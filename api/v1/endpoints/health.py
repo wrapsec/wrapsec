@@ -1,26 +1,30 @@
 from fastapi import APIRouter
 from config.settings import get_settings
 
-router = APIRouter()
+router   = APIRouter()
 settings = get_settings()
 
 
 @router.get("/health")
 async def health():
     return {
-        "status": "ok",
+        "status":  "ok",
         "version": settings.app_version,
     }
 
 
 @router.get("/health/ready")
 async def health_ready():
+    from cache.redis_client import ping as redis_ping
+    redis_ok = await redis_ping()
+
     checks = {
         "database": "ok",
-        "redis":    "ok",
+        "redis":    "ok" if redis_ok else "unavailable",
         "ml_model": "ok",
     }
     all_ok = all(v == "ok" for v in checks.values())
+
     return {
         "status": "ready" if all_ok else "degraded",
         "checks": checks,

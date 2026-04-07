@@ -90,6 +90,12 @@ async def ai_request(
         ),
     )
 
+    # Check semantic cache — only for ALLOW candidates
+    from cache.semantic_cache import get_cached_result, set_cached_result
+    cached = await get_cached_result(body.input, body.detection_mode)
+    if cached:
+        return JSONResponse(content=cached)
+
     result = await run_in_threadpool(_gateway.process, incoming)
 
     # Persist audit log to PostgreSQL
@@ -113,6 +119,14 @@ async def ai_request(
         result.decision,
         debug=body.options.debug and getattr(request.state, "is_admin", False)
     )
+
+    response = _build_response(
+        result.decision,
+        debug=body.options.debug and getattr(request.state, "is_admin", False)
+    )
+
+    # Cache ALLOW results for repeated prompts
+    await set_cached_result(body.input, body.detection_mode, response)
 
     return JSONResponse(content=response)
 

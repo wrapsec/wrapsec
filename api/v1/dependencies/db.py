@@ -1,6 +1,8 @@
 from collections.abc import AsyncGenerator
 from sqlalchemy.ext.asyncio import AsyncSession
 from db.session import AsyncSessionFactory
+from cache.redis_client import get_redis
+from redis.asyncio import Redis
 
 
 async def get_db() -> AsyncGenerator[AsyncSession, None]:
@@ -10,3 +12,7 @@ async def get_db() -> AsyncGenerator[AsyncSession, None]:
         except Exception:
             await session.rollback()
             raise
+
+
+async def get_cache() -> Redis:
+    return get_redis()
