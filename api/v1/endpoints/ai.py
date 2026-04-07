@@ -1,10 +1,15 @@
 import time
-from fastapi import APIRouter, Request
+import hashlib
+from fastapi import APIRouter, Request, Depends
+from fastapi.concurrency import run_in_threadpool
 from fastapi.responses import JSONResponse
+from sqlalchemy.ext.asyncio import AsyncSession
 
 from api.v1.schemas.request import AIRequestSchema
+from api.v1.dependencies.db import get_db
+from db.repositories.audit import AuditRepository
 from config.settings import get_settings
-from domain.enums import DetectionMode, ExecutionMode
+from domain.enums import DecisionType, DetectionMode, ExecutionMode
 from domain.value_objects.trace_id import TraceId
 from domain.entities.request import (
     IncomingRequest, RequestMetadata,
@@ -15,12 +20,7 @@ from services.gateway.service import GatewayService
 
 router   = APIRouter()
 settings = get_settings()
-
-# Single shared gateway service instance
 _gateway = GatewayService()
-
-# In-memory audit store — replaced by DB in next step
-_request_store: dict[str, dict] = {}
 
 
 def _build_response(decision, debug: bool = False) -> dict:
@@ -40,7 +40,6 @@ def _build_response(decision, debug: bool = False) -> dict:
     }
 
     if debug and decision.layer_scores:
-        from domain.enums import DecisionType
         def layer_decision(score: float) -> str:
             if score >= settings.block_threshold:
                 return DecisionType.BLOCK.value
@@ -63,12 +62,14 @@ def _build_response(decision, debug: bool = False) -> dict:
 
 
 @router.post("/request", response_model=None)
-async def ai_request(body: AIRequestSchema, request: Request):
-    # Debug mode requires admin
+async def ai_request(
+    body:    AIRequestSchema,
+    request: Request,
+    db:      AsyncSession = Depends(get_db),
+):
     if body.options.debug and not getattr(request.state, "is_admin", False):
         raise DebugForbiddenError()
 
-    # Build domain request
     incoming = IncomingRequest(
         input          = body.input,
         detection_mode = DetectionMode(body.detection_mode),
@@ -89,12 +90,11 @@ async def ai_request(body: AIRequestSchema, request: Request):
         ),
     )
 
-    # Process through gateway
-    from fastapi.concurrency import run_in_threadpool
     result = await run_in_threadpool(_gateway.process, incoming)
 
-    # Store for retrieval
-    _request_store[str(incoming.trace_id)] = {
+    # Persist audit log to PostgreSQL
+    repo = AuditRepository(db)
+    await repo.create({
         "trace_id":       str(incoming.trace_id),
         "decision":       result.decision.decision.value,
         "risk_score":     result.decision.risk_score.value,
@@ -106,7 +106,8 @@ async def ai_request(body: AIRequestSchema, request: Request):
         "latency_ms":     round(result.decision.latency_ms, 2),
         "tenant_id":      body.metadata.tenant_id if body.metadata else None,
         "source":         body.metadata.source if body.metadata else None,
-    }
+        "user_id":        body.metadata.user_id if body.metadata else None,
+    })
 
     response = _build_response(
         result.decision,
@@ -117,8 +118,32 @@ async def ai_request(body: AIRequestSchema, request: Request):
 
 
 @router.get("/requests/{trace_id}")
-async def get_request(trace_id: str):
-    record = _request_store.get(trace_id)
+async def get_request(
+    trace_id: str,
+    db:       AsyncSession = Depends(get_db),
+):
+    repo   = AuditRepository(db)
+    record = await repo.get_by_trace_id(trace_id)
+
     if not record:
         raise NotFoundError("request", trace_id)
-    return JSONResponse(content=record)
+
+    return JSONResponse(content={
+        "trace_id":       record.trace_id,
+        "timestamp":      record.created_at.isoformat(),
+        "metadata": {
+            "tenant_id": record.tenant_id,
+            "source":    record.source,
+            "user_id":   record.user_id,
+        },
+        "decision":       record.decision,
+        "risk_score":     record.risk_score,
+        "threats":        record.threats or [],
+        "input_hash":     record.input_hash,
+        "processing": {
+            "latency_ms":     record.latency_ms,
+            "llm_invoked":    record.llm_invoked,
+            "detection_mode": record.detection_mode,
+            "execution_mode": record.execution_mode,
+        },
+    })

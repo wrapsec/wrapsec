@@ -1,8 +1,9 @@
 from datetime import datetime, timezone
-from fastapi import APIRouter, Query
+from fastapi import APIRouter, Query, Depends
 from fastapi.responses import JSONResponse
-from api.v1.endpoints.ai import _request_store
-from errors.exceptions import NotFoundError
+from sqlalchemy.ext.asyncio import AsyncSession
+from api.v1.dependencies.db import get_db
+from db.repositories.audit import AuditRepository
 
 router = APIRouter()
 
@@ -16,6 +17,21 @@ def _parse_dt(value: str | None) -> datetime | None:
         return None
 
 
+def _format_item(item) -> dict:
+    return {
+        "trace_id":       item.trace_id,
+        "timestamp":      item.created_at.isoformat(),
+        "tenant_id":      item.tenant_id,
+        "decision":       item.decision,
+        "risk_score":     item.risk_score,
+        "threats":        item.threats or [],
+        "input_hash":     item.input_hash,
+        "detection_mode": item.detection_mode,
+        "execution_mode": item.execution_mode,
+        "latency_ms":     item.latency_ms,
+    }
+
+
 @router.get("/logs")
 async def get_audit_logs(
     tenant_id:       str | None = Query(None),
@@ -25,49 +41,22 @@ async def get_audit_logs(
     to:              str | None = Query(None),
     limit:           int        = Query(50, ge=1, le=500),
     offset:          int        = Query(0, ge=0),
+    db:              AsyncSession = Depends(get_db),
 ):
-    items = list(_request_store.values())
-
-    # Filters
-    if tenant_id:
-        items = [i for i in items if i.get("tenant_id") == tenant_id]
-
-    if decision:
-        items = [i for i in items if i.get("decision") == decision.upper()]
-
-    if threat_category:
-        items = [
-            i for i in items
-            if threat_category.upper() in i.get("threats", [])
-        ]
-
-    from_dt = _parse_dt(from_)
-    to_dt   = _parse_dt(to)
-
-    if from_dt or to_dt:
-        filtered = []
-        for i in items:
-            ts = i.get("timestamp")
-            if not ts:
-                filtered.append(i)
-                continue
-            try:
-                item_dt = datetime.fromisoformat(ts)
-                if from_dt and item_dt < from_dt:
-                    continue
-                if to_dt and item_dt > to_dt:
-                    continue
-                filtered.append(i)
-            except ValueError:
-                filtered.append(i)
-        items = filtered
-
-    total      = len(items)
-    paginated  = items[offset: offset + limit]
+    repo = AuditRepository(db)
+    total, items = await repo.list(
+        tenant_id       = tenant_id,
+        decision        = decision,
+        threat_category = threat_category,
+        from_dt         = _parse_dt(from_),
+        to_dt           = _parse_dt(to),
+        limit           = limit,
+        offset          = offset,
+    )
 
     return JSONResponse(content={
         "total": total,
-        "items": paginated,
+        "items": [_format_item(i) for i in items],
     })
 
 
@@ -76,16 +65,17 @@ async def get_audit_stats(
     tenant_id: str | None = Query(None),
     from_:     str | None = Query(None, alias="from"),
     to:        str | None = Query(None),
+    db:        AsyncSession = Depends(get_db),
 ):
-    items = list(_request_store.values())
+    repo  = AuditRepository(db)
+    stats = await repo.get_stats(
+        tenant_id = tenant_id,
+        from_dt   = _parse_dt(from_),
+        to_dt     = _parse_dt(to),
+    )
 
-    if tenant_id:
-        items = [i for i in items if i.get("tenant_id") == tenant_id]
-
-    from_dt = _parse_dt(from_)
-    to_dt   = _parse_dt(to)
-
-    if not items:
+    total = stats["total"]
+    if total == 0:
         return JSONResponse(content={
             "period_from":    from_ or datetime.now(timezone.utc).isoformat(),
             "period_to":      to    or datetime.now(timezone.utc).isoformat(),
@@ -98,21 +88,14 @@ async def get_audit_stats(
             "top_threats":    [],
         })
 
-    total    = len(items)
-    blocked  = sum(1 for i in items if i.get("decision") == "BLOCK")
-    sanitized = sum(1 for i in items if i.get("decision") == "SANITIZE")
-    allowed  = sum(1 for i in items if i.get("decision") == "ALLOW")
-
-    latencies = sorted([i.get("latency_ms", 0) for i in items])
+    latencies = stats["latencies"]
     avg_lat   = sum(latencies) / len(latencies) if latencies else 0.0
     p95_idx   = int(len(latencies) * 0.95)
     p95_lat   = latencies[p95_idx] if latencies else 0.0
 
-    # Threat distribution
     threat_counts: dict[str, int] = {}
-    for item in items:
-        for threat in item.get("threats", []):
-            threat_counts[threat] = threat_counts.get(threat, 0) + 1
+    for threat in stats["threats"]:
+        threat_counts[threat] = threat_counts.get(threat, 0) + 1
 
     top_threats = sorted(
         [{"category": k, "count": v} for k, v in threat_counts.items()],
@@ -124,9 +107,9 @@ async def get_audit_stats(
         "period_from":    from_ or datetime.now(timezone.utc).isoformat(),
         "period_to":      to    or datetime.now(timezone.utc).isoformat(),
         "total_requests": total,
-        "block_rate":     round(blocked   / total, 4),
-        "sanitize_rate":  round(sanitized / total, 4),
-        "allow_rate":     round(allowed   / total, 4),
+        "block_rate":     round(stats["block_count"]    / total, 4),
+        "sanitize_rate":  round(stats["sanitize_count"] / total, 4),
+        "allow_rate":     round(stats["allow_count"]    / total, 4),
         "avg_latency_ms": round(avg_lat, 2),
         "p95_latency_ms": round(p95_lat, 2),
         "top_threats":    top_threats,
