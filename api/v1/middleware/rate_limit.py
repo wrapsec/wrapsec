@@ -6,7 +6,7 @@ from config.settings import get_settings
 
 settings = get_settings()
 
-PUBLIC_PATHS = {"/health", "/health/ready", "/health/live"}
+PUBLIC_PATHS = {"/health", "/health/ready", "/health/live", "/metrics"}
 
 
 class RateLimitMiddleware(BaseHTTPMiddleware):

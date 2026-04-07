@@ -23,6 +23,11 @@ settings = get_settings()
 _gateway = GatewayService()
 
 
+def _mode_str(value) -> str:
+    """Extract clean string from enum or string — always returns lowercase."""
+    return str(value).split(".")[-1].lower()
+
+
 def _build_response(decision, debug: bool = False) -> dict:
     response = {
         "trace_id":        str(decision.trace_id),
@@ -67,13 +72,28 @@ async def ai_request(
     request: Request,
     db:      AsyncSession = Depends(get_db),
 ):
+    # Debug mode requires admin
     if body.options.debug and not getattr(request.state, "is_admin", False):
         raise DebugForbiddenError()
 
+    # Extract clean mode strings
+    det_mode_str = _mode_str(body.detection_mode)
+    exe_mode_str = _mode_str(body.execution_mode)
+
+    # Check semantic cache
+    from cache.semantic_cache import get_cached_result, set_cached_result
+    from observability.metrics import CACHE_HITS, CACHE_MISSES
+    cached = await get_cached_result(body.input, det_mode_str, exe_mode_str)
+    if cached:
+        CACHE_HITS.inc()
+        return JSONResponse(content=cached)
+    CACHE_MISSES.inc()
+
+    # Build domain request
     incoming = IncomingRequest(
         input          = body.input,
-        detection_mode = DetectionMode(body.detection_mode),
-        execution_mode = ExecutionMode(body.execution_mode),
+        detection_mode = DetectionMode(det_mode_str),
+        execution_mode = ExecutionMode(exe_mode_str),
         model          = body.model,
         metadata       = RequestMetadata(
             tenant_id = body.metadata.tenant_id if body.metadata else None,
@@ -90,12 +110,7 @@ async def ai_request(
         ),
     )
 
-    # Check semantic cache — only for ALLOW candidates
-    from cache.semantic_cache import get_cached_result, set_cached_result
-    cached = await get_cached_result(body.input, body.detection_mode, body.execution_mode)
-    if cached:
-        return JSONResponse(content=cached)
-
+    # Process through gateway
     result = await run_in_threadpool(_gateway.process, incoming)
 
     # Persist audit log to PostgreSQL
@@ -106,8 +121,8 @@ async def ai_request(
         "risk_score":     result.decision.risk_score.value,
         "threats":        [t.value for t in result.decision.threats],
         "input_hash":     result.audit_log.input_hash,
-        "detection_mode": body.detection_mode,
-        "execution_mode": body.execution_mode,
+        "detection_mode": det_mode_str,
+        "execution_mode": exe_mode_str,
         "llm_invoked":    result.decision.llm_invoked,
         "latency_ms":     round(result.decision.latency_ms, 2),
         "tenant_id":      body.metadata.tenant_id if body.metadata else None,
@@ -115,18 +130,29 @@ async def ai_request(
         "user_id":        body.metadata.user_id if body.metadata else None,
     })
 
+    # Record Prometheus metrics
+    from observability.metrics import record_request
+    record_request(
+        decision       = result.decision.decision.value,
+        detection_mode = det_mode_str,
+        execution_mode = exe_mode_str,
+        latency_ms     = result.decision.latency_ms,
+        threats        = [t.value for t in result.decision.threats],
+        layer_scores   = {
+            "rule": result.decision.layer_scores.rule_score,
+            "ml":   result.decision.layer_scores.ml_score,
+            "llm":  result.decision.layer_scores.llm_score,
+        } if result.decision.layer_scores else None,
+    )
+
+    # Build response
     response = _build_response(
         result.decision,
         debug=body.options.debug and getattr(request.state, "is_admin", False)
     )
 
-    response = _build_response(
-        result.decision,
-        debug=body.options.debug and getattr(request.state, "is_admin", False)
-    )
-
-    # Cache ALLOW results for repeated prompts
-    await set_cached_result(body.input, body.detection_mode, body.execution_mode, response)
+    # Cache ALLOW results
+    await set_cached_result(body.input, det_mode_str, exe_mode_str, response)
 
     return JSONResponse(content=response)
 

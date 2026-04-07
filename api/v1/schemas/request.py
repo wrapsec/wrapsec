@@ -40,4 +40,4 @@ class AIRequestSchema(BaseModel):
 
         return self
 
-    model_config = {"use_enum_values": True}
+    model_config = {"use_enum_values": True, "populate_by_name": True}

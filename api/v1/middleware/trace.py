@@ -2,6 +2,7 @@ import uuid
 from fastapi import Request
 from starlette.middleware.base import BaseHTTPMiddleware
 from starlette.responses import Response
+from observability.tracing import set_trace_id
 
 
 class TraceMiddleware(BaseHTTPMiddleware):
@@ -20,6 +21,7 @@ class TraceMiddleware(BaseHTTPMiddleware):
 
         # Attach to request state — available in all endpoints
         request.state.trace_id = trace_id
+        set_trace_id(trace_id)
 
         response = await call_next(request)
 

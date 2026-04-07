@@ -1,9 +1,11 @@
 import time
-import logging
 from contextlib import asynccontextmanager
+from observability.logging import setup_logging
+from observability.metrics import get_metrics, ACTIVE_REQUESTS
 from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
+from fastapi import Response
 
 from config.settings import get_settings
 from errors.exceptions import WrapSecError
@@ -16,10 +18,7 @@ from api.v1.middleware.rate_limit import RateLimitMiddleware
 
 settings = get_settings()
 
-logging.basicConfig(
-    level  = getattr(logging, settings.log_level.upper(), logging.INFO),
-    format = "%(message)s",
-)
+setup_logging()
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
@@ -68,3 +67,9 @@ app.add_exception_handler(Exception, unhandled_exception_handler)
 
 # ── Routers ───────────────────────────────────────────────────
 app.include_router(v1_router)
+
+# ── Metrics endpoint ──────────────────────────────────────────
+@app.get("/metrics", include_in_schema=False)
+async def metrics():
+    data, content_type = get_metrics()
+    return Response(content=data, media_type=content_type)
