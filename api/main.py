@@ -22,18 +22,20 @@ setup_logging()
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    # Startup
-    from db.session import create_tables
-    from cache.redis_client import ping, close
-    await create_tables()
-    redis_ok = await ping()
-    print(f"Starting {settings.app_name} v{settings.app_version}")
-    print(f"Environment: {settings.environment}")
-    print(f"Redis: {'connected' if redis_ok else 'unavailable'}")
-    yield
-    # Shutdown
-    await close()
-    print(f"Shutting down {settings.app_name}")
+    import os
+    if os.getenv("TESTING") != "true":
+        from db.session import create_tables
+        from cache.redis_client import ping, close
+        await create_tables()
+        redis_ok = await ping()
+        print(f"Starting {settings.app_name} v{settings.app_version}")
+        print(f"Environment: {settings.environment}")
+        print(f"Redis: {'connected' if redis_ok else 'unavailable'}")
+        yield
+        await close()
+        print(f"Shutting down {settings.app_name}")
+    else:
+        yield
 
 
 app = FastAPI(
