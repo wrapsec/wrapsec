@@ -92,7 +92,7 @@ async def ai_request(
 
     # Check semantic cache — only for ALLOW candidates
     from cache.semantic_cache import get_cached_result, set_cached_result
-    cached = await get_cached_result(body.input, body.detection_mode)
+    cached = await get_cached_result(body.input, body.detection_mode, body.execution_mode)
     if cached:
         return JSONResponse(content=cached)
 
@@ -126,7 +126,7 @@ async def ai_request(
     )
 
     # Cache ALLOW results for repeated prompts
-    await set_cached_result(body.input, body.detection_mode, response)
+    await set_cached_result(body.input, body.detection_mode, body.execution_mode, response)
 
     return JSONResponse(content=response)
 

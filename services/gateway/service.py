@@ -59,11 +59,39 @@ class GatewayService:
     def _hash_input(self, text: str) -> str:
         return "sha256:" + hashlib.sha256(text.encode()).hexdigest()[:16] + "..."
 
-    def _mock_llm(self, text: str, model: str) -> str:
+    def _call_llm(self, text: str, model: str) -> str:
         """
-        Mock LLM response — replace with real client in next step.
+        Call the configured LLM provider synchronously.
+        GatewayService runs in a threadpool so we need a sync wrapper.
         """
-        return f"[Mock LLM response using {model} for: {text[:60]}...]"
+        import asyncio
+        from clients import get_llm_client
+
+        client = get_llm_client()
+
+        system_prompt = (
+            "You are a helpful AI assistant. "
+            "Answer the user's question clearly and concisely."
+        )
+
+        try:
+            loop     = asyncio.new_event_loop()
+            response = loop.run_until_complete(
+                client.complete(
+                    system_prompt = system_prompt,
+                    user_prompt   = text,
+                    model         = model,
+                )
+            )
+            loop.close()
+
+            if response.content:
+                return response.content
+            return "[LLM returned empty response]"
+
+        except Exception as e:
+            logger.error(f"LLM call failed: {e}")
+            return "[LLM unavailable]"
 
     def process(self, request: IncomingRequest) -> GatewayResult:
         start = time.perf_counter()
@@ -129,7 +157,7 @@ class GatewayService:
             ):
                 llm_invoked   = True
                 prompt        = sanitized_input or effective_input
-                raw_output    = self._mock_llm(prompt, request.model or "default")
+                raw_output    = self._call_llm(prompt, request.model or settings.llm_model)
 
                 # Output guard — check LLM response for PII
                 output_result = self._output_guard.inspect(raw_output)

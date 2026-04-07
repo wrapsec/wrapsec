@@ -95,64 +95,29 @@ class LLMDetector(BaseDetector):
             logger.warning(f"LLMDetector parse failed: {e}")
             return DetectionResult.clean(self.name)
 
-    def _detect_ollama(self, text: str) -> DetectionResult:
-        import httpx
-        response = httpx.post(
-            f"{settings.llm_base_url}/api/chat",
-            json={
-                "model":  settings.llm_model,
-                "stream": False,
-                "messages": [
-                    {"role": "system",  "content": SYSTEM_PROMPT},
-                    {"role": "user",    "content": f"Analyse this input:\n\n{text}"},
-                ],
-            },
-            timeout=settings.llm_timeout,
-        )
-        response.raise_for_status()
-        raw = response.json()["message"]["content"]
-        return self._parse_response(raw)
+    def detect(self, text: str) -> DetectionResult:
+        try:
+            import asyncio
+            from clients import get_llm_client
 
-    def _detect_groq(self, text: str) -> DetectionResult:
-        import httpx
-        response = httpx.post(
-            "https://api.groq.com/openai/v1/chat/completions",
-            headers={
-                "Authorization": f"Bearer {settings.groq_api_key}",
-                "Content-Type":  "application/json",
-            },
-            json={
-                "model":  settings.llm_model,
-                "stream": False,
-                "messages": [
-                    {"role": "system",  "content": SYSTEM_PROMPT},
-                    {"role": "user",    "content": f"Analyse this input:\n\n{text}"},
-                ],
-            },
-            timeout=settings.llm_timeout,
-        )
-        response.raise_for_status()
-        raw = response.json()["choices"][0]["message"]["content"]
-        return self._parse_response(raw)
+            client = get_llm_client()
 
-    def _detect_openai(self, text: str) -> DetectionResult:
-        import httpx
-        response = httpx.post(
-            "https://api.openai.com/v1/chat/completions",
-            headers={
-                "Authorization": f"Bearer {settings.openai_api_key}",
-                "Content-Type":  "application/json",
-            },
-            json={
-                "model":  settings.llm_model,
-                "stream": False,
-                "messages": [
-                    {"role": "system",  "content": SYSTEM_PROMPT},
-                    {"role": "user",    "content": f"Analyse this input:\n\n{text}"},
-                ],
-            },
-            timeout=settings.llm_timeout,
-        )
-        response.raise_for_status()
-        raw = response.json()["choices"][0]["message"]["content"]
-        return self._parse_response(raw)
+            loop     = asyncio.new_event_loop()
+            response = loop.run_until_complete(
+                client.complete(
+                    system_prompt = SYSTEM_PROMPT,
+                    user_prompt   = f"Analyse this input:\n\n{text}",
+                    temperature   = 0.0,
+                    max_tokens    = 200,
+                )
+            )
+            loop.close()
+
+            if not response.content:
+                return DetectionResult.clean(self.name)
+
+            return self._parse_response(response.content)
+
+        except Exception as e:
+            logger.warning(f"LLMDetector failed: {e}")
+            return DetectionResult.clean(self.name)
