@@ -4,10 +4,11 @@ import { AuditLogItem } from "@/lib/types"
 import { timeAgo, formatLatency, formatScore } from "@/lib/utils"
 
 interface RecentRequestsProps {
-  items: AuditLogItem[]
+  items:    AuditLogItem[]
+  onSelect: (traceId: string) => void
 }
 
-export function RecentRequests({ items }: RecentRequestsProps) {
+export function RecentRequests({ items, onSelect }: RecentRequestsProps) {
   return (
     <Card padding={false}>
       <div className="px-5 py-4 border-b border-slate-100">
@@ -34,7 +35,11 @@ export function RecentRequests({ items }: RecentRequestsProps) {
               </tr>
             ) : (
               items.map((item) => (
-                <tr key={item.trace_id} className="border-b border-slate-50 hover:bg-slate-50 transition-colors">
+                <tr
+                  key={item.trace_id}
+                  className="border-b border-slate-50 hover:bg-slate-50 transition-colors cursor-pointer"
+                  onClick={() => onSelect(item.trace_id)}
+                >
                   <td className="px-5 py-3 font-mono text-xs text-slate-600">
                     {item.trace_id}
                   </td>

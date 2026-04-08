@@ -22,10 +22,13 @@ class AuditRepository(BaseRepository):
     async def list(
         self,
         tenant_id:       str | None = None,
+        trace_id:        str | None = None,
         decision:        str | None = None,
         threat_category: str | None = None,
         from_dt:         datetime | None = None,
         to_dt:           datetime | None = None,
+        sort_by:         str = "created_at",
+        sort_order:      str = "desc",
         limit:           int = 50,
         offset:          int = 0,
     ) -> tuple[int, list[AuditLogModel]]:
@@ -33,6 +36,8 @@ class AuditRepository(BaseRepository):
 
         if tenant_id:
             query = query.where(AuditLogModel.tenant_id == tenant_id)
+        if trace_id:
+            query = query.where(AuditLogModel.trace_id.ilike(f"%{trace_id}%"))
         if decision:
             query = query.where(AuditLogModel.decision == decision.upper())
         if threat_category:
@@ -51,8 +56,20 @@ class AuditRepository(BaseRepository):
         count_query = select(func.count()).select_from(query.subquery())
         total       = await self.session.scalar(count_query)
 
+        # Sort
+        SORTABLE = {
+            "created_at": AuditLogModel.created_at,
+            "risk_score":  AuditLogModel.risk_score,
+            "latency_ms":  AuditLogModel.latency_ms,
+            "decision":    AuditLogModel.decision,
+        }
+        sort_col = SORTABLE.get(sort_by, AuditLogModel.created_at)
+        if sort_order == "asc":
+            query = query.order_by(sort_col.asc())
+        else:
+            query = query.order_by(sort_col.desc())
+
         # Paginate
-        query  = query.order_by(AuditLogModel.created_at.desc())
         query  = query.offset(offset).limit(limit)
         result = await self.session.execute(query)
         items  = result.scalars().all()

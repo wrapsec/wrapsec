@@ -7,14 +7,19 @@ interface RequestsTableProps {
   onSelect: (traceId: string) => void
 }
 
+const HEADERS = ["Trace ID", "Decision", "Score", "Threats", "Mode", "Latency", "Time"]
+
 export function RequestsTable({ items, onSelect }: RequestsTableProps) {
   return (
     <div className="overflow-x-auto">
       <table className="w-full text-sm">
         <thead>
           <tr className="border-b border-slate-100 bg-slate-50">
-            {["Trace ID", "Decision", "Score", "Threats", "Mode", "Latency", "Time"].map((h) => (
-              <th key={h} className="text-left px-5 py-2.5 text-xs font-medium text-slate-500 uppercase tracking-wide whitespace-nowrap">
+            {HEADERS.map((h) => (
+              <th
+                key={h}
+                className="text-left px-5 py-2.5 text-xs font-medium text-slate-500 uppercase tracking-wide whitespace-nowrap"
+              >
                 {h}
               </th>
             ))}
@@ -29,11 +34,11 @@ export function RequestsTable({ items, onSelect }: RequestsTableProps) {
             </tr>
           ) : (
             items.map((item) => (
-                <tr
-                  key={item.trace_id}
-                  className="border-b border-slate-50 hover:bg-slate-50 transition-colors cursor-pointer"
-                  onClick={() => onSelect(item.trace_id)}
-                >
+              <tr
+                key={item.trace_id}
+                className="border-b border-slate-50 hover:bg-slate-50 transition-colors cursor-pointer"
+                onClick={() => onSelect(item.trace_id)}
+              >
                 <td className="px-5 py-3 font-mono text-xs text-slate-600 whitespace-nowrap">
                   {item.trace_id}
                 </td>

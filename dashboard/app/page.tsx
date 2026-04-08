@@ -10,8 +10,11 @@ import { PageSpinner } from "@/components/ui/Spinner"
 import { getAuditStats, getAuditLogs } from "@/lib/api"
 import { formatRate, formatLatency } from "@/lib/utils"
 import { POLL_INTERVAL } from "@/lib/constants"
+import { useState } from "react"
+import { RequestDetailModal } from "@/components/requests/RequestDetail"
 
 export default function OverviewPage() {
+  const [selectedId, setSelectedId] = useState<string | null>(null)
   const { data: stats, isLoading: statsLoading } = useSWR(
     "audit-stats",
     getAuditStats,
@@ -89,8 +92,17 @@ export default function OverviewPage() {
           </div>
 
           {/* Recent requests */}
-          <RecentRequests items={logs?.items ?? []} />
+          <RecentRequests
+            items={logs?.items ?? []}
+            onSelect={(id) => setSelectedId(id)}
+          />
         </div>
+      )}
+      {selectedId && (
+        <RequestDetailModal
+          traceId={selectedId}
+          onClose={() => setSelectedId(null)}
+        />
       )}
     </Shell>
   )
