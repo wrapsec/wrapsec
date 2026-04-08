@@ -1,9 +1,8 @@
 from datetime import datetime
-from sqlalchemy import select, func, case
+from sqlalchemy import select, func, text
 from sqlalchemy.ext.asyncio import AsyncSession
 from db.models import AuditLogModel
 from db.repositories.base import BaseRepository
-from domain.enums import DecisionType
 
 
 class AuditRepository(BaseRepository):
@@ -36,6 +35,13 @@ class AuditRepository(BaseRepository):
             query = query.where(AuditLogModel.tenant_id == tenant_id)
         if decision:
             query = query.where(AuditLogModel.decision == decision.upper())
+        if threat_category:
+            import json
+            from sqlalchemy import text
+            val = json.dumps([threat_category.upper()])
+            query = query.where(
+                text(f"threats::jsonb @> '{val}'::jsonb")
+            )
         if from_dt:
             query = query.where(AuditLogModel.created_at >= from_dt)
         if to_dt:
@@ -73,12 +79,12 @@ class AuditRepository(BaseRepository):
 
         if not items:
             return {
-                "total":         0,
-                "block_count":   0,
+                "total":          0,
+                "block_count":    0,
                 "sanitize_count": 0,
-                "allow_count":   0,
-                "latencies":     [],
-                "threats":       [],
+                "allow_count":    0,
+                "latencies":      [],
+                "threats":        [],
             }
 
         latencies = [i.latency_ms for i in items]
