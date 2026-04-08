@@ -115,20 +115,34 @@ async def ai_request(
     result = await run_in_threadpool(_gateway.process, incoming)
 
     # Persist audit log to PostgreSQL
+    detection_scores  = {}
+    guardrail_scores  = {}
+    if result.decision.layer_scores:
+        detection_scores = {
+            "rule": result.decision.layer_scores.rule_score,
+            "ml":   result.decision.layer_scores.ml_score,
+            "llm":  result.decision.layer_scores.llm_score,
+        }
+        guardrail_scores = {
+            "pii":  result.decision.layer_scores.pii_score,
+        }
+
     repo = AuditRepository(db)
     await repo.create({
-        "trace_id":       str(incoming.trace_id),
-        "decision":       result.decision.decision.value,
-        "risk_score":     result.decision.risk_score.value,
-        "threats":        [t.value for t in result.decision.threats],
-        "input_hash":     result.audit_log.input_hash,
-        "detection_mode": det_mode_str,
-        "execution_mode": exe_mode_str,
-        "llm_invoked":    result.decision.llm_invoked,
-        "latency_ms":     round(result.decision.latency_ms, 2),
-        "tenant_id":      body.metadata.tenant_id if body.metadata else None,
-        "source":         body.metadata.source if body.metadata else None,
-        "user_id":        body.metadata.user_id if body.metadata else None,
+        "trace_id":          str(incoming.trace_id),
+        "decision":          result.decision.decision.value,
+        "risk_score":        result.decision.risk_score.value,
+        "threats":           [t.value for t in result.decision.threats],
+        "input_hash":        result.audit_log.input_hash,
+        "detection_mode":    det_mode_str,
+        "execution_mode":    exe_mode_str,
+        "llm_invoked":       result.decision.llm_invoked,
+        "latency_ms":        round(result.decision.latency_ms, 2),
+        "detection_scores":  detection_scores,
+        "guardrail_scores":  guardrail_scores,
+        "tenant_id":         body.metadata.tenant_id if body.metadata else None,
+        "source":            body.metadata.source if body.metadata else None,
+        "user_id":           body.metadata.user_id if body.metadata else None,
     })
 
     # Record Prometheus metrics
@@ -181,6 +195,8 @@ async def get_request(
         "risk_score":     record.risk_score,
         "threats":        record.threats or [],
         "input_hash":     record.input_hash,
+        "detection_scores":  record.detection_scores or {},
+        "guardrail_scores":  record.guardrail_scores or {},
         "processing": {
             "latency_ms":     record.latency_ms,
             "llm_invoked":    record.llm_invoked,
