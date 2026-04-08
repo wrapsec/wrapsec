@@ -10,11 +10,13 @@ import { Pagination } from "@/components/requests/Pagination"
 import { PageSpinner } from "@/components/ui/Spinner"
 import { getAuditLogs } from "@/lib/api"
 import { PAGE_SIZE, POLL_INTERVAL } from "@/lib/constants"
+import { RequestDetailModal } from "@/components/requests/RequestDetail"
 
 export default function RequestsPage() {
   const [decision,       setDecision]       = useState("")
   const [threatCategory, setThreatCategory] = useState("")
   const [offset,         setOffset]         = useState(0)
+  const [selectedId,     setSelectedId]     = useState<string | null>(null)
 
   const { data, isLoading } = useSWR(
     ["audit-logs", decision, threatCategory, offset],
@@ -49,7 +51,10 @@ export default function RequestsPage() {
             <PageSpinner />
           ) : (
             <>
-              <RequestsTable items={data?.items ?? []} />
+                <RequestsTable
+                  items={data?.items ?? []}
+                  onSelect={(id) => setSelectedId(id)}
+                />
               <Pagination
                 total={data?.total ?? 0}
                 offset={offset}
@@ -60,6 +65,12 @@ export default function RequestsPage() {
           )}
         </Card>
       </div>
+      {selectedId && (
+        <RequestDetailModal
+          traceId={selectedId}
+          onClose={() => setSelectedId(null)}
+        />
+      )}
     </Shell>
   )
 }

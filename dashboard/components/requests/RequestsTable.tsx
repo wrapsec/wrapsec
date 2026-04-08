@@ -3,10 +3,11 @@ import { AuditLogItem } from "@/lib/types"
 import { timeAgo, formatLatency, formatScore } from "@/lib/utils"
 
 interface RequestsTableProps {
-  items: AuditLogItem[]
+  items:    AuditLogItem[]
+  onSelect: (traceId: string) => void
 }
 
-export function RequestsTable({ items }: RequestsTableProps) {
+export function RequestsTable({ items, onSelect }: RequestsTableProps) {
   return (
     <div className="overflow-x-auto">
       <table className="w-full text-sm">
@@ -28,7 +29,11 @@ export function RequestsTable({ items }: RequestsTableProps) {
             </tr>
           ) : (
             items.map((item) => (
-              <tr key={item.trace_id} className="border-b border-slate-50 hover:bg-slate-50 transition-colors">
+                <tr
+                  key={item.trace_id}
+                  className="border-b border-slate-50 hover:bg-slate-50 transition-colors cursor-pointer"
+                  onClick={() => onSelect(item.trace_id)}
+                >
                 <td className="px-5 py-3 font-mono text-xs text-slate-600 whitespace-nowrap">
                   {item.trace_id}
                 </td>
