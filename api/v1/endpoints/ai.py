@@ -56,6 +56,7 @@ def _build_response(decision, debug: bool = False) -> dict:
             "rule_score": decision.layer_scores.rule_score,
             "ml_score":   decision.layer_scores.ml_score,
             "llm_score":  decision.layer_scores.llm_score,
+            "pii_score":  decision.layer_scores.pii_score,
             "layer_decisions": {
                 "rule": layer_decision(decision.layer_scores.rule_score),
                 "ml":   layer_decision(decision.layer_scores.ml_score),

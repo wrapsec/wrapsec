@@ -170,6 +170,7 @@ class GatewayService:
                 rule_score = scoring.rule_score,
                 ml_score   = scoring.ml_score,
                 llm_score  = scoring.llm_score,
+                pii_score  = scoring.pii_score,
             )
 
             gateway_decision = GatewayDecision(
