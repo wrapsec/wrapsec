@@ -5,7 +5,6 @@ from config.settings import get_settings
 
 settings = get_settings()
 
-# Paths that do not require authentication
 PUBLIC_PATHS = {
     "/health",
     "/health/ready",
@@ -19,8 +18,9 @@ PUBLIC_PATHS = {
 
 class AuthMiddleware(BaseHTTPMiddleware):
     """
-    Validates API key or JWT on every protected request.
-    Sets request.state.is_admin based on key type.
+    Validates API key on every protected request.
+    Admin key — full access.
+    Standard key (wsk_live_) — validated against DB.
     """
 
     async def dispatch(self, request: Request, call_next) -> Response:
@@ -36,12 +36,26 @@ class AuthMiddleware(BaseHTTPMiddleware):
             request.state.is_admin = True
             return await call_next(request)
 
-        # Standard API key — check against key store
+        # Standard API key — validate against DB
         if api_key.startswith("wsk_live_"):
-            request.state.is_admin = False
-            return await call_next(request)
+            valid = await self._validate_standard_key(api_key)
+            if valid:
+                request.state.is_admin = False
+                return await call_next(request)
+            else:
+                trace_id = getattr(request.state, "trace_id", "")
+                return JSONResponse(
+                    status_code=401,
+                    content={
+                        "error": {
+                            "code":     "UNAUTHORIZED",
+                            "message":  "Missing or invalid credentials",
+                            "trace_id": trace_id,
+                        }
+                    },
+                )
 
-        # JWT — placeholder for now
+        # JWT — placeholder for future
         if auth.startswith("Bearer "):
             request.state.is_admin = False
             return await call_next(request)
@@ -58,3 +72,23 @@ class AuthMiddleware(BaseHTTPMiddleware):
                 }
             },
         )
+
+    async def _validate_standard_key(self, api_key: str) -> bool:
+        """Validate standard key against DB — check hash and revoked status."""
+        try:
+            import hashlib
+            from db.session import AsyncSessionFactory
+            from db.repositories.api_key import ApiKeyRepository
+
+            key_hash = hashlib.sha256(api_key.encode()).hexdigest()
+
+            async with AsyncSessionFactory() as session:
+                repo   = ApiKeyRepository(session)
+                record = await repo.get_by_hash(key_hash)
+                return record is not None and not record.revoked
+
+        except Exception as e:
+            import logging
+            logging.getLogger("wrapsec.auth").error(f"Key validation failed: {e}")
+            # Fail closed — reject if DB unavailable
+            return False
