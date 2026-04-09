@@ -32,13 +32,23 @@ class ThresholdsUpdateSchema(BaseModel):
 
     @model_validator(mode="after")
     def validate_thresholds(self) -> "ThresholdsUpdateSchema":
-        block    = self.block_threshold    or settings.block_threshold
-        sanitize = self.sanitize_threshold or settings.sanitize_threshold
+        block    = self.block_threshold    if self.block_threshold    is not None else settings.block_threshold
+        sanitize = self.sanitize_threshold if self.sanitize_threshold is not None else settings.sanitize_threshold
+
+        if block <= 0.0:
+            raise ValueError("block_threshold must be greater than 0")
+        if sanitize < 0.0:
+            raise ValueError("sanitize_threshold must be 0 or greater")
         if block <= sanitize:
-            raise ValidationError(
+            raise ValueError(
                 f"block_threshold ({block}) must be greater "
                 f"than sanitize_threshold ({sanitize})"
             )
+        if block > 1.0:
+            raise ValueError("block_threshold cannot exceed 1.0")
+        if sanitize >= 1.0:
+            raise ValueError("sanitize_threshold must be less than 1.0")
+
         return self
 
 

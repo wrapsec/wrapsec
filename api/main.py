@@ -9,7 +9,8 @@ from fastapi import Response
 
 from config.settings import get_settings
 from errors.exceptions import WrapSecError
-from errors.handlers import wrapsec_exception_handler, unhandled_exception_handler
+from errors.handlers import wrapsec_exception_handler, unhandled_exception_handler, validation_exception_handler
+from fastapi.exceptions import RequestValidationError
 from api.v1.router import router as v1_router
 from api.v1.middleware.trace import TraceMiddleware
 from api.v1.middleware.logging import LoggingMiddleware
@@ -65,6 +66,7 @@ app.add_middleware(
 
 # ── Exception handlers ────────────────────────────────────────
 app.add_exception_handler(WrapSecError, wrapsec_exception_handler)
+app.add_exception_handler(RequestValidationError, validation_exception_handler)
 app.add_exception_handler(Exception, unhandled_exception_handler)
 
 # ── Routers ───────────────────────────────────────────────────

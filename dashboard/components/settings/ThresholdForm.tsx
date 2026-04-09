@@ -17,7 +17,13 @@ export function ThresholdForm({ thresholds, onUpdated }: ThresholdFormProps) {
   const [error,    setError]    = useState<string | null>(null)
   const [saved,    setSaved]    = useState(false)
 
-  const valid = block > sanitize && block <= 1.0 && sanitize >= 0.0
+  const valid = (
+    block > 0.0 &&
+    block <= 1.0 &&
+    sanitize >= 0.0 &&
+    sanitize < 1.0 &&
+    block > sanitize
+  )
 
   const handleSave = async () => {
     if (!valid) return
@@ -53,7 +59,7 @@ export function ThresholdForm({ thresholds, onUpdated }: ThresholdFormProps) {
             className="h-9 w-full px-3 text-sm rounded-md border border-slate-200 bg-white text-slate-900 focus:outline-none focus:ring-2 focus:ring-blue-800 focus:border-blue-800"
           />
           <p className="text-xs text-slate-400 mt-1">
-            Requests with risk score ≥ {block} are blocked
+            Requests with risk score ≥ {block} are blocked (min: 0.01, max: 1.0)
           </p>
         </div>
         <div>
@@ -68,14 +74,22 @@ export function ThresholdForm({ thresholds, onUpdated }: ThresholdFormProps) {
             className="h-9 w-full px-3 text-sm rounded-md border border-slate-200 bg-white text-slate-900 focus:outline-none focus:ring-2 focus:ring-blue-800 focus:border-blue-800"
           />
           <p className="text-xs text-slate-400 mt-1">
-            Requests with risk score ≥ {sanitize} are sanitized
+            Requests with risk score ≥ {sanitize} are sanitized (min: 0.0, max: 0.99)
           </p>
         </div>
       </div>
 
       {!valid && (
         <p className="text-xs text-red-600">
-          Block threshold must be greater than sanitize threshold
+          {block <= 0.0
+            ? "Block threshold must be greater than 0"
+            : block > 1.0
+            ? "Block threshold cannot exceed 1.0"
+            : sanitize < 0.0
+            ? "Sanitize threshold cannot be negative"
+            : sanitize >= 1.0
+            ? "Sanitize threshold must be less than 1.0"
+            : "Block threshold must be greater than sanitize threshold"}
         </p>
       )}
       {error && (
