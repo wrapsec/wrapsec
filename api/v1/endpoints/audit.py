@@ -19,16 +19,20 @@ def _parse_dt(value: str | None) -> datetime | None:
 
 def _format_item(item) -> dict:
     return {
-        "trace_id":       item.trace_id,
-        "timestamp":      item.created_at.isoformat(),
-        "tenant_id":      item.tenant_id,
-        "decision":       item.decision,
-        "risk_score":     item.risk_score,
-        "threats":        item.threats or [],
-        "input_hash":     item.input_hash,
-        "detection_mode": item.detection_mode,
-        "execution_mode": item.execution_mode,
-        "latency_ms":     item.latency_ms,
+        "trace_id":              item.trace_id,
+        "timestamp":             item.created_at.isoformat(),
+        "tenant_id":             item.tenant_id,
+        "decision":              item.decision,
+        "risk_score":            item.risk_score,
+        "threats":               item.threats or [],
+        "input_hash":            item.input_hash,
+        "detection_mode":        item.detection_mode,
+        "execution_mode":        item.execution_mode,
+        "latency_ms":            item.latency_ms,
+        "key_id":                item.key_id,
+        "source":                item.source,
+        "ip_address":            item.ip_address,
+        "attribution_verified":  item.attribution_verified,
     }
 
 

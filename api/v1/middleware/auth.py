@@ -28,19 +28,32 @@ class AuthMiddleware(BaseHTTPMiddleware):
             request.state.is_admin = False
             return await call_next(request)
 
+        # Always capture network attribution
+        request.state.ip_address = (
+            request.headers.get("x-forwarded-for", "").split(",")[0].strip()
+            or (request.client.host if request.client else "unknown")
+        )
+        request.state.user_agent = request.headers.get("user-agent", "")
+        request.state.key_id     = None
+        request.state.key_name   = None
+
         api_key = request.headers.get("x-api-key", "")
         auth    = request.headers.get("authorization", "")
 
         # Admin API key
         if api_key == settings.admin_api_key:
             request.state.is_admin = True
+            request.state.key_id   = "admin"
+            request.state.key_name = "Admin Key"
             return await call_next(request)
 
         # Standard API key — validate against DB
         if api_key.startswith("wsk_live_"):
-            valid = await self._validate_standard_key(api_key)
-            if valid:
+            key_record = await self._get_standard_key(api_key)
+            if key_record:
                 request.state.is_admin = False
+                request.state.key_id   = key_record.key_id
+                request.state.key_name = key_record.name
                 return await call_next(request)
             else:
                 trace_id = getattr(request.state, "trace_id", "")
@@ -73,8 +86,8 @@ class AuthMiddleware(BaseHTTPMiddleware):
             },
         )
 
-    async def _validate_standard_key(self, api_key: str) -> bool:
-        """Validate standard key against DB — check hash and revoked status."""
+    async def _get_standard_key(self, api_key: str):
+        """Validate standard key and return the record."""
         try:
             import hashlib
             from db.session import AsyncSessionFactory
@@ -85,10 +98,11 @@ class AuthMiddleware(BaseHTTPMiddleware):
             async with AsyncSessionFactory() as session:
                 repo   = ApiKeyRepository(session)
                 record = await repo.get_by_hash(key_hash)
-                return record is not None and not record.revoked
+                if record and not record.revoked:
+                    return record
+                return None
 
         except Exception as e:
             import logging
             logging.getLogger("wrapsec.auth").error(f"Key validation failed: {e}")
-            # Fail closed — reject if DB unavailable
-            return False
+            return None

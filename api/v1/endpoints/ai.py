@@ -147,22 +147,33 @@ async def ai_request(
             "pii":  result.decision.layer_scores.pii_score,
         }
 
+    # TASK-004 — default source to key name if metadata.source empty
+    source = (
+        (body.metadata.source if body.metadata and body.metadata.source else None)
+        or getattr(request.state, "key_name", None)
+        or "unknown"
+    )
+
     repo = AuditRepository(db)
     await repo.create({
-        "trace_id":          str(incoming.trace_id),
-        "decision":          result.decision.decision.value,
-        "risk_score":        result.decision.risk_score.value,
-        "threats":           [t.value for t in result.decision.threats],
-        "input_hash":        result.audit_log.input_hash,
-        "detection_mode":    det_mode_str,
-        "execution_mode":    exe_mode_str,
-        "llm_invoked":       result.decision.llm_invoked,
-        "latency_ms":        round(result.decision.latency_ms, 2),
-        "detection_scores":  detection_scores,
-        "guardrail_scores":  guardrail_scores,
-        "tenant_id":         body.metadata.tenant_id if body.metadata else None,
-        "source":            body.metadata.source if body.metadata else None,
-        "user_id":           body.metadata.user_id if body.metadata else None,
+        "trace_id":              str(incoming.trace_id),
+        "decision":              result.decision.decision.value,
+        "risk_score":            result.decision.risk_score.value,
+        "threats":               [t.value for t in result.decision.threats],
+        "input_hash":            result.audit_log.input_hash,
+        "detection_mode":        det_mode_str,
+        "execution_mode":        exe_mode_str,
+        "llm_invoked":           result.decision.llm_invoked,
+        "latency_ms":            round(result.decision.latency_ms, 2),
+        "detection_scores":      detection_scores,
+        "guardrail_scores":      guardrail_scores,
+        "tenant_id":             body.metadata.tenant_id if body.metadata else None,
+        "source":                source,
+        "user_id":               body.metadata.user_id if body.metadata else None,
+        "key_id":                getattr(request.state, "key_id",    None),
+        "ip_address":            getattr(request.state, "ip_address", None),
+        "user_agent":            getattr(request.state, "user_agent", None),
+        "attribution_verified":  False,
     })
 
     # Record Prometheus metrics
@@ -204,17 +215,21 @@ async def get_request(
         raise NotFoundError("request", trace_id)
 
     return JSONResponse(content={
-        "trace_id":       record.trace_id,
-        "timestamp":      record.created_at.isoformat(),
-        "metadata": {
-            "tenant_id": record.tenant_id,
-            "source":    record.source,
-            "user_id":   record.user_id,
+        "trace_id":  record.trace_id,
+        "timestamp": record.created_at.isoformat(),
+        "attribution": {
+            "tenant_id":            record.tenant_id,
+            "source":               record.source,
+            "user_id":              record.user_id,
+            "key_id":               record.key_id,
+            "ip_address":           record.ip_address,
+            "user_agent":           record.user_agent,
+            "attribution_verified": record.attribution_verified,
         },
-        "decision":       record.decision,
-        "risk_score":     record.risk_score,
-        "threats":        record.threats or [],
-        "input_hash":     record.input_hash,
+        "decision":          record.decision,
+        "risk_score":        record.risk_score,
+        "threats":           record.threats or [],
+        "input_hash":        record.input_hash,
         "detection_scores":  record.detection_scores or {},
         "guardrail_scores":  record.guardrail_scores or {},
         "processing": {
