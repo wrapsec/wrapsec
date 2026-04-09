@@ -111,8 +111,28 @@ async def ai_request(
         ),
     )
 
+    # Load current settings from DB
+    from db.repositories.settings import SettingsRepository
+    settings_repo      = SettingsRepository(db)
+    stored_thresholds  = await settings_repo.get("policy_thresholds") or {}
+    stored_layers      = await settings_repo.get("detection_layers")  or {}
+
+    block_threshold    = stored_thresholds.get("block_threshold",    settings.block_threshold)
+    sanitize_threshold = stored_thresholds.get("sanitize_threshold", settings.sanitize_threshold)
+    rule_enabled       = stored_layers.get("rule_enabled", True)
+    ml_enabled         = stored_layers.get("ml_enabled",   True)
+    llm_enabled        = stored_layers.get("llm_enabled",  True)
+
     # Process through gateway
-    result = await run_in_threadpool(_gateway.process, incoming)
+    result = await run_in_threadpool(
+        _gateway.process,
+        incoming,
+        block_threshold,
+        sanitize_threshold,
+        rule_enabled,
+        ml_enabled,
+        llm_enabled,
+    )
 
     # Persist audit log to PostgreSQL
     detection_scores  = {}

@@ -93,19 +93,32 @@ class GatewayService:
             logger.error(f"LLM call failed: {e}")
             return "[LLM unavailable]"
 
-    def process(self, request: IncomingRequest) -> GatewayResult:
+    def process(
+        self,
+        request:            IncomingRequest,
+        block_threshold:    float | None = None,
+        sanitize_threshold: float | None = None,
+        rule_enabled:       bool = True,
+        ml_enabled:         bool = True,
+        llm_enabled:        bool = True,
+    ) -> GatewayResult:
         start = time.perf_counter()
 
+        # Use provided settings or fall back to config defaults
+        block_threshold    = block_threshold    or settings.block_threshold
+        sanitize_threshold = sanitize_threshold or settings.sanitize_threshold
+
         try:
+
             # ── Step 1: Input guard ───────────────────────────
             input_result    = self._input_guard.inspect(request.input)
             effective_input = input_result.sanitized_text or request.input
 
             # ── Step 2: Rule detection ────────────────────────
-            rule_result = self._rule_detector.detect(effective_input)
+            rule_result = self._rule_detector.detect(effective_input) if rule_enabled else DetectionResult.clean("rule_detector")
 
             # ── Step 3: ML detection ──────────────────────────
-            ml_result = self._ml_detector.detect(effective_input)
+            ml_result = self._ml_detector.detect(effective_input) if ml_enabled else DetectionResult.clean("ml_detector")
 
             # ── Step 4: LLM detection (conditional) ───────────
             # Only invoke LLM detector if:
@@ -119,7 +132,8 @@ class GatewayService:
 
             llm_result = DetectionResult.clean("llm_detector")
             if (
-                request.detection_mode == DetectionMode.FULL
+                llm_enabled
+                and request.detection_mode == DetectionMode.FULL
                 and pre_score >= settings.llm_trigger_threshold
             ):
                 logger.debug(
@@ -138,8 +152,10 @@ class GatewayService:
 
             # ── Step 6: Policy decision ───────────────────────
             policy = self._policy_engine.decide(
-                risk_score = scoring.final_score,
-                threats    = scoring.threats,
+                risk_score         = scoring.final_score,
+                threats            = scoring.threats,
+                block_threshold    = block_threshold,
+                sanitize_threshold = sanitize_threshold,
             )
 
             # ── Step 7: Sanitized input ───────────────────────

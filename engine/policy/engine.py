@@ -29,15 +29,21 @@ class PolicyEngine:
 
     def decide(
         self,
-        risk_score: RiskScore,
-        threats:    list[ThreatCategory],
+        risk_score:         RiskScore,
+        threats:            list[ThreatCategory],
+        block_threshold:    float | None = None,
+        sanitize_threshold: float | None = None,
     ) -> PolicyDecision:
         try:
             score = risk_score.value
 
-            if self.rules.should_block(score):
+            # Use dynamic thresholds if provided
+            bt = block_threshold    or self.rules.block_threshold
+            st = sanitize_threshold or self.rules.sanitize_threshold
+
+            if score >= bt:
                 decision = DecisionType.BLOCK
-            elif self.rules.should_sanitize(score):
+            elif score >= st:
                 decision = DecisionType.SANITIZE
             else:
                 decision = DecisionType.ALLOW
