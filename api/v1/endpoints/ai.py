@@ -116,6 +116,7 @@ async def ai_request(
     settings_repo      = SettingsRepository(db)
     stored_thresholds  = await settings_repo.get("policy_thresholds") or {}
     stored_layers      = await settings_repo.get("detection_layers")  or {}
+    stored_llm         = await settings_repo.get("llm_settings")      or {}
 
     block_threshold    = stored_thresholds.get("block_threshold",    settings.block_threshold)
     sanitize_threshold = stored_thresholds.get("sanitize_threshold", settings.sanitize_threshold)
@@ -132,6 +133,7 @@ async def ai_request(
         rule_enabled,
         ml_enabled,
         llm_enabled,
+        stored_llm,
     )
 
     # Persist audit log to PostgreSQL

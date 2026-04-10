@@ -12,6 +12,9 @@ OPENAI_API_URL = "https://api.openai.com/v1/chat/completions"
 
 class OpenAIClient(BaseLLMClient):
 
+    def __init__(self, llm_settings: dict | None = None):
+        self._llm_settings = llm_settings or {}
+
     @property
     def provider(self) -> str:
         return "openai"
@@ -24,9 +27,12 @@ class OpenAIClient(BaseLLMClient):
         temperature:   float = 0.0,
         max_tokens:    int = 500,
     ) -> LLMResponse:
-        start = time.perf_counter()
+        start          = time.perf_counter()
+        resolved_model = model or self._llm_settings.get("model") or settings.llm_model
+        timeout        = self._llm_settings.get("timeout") or settings.llm_timeout
+
         try:
-            async with httpx.AsyncClient(timeout=settings.llm_timeout) as client:
+            async with httpx.AsyncClient(timeout=timeout) as client:
                 response = await client.post(
                     OPENAI_API_URL,
                     headers={
@@ -34,7 +40,7 @@ class OpenAIClient(BaseLLMClient):
                         "Content-Type":  "application/json",
                     },
                     json={
-                        "model":       model or settings.llm_model,
+                        "model":       resolved_model,
                         "temperature": temperature,
                         "max_tokens":  max_tokens,
                         "messages": [
@@ -48,7 +54,7 @@ class OpenAIClient(BaseLLMClient):
 
                 return LLMResponse(
                     content           = data["choices"][0]["message"]["content"],
-                    model             = data.get("model", model or settings.llm_model),
+                    model             = data.get("model", resolved_model),
                     provider          = self.provider,
                     prompt_tokens     = data.get("usage", {}).get("prompt_tokens", 0),
                     completion_tokens = data.get("usage", {}).get("completion_tokens", 0),
@@ -59,7 +65,7 @@ class OpenAIClient(BaseLLMClient):
             logger.error(f"OpenAI completion failed: {e}")
             return LLMResponse(
                 content    = "",
-                model      = model or settings.llm_model,
+                model      = resolved_model,
                 provider   = self.provider,
                 latency_ms = (time.perf_counter() - start) * 1000,
             )

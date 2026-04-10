@@ -59,15 +59,11 @@ class GatewayService:
     def _hash_input(self, text: str) -> str:
         return "sha256:" + hashlib.sha256(text.encode()).hexdigest()[:16] + "..."
 
-    def _call_llm(self, text: str, model: str) -> str:
-        """
-        Call the configured LLM provider synchronously.
-        GatewayService runs in a threadpool so we need a sync wrapper.
-        """
+    def _call_llm(self, text: str, model: str, llm_settings: dict | None = None) -> str:
         import asyncio
         from clients import get_llm_client
 
-        client = get_llm_client()
+        client = get_llm_client(llm_settings=llm_settings)
 
         system_prompt = (
             "You are a helpful AI assistant. "
@@ -101,6 +97,7 @@ class GatewayService:
         rule_enabled:       bool = True,
         ml_enabled:         bool = True,
         llm_enabled:        bool = True,
+        llm_settings:       dict | None = None,
     ) -> GatewayResult:
         start = time.perf_counter()
 
@@ -173,7 +170,11 @@ class GatewayService:
             ):
                 llm_invoked   = True
                 prompt        = sanitized_input or effective_input
-                raw_output    = self._call_llm(prompt, request.model or settings.llm_model)
+                raw_output    = self._call_llm(
+                    prompt,
+                    request.model or (llm_settings or {}).get("model") or settings.llm_model,
+                    llm_settings=llm_settings,
+                )
 
                 # Output guard — check LLM response for PII
                 output_result = self._output_guard.inspect(raw_output)

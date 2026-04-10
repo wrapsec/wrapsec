@@ -114,3 +114,63 @@ async def update_layers(
         **current,
         "updated_at": datetime.now(timezone.utc).isoformat(),
     })
+
+LLM_KEY = "llm_settings"
+
+DEFAULT_LLM = {
+    "provider":    settings.llm_provider,
+    "model":       settings.llm_model,
+    "base_url":    settings.llm_base_url,
+    "timeout":     settings.llm_timeout,
+    "llm_trigger": settings.llm_trigger_threshold,
+}
+
+
+class LLMSettingsSchema(BaseModel):
+    provider:    str   | None = None
+    model:       str   | None = None
+    base_url:    str   | None = None
+    timeout:     int   | None = None
+    llm_trigger: float | None = None
+
+    @model_validator(mode="after")
+    def validate_llm(self) -> "LLMSettingsSchema":
+        if self.provider and self.provider not in ("ollama", "openai", "groq"):
+            raise ValueError("provider must be ollama, openai, or groq")
+        if self.timeout is not None and self.timeout < 5:
+            raise ValueError("timeout must be at least 5 seconds")
+        if self.timeout is not None and self.timeout > 120:
+            raise ValueError("timeout cannot exceed 120 seconds")
+        if self.llm_trigger is not None:
+            if self.llm_trigger < 0.0 or self.llm_trigger > 1.0:
+                raise ValueError("llm_trigger must be between 0.0 and 1.0")
+        return self
+
+
+@router.get("/llm")
+async def get_llm_settings(db: AsyncSession = Depends(get_db)):
+    repo   = SettingsRepository(db)
+    stored = await repo.get(LLM_KEY)
+    return JSONResponse(content=stored or DEFAULT_LLM)
+
+
+@router.put("/llm")
+async def update_llm_settings(
+    body: LLMSettingsSchema,
+    db:   AsyncSession = Depends(get_db),
+):
+    repo    = SettingsRepository(db)
+    current = await repo.get(LLM_KEY) or DEFAULT_LLM.copy()
+
+    if body.provider    is not None: current["provider"]    = body.provider
+    if body.model       is not None: current["model"]       = body.model
+    if body.base_url    is not None: current["base_url"]    = body.base_url
+    if body.timeout     is not None: current["timeout"]     = body.timeout
+    if body.llm_trigger is not None: current["llm_trigger"] = body.llm_trigger
+
+    await repo.set(LLM_KEY, current)
+
+    return JSONResponse(content={
+        **current,
+        "updated_at": datetime.now(timezone.utc).isoformat(),
+    })

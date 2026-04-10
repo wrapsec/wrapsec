@@ -9,10 +9,9 @@ settings = get_settings()
 
 
 class LocalLLMClient(BaseLLMClient):
-    """
-    Ollama local LLM client.
-    Uses the Ollama /api/chat endpoint.
-    """
+
+    def __init__(self, llm_settings: dict | None = None):
+        self._llm_settings = llm_settings or {}
 
     @property
     def provider(self) -> str:
@@ -26,13 +25,15 @@ class LocalLLMClient(BaseLLMClient):
         temperature:   float = 0.0,
         max_tokens:    int = 500,
     ) -> LLMResponse:
-        start         = time.perf_counter()
-        resolved_model = model or settings.llm_model
+        start          = time.perf_counter()
+        resolved_model = model or self._llm_settings.get("model") or settings.llm_model
+        base_url       = self._llm_settings.get("base_url") or settings.llm_base_url
+        timeout        = self._llm_settings.get("timeout")  or settings.llm_timeout
 
         try:
             async with httpx.AsyncClient(timeout=settings.llm_timeout) as client:
                 response = await client.post(
-                    f"{settings.llm_base_url}/api/chat",
+                    f"{base_url}/api/chat",
                     json={
                         "model":  resolved_model,
                         "stream": False,
@@ -65,7 +66,7 @@ class LocalLLMClient(BaseLLMClient):
 
     async def is_available(self) -> bool:
         try:
-            async with httpx.AsyncClient(timeout=5) as client:
+            async with httpx.AsyncClient(timeout=timeout) as client:
                 response = await client.get(f"{settings.llm_base_url}/api/tags")
                 return response.status_code == 200
         except Exception:

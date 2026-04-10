@@ -9,7 +9,6 @@ settings = get_settings()
 
 GROQ_API_URL = "https://api.groq.com/openai/v1/chat/completions"
 
-# Groq supported models
 GROQ_MODELS = {
     "llama3-8b-8192",
     "llama3-70b-8192",
@@ -21,6 +20,9 @@ DEFAULT_GROQ_MODEL = "llama3-8b-8192"
 
 
 class GroqClient(BaseLLMClient):
+
+    def __init__(self, llm_settings: dict | None = None):
+        self._llm_settings = llm_settings or {}
 
     @property
     def provider(self) -> str:
@@ -34,13 +36,15 @@ class GroqClient(BaseLLMClient):
         temperature:   float = 0.0,
         max_tokens:    int = 500,
     ) -> LLMResponse:
-        start = time.perf_counter()
+        start   = time.perf_counter()
+        timeout = self._llm_settings.get("timeout") or settings.llm_timeout
 
         # Groq requires a valid model name
-        resolved_model = model if model in GROQ_MODELS else DEFAULT_GROQ_MODEL
+        requested      = model or self._llm_settings.get("model") or DEFAULT_GROQ_MODEL
+        resolved_model = requested if requested in GROQ_MODELS else DEFAULT_GROQ_MODEL
 
         try:
-            async with httpx.AsyncClient(timeout=settings.llm_timeout) as client:
+            async with httpx.AsyncClient(timeout=timeout) as client:
                 response = await client.post(
                     GROQ_API_URL,
                     headers={
