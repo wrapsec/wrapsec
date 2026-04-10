@@ -204,6 +204,21 @@ class GatewayService:
                 sanitize_threshold  = sanitize_threshold,
             )
 
+            # Compute confidence score
+            from engine.scoring.confidence import compute_confidence
+            confidence, confidence_band = compute_confidence(
+                rule_score          = scoring.rule_score,
+                ml_score            = scoring.ml_score,
+                llm_score           = scoring.llm_score,
+                pii_score           = scoring.pii_score,
+                rule_enabled        = rule_enabled,
+                ml_enabled          = ml_enabled,
+                llm_invoked         = llm_invoked,
+                guardrail_triggered = guardrail_triggered,
+                block_threshold     = block_threshold,
+                sanitize_threshold  = sanitize_threshold,
+            )
+
             gateway_decision = GatewayDecision(
                 trace_id        = request.trace_id,
                 decision        = policy.decision,
@@ -217,6 +232,8 @@ class GatewayService:
                 execution_mode  = request.execution_mode,
                 latency_ms      = latency_ms,
                 primary_reason  = primary_reason,
+                confidence      = confidence,
+                confidence_band = confidence_band,
             )
 
             audit_log = AuditLog(

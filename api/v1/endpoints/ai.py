@@ -34,6 +34,8 @@ def _build_response(decision, debug: bool = False) -> dict:
         "decision":        decision.decision.value,
         "risk_score":      decision.risk_score.value,
         "primary_reason":  decision.primary_reason,
+        "confidence":      decision.confidence,
+        "confidence_band": decision.confidence_band,
         "threats":         [t.value for t in decision.threats],
         "sanitized_input": decision.sanitized_input,
         "output":          decision.output,
@@ -186,6 +188,8 @@ async def ai_request(
                                 or (body.metadata.tenant_id if body.metadata else None),
         "policy_source":   policy_source,
         "primary_reason":  result.decision.primary_reason,
+        "confidence":      result.decision.confidence,
+        "confidence_band": result.decision.confidence_band,
     })
 
     # Record Prometheus metrics
@@ -243,6 +247,8 @@ async def get_request(
         "decision":        record.decision,
         "risk_score":      record.risk_score,
         "primary_reason":  record.primary_reason,
+        "confidence":      record.confidence,
+        "confidence_band": record.confidence_band,
         "threats":         record.threats or [],
         "input_hash":        record.input_hash,
         "detection_scores":  record.detection_scores or {},

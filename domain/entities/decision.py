@@ -35,6 +35,8 @@ class GatewayDecision:
     execution_mode:  ExecutionMode         = ExecutionMode.SCAN_ONLY
     latency_ms:      float                 = 0.0
     primary_reason:  str | None            = None
+    confidence:      float | None          = None
+    confidence_band: str | None            = None
     decided_at:      datetime              = field(default_factory=datetime.utcnow)
 
     @property

@@ -92,6 +92,8 @@ class AuditLogModel(Base):
     tenant_id      = Column(String(50),  nullable=True)
     policy_source  = Column(String(50),  nullable=True)
     primary_reason = Column(String(50),  nullable=True)
+    confidence      = Column(Float,      nullable=True)
+    confidence_band = Column(String(10), nullable=True)
     source         = Column(String(100), nullable=True)
     user_id        = Column(String(100), nullable=True)
     created_at     = Column(DateTime,    nullable=False, default=datetime.utcnow)
