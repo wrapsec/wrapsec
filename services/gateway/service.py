@@ -190,6 +190,20 @@ class GatewayService:
                 pii_score  = scoring.pii_score,
             )
 
+            # Compute primary reason
+            from engine.scoring.primary_reason import compute_primary_reason
+            guardrail_triggered = scoring.pii_score >= block_threshold or scoring.pii_score >= sanitize_threshold
+            primary_reason = compute_primary_reason(
+                guardrail_triggered = guardrail_triggered,
+                guardrail_decision  = policy.decision.value,
+                rule_score          = scoring.rule_score,
+                ml_score            = scoring.ml_score,
+                llm_score           = scoring.llm_score,
+                pii_score           = scoring.pii_score,
+                block_threshold     = block_threshold,
+                sanitize_threshold  = sanitize_threshold,
+            )
+
             gateway_decision = GatewayDecision(
                 trace_id        = request.trace_id,
                 decision        = policy.decision,
@@ -202,6 +216,7 @@ class GatewayService:
                 detection_mode  = request.detection_mode,
                 execution_mode  = request.execution_mode,
                 latency_ms      = latency_ms,
+                primary_reason  = primary_reason,
             )
 
             audit_log = AuditLog(

@@ -33,6 +33,7 @@ def _build_response(decision, debug: bool = False) -> dict:
         "trace_id":        str(decision.trace_id),
         "decision":        decision.decision.value,
         "risk_score":      decision.risk_score.value,
+        "primary_reason":  decision.primary_reason,
         "threats":         [t.value for t in decision.threats],
         "sanitized_input": decision.sanitized_input,
         "output":          decision.output,
@@ -183,7 +184,8 @@ async def ai_request(
         "dept_id":              getattr(request.state, "dept_id",   None),
         "tenant_id":            getattr(request.state, "tenant_id", None)
                                 or (body.metadata.tenant_id if body.metadata else None),
-        "policy_source":        policy_source,
+        "policy_source":   policy_source,
+        "primary_reason":  result.decision.primary_reason,
     })
 
     # Record Prometheus metrics
@@ -238,9 +240,10 @@ async def get_request(
             "user_agent":           record.user_agent,
             "attribution_verified": record.attribution_verified,
         },
-        "decision":          record.decision,
-        "risk_score":        record.risk_score,
-        "threats":           record.threats or [],
+        "decision":        record.decision,
+        "risk_score":      record.risk_score,
+        "primary_reason":  record.primary_reason,
+        "threats":         record.threats or [],
         "input_hash":        record.input_hash,
         "detection_scores":  record.detection_scores or {},
         "guardrail_scores":  record.guardrail_scores or {},
