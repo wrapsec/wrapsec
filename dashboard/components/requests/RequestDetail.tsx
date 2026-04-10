@@ -43,8 +43,8 @@ export function RequestDetailModal({ traceId, onClose }: RequestDetailModalProps
   }, [traceId])
 
   return (
-    <div className="fixed inset-0 bg-black/40 flex items-center justify-center z-50 p-4">
-      <div className="bg-white rounded-xl border border-slate-200 w-full max-w-2xl max-h-[90vh] overflow-y-auto shadow-lg">
+    <div className="fixed inset-0 bg-black/40 flex items-start justify-center z-50 p-6 overflow-y-auto">
+      <div className="bg-white rounded-xl border border-slate-200 w-full max-w-2xl shadow-lg flex flex-col" style={{ maxHeight: "90vh" }}>
         {/* Header */}
         <div className="flex items-center justify-between px-6 py-4 border-b border-slate-100">
           <div>
@@ -62,7 +62,7 @@ export function RequestDetailModal({ traceId, onClose }: RequestDetailModalProps
         </div>
 
         {/* Content */}
-        <div className="px-6 py-5 space-y-6">
+        <div className="px-6 py-5 space-y-6 overflow-y-auto flex-1">
           {loading && (
             <div className="flex items-center justify-center py-12">
               <Spinner className="h-6 w-6" />
@@ -78,7 +78,7 @@ export function RequestDetailModal({ traceId, onClose }: RequestDetailModalProps
           {detail && (
             <>
               {/* Decision summary */}
-              <div className="flex items-center gap-4 p-4 bg-slate-50 rounded-lg border border-slate-100">
+              <div className="flex items-center gap-4 p-4 bg-slate-50 rounded-lg border border-slate-100 flex-wrap">
                 <div>
                   <p className="text-xs text-slate-500 mb-1">Decision</p>
                   <DecisionBadge decision={detail.decision} />
@@ -88,6 +88,35 @@ export function RequestDetailModal({ traceId, onClose }: RequestDetailModalProps
                   <p className="text-xs text-slate-500 mb-1">Risk Score</p>
                   <p className="text-sm font-semibold text-slate-900">
                     {formatScore(detail.risk_score)}
+                  </p>
+                </div>
+                <div className="h-8 w-px bg-slate-200" />
+                <div>
+                  <p className="text-xs text-slate-500 mb-1">Confidence</p>
+                  <div className="flex items-center gap-1.5">
+                    <p className="text-sm font-semibold text-slate-900">
+                      {detail.confidence !== null
+                        ? `${Math.round((detail.confidence ?? 0) * 100)}%`
+                        : "—"}
+                    </p>
+                    {detail.confidence_band && (
+                      <span className={`text-xs px-2 py-0.5 rounded-full font-medium ${
+                        detail.confidence_band === "HIGH"
+                          ? "bg-green-50 text-green-700 border border-green-200"
+                          : detail.confidence_band === "MEDIUM"
+                          ? "bg-amber-50 text-amber-700 border border-amber-200"
+                          : "bg-red-50 text-red-700 border border-red-200"
+                      }`}>
+                        {detail.confidence_band}
+                      </span>
+                    )}
+                  </div>
+                </div>
+                <div className="h-8 w-px bg-slate-200" />
+                <div>
+                  <p className="text-xs text-slate-500 mb-1">Primary Reason</p>
+                  <p className="text-xs font-mono text-slate-600">
+                    {detail.primary_reason || "—"}
                   </p>
                 </div>
                 <div className="h-8 w-px bg-slate-200" />
