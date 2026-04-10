@@ -1,0 +1,138 @@
+import uuid
+from fastapi import APIRouter, Depends
+from fastapi.responses import JSONResponse
+from sqlalchemy.ext.asyncio import AsyncSession
+from api.v1.dependencies.db import get_db
+from db.repositories.application import ApplicationRepository
+from db.repositories.department import DepartmentRepository
+from db.repositories.tenant import TenantRepository
+from errors.exceptions import NotFoundError
+from pydantic import BaseModel
+
+router = APIRouter()
+
+
+def _format(app) -> dict:
+    return {
+        "id":                   str(app.id),
+        "tenant_id":            str(app.tenant_id),
+        "dept_id":              str(app.dept_id),
+        "slug":                 app.slug,
+        "name":                 app.name,
+        "description":          app.description,
+        "owner_name":           app.owner_name,
+        "owner_email":          app.owner_email,
+        "environment":          app.environment,
+        "metadata":             app.metadata_,
+        "policy_override":      app.policy_override,
+        "rate_limit_override":  app.rate_limit_override,
+        "is_active":            app.is_active,
+        "created_at":           app.created_at.isoformat(),
+    }
+
+
+class ApplicationCreateSchema(BaseModel):
+    dept_id:            str
+    slug:               str
+    name:               str
+    description:        str  | None = None
+    owner_name:         str  | None = None
+    owner_email:        str  | None = None
+    environment:        str  | None = "production"
+    metadata:           dict | None = None
+    policy_override:    dict | None = None
+    rate_limit_override: int | None = None
+
+
+class ApplicationUpdateSchema(BaseModel):
+    name:               str  | None = None
+    description:        str  | None = None
+    owner_name:         str  | None = None
+    owner_email:        str  | None = None
+    environment:        str  | None = None
+    metadata:           dict | None = None
+    policy_override:    dict | None = None
+    rate_limit_override: int | None = None
+    is_active:          bool | None = None
+
+
+@router.post("")
+async def create_application(
+    body: ApplicationCreateSchema,
+    db:   AsyncSession = Depends(get_db),
+):
+    tenant_repo = TenantRepository(db)
+    tenant      = await tenant_repo.get_default()
+
+    # Validate department belongs to tenant
+    dept_repo = DepartmentRepository(db)
+    dept      = await dept_repo.get_by_id(uuid.UUID(body.dept_id))
+    if not dept or str(dept.tenant_id) != str(tenant.id):
+        raise NotFoundError("department", body.dept_id)
+
+    repo   = ApplicationRepository(db)
+    record = await repo.create({
+        "tenant_id":           tenant.id,
+        "dept_id":             uuid.UUID(body.dept_id),
+        "slug":                body.slug,
+        "name":                body.name,
+        "description":         body.description,
+        "owner_name":          body.owner_name,
+        "owner_email":         body.owner_email,
+        "environment":         body.environment or "production",
+        "metadata_":           body.metadata,
+        "policy_override":     body.policy_override,
+        "rate_limit_override": body.rate_limit_override,
+    })
+    return JSONResponse(content=_format(record), status_code=201)
+
+
+@router.get("")
+async def list_applications(
+    dept_id: str | None = None,
+    db: AsyncSession = Depends(get_db),
+):
+    tenant_repo = TenantRepository(db)
+    tenant      = await tenant_repo.get_default()
+    repo        = ApplicationRepository(db)
+
+    if dept_id:
+        items = await repo.list_by_dept(uuid.UUID(dept_id))
+    else:
+        items = await repo.list_by_tenant(tenant.id)
+
+    return JSONResponse(content={"applications": [_format(a) for a in items]})
+
+
+@router.get("/{app_id}")
+async def get_application(app_id: str, db: AsyncSession = Depends(get_db)):
+    repo   = ApplicationRepository(db)
+    record = await repo.get_by_id(uuid.UUID(app_id))
+    if not record:
+        raise NotFoundError("application", app_id)
+    return JSONResponse(content=_format(record))
+
+
+@router.put("/{app_id}")
+async def update_application(
+    app_id: str,
+    body:   ApplicationUpdateSchema,
+    db:     AsyncSession = Depends(get_db),
+):
+    repo = ApplicationRepository(db)
+    data = {k: v for k, v in body.model_dump().items() if v is not None}
+    if "metadata" in data:
+        data["metadata_"] = data.pop("metadata")
+    record = await repo.update(uuid.UUID(app_id), data)
+    if not record:
+        raise NotFoundError("application", app_id)
+    return JSONResponse(content=_format(record))
+
+
+@router.delete("/{app_id}")
+async def delete_application(app_id: str, db: AsyncSession = Depends(get_db)):
+    repo   = ApplicationRepository(db)
+    record = await repo.update(uuid.UUID(app_id), {"is_active": False})
+    if not record:
+        raise NotFoundError("application", app_id)
+    return JSONResponse(content={"app_id": app_id, "deactivated": True})

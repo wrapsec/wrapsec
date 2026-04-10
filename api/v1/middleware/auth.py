@@ -36,24 +36,33 @@ class AuthMiddleware(BaseHTTPMiddleware):
         request.state.user_agent = request.headers.get("user-agent", "")
         request.state.key_id     = None
         request.state.key_name   = None
+        request.state.app_id     = None
+        request.state.dept_id    = None
+        request.state.tenant_id  = None
 
         api_key = request.headers.get("x-api-key", "")
         auth    = request.headers.get("authorization", "")
 
         # Admin API key
         if api_key == settings.admin_api_key:
-            request.state.is_admin = True
-            request.state.key_id   = "admin"
-            request.state.key_name = "Admin Key"
+            request.state.is_admin  = True
+            request.state.key_id    = "admin"
+            request.state.key_name  = "Admin Key"
+            request.state.app_id    = None
+            request.state.dept_id   = None
+            request.state.tenant_id = None
             return await call_next(request)
 
         # Standard API key — validate against DB
         if api_key.startswith("wsk_live_"):
             key_record = await self._get_standard_key(api_key)
             if key_record:
-                request.state.is_admin = False
-                request.state.key_id   = key_record.key_id
-                request.state.key_name = key_record.name
+                request.state.is_admin  = False
+                request.state.key_id    = key_record.key_id
+                request.state.key_name  = key_record.name
+                request.state.app_id    = str(key_record.app_id)    if key_record.app_id    else None
+                request.state.dept_id   = str(key_record.dept_id)   if key_record.dept_id   else None
+                request.state.tenant_id = str(key_record.tenant_id) if key_record.tenant_id else None
                 return await call_next(request)
             else:
                 trace_id = getattr(request.state, "trace_id", "")

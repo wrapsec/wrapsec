@@ -172,10 +172,14 @@ async def ai_request(
         "tenant_id":             body.metadata.tenant_id if body.metadata else None,
         "source":                source,
         "user_id":               body.metadata.user_id if body.metadata else None,
-        "key_id":                getattr(request.state, "key_id",    None),
-        "ip_address":            getattr(request.state, "ip_address", None),
-        "user_agent":            getattr(request.state, "user_agent", None),
-        "attribution_verified":  False,
+        "key_id":               getattr(request.state, "key_id",    None),
+        "ip_address":           getattr(request.state, "ip_address", None),
+        "user_agent":           getattr(request.state, "user_agent", None),
+        "attribution_verified": False,
+        "app_id":               getattr(request.state, "app_id",    None),
+        "dept_id":              getattr(request.state, "dept_id",   None),
+        "tenant_id":            getattr(request.state, "tenant_id", None)
+                                or (body.metadata.tenant_id if body.metadata else None),
     })
 
     # Record Prometheus metrics
@@ -221,6 +225,8 @@ async def get_request(
         "timestamp": record.created_at.isoformat(),
         "attribution": {
             "tenant_id":            record.tenant_id,
+            "dept_id":              record.dept_id,
+            "app_id":               record.app_id,
             "source":               record.source,
             "user_id":              record.user_id,
             "key_id":               record.key_id,
