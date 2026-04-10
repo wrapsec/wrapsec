@@ -111,18 +111,21 @@ async def ai_request(
         ),
     )
 
-    # Load current settings from DB
-    from db.repositories.settings import SettingsRepository
-    settings_repo      = SettingsRepository(db)
-    stored_thresholds  = await settings_repo.get("policy_thresholds") or {}
-    stored_layers      = await settings_repo.get("detection_layers")  or {}
-    stored_llm         = await settings_repo.get("llm_settings")      or {}
+    # Resolve effective policy for this request
+    from services.policy_resolver import resolve_policy
+    policy, policy_source = await resolve_policy(
+        db        = db,
+        tenant_id = getattr(request.state, "tenant_id", None),
+        dept_id   = getattr(request.state, "dept_id",   None),
+        app_id    = getattr(request.state, "app_id",    None),
+    )
 
-    block_threshold    = stored_thresholds.get("block_threshold",    settings.block_threshold)
-    sanitize_threshold = stored_thresholds.get("sanitize_threshold", settings.sanitize_threshold)
-    rule_enabled       = stored_layers.get("rule_enabled", True)
-    ml_enabled         = stored_layers.get("ml_enabled",   True)
-    llm_enabled        = stored_layers.get("llm_enabled",  True)
+    block_threshold    = policy["thresholds"]["block"]
+    sanitize_threshold = policy["thresholds"]["sanitize"]
+    rule_enabled       = policy["detection"]["rule_enabled"]
+    ml_enabled         = policy["detection"]["ml_enabled"]
+    llm_enabled        = policy["detection"]["llm_enabled"]
+    llm_settings       = policy["llm"]
 
     # Process through gateway
     result = await run_in_threadpool(
@@ -133,7 +136,7 @@ async def ai_request(
         rule_enabled,
         ml_enabled,
         llm_enabled,
-        stored_llm,
+        llm_settings,
     )
 
     # Persist audit log to PostgreSQL
@@ -180,6 +183,7 @@ async def ai_request(
         "dept_id":              getattr(request.state, "dept_id",   None),
         "tenant_id":            getattr(request.state, "tenant_id", None)
                                 or (body.metadata.tenant_id if body.metadata else None),
+        "policy_source":        policy_source,
     })
 
     # Record Prometheus metrics
@@ -245,5 +249,6 @@ async def get_request(
             "llm_invoked":    record.llm_invoked,
             "detection_mode": record.detection_mode,
             "execution_mode": record.execution_mode,
+            "policy_source":  record.policy_source,
         },
     })
