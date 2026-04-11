@@ -9,7 +9,7 @@ class TenantRepository(BaseRepository):
     async def get_default(self) -> TenantModel | None:
         result = await self.session.execute(
             select(TenantModel).where(
-                TenantModel.slug     == "default",
+                TenantModel.slug      == "default",
                 TenantModel.is_active == True,
             )
         )
@@ -18,7 +18,7 @@ class TenantRepository(BaseRepository):
     async def get_by_slug(self, slug: str) -> TenantModel | None:
         result = await self.session.execute(
             select(TenantModel).where(
-                TenantModel.slug     == slug,
+                TenantModel.slug      == slug,
                 TenantModel.is_active == True,
             )
         )

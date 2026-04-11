@@ -110,6 +110,28 @@ async def list_keys(db: AsyncSession = Depends(get_db)):
         ]
     })
 
+class UpdateKeySchema(BaseModel):
+    name: str
+
+@router.put("/{key_id}")
+async def update_key(
+    key_id: str,
+    body:   UpdateKeySchema,
+    db:     AsyncSession = Depends(get_db),
+):
+    repo   = ApiKeyRepository(db)
+    record = await repo.get_by_key_id(key_id)
+    if not record:
+        raise NotFoundError("key", key_id)
+
+    record.name = body.name
+    await db.commit()
+
+    return JSONResponse(content={
+        "key_id":     record.key_id,
+        "name":       record.name,
+        "updated_at": datetime.now(timezone.utc).isoformat(),
+    })
 
 @router.delete("/{key_id}")
 async def delete_key(

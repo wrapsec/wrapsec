@@ -22,6 +22,10 @@ class AuditRepository(BaseRepository):
     async def list(
         self,
         tenant_id:       str | None = None,
+        dept_id:         str | None = None,
+        app_id:          str | None = None,
+        key_id:          str | None = None,
+        user_id:         str | None = None,
         trace_id:        str | None = None,
         decision:        str | None = None,
         threat_category: str | None = None,
@@ -36,6 +40,14 @@ class AuditRepository(BaseRepository):
 
         if tenant_id:
             query = query.where(AuditLogModel.tenant_id == tenant_id)
+        if dept_id:
+            query = query.where(AuditLogModel.dept_id == dept_id)
+        if app_id:
+            query = query.where(AuditLogModel.app_id == app_id)
+        if key_id:
+            query = query.where(AuditLogModel.key_id == key_id)
+        if user_id:
+            query = query.where(AuditLogModel.user_id.ilike(f"%{user_id}%"))
         if trace_id:
             query = query.where(AuditLogModel.trace_id.ilike(f"%{trace_id}%"))
         if decision:

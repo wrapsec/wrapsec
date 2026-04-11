@@ -39,6 +39,10 @@ def _format_item(item) -> dict:
 @router.get("/logs")
 async def get_audit_logs(
     tenant_id:       str | None = Query(None),
+    dept_id:         str | None = Query(None),
+    app_id:          str | None = Query(None),
+    key_id:          str | None = Query(None),
+    user_id:         str | None = Query(None),
     trace_id:        str | None = Query(None),
     decision:        str | None = Query(None),
     threat_category: str | None = Query(None),
@@ -53,6 +57,10 @@ async def get_audit_logs(
     repo = AuditRepository(db)
     total, items = await repo.list(
         tenant_id       = tenant_id,
+        dept_id         = dept_id,
+        app_id          = app_id,
+        key_id          = key_id,
+        user_id         = user_id,
         trace_id        = trace_id,
         decision        = decision,
         threat_category = threat_category,

@@ -230,13 +230,37 @@ async def get_request(
     if not record:
         raise NotFoundError("request", trace_id)
 
+    # Enrich with human-readable names
+    dept_name = None
+    app_name  = None
+    if record.dept_id:
+        try:
+            import uuid
+            from db.repositories.department import DepartmentRepository
+            dept_repo = DepartmentRepository(db)
+            dept      = await dept_repo.get_by_id(uuid.UUID(record.dept_id))
+            dept_name = dept.name if dept else None
+        except Exception:
+            pass
+    if record.app_id:
+        try:
+            import uuid
+            from db.repositories.application import ApplicationRepository
+            app_repo = ApplicationRepository(db)
+            app      = await app_repo.get_by_id(uuid.UUID(record.app_id))
+            app_name = app.name if app else None
+        except Exception:
+            pass
+
     return JSONResponse(content={
         "trace_id":  record.trace_id,
         "timestamp": record.created_at.isoformat(),
         "attribution": {
             "tenant_id":            record.tenant_id,
             "dept_id":              record.dept_id,
+            "dept_name":            dept_name,
             "app_id":               record.app_id,
+            "app_name":             app_name,
             "source":               record.source,
             "user_id":              record.user_id,
             "key_id":               record.key_id,

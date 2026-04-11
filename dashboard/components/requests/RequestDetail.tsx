@@ -228,8 +228,8 @@ export function RequestDetailModal({ traceId, onClose }: RequestDetailModalProps
                   {[
                     { label: "Source",         value: detail.attribution.source      || "—" },
                     { label: "Key ID",         value: detail.attribution.key_id      || "—" },
-                    { label: "Department",     value: detail.attribution.dept_id     || "—" },
-                    { label: "Application",    value: detail.attribution.app_id      || "—" },
+                    { label: "Department",  value: detail.attribution.dept_name || detail.attribution.dept_id || "—" },
+                    { label: "Application", value: detail.attribution.app_name  || detail.attribution.app_id  || "—" },
                     { label: "User ID",        value: detail.attribution.user_id     || "—" },
                     { label: "IP Address",     value: detail.attribution.ip_address  || "—" },
                     { label: "Detection mode", value: detail.processing.detection_mode },
