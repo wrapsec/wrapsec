@@ -136,3 +136,38 @@ async def delete_application(app_id: str, db: AsyncSession = Depends(get_db)):
     if not record:
         raise NotFoundError("application", app_id)
     return JSONResponse(content={"app_id": app_id, "deactivated": True})
+
+@router.get("/{app_id}/policy")
+async def get_application_policy(
+    app_id: str,
+    db:     AsyncSession = Depends(get_db),
+):
+    """
+    Returns the fully resolved effective policy for this application.
+    Merges: system defaults → tenant global → department → application.
+    Application overrides are null in v1 — will be active in v1.1.
+    """
+    from services.policy_resolver import resolve_policy
+    import uuid as uuid_lib
+
+    repo = ApplicationRepository(db)
+    app  = await repo.get_by_id(uuid_lib.UUID(app_id))
+    if not app:
+        raise NotFoundError("application", app_id)
+
+    policy, policy_source = await resolve_policy(
+        db        = db,
+        tenant_id = str(app.tenant_id),
+        dept_id   = str(app.dept_id),
+        app_id    = app_id,
+    )
+
+    return JSONResponse(content={
+        "app_id":          app_id,
+        "app_name":        app.name,
+        "dept_id":         str(app.dept_id),
+        "policy_source":   policy_source,
+        "override_set":    app.policy_override is not None,
+        "policy_override": app.policy_override,  # null in v1
+        "resolved_policy": policy,
+    })

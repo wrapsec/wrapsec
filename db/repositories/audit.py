@@ -26,9 +26,12 @@ class AuditRepository(BaseRepository):
         app_id:          str | None = None,
         key_id:          str | None = None,
         user_id:         str | None = None,
+        source:          str | None = None,
         trace_id:        str | None = None,
         decision:        str | None = None,
         threat_category: str | None = None,
+        primary_reason:  str | None = None,
+        confidence_band: str | None = None,
         from_dt:         datetime | None = None,
         to_dt:           datetime | None = None,
         sort_by:         str = "created_at",
@@ -48,6 +51,12 @@ class AuditRepository(BaseRepository):
             query = query.where(AuditLogModel.key_id == key_id)
         if user_id:
             query = query.where(AuditLogModel.user_id.ilike(f"%{user_id}%"))
+        if source:
+            query = query.where(AuditLogModel.source.ilike(f"%{source}%"))
+        if primary_reason:
+            query = query.where(AuditLogModel.primary_reason == primary_reason)
+        if confidence_band:
+            query = query.where(AuditLogModel.confidence_band == confidence_band)
         if trace_id:
             query = query.where(AuditLogModel.trace_id.ilike(f"%{trace_id}%"))
         if decision:

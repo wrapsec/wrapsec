@@ -71,37 +71,6 @@ async def list_departments(db: AsyncSession = Depends(get_db)):
     return JSONResponse(content={"departments": [_format(d) for d in items]})
 
 
-@router.get("/{dept_id}")
-async def get_department(dept_id: str, db: AsyncSession = Depends(get_db)):
-    repo   = DepartmentRepository(db)
-    record = await repo.get_by_id(uuid.UUID(dept_id))
-    if not record:
-        raise NotFoundError("department", dept_id)
-    return JSONResponse(content=_format(record))
-
-
-@router.put("/{dept_id}")
-async def update_department(
-    dept_id: str,
-    body:    DepartmentUpdateSchema,
-    db:      AsyncSession = Depends(get_db),
-):
-    repo = DepartmentRepository(db)
-    data = {k: v for k, v in body.model_dump().items() if v is not None}
-    record = await repo.update(uuid.UUID(dept_id), data)
-    if not record:
-        raise NotFoundError("department", dept_id)
-    return JSONResponse(content=_format(record))
-
-
-@router.delete("/{dept_id}")
-async def delete_department(dept_id: str, db: AsyncSession = Depends(get_db)):
-    repo   = DepartmentRepository(db)
-    record = await repo.update(uuid.UUID(dept_id), {"is_active": False})
-    if not record:
-        raise NotFoundError("department", dept_id)
-    return JSONResponse(content={"dept_id": dept_id, "deactivated": True})
-
 @router.get("/{dept_id}/stats")
 async def get_department_stats(
     dept_id: str,
@@ -167,3 +136,67 @@ async def get_department_stats(
         "avg_latency_ms": round(avg_latency, 2),
         "top_threats":    top_threats,
     })
+
+@router.get("/{dept_id}/policy")
+async def get_department_policy(
+    dept_id: str,
+    db:      AsyncSession = Depends(get_db),
+):
+    """
+    Returns the fully resolved effective policy for this department.
+    Merges: system defaults → tenant global → department override.
+    Useful for compliance verification.
+    """
+    from services.policy_resolver import resolve_policy
+
+    repo   = DepartmentRepository(db)
+    dept   = await repo.get_by_id(uuid.UUID(dept_id))
+    if not dept:
+        raise NotFoundError("department", dept_id)
+
+    policy, policy_source = await resolve_policy(
+        db        = db,
+        tenant_id = str(dept.tenant_id),
+        dept_id   = dept_id,
+        app_id    = None,
+    )
+
+    return JSONResponse(content={
+        "dept_id":       dept_id,
+        "dept_name":     dept.name,
+        "policy_source": policy_source,
+        "override_set":  dept.policy_override is not None,
+        "policy_override": dept.policy_override,
+        "resolved_policy": policy,
+    })
+
+@router.get("/{dept_id}")
+async def get_department(dept_id: str, db: AsyncSession = Depends(get_db)):
+    repo   = DepartmentRepository(db)
+    record = await repo.get_by_id(uuid.UUID(dept_id))
+    if not record:
+        raise NotFoundError("department", dept_id)
+    return JSONResponse(content=_format(record))
+
+
+@router.put("/{dept_id}")
+async def update_department(
+    dept_id: str,
+    body:    DepartmentUpdateSchema,
+    db:      AsyncSession = Depends(get_db),
+):
+    repo = DepartmentRepository(db)
+    data = {k: v for k, v in body.model_dump().items() if v is not None}
+    record = await repo.update(uuid.UUID(dept_id), data)
+    if not record:
+        raise NotFoundError("department", dept_id)
+    return JSONResponse(content=_format(record))
+
+
+@router.delete("/{dept_id}")
+async def delete_department(dept_id: str, db: AsyncSession = Depends(get_db)):
+    repo   = DepartmentRepository(db)
+    record = await repo.update(uuid.UUID(dept_id), {"is_active": False})
+    if not record:
+        raise NotFoundError("department", dept_id)
+    return JSONResponse(content={"dept_id": dept_id, "deactivated": True})

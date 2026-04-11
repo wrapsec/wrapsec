@@ -1,9 +1,11 @@
 from datetime import datetime, timezone
 from fastapi import APIRouter, Query, Depends
 from fastapi.responses import JSONResponse
+from sqlalchemy import func, case, Integer
 from sqlalchemy.ext.asyncio import AsyncSession
 from api.v1.dependencies.db import get_db
 from db.repositories.audit import AuditRepository
+from db.models import AuditLogModel
 
 router = APIRouter()
 
@@ -43,9 +45,12 @@ async def get_audit_logs(
     app_id:          str | None = Query(None),
     key_id:          str | None = Query(None),
     user_id:         str | None = Query(None),
+    source:          str | None = Query(None),
     trace_id:        str | None = Query(None),
     decision:        str | None = Query(None),
     threat_category: str | None = Query(None),
+    primary_reason:  str | None = Query(None),
+    confidence_band: str | None = Query(None),
     from_:           str | None = Query(None, alias="from"),
     to:              str | None = Query(None),
     sort_by:         str        = Query("created_at"),
@@ -61,9 +66,12 @@ async def get_audit_logs(
         app_id          = app_id,
         key_id          = key_id,
         user_id         = user_id,
+        source          = source,
         trace_id        = trace_id,
         decision        = decision,
         threat_category = threat_category,
+        primary_reason  = primary_reason,
+        confidence_band = confidence_band,
         from_dt         = _parse_dt(from_),
         to_dt           = _parse_dt(to),
         sort_by         = sort_by,
@@ -132,3 +140,210 @@ async def get_audit_stats(
         "p95_latency_ms": round(p95_lat, 2),
         "top_threats":    top_threats,
     })
+
+@router.get("/attribution")
+async def get_attribution_report(
+    dept_id:    str | None = Query(None),
+    limit:      int        = Query(10, ge=1, le=100),
+    db:         AsyncSession = Depends(get_db),
+):
+    """
+    Returns attribution summary — requests grouped by key, department,
+    and application. Useful for security review and capacity planning.
+    Extensible: add group_by parameter in v1.1 for custom grouping.
+    """
+    from sqlalchemy import select as sa_select
+
+    base_where = []
+    if dept_id:
+        base_where.append(AuditLogModel.dept_id == dept_id)
+
+    # By API key
+    key_query = sa_select(
+        AuditLogModel.key_id,
+        AuditLogModel.source,
+        func.count().label("total"),
+        func.sum(
+            case((AuditLogModel.decision == "BLOCK", 1), else_=0)
+        ).label("blocked"),
+        func.avg(AuditLogModel.latency_ms).label("avg_latency"),
+    ).where(*base_where).group_by(
+        AuditLogModel.key_id,
+        AuditLogModel.source,
+    ).order_by(func.count().desc()).limit(limit)
+
+    key_result = await db.execute(key_query)
+    by_key = [
+        {
+            "key_id":       row.key_id,
+            "source":       row.source,
+            "total":        row.total,
+            "blocked":      row.blocked or 0,
+            "block_rate":   round((row.blocked or 0) / row.total, 3),
+            "avg_latency_ms": round(row.avg_latency or 0, 2),
+        }
+        for row in key_result
+    ]
+
+    # By department
+    dept_query = sa_select(
+        AuditLogModel.dept_id,
+        func.count().label("total"),
+        func.sum(
+            case((AuditLogModel.decision == "BLOCK", 1), else_=0)
+        ).label("blocked"),
+    ).group_by(AuditLogModel.dept_id).order_by(
+        func.count().desc()
+    ).limit(limit)
+
+    dept_result = await db.execute(dept_query)
+    by_dept = [
+        {
+            "dept_id":    row.dept_id,
+            "total":      row.total,
+            "blocked":    row.blocked or 0,
+            "block_rate": round((row.blocked or 0) / row.total, 3),
+        }
+        for row in dept_result
+    ]
+
+    # By application
+    app_query = sa_select(
+        AuditLogModel.app_id,
+        func.count().label("total"),
+        func.sum(
+            case((AuditLogModel.decision == "BLOCK", 1), else_=0)
+        ).label("blocked"),
+        func.avg(AuditLogModel.latency_ms).label("avg_latency"),
+    ).where(*base_where).group_by(
+        AuditLogModel.app_id,
+    ).order_by(func.count().desc()).limit(limit)
+
+    app_result = await db.execute(app_query)
+    by_app = [
+        {
+            "app_id":       row.app_id,
+            "total":        row.total,
+            "blocked":      row.blocked or 0,
+            "block_rate":   round((row.blocked or 0) / row.total, 3),
+            "avg_latency_ms": round(row.avg_latency or 0, 2),
+        }
+        for row in app_result
+    ]
+
+    # By primary reason
+    reason_query = sa_select(
+        AuditLogModel.primary_reason,
+        func.count().label("total"),
+    ).where(*base_where).group_by(
+        AuditLogModel.primary_reason,
+    ).order_by(func.count().desc())
+
+    reason_result = await db.execute(reason_query)
+    by_reason = [
+        {"primary_reason": row.primary_reason, "count": row.total}
+        for row in reason_result
+        if row.primary_reason
+    ]
+
+    # By confidence band
+    band_query = sa_select(
+        AuditLogModel.confidence_band,
+        func.count().label("total"),
+    ).where(*base_where).group_by(
+        AuditLogModel.confidence_band,
+    ).order_by(func.count().desc())
+
+    band_result = await db.execute(band_query)
+    by_confidence = [
+        {"band": row.confidence_band, "count": row.total}
+        for row in band_result
+        if row.confidence_band
+    ]
+
+    return JSONResponse(content={
+        "by_key":        by_key,
+        "by_department": by_dept,
+        "by_application": by_app,
+        "by_primary_reason": by_reason,
+        "by_confidence_band": by_confidence,
+    })
+
+@router.get("/export")
+async def export_audit_logs(
+    dept_id:         str | None = Query(None),
+    app_id:          str | None = Query(None),
+    decision:        str | None = Query(None),
+    primary_reason:  str | None = Query(None),
+    confidence_band: str | None = Query(None),
+    from_:           str | None = Query(None, alias="from"),
+    to:              str | None = Query(None),
+    limit:           int        = Query(1000, ge=1, le=10000),
+    db:              AsyncSession = Depends(get_db),
+):
+    """
+    Export audit logs as CSV for compliance reporting.
+    Extensible: additional filters and formats (JSON, PDF) in v1.1.
+    """
+    import csv
+    import io
+    from starlette.responses import StreamingResponse
+
+    repo = AuditRepository(db)
+    _, items = await repo.list(
+        dept_id         = dept_id,
+        app_id          = app_id,
+        decision        = decision,
+        primary_reason  = primary_reason,
+        confidence_band = confidence_band,
+        from_dt         = _parse_dt(from_),
+        to_dt           = _parse_dt(to),
+        sort_by         = "created_at",
+        sort_order      = "desc",
+        limit           = limit,
+        offset          = 0,
+    )
+
+    output = io.StringIO()
+    writer = csv.writer(output)
+
+    # Header
+    writer.writerow([
+        "trace_id", "timestamp", "decision", "risk_score",
+        "confidence", "confidence_band", "primary_reason",
+        "threats", "tenant_id", "dept_id", "app_id",
+        "key_id", "source", "user_id", "ip_address",
+        "policy_source", "detection_mode", "latency_ms",
+    ])
+
+    # Rows
+    for item in items:
+        writer.writerow([
+            item.trace_id,
+            item.created_at.isoformat(),
+            item.decision,
+            item.risk_score,
+            item.confidence,
+            item.confidence_band,
+            item.primary_reason,
+            "|".join(item.threats or []),
+            item.tenant_id,
+            item.dept_id,
+            item.app_id,
+            item.key_id,
+            item.source,
+            item.user_id,
+            item.ip_address,
+            item.policy_source,
+            item.detection_mode,
+            item.latency_ms,
+        ])
+
+    output.seek(0)
+    return StreamingResponse(
+        iter([output.getvalue()]),
+        media_type = "text/csv",
+        headers    = {
+            "Content-Disposition": "attachment; filename=wrapsec_audit_export.csv"
+        },
+    )

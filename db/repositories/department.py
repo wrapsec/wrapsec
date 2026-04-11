@@ -19,8 +19,7 @@ class DepartmentRepository(BaseRepository):
     async def get_by_id(self, dept_id) -> DepartmentModel | None:
         result = await self.session.execute(
             select(DepartmentModel).where(
-                DepartmentModel.id        == dept_id,
-                DepartmentModel.is_active == True,
+                DepartmentModel.id == dept_id,
             )
         )
         return result.scalar_one_or_none()

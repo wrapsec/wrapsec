@@ -110,6 +110,29 @@ async def list_keys(db: AsyncSession = Depends(get_db)):
         ]
     })
 
+@router.get("/{key_id}")
+async def get_key(
+    key_id: str,
+    db:     AsyncSession = Depends(get_db),
+):
+    repo   = ApiKeyRepository(db)
+    record = await repo.get_by_key_id(key_id)
+    if not record:
+        raise NotFoundError("key", key_id)
+
+    return JSONResponse(content={
+        "key_id":       record.key_id,
+        "name":         record.name,
+        "app_id":       str(record.app_id)    if record.app_id    else None,
+        "dept_id":      str(record.dept_id)   if record.dept_id   else None,
+        "tenant_id":    str(record.tenant_id) if record.tenant_id else None,
+        "is_admin":     record.is_admin,
+        "revoked":      record.revoked,
+        "created_at":   record.created_at.isoformat(),
+        "expires_at":   record.expires_at.isoformat() if record.expires_at else None,
+        "last_used_at": record.last_used_at.isoformat() if record.last_used_at else None,
+    })
+
 class UpdateKeySchema(BaseModel):
     name: str
 
