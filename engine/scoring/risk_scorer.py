@@ -22,23 +22,29 @@ class RiskScorer:
     """
     Aggregates detection scores from all layers into a unified risk score.
 
-    Weighting:
-      - LLM score carries highest weight (most accurate but conditional)
-      - Rule score carries high weight (deterministic, fast)
-      - ML score carries medium weight (probabilistic)
-      - PII score carries lower weight (always sanitize, not block)
+    Architecture — two separate concerns:
+
+    Detection layers (probabilistic — identify malicious intent):
+      rule_score, ml_score, llm_score
+      Weighted aggregation → detection_risk_score
+      Weights: rule=0.40, ml=0.30, llm=0.30
+
+    Guardrail layers (deterministic — enforce data protection):
+      pii_score (and future: toxicity, bias)
+      Evaluated independently by the policy engine
+      NEVER mixed into the detection risk score
 
     Boost mechanism:
       If any single detector fires strongly (>= boost_threshold),
-      the final score is floored at that value — preventing a strong
-      signal from being diluted by lower scores on other layers.
+      the final detection score is floored at that value.
+      Prevents a strong signal from being diluted by lower scores.
     """
 
-    # Layer weights — must sum to 1.0
-    WEIGHT_RULE = 0.35
-    WEIGHT_ML   = 0.25
+    # Detection layer weights — must sum to 1.0
+    # PII is excluded — it is a guardrail, not a detector
+    WEIGHT_RULE = 0.40
+    WEIGHT_ML   = 0.30
     WEIGHT_LLM  = 0.30
-    WEIGHT_PII  = 0.10
 
     # If any single detector exceeds this, floor the final score at its value
     BOOST_THRESHOLD = 0.5
@@ -56,28 +62,28 @@ class RiskScorer:
             llm_score  = llm_result.score
             pii_score  = pii_result.score
 
-            # Weighted aggregation
+            # Detection risk score — detectors only, no PII
             weighted = (
                 rule_score * self.WEIGHT_RULE +
                 ml_score   * self.WEIGHT_ML   +
-                llm_score  * self.WEIGHT_LLM  +
-                pii_score  * self.WEIGHT_PII
+                llm_score  * self.WEIGHT_LLM
             )
 
             # Boost — prevent strong signal from being diluted
-            all_scores = [rule_score, ml_score, llm_score, pii_score]
-            max_score  = max(all_scores)
-            boosted    = False
+            # Only detection layer scores contribute to boost
+            detection_scores = [rule_score, ml_score, llm_score]
+            max_score        = max(detection_scores)
+            boosted          = False
 
             if max_score >= self.BOOST_THRESHOLD:
-                final = max(weighted, max_score)
+                final   = max(weighted, max_score)
                 boosted = True
             else:
                 final = weighted
 
             final = round(min(final, 1.0), 4)
 
-            # Aggregate unique threats from all layers
+            # Aggregate unique threats from all layers including guardrails
             threats: list[ThreatCategory] = []
             seen = set()
             for result in [rule_result, ml_result, llm_result, pii_result]:

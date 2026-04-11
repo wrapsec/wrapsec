@@ -18,7 +18,13 @@ class PolicyDecision:
 class PolicyEngine:
     """
     Maps aggregated risk score to a policy decision.
-    Decision logic:
+
+    Guardrail-first enforcement:
+      PII and other guardrails are evaluated FIRST.
+      A guardrail decision overrides the detection-based decision.
+      Guardrail scores never contribute to the detection risk score.
+
+    Detection-based decision (applied only if no guardrail triggers):
       score >= block_threshold    → BLOCK
       score >= sanitize_threshold → SANITIZE
       score <  sanitize_threshold → ALLOW
@@ -33,6 +39,7 @@ class PolicyEngine:
         threats:            list[ThreatCategory],
         block_threshold:    float | None = None,
         sanitize_threshold: float | None = None,
+        pii_score:          float = 0.0,
     ) -> PolicyDecision:
         try:
             score = risk_score.value
@@ -41,6 +48,38 @@ class PolicyEngine:
             bt = block_threshold    or self.rules.block_threshold
             st = sanitize_threshold or self.rules.sanitize_threshold
 
+            # ── Guardrail-first enforcement ──────────────────
+            # Guardrails are deterministic and always override
+            # detection-based decisions.
+            # Future guardrails (toxicity, bias) follow same pattern.
+
+            if pii_score >= bt:
+                decision = DecisionType.BLOCK
+                logger.debug(
+                    f"PolicyEngine guardrail override: BLOCK "
+                    f"pii_score={pii_score} threshold={bt}"
+                )
+                return PolicyDecision(
+                    decision   = decision,
+                    risk_score = risk_score,
+                    threats    = threats,
+                    rules      = self.rules,
+                )
+
+            if pii_score >= st:
+                decision = DecisionType.SANITIZE
+                logger.debug(
+                    f"PolicyEngine guardrail override: SANITIZE "
+                    f"pii_score={pii_score} threshold={st}"
+                )
+                return PolicyDecision(
+                    decision   = decision,
+                    risk_score = risk_score,
+                    threats    = threats,
+                    rules      = self.rules,
+                )
+
+            # ── Detection-based decision ──────────────────────
             if score >= bt:
                 decision = DecisionType.BLOCK
             elif score >= st:

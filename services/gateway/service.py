@@ -153,6 +153,7 @@ class GatewayService:
                 threats            = scoring.threats,
                 block_threshold    = block_threshold,
                 sanitize_threshold = sanitize_threshold,
+                pii_score          = scoring.pii_score,
             )
 
             # ── Step 7: Sanitized input ───────────────────────
@@ -192,7 +193,10 @@ class GatewayService:
 
             # Compute primary reason
             from engine.scoring.primary_reason import compute_primary_reason
-            guardrail_triggered = scoring.pii_score >= block_threshold or scoring.pii_score >= sanitize_threshold
+            guardrail_triggered = (
+                scoring.pii_score >= block_threshold or
+                scoring.pii_score >= sanitize_threshold
+            )
             primary_reason = compute_primary_reason(
                 guardrail_triggered = guardrail_triggered,
                 guardrail_decision  = policy.decision.value,

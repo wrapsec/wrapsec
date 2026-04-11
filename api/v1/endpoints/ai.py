@@ -30,13 +30,15 @@ def _mode_str(value) -> str:
 
 def _build_response(decision, debug: bool = False) -> dict:
     response = {
-        "trace_id":        str(decision.trace_id),
-        "decision":        decision.decision.value,
-        "risk_score":      decision.risk_score.value,
-        "primary_reason":  decision.primary_reason,
-        "confidence":      decision.confidence,
-        "confidence_band": decision.confidence_band,
-        "threats":         [t.value for t in decision.threats],
+        "trace_id":              str(decision.trace_id),
+        "decision":              decision.decision.value,
+        "decision_version":      "v1.0",
+        "risk_score":            decision.risk_score.value,
+        "primary_reason":        decision.primary_reason,
+        "confidence":            decision.confidence,
+        "confidence_band":       decision.confidence_band,
+        "threats":               [t.value for t in decision.threats],
+        "sanitization_applied":  decision.decision.value == "SANITIZE",
         "processing": {
             "latency_ms":     round(decision.latency_ms, 2),
             "llm_invoked":    decision.llm_invoked,

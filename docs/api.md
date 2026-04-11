@@ -15,7 +15,7 @@ x-api-key: your-api-key
 ```
 
 **Admin key** — full access to all endpoints including debug mode and admin routes.  
-**Standard key** (`wsk_live_...`) — scoped to the department and application the key belongs to.
+**Standard key** (`wsk_live_...`) — scoped to the department and application the key belongs to. Tenant identity is always derived from the API key — it cannot be overridden by the caller.
 
 ---
 
@@ -41,6 +41,7 @@ All errors follow a consistent envelope:
 | `FORBIDDEN` | 403 | Valid key but insufficient permissions |
 | `NOT_FOUND` | 404 | Resource does not exist |
 | `VALIDATION_ERROR` | 422 | Request body validation failed |
+| `RATE_LIMITED` | 429 | Rate limit exceeded |
 | `INTERNAL_ERROR` | 500 | Unexpected server error |
 
 ---
@@ -58,8 +59,6 @@ Every `/v1/ai/request` response follows this structure:
   "confidence":      0.75,
   "confidence_band": "HIGH",
   "threats":         ["PROMPT_INJECTION"],
-  "sanitized_input": null,
-  "output":          null,
   "processing": {
     "latency_ms":     2.1,
     "llm_invoked":    false,
@@ -70,11 +69,43 @@ Every `/v1/ai/request` response follows this structure:
 }
 ```
 
-**Decision values:** `BLOCK` | `SANITIZE` | `ALLOW`  
-**Threat categories:** `PROMPT_INJECTION` | `JAILBREAK` | `MALICIOUS_INTENT` | `DATA_EXFILTRATION` | `PII` | `TOXICITY`  
-**Primary reason values:** `RULE_DETECTOR` | `ML_DETECTOR` | `LLM_DETECTOR` | `PII_GUARDRAIL_BLOCK` | `PII_GUARDRAIL_SANITIZE` | `NO_THREAT_DETECTED`  
-**Confidence bands:** `HIGH` | `MEDIUM` | `LOW`  
-**Policy source values:** `system_default` | `tenant_global` | `department_override` | `application_override`
+**Response field rules:**
+- `sanitized_input` — only present when `decision = SANITIZE`
+- `output` — only present in proxy mode when LLM was invoked
+- `threats` — always present (empty array if none)
+- `confidence` — always present (1.0 for single-layer fast mode)
+
+**Decision values:** `BLOCK` | `SANITIZE` | `ALLOW`
+
+**Threat categories:** `PROMPT_INJECTION` | `JAILBREAK` | `MALICIOUS_INTENT` | `DATA_EXFILTRATION` | `PII` | `TOXICITY`
+
+**Primary reason values:**
+
+| Value | Description |
+|---|---|
+| `RULE_DETECTOR` | Regex or heuristic pattern was the dominant signal |
+| `ML_DETECTOR` | ML classifier was the dominant signal |
+| `LLM_DETECTOR` | LLM semantic analysis was the dominant signal |
+| `PII_GUARDRAIL_BLOCK` | PII guardrail triggered a BLOCK decision |
+| `PII_GUARDRAIL_SANITIZE` | PII guardrail triggered a SANITIZE decision |
+| `NO_THREAT_DETECTED` | All scores below thresholds — clean request |
+
+**Confidence bands:**
+
+| Band | Range | Meaning |
+|---|---|---|
+| `HIGH` | 0.7 – 1.0 | Strong signal, consistent across layers |
+| `MEDIUM` | 0.4 – 0.7 | Moderate signal or partial agreement between layers |
+| `LOW` | 0.0 – 0.4 | Weak or conflicting signals — consider human review |
+
+**Policy source values:**
+
+| Value | Description |
+|---|---|
+| `system_default` | No overrides — using `.env` defaults |
+| `tenant_global` | Tenant global policy applied |
+| `department_override` | Department policy changed at least one field |
+| `application_override` | Application policy changed at least one field (v1.1) |
 
 ---
 
@@ -88,14 +119,13 @@ Scan a prompt through the detection pipeline. Optionally proxy to an LLM.
 
 ```json
 {
-  "input": "string (required)",
+  "input": "string (required, max 10000 chars)",
   "detection_mode": "fast | full (default: fast)",
   "execution_mode": "scan_only | proxy (default: scan_only)",
-  "model": "string (optional, overrides configured model)",
+  "model": "string (proxy mode only — ignored in scan_only)",
   "metadata": {
-    "tenant_id": "string (optional)",
-    "user_id":   "string (optional)",
-    "source":    "string (optional, defaults to key name)"
+    "user_id": "string (optional — self-reported, not verified)",
+    "source":  "string (optional — label for audit display, defaults to key name)"
   },
   "options": {
     "debug": "boolean (admin only, default: false)"
@@ -103,19 +133,28 @@ Scan a prompt through the detection pipeline. Optionally proxy to an LLM.
 }
 ```
 
+> **Security note:** `tenant_id` is not accepted in metadata. Tenant identity is always derived from the API key. This prevents caller spoofing.
+
+> **Source field note:** `source` is an optional label for audit display only. It is never used for identity or policy decisions. If omitted, it defaults to the API key name.
+
 **Detection modes:**
 
-| Mode | Layers | Use case |
+| Mode | Layers | Latency |
 |---|---|---|
-| `fast` | Rule + ML | Low latency, ~2-10ms |
-| `full` | Rule + ML + LLM | Highest accuracy, ~100-500ms |
+| `fast` | Rule + ML | ~2–10ms |
+| `full` | Rule + ML + LLM (conditional) | ~100–500ms |
 
 **Execution modes:**
 
 | Mode | Description |
 |---|---|
-| `scan_only` | Scan and return decision only |
-| `proxy` | Scan then forward to LLM if not blocked |
+| `scan_only` | Scan and return decision only. `model` field ignored. |
+| `proxy` | Scan then forward to LLM if not blocked. Requires LLM layer to be enabled. |
+
+**Validation rules:**
+- `proxy` mode requires LLM layer to be enabled in settings
+- `model` field is ignored in `scan_only` mode
+- `stream: true` only valid in `proxy` mode
 
 **Example — scan only:**
 
@@ -130,7 +169,7 @@ curl -X POST http://localhost:8000/v1/ai/request \
   }'
 ```
 
-**Response:**
+**Response — BLOCK:**
 
 ```json
 {
@@ -141,14 +180,34 @@ curl -X POST http://localhost:8000/v1/ai/request \
   "confidence":      0.75,
   "confidence_band": "HIGH",
   "threats":         ["PROMPT_INJECTION"],
-  "sanitized_input": null,
-  "output":          null,
   "processing": {
     "latency_ms":     2.1,
     "llm_invoked":    false,
     "detection_mode": "fast",
     "execution_mode": "scan_only",
     "policy_source":  "system_default"
+  }
+}
+```
+
+**Response — SANITIZE (includes sanitized_input):**
+
+```json
+{
+  "trace_id":        "req_def456",
+  "decision":        "SANITIZE",
+  "risk_score":      0.55,
+  "primary_reason":  "PII_GUARDRAIL_SANITIZE",
+  "confidence":      0.75,
+  "confidence_band": "HIGH",
+  "threats":         ["PII"],
+  "sanitized_input": "My email is [EMAIL] and SSN is [SSN]",
+  "processing": {
+    "latency_ms":     3.2,
+    "llm_invoked":    false,
+    "detection_mode": "fast",
+    "execution_mode": "scan_only",
+    "policy_source":  "department_override"
   }
 }
 ```
@@ -166,6 +225,28 @@ curl -X POST http://localhost:8000/v1/ai/request \
   }'
 ```
 
+**Response — proxy ALLOW (includes output):**
+
+```json
+{
+  "trace_id":        "req_ghi789",
+  "decision":        "ALLOW",
+  "risk_score":      0.0,
+  "primary_reason":  "NO_THREAT_DETECTED",
+  "confidence":      1.0,
+  "confidence_band": "HIGH",
+  "threats":         [],
+  "output":          "Machine learning is a subset of AI...",
+  "processing": {
+    "latency_ms":     312.4,
+    "llm_invoked":    true,
+    "detection_mode": "fast",
+    "execution_mode": "proxy",
+    "policy_source":  "system_default"
+  }
+}
+```
+
 **Example — with user attribution:**
 
 ```bash
@@ -176,7 +257,7 @@ curl -X POST http://localhost:8000/v1/ai/request \
     "input": "Summarise the Q4 report",
     "metadata": {
       "user_id": "emp_12345",
-      "source":  "finance-bot"
+      "source":  "finance-dashboard"
     }
   }'
 ```
@@ -197,9 +278,13 @@ Debug response includes per-layer scores:
 
 ```json
 {
-  "trace_id": "req_abc123",
-  "decision":  "BLOCK",
-  "risk_score": 0.85,
+  "trace_id":        "req_abc123",
+  "decision":        "BLOCK",
+  "risk_score":      0.85,
+  "primary_reason":  "RULE_DETECTOR",
+  "confidence":      0.75,
+  "confidence_band": "HIGH",
+  "threats":         ["PROMPT_INJECTION"],
   "debug": {
     "rule_score": 0.85,
     "ml_score":   0.30,
@@ -210,6 +295,13 @@ Debug response includes per-layer scores:
       "ml":   "ALLOW",
       "llm":  "ALLOW"
     }
+  },
+  "processing": {
+    "latency_ms":     2.1,
+    "llm_invoked":    false,
+    "detection_mode": "fast",
+    "execution_mode": "scan_only",
+    "policy_source":  "system_default"
   }
 }
 ```
@@ -218,7 +310,7 @@ Debug response includes per-layer scores:
 
 ### GET /v1/ai/requests/{trace_id}
 
-Retrieve a specific request by trace ID.
+Retrieve a specific request by trace ID including full attribution chain.
 
 **Response:**
 
@@ -229,7 +321,9 @@ Retrieve a specific request by trace ID.
   "attribution": {
     "tenant_id":            "42a083bf-...",
     "dept_id":              "d79ad4d5-...",
+    "dept_name":            "Finance Department",
     "app_id":               "972eae29-...",
+    "app_name":             "Finance Bot",
     "source":               "Finance Bot",
     "user_id":              "emp_12345",
     "key_id":               "key_abc123",
@@ -262,32 +356,41 @@ Retrieve a specific request by trace ID.
 }
 ```
 
+> **Attribution note:** `attribution_verified: false` means user identity (`user_id`) is self-reported by the calling application. The API key identity (key_id, dept_id, app_id) is always cryptographically verified.
+
 ---
 
 ## Audit
 
 ### GET /v1/audit/logs
 
-List audit logs with filters.
+List audit logs with filters and sorting.
 
 **Query parameters:**
 
 | Parameter | Type | Description |
 |---|---|---|
 | `trace_id` | string | Search by trace ID (partial match) |
-| `decision` | string | Filter by decision: `BLOCK`, `SANITIZE`, `ALLOW` |
+| `decision` | string | Filter: `BLOCK`, `SANITIZE`, `ALLOW` |
 | `threat_category` | string | Filter by threat category |
+| `primary_reason` | string | Filter by primary reason (e.g. `RULE_DETECTOR`) |
+| `confidence_band` | string | Filter: `HIGH`, `MEDIUM`, `LOW` |
+| `source` | string | Filter by source (partial match) |
+| `key_id` | string | Filter by API key ID |
+| `dept_id` | string | Filter by department ID |
+| `app_id` | string | Filter by application ID |
+| `user_id` | string | Filter by user ID (partial match) |
 | `from` | ISO datetime | Start of time range |
 | `to` | ISO datetime | End of time range |
-| `sort_by` | string | Sort field: `created_at`, `risk_score`, `latency_ms` |
+| `sort_by` | string | `created_at`, `risk_score`, `latency_ms` |
 | `sort_order` | string | `asc` or `desc` (default: `desc`) |
 | `limit` | integer | Max results (default: 20, max: 500) |
 | `offset` | integer | Pagination offset (default: 0) |
 
-**Example:**
+**Example — filter by confidence and reason:**
 
 ```bash
-curl "http://localhost:8000/v1/audit/logs?decision=BLOCK&limit=10" \
+curl "http://localhost:8000/v1/audit/logs?confidence_band=LOW&primary_reason=ML_DETECTOR" \
   -H "x-api-key: wrapsec_admin_key"
 ```
 
@@ -298,19 +401,20 @@ curl "http://localhost:8000/v1/audit/logs?decision=BLOCK&limit=10" \
   "total": 142,
   "items": [
     {
-      "trace_id":       "req_abc123",
-      "timestamp":      "2026-04-10T03:14:22Z",
-      "tenant_id":      "42a083bf-...",
-      "decision":       "BLOCK",
-      "risk_score":     0.85,
-      "threats":        ["PROMPT_INJECTION"],
-      "input_hash":     "sha256:2847bd...",
-      "detection_mode": "fast",
-      "execution_mode": "scan_only",
-      "latency_ms":     2.1,
-      "key_id":         "key_abc123",
-      "source":         "Finance Bot",
-      "attribution_verified": false
+      "trace_id":              "req_abc123",
+      "timestamp":             "2026-04-10T03:14:22Z",
+      "tenant_id":             "42a083bf-...",
+      "decision":              "BLOCK",
+      "risk_score":            0.85,
+      "threats":               ["PROMPT_INJECTION"],
+      "input_hash":            "sha256:2847bd...",
+      "detection_mode":        "fast",
+      "execution_mode":        "scan_only",
+      "latency_ms":            2.1,
+      "key_id":                "key_abc123",
+      "source":                "Finance Bot",
+      "ip_address":            "10.0.0.45",
+      "attribution_verified":  false
     }
   ]
 }
@@ -322,24 +426,106 @@ curl "http://localhost:8000/v1/audit/logs?decision=BLOCK&limit=10" \
 
 Aggregated statistics for the audit log.
 
+**Query parameters:** `tenant_id`, `from`, `to`
+
 **Response:**
 
 ```json
 {
   "total_requests": 1247,
-  "decisions": {
-    "BLOCK":    423,
-    "SANITIZE": 89,
-    "ALLOW":    735
-  },
-  "block_rate":    0.339,
+  "block_rate":     0.339,
+  "sanitize_rate":  0.071,
+  "allow_rate":     0.590,
   "avg_latency_ms": 4.2,
+  "p95_latency_ms": 12.1,
   "top_threats": [
     { "category": "PROMPT_INJECTION", "count": 312 },
     { "category": "PII",              "count": 89  },
     { "category": "JAILBREAK",        "count": 67  }
   ]
 }
+```
+
+---
+
+### GET /v1/audit/attribution
+
+Attribution summary — requests grouped by key, department, application, primary reason, and confidence band. Useful for security review and compliance reporting.
+
+**Query parameters:**
+
+| Parameter | Type | Description |
+|---|---|---|
+| `dept_id` | string | Scope to a specific department |
+| `limit` | integer | Max items per group (default: 10, max: 100) |
+
+**Response:**
+
+```json
+{
+  "by_key": [
+    {
+      "key_id":         "key_abc123",
+      "source":         "Finance Bot",
+      "total":          847,
+      "blocked":        312,
+      "block_rate":     0.368,
+      "avg_latency_ms": 3.2
+    }
+  ],
+  "by_department": [
+    {
+      "dept_id":    "d79ad4d5-...",
+      "total":      1247,
+      "blocked":    423,
+      "block_rate": 0.339
+    }
+  ],
+  "by_application": [
+    {
+      "app_id":         "972eae29-...",
+      "total":          847,
+      "blocked":        312,
+      "block_rate":     0.368,
+      "avg_latency_ms": 3.2
+    }
+  ],
+  "by_primary_reason": [
+    { "primary_reason": "RULE_DETECTOR",     "count": 280 },
+    { "primary_reason": "PII_GUARDRAIL_BLOCK", "count": 89 },
+    { "primary_reason": "NO_THREAT_DETECTED",  "count": 735 }
+  ],
+  "by_confidence_band": [
+    { "band": "HIGH",   "count": 1190 },
+    { "band": "MEDIUM", "count": 42   },
+    { "band": "LOW",    "count": 15   }
+  ]
+}
+```
+
+---
+
+### GET /v1/audit/export
+
+Export audit logs as CSV for compliance reporting.
+
+**Query parameters:** `dept_id`, `app_id`, `decision`, `primary_reason`, `confidence_band`, `from`, `to`, `limit` (max: 10000)
+
+**Response:** CSV file download (`wrapsec_audit_export.csv`)
+
+**CSV columns:**
+```
+trace_id, timestamp, decision, risk_score, confidence, confidence_band,
+primary_reason, threats, tenant_id, dept_id, app_id, key_id, source,
+user_id, ip_address, policy_source, detection_mode, latency_ms
+```
+
+**Example:**
+
+```bash
+curl "http://localhost:8000/v1/audit/export?dept_id=d79ad4d5-...&from=2026-04-01" \
+  -H "x-api-key: wrapsec_admin_key" \
+  -o audit_export.csv
 ```
 
 ---
@@ -375,8 +561,8 @@ Update policy thresholds. Changes take effect immediately without restart.
 ```
 
 **Validation rules:**
-- `block_threshold` must be > 0 and <= 1.0
-- `sanitize_threshold` must be >= 0 and < 1.0
+- `block_threshold` must be > 0.0 and <= 1.0
+- `sanitize_threshold` must be >= 0.0 and < 1.0
 - `block_threshold` must be > `sanitize_threshold`
 
 ---
@@ -410,6 +596,8 @@ Enable or disable detection layers. Changes take effect immediately.
   "llm_enabled":  false
 }
 ```
+
+> **Note:** Disabling the LLM layer will prevent proxy mode from working. Proxy mode requires LLM to be enabled.
 
 ---
 
@@ -450,7 +638,9 @@ Update LLM configuration. Changes take effect immediately without restart.
 - `provider` must be `ollama`, `openai`, or `groq`
 - `timeout` must be between 5 and 120 seconds
 - `llm_trigger` must be between 0.0 and 1.0
-- API keys for OpenAI and Groq are configured in `.env` only — not stored in the database
+- API keys for OpenAI and Groq are configured in `.env` only — never stored in the database
+
+> **LLM trigger note:** `llm_trigger` is the minimum pre-score before the LLM detector is invoked in `full` mode. Lower values invoke the LLM more frequently (higher accuracy, higher latency).
 
 ---
 
@@ -458,7 +648,7 @@ Update LLM configuration. Changes take effect immediately without restart.
 
 ### POST /v1/keys
 
-Create a new API key. Optionally link to an application.
+Create a new API key. Optionally link to an application for full attribution.
 
 **Request body:**
 
@@ -491,7 +681,7 @@ Create a new API key. Optionally link to an application.
 
 ### GET /v1/keys
 
-List all active API keys.
+List all active (non-revoked) API keys.
 
 **Response:**
 
@@ -513,9 +703,54 @@ List all active API keys.
 
 ---
 
+### GET /v1/keys/{key_id}
+
+Get a single API key by key ID.
+
+**Response:**
+
+```json
+{
+  "key_id":       "key_abc123",
+  "name":         "Finance Bot Key",
+  "app_id":       "972eae29-...",
+  "dept_id":      "d79ad4d5-...",
+  "tenant_id":    "42a083bf-...",
+  "is_admin":     false,
+  "revoked":      false,
+  "created_at":   "2026-04-10T03:14:22Z",
+  "expires_at":   null,
+  "last_used_at": "2026-04-10T09:31:05Z"
+}
+```
+
+---
+
+### PUT /v1/keys/{key_id}
+
+Rename an API key.
+
+**Request body:**
+
+```json
+{ "name": "Finance Bot Primary Key" }
+```
+
+**Response:**
+
+```json
+{
+  "key_id":     "key_abc123",
+  "name":       "Finance Bot Primary Key",
+  "updated_at": "2026-04-10T09:45:00Z"
+}
+```
+
+---
+
 ### DELETE /v1/keys/{key_id}
 
-Revoke an API key. Takes effect immediately — all subsequent requests with this key will return 401.
+Revoke an API key. Takes effect immediately — all subsequent requests with this key return 401.
 
 **Response:**
 
@@ -531,9 +766,55 @@ Revoke an API key. Takes effect immediately — all subsequent requests with thi
 
 ## Administration
 
+### GET /v1/admin/tenant
+
+Get current tenant information and global policy.
+
+**Response:**
+
+```json
+{
+  "id":          "42a083bf-...",
+  "slug":        "default",
+  "name":        "Acme Corporation",
+  "description": "Single on-premise installation",
+  "global_policy": {
+    "detection": {
+      "rule_weight": 0.4, "ml_weight": 0.3, "llm_weight": 0.3,
+      "rule_enabled": true, "ml_enabled": true, "llm_enabled": true,
+      "llm_trigger": 0.2
+    },
+    "thresholds":  { "block": 0.7, "sanitize": 0.4 },
+    "guardrails":  { "pii": { "enabled": true, "block_threshold": 0.7, "sanitize_threshold": 0.4 } },
+    "rate_limit":  { "per_minute": 60 }
+  },
+  "contact_email": "admin@acme.com",
+  "is_active":     true,
+  "created_at":    "2026-04-10T00:44:13Z"
+}
+```
+
+---
+
+### PUT /v1/admin/tenant
+
+Update tenant information.
+
+**Request body:**
+
+```json
+{
+  "name":          "Acme Corporation",
+  "description":   "Single on-premise WrapSec installation",
+  "contact_email": "security@acme.com"
+}
+```
+
+---
+
 ### GET /v1/admin/departments
 
-List all departments.
+List all active departments.
 
 **Response:**
 
@@ -547,10 +828,7 @@ List all departments.
       "name":            "Finance Department",
       "description":     "Finance division",
       "policy_override": {
-        "thresholds": {
-          "block":    0.5,
-          "sanitize": 0.3
-        }
+        "thresholds": { "block": 0.5, "sanitize": 0.3 }
       },
       "contact_email":  "finance@acme.com",
       "is_active":      true,
@@ -594,10 +872,7 @@ Update a department or its policy override.
 ```json
 {
   "policy_override": {
-    "thresholds": {
-      "block":    0.5,
-      "sanitize": 0.3
-    }
+    "thresholds": { "block": 0.5, "sanitize": 0.3 }
   }
 }
 ```
@@ -606,18 +881,58 @@ Set `policy_override` to `null` to remove all overrides and inherit from global.
 
 ---
 
-### DELETE /v1/admin/departments/{id}
+### GET /v1/admin/departments/{id}/policy
 
-Deactivate a department.
+Returns the fully resolved effective policy for this department. Merges system defaults → tenant global → department override. Use this to verify what policy is actually applied to requests from this department.
 
 **Response:**
 
 ```json
 {
-  "dept_id":     "d79ad4d5-...",
-  "deactivated": true
+  "dept_id":       "d79ad4d5-...",
+  "dept_name":     "Finance Department",
+  "policy_source": "department_override",
+  "override_set":  true,
+  "policy_override": {
+    "thresholds": { "block": 0.5, "sanitize": 0.3 }
+  },
+  "resolved_policy": {
+    "detection":  { "rule_weight": 0.4, "ml_weight": 0.3, "llm_weight": 0.3, "rule_enabled": true, "ml_enabled": true, "llm_enabled": true, "llm_trigger": 0.2 },
+    "thresholds": { "block": 0.5, "sanitize": 0.3 },
+    "guardrails": { "pii": { "enabled": true, "block_threshold": 0.7, "sanitize_threshold": 0.4 } },
+    "llm":        { "provider": "ollama", "model": "llama3.2:latest", "base_url": "http://localhost:11434", "timeout": 30 },
+    "rate_limit": { "per_minute": 60 }
+  }
 }
 ```
+
+---
+
+### GET /v1/admin/departments/{id}/stats
+
+Usage statistics for a specific department.
+
+**Response:**
+
+```json
+{
+  "dept_id":        "d79ad4d5-...",
+  "total":          1247,
+  "decisions":      { "BLOCK": 423, "SANITIZE": 89, "ALLOW": 735 },
+  "block_rate":     0.339,
+  "avg_latency_ms": 4.2,
+  "top_threats": [
+    { "category": "PROMPT_INJECTION", "count": 312 },
+    { "category": "PII",              "count": 89  }
+  ]
+}
+```
+
+---
+
+### DELETE /v1/admin/departments/{id}
+
+Deactivate a department.
 
 ---
 
@@ -625,36 +940,7 @@ Deactivate a department.
 
 List all applications. Optionally filter by department.
 
-**Query parameters:**
-
-| Parameter | Type | Description |
-|---|---|---|
-| `dept_id` | UUID | Filter by department |
-
-**Response:**
-
-```json
-{
-  "applications": [
-    {
-      "id":                  "972eae29-...",
-      "tenant_id":           "42a083bf-...",
-      "dept_id":             "d79ad4d5-...",
-      "slug":                "finance-bot",
-      "name":                "Finance Bot",
-      "description":         "Finance automation system",
-      "owner_name":          "John Smith",
-      "owner_email":         "john@acme.com",
-      "environment":         "production",
-      "metadata":            null,
-      "policy_override":     null,
-      "rate_limit_override": null,
-      "is_active":           true,
-      "created_at":          "2026-04-10T01:05:47Z"
-    }
-  ]
-}
-```
+**Query parameters:** `dept_id`
 
 ---
 
@@ -684,6 +970,28 @@ Get an application by ID.
 
 ---
 
+### GET /v1/admin/applications/{id}/policy
+
+Returns the fully resolved effective policy for this application. In v1, application-level overrides are null — the resolved policy reflects system → tenant → department chain.
+
+**Response:**
+
+```json
+{
+  "app_id":          "972eae29-...",
+  "app_name":        "Finance Bot",
+  "dept_id":         "d79ad4d5-...",
+  "policy_source":   "department_override",
+  "override_set":    false,
+  "policy_override": null,
+  "resolved_policy": { ... }
+}
+```
+
+> **V1.1 note:** Application-level policy overrides (`PUT /v1/admin/applications/{id}/policy`) will be available in v1.1.
+
+---
+
 ### PUT /v1/admin/applications/{id}
 
 Update an application.
@@ -706,21 +1014,12 @@ Returns system readiness — checks DB and Redis connectivity.
 
 ```json
 {
-  "status":     "ready",
-  "database":   "ok",
-  "redis":      "ok",
-  "timestamp":  "2026-04-10T03:14:22Z"
-}
-```
-
-**Response (degraded):**
-
-```json
-{
-  "status":   "degraded",
-  "database": "ok",
-  "redis":    "error",
-  "timestamp": "2026-04-10T03:14:22Z"
+  "status": "ready",
+  "checks": {
+    "database": "ok",
+    "redis":    "ok",
+    "ml_model": "ok"
+  }
 }
 ```
 
@@ -736,15 +1035,51 @@ Returns liveness — confirms the process is running.
 
 ---
 
+### GET /health/config
+
+Returns the currently active system configuration. Useful for deployment verification. Does not expose API keys or secrets.
+
+**Response:**
+
+```json
+{
+  "version": "1.0.0",
+  "thresholds": {
+    "block":    0.7,
+    "sanitize": 0.4,
+    "source":   "database"
+  },
+  "detection_layers": {
+    "rule":   true,
+    "ml":     true,
+    "llm":    true,
+    "source": "database"
+  },
+  "llm": {
+    "provider":    "ollama",
+    "model":       "llama3.2:latest",
+    "llm_trigger": 0.2,
+    "timeout":     30,
+    "source":      "database"
+  },
+  "rate_limit": {
+    "per_minute": 60,
+    "scope":      "per_api_key"
+  }
+}
+```
+
+---
+
 ### GET /metrics
 
-Prometheus metrics endpoint. Returns plain text in Prometheus exposition format.
+Prometheus metrics endpoint. Returns plain text in Prometheus exposition format. No authentication required.
 
 ---
 
 ## Integration Guide
 
-### Quickstart
+### Python quickstart
 
 ```python
 import httpx
@@ -770,9 +1105,10 @@ if result["decision"] == "BLOCK":
     return "Request blocked by security policy"
 elif result["decision"] == "SANITIZE":
     safe_input = result["sanitized_input"]
-    # proceed with sanitized_input
+    # proceed with sanitized input
 else:
     # ALLOW — proceed normally
+    pass
 ```
 
 ### Proxy mode integration
@@ -801,69 +1137,50 @@ result = response.json()
 
 if result["confidence_band"] == "LOW":
     # Flag for human review
-    flag_for_review(result["trace_id"])
+    flag_for_review(
+        trace_id       = result["trace_id"],
+        primary_reason = result["primary_reason"],
+        confidence     = result["confidence"],
+    )
 
 if result["decision"] == "BLOCK":
     log_block(
         trace_id       = result["trace_id"],
         primary_reason = result["primary_reason"],
         confidence     = result["confidence"],
+        dept_scoped    = True,  # policy came from department
     )
 ```
 
----
+### Compliance audit query
 
-## Planned APIs — V1.1
+```python
+# Export all LOW confidence decisions for review
+response = client.get("/v1/audit/export", params={
+    "confidence_band": "LOW",
+    "from": "2026-04-01T00:00:00",
+    "to":   "2026-04-30T23:59:59",
+})
 
-These endpoints are planned for v1.1 and are not yet implemented:
-
-```
-GET  /v1/admin/tenant              → get tenant global policy
-PUT  /v1/admin/tenant              → update global policy
-
-GET  /v1/admin/departments/{id}/stats → per-department usage stats
-GET  /v1/admin/analytics           → cross-department analytics
-
-POST /v1/admin/roles               → create role
-GET  /v1/admin/roles               → list roles
-PUT  /v1/admin/roles/{id}          → update role policy override
-```
-
----
-
-## Planned APIs — V2
-
-```
-POST /v1/auth/token                → JWT token exchange
-GET  /v1/admin/tenants             → list all tenants (SaaS)
-POST /v1/admin/tenants             → create tenant (SaaS onboarding)
-GET  /v1/admin/tenants/{id}/usage  → usage and billing per tenant
-POST /v1/webhooks                  → register webhook endpoint
-GET  /v1/export/audit              → export audit logs as CSV
+with open("low_confidence_audit.csv", "wb") as f:
+    f.write(response.content)
 ```
 
 ---
 
 ## Rate Limiting
 
-Requests are rate limited per API key.
+Requests are rate limited per API key using a sliding window.
 
-**Default:** 60 requests per minute per key  
-**Headers returned on limit:**
-
-```
-X-RateLimit-Limit:     60
-X-RateLimit-Remaining: 0
-X-RateLimit-Reset:     1712718262
-```
+**Default:** 60 requests per minute per key
 
 **Response when limited:**
 
 ```json
 {
   "error": {
-    "code":    "RATE_LIMITED",
-    "message": "Rate limit exceeded. Try again in 30 seconds.",
+    "code":     "RATE_LIMITED",
+    "message":  "Rate limit exceeded. Try again in 30 seconds.",
     "trace_id": "req_abc123"
   }
 }
@@ -871,22 +1188,79 @@ X-RateLimit-Reset:     1712718262
 
 ---
 
+## Planned — V1.1
+
+```
+PUT    /v1/admin/applications/{id}/policy  → application-level policy overrides
+DELETE /v1/admin/applications/{id}/policy  → reset application override
+POST   /v1/keys/{key_id}/rotate            → key rotation with grace period
+GET    /v1/admin/analytics                 → advanced cross-department analytics
+```
+
+**Idempotency support (V1.1):**
+
+```
+Idempotency-Key: <uuid>
+```
+
+Prevents duplicate processing on retries. Response is cached for 60 seconds per key.
+
+**Cursor-based pagination (V1.1):**
+
+For large audit log datasets, offset pagination will be replaced with cursor-based pagination:
+
+```
+GET /v1/audit/logs?cursor=req_abc123&limit=20
+```
+
+---
+
+## Planned — V2
+
+```
+POST /v1/auth/token                → JWT token exchange (verified user identity)
+POST /v1/admin/tenants             → multi-tenant onboarding (SaaS)
+GET  /v1/admin/tenants/{id}/usage  → usage and billing per tenant
+POST /v1/webhooks                  → webhook notifications for BLOCK events
+POST /v1/admin/roles               → role management with JWT assignment
+```
+
+---
+
 ## Changelog
 
 ### v1.0 (April 2026)
-- Initial release
-- Detection pipeline: rule, ML, LLM, PII guardrail
-- Policy thresholds and layer toggles (runtime configurable)
-- LLM settings (runtime configurable)
-- API key management with instant revocation
-- Department and application management
-- Policy resolution: system → tenant → department
-- Full attribution chain in audit logs
-- Confidence score and primary reason in all responses
-- Prometheus metrics and structured logging
+
+**Security:**
+- `tenant_id` removed from request metadata — always derived from API key to prevent spoofing
+- `model` field ignored in `scan_only` mode
+- Proxy mode validates LLM layer is enabled before processing
+- Debug mode restricted to admin keys only
+
+**Detection:**
+- Multi-layer pipeline: rule, ML, LLM, PII guardrail
+- Confidence score with `HIGH/MEDIUM/LOW` bands
+- `primary_reason` field identifying dominant detection factor
+- Detection and guardrail scores stored separately in audit logs
+
+**Policy:**
+- Runtime configurable thresholds, detection layers, LLM settings (no restart)
+- Policy resolution: system → tenant → department → application
+- `policy_source` in every response showing which level determined the policy
+
+**Attribution:**
+- Full attribution chain: tenant → department → application → key → user → IP
+- `attribution_verified: false` in v1 (self-reported user identity)
+- `source` defaults to API key name if not provided
+
+**APIs:**
+- 38 endpoints across gateway, audit, settings, keys, admin, health
+- Audit export as CSV for compliance reporting
+- Attribution report grouped by key, department, application, reason, confidence
 
 ---
 
 *API version: 1.0*  
 *Authentication: API key (`x-api-key` header)*  
-*Content-Type: `application/json`*
+*Content-Type: `application/json`*  
+*Total endpoints: 38*
