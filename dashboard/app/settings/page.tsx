@@ -7,27 +7,46 @@ import { Card, CardHeader } from "@/components/ui/Card"
 import { ThresholdForm } from "@/components/settings/ThresholdForm"
 import { LayerToggles } from "@/components/settings/LayerToggles"
 import { LLMSettingsForm } from "@/components/settings/LLMSettings"
+import { TenantSettingsForm } from "@/components/settings/TenantSettings"
 import { PageSpinner } from "@/components/ui/Spinner"
-import { getThresholds, getLayers, getLLMSettings } from "@/lib/api"
-import { Thresholds, Layers, LLMSettings } from "@/lib/types"
+import { getThresholds, getLayers, getLLMSettings, getTenant } from "@/lib/api"
 
 export default function SettingsPage() {
+  const { data: tenant,     isLoading: tenantLoading,  mutate: mutateN } =
+    useSWR("tenant",       getTenant)
+
   const { data: thresholds, isLoading: tLoading, mutate: mutateT } =
-    useSWR("thresholds", getThresholds)
+    useSWR("thresholds",   getThresholds)
 
-  const { data: layers, isLoading: lLoading, mutate: mutateL } =
-    useSWR("layers", getLayers)
+  const { data: layers,     isLoading: lLoading, mutate: mutateL } =
+    useSWR("layers",       getLayers)
 
-  const { data: llm, isLoading: llmLoading, mutate: mutateM } =
+  const { data: llm,        isLoading: llmLoading, mutate: mutateM } =
     useSWR("llm-settings", getLLMSettings)
 
-  if (tLoading || lLoading || llmLoading) {
+  if (tenantLoading || tLoading || lLoading || llmLoading) {
     return <Shell title="Settings"><PageSpinner /></Shell>
   }
 
   return (
     <Shell title="Settings">
       <div className="max-w-2xl space-y-5">
+
+        {/* Tenant / Organisation */}
+        <Card>
+          <CardHeader
+            title="Organisation"
+            subtitle="Global settings for this WrapSec installation"
+          />
+          {tenant && (
+            <TenantSettingsForm
+              tenant={tenant}
+              onUpdated={(t) => mutateN(t, false)}
+            />
+          )}
+        </Card>
+
+        {/* Policy Thresholds */}
         <Card>
           <CardHeader
             title="Policy Thresholds"
@@ -41,6 +60,7 @@ export default function SettingsPage() {
           )}
         </Card>
 
+        {/* Detection Layers */}
         <Card>
           <CardHeader
             title="Detection Layers"
@@ -54,6 +74,7 @@ export default function SettingsPage() {
           )}
         </Card>
 
+        {/* LLM Configuration */}
         <Card>
           <CardHeader
             title="LLM Configuration"
