@@ -48,6 +48,11 @@ const SETTINGS_ITEMS = [
   { label: "API Keys",   href: "/settings/keys" },
 ]
 
+const ADMIN_ITEMS = [
+  { label: "Departments",  href: "/departments" },
+  { label: "Applications", href: "/applications" },
+]
+
 export function Sidebar() {
   const pathname = usePathname()
 
@@ -95,6 +100,29 @@ export function Sidebar() {
           </p>
           {SETTINGS_ITEMS.map((item) => {
             const active = pathname === item.href
+            return (
+              <Link
+                key={item.href}
+                href={item.href}
+                className={cn(
+                  "flex items-center gap-2.5 px-3 py-2 rounded-md text-sm transition-colors",
+                  active
+                    ? "bg-blue-50 text-blue-800 font-medium"
+                    : "text-slate-600 hover:bg-slate-50 hover:text-slate-900"
+                )}
+              >
+                {item.label}
+              </Link>
+            )
+          })}
+        </div>
+
+        <div className="pt-2 pb-1">
+          <p className="px-3 text-xs font-medium text-slate-400 uppercase tracking-wider mb-1">
+            Administration
+          </p>
+          {ADMIN_ITEMS.map((item) => {
+            const active = pathname.startsWith(item.href)
             return (
               <Link
                 key={item.href}
