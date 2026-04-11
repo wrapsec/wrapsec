@@ -1,12 +1,13 @@
 from pydantic import BaseModel, Field, model_validator
 from domain.enums import DetectionMode, ExecutionMode
-from errors.exceptions import StreamNotSupportedError, ModelRequiredError
+from errors.exceptions import StreamNotSupportedError, ModelRequiredError, WrapSecError
 
 
 class RequestMetadataSchema(BaseModel):
-    tenant_id: str | None = None
-    source:    str | None = None
-    user_id:   str | None = None
+    # tenant_id intentionally removed — derived from API key only
+    # Allowing caller-provided tenant_id enables spoofing
+    source:  str | None = None
+    user_id: str | None = None
 
 
 class RequestContextSchema(BaseModel):
@@ -37,6 +38,10 @@ class AIRequestSchema(BaseModel):
         # model required in proxy mode
         if self.execution_mode == ExecutionMode.PROXY and not self.model:
             raise ModelRequiredError()
+
+        # model field ignored in scan_only mode — clear it
+        if self.execution_mode == ExecutionMode.SCAN_ONLY:
+            self.model = None
 
         return self
 

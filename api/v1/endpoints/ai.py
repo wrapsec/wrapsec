@@ -37,8 +37,6 @@ def _build_response(decision, debug: bool = False) -> dict:
         "confidence":      decision.confidence,
         "confidence_band": decision.confidence_band,
         "threats":         [t.value for t in decision.threats],
-        "sanitized_input": decision.sanitized_input,
-        "output":          decision.output,
         "processing": {
             "latency_ms":     round(decision.latency_ms, 2),
             "llm_invoked":    decision.llm_invoked,
@@ -46,6 +44,14 @@ def _build_response(decision, debug: bool = False) -> dict:
             "execution_mode": decision.execution_mode.value if hasattr(decision.execution_mode, "value") else decision.execution_mode,
         },
     }
+
+    # sanitized_input only present when decision = SANITIZE
+    if decision.decision.value == "SANITIZE":
+        response["sanitized_input"] = decision.sanitized_input
+
+    # output only present in proxy mode
+    if decision.output is not None:
+        response["output"] = decision.output
 
     if debug and decision.layer_scores:
         def layer_decision(score: float) -> str:
@@ -100,8 +106,9 @@ async def ai_request(
         execution_mode = ExecutionMode(exe_mode_str),
         model          = body.model,
         metadata       = RequestMetadata(
-            tenant_id = body.metadata.tenant_id if body.metadata else None,
-            source    = body.metadata.source if body.metadata else None,
+            # tenant_id always from API key — never from caller metadata
+            tenant_id = getattr(request.state, "tenant_id", None),
+            source    = body.metadata.source  if body.metadata else None,
             user_id   = body.metadata.user_id if body.metadata else None,
         ),
         context        = RequestContext(
@@ -129,6 +136,15 @@ async def ai_request(
     ml_enabled         = policy["detection"]["ml_enabled"]
     llm_enabled        = policy["detection"]["llm_enabled"]
     llm_settings       = policy["llm"]
+
+    # Proxy mode requires LLM to be enabled
+    if body.execution_mode == ExecutionMode.PROXY and not llm_enabled:
+        from errors.exceptions import WrapSecError
+        raise WrapSecError(
+            code       = "VALIDATION_ERROR",
+            message    = "Proxy mode requires LLM layer to be enabled",
+            status_code = 422,
+        )
 
     # Process through gateway
     result = await run_in_threadpool(
@@ -175,7 +191,7 @@ async def ai_request(
         "latency_ms":            round(result.decision.latency_ms, 2),
         "detection_scores":      detection_scores,
         "guardrail_scores":      guardrail_scores,
-        "tenant_id":             body.metadata.tenant_id if body.metadata else None,
+        "tenant_id":             getattr(request.state, "tenant_id", None),
         "source":                source,
         "user_id":               body.metadata.user_id if body.metadata else None,
         "key_id":               getattr(request.state, "key_id",    None),
@@ -184,8 +200,7 @@ async def ai_request(
         "attribution_verified": False,
         "app_id":               getattr(request.state, "app_id",    None),
         "dept_id":              getattr(request.state, "dept_id",   None),
-        "tenant_id":            getattr(request.state, "tenant_id", None)
-                                or (body.metadata.tenant_id if body.metadata else None),
+        "tenant_id":            getattr(request.state, "tenant_id", None),
         "policy_source":   policy_source,
         "primary_reason":  result.decision.primary_reason,
         "confidence":      result.decision.confidence,
