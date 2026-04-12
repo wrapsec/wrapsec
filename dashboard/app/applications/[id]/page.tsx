@@ -1,13 +1,11 @@
 "use client"
 
-import { useState } from "react"
 import { useParams } from "next/navigation"
 import useSWR from "swr"
 import { Shell } from "@/components/layout/Shell"
 import { Card, CardHeader } from "@/components/ui/Card"
-import { Button } from "@/components/ui/Button"
 import { PageSpinner } from "@/components/ui/Spinner"
-import { getApplication, getDepartment, getKeysByApp, createApiKeyForApp, revokeApiKey } from "@/lib/api"
+import { getApplication, getDepartment, getKeysByApp } from "@/lib/api"
 import Link from "next/link"
 
 export default function ApplicationDetailPage() {
@@ -20,46 +18,12 @@ export default function ApplicationDetailPage() {
     app ? `department-${app.dept_id}` : null,
     () => getDepartment(app!.dept_id)
   )
-  const { data: keysData, mutate: mutateKeys } = useSWR(
+  const { data: keysData } = useSWR(
     `keys-app-${id}`, () => getKeysByApp(id)
   )
 
-  const [newKeyName,    setNewKeyName]    = useState("")
-  const [creatingKey,   setCreatingKey]   = useState(false)
-  const [createdKey,    setCreatedKey]    = useState<string | null>(null)
-  const [keyError,      setKeyError]      = useState<string | null>(null)
-  const [revokingId,    setRevokingId]    = useState<string | null>(null)
-
-  // Filter keys to this application
+  // Filter keys scoped to this application
   const appKeys = (keysData?.keys ?? []).filter(k => k.app_id === id)
-
-  const handleCreateKey = async () => {
-    if (!newKeyName.trim()) return
-    setCreatingKey(true)
-    setKeyError(null)
-    setCreatedKey(null)
-    try {
-      const result = await createApiKeyForApp(newKeyName.trim(), id)
-      setCreatedKey(result.api_key)
-      setNewKeyName("")
-      mutateKeys()
-    } catch (e: any) {
-      setKeyError(e.message)
-    } finally {
-      setCreatingKey(false)
-    }
-  }
-
-  const handleRevokeKey = async (keyId: string) => {
-    if (!confirm("Revoke this key? This cannot be undone.")) return
-    setRevokingId(keyId)
-    try {
-      await revokeApiKey(keyId)
-      mutateKeys()
-    } finally {
-      setRevokingId(null)
-    }
-  }
 
   if (isLoading) return <Shell title="Application"><PageSpinner /></Shell>
   if (!app)      return <Shell title="Application"><p className="text-sm text-slate-500">Application not found.</p></Shell>
@@ -67,6 +31,7 @@ export default function ApplicationDetailPage() {
   return (
     <Shell title={app.name}>
       <div className="max-w-2xl space-y-5">
+
         {/* Back button */}
         <Link
           href="/applications"
@@ -101,38 +66,30 @@ export default function ApplicationDetailPage() {
           </div>
         </Card>
 
-        {/* API Keys */}
+        {/* API Keys — read only view, managed in /settings/keys */}
         <Card>
-          <CardHeader
-            title="API Keys"
-            subtitle="Keys scoped to this application"
-          />
+          <div className="flex items-center justify-between mb-4">
+            <CardHeader
+              title="API Keys"
+              subtitle="Keys scoped to this application"
+            />
+            <Link
+              href="/settings/keys"
+              className="text-xs text-blue-700 hover:underline whitespace-nowrap"
+            >
+              Manage keys →
+            </Link>
+          </div>
 
-          {/* Newly created key — show once */}
-          {createdKey && (
-            <div className="mb-4 p-3 bg-emerald-50 border border-emerald-200 rounded-lg">
-              <p className="text-xs font-semibold text-emerald-800 mb-1">
-                Key created — copy it now. It will not be shown again.
-              </p>
-              <div className="flex items-center gap-2">
-                <code className="flex-1 text-xs font-mono text-emerald-900 bg-emerald-100 px-2 py-1.5 rounded break-all">
-                  {createdKey}
-                </code>
-                <button
-                  onClick={() => navigator.clipboard.writeText(createdKey)}
-                  className="text-xs text-emerald-700 hover:text-emerald-900 underline whitespace-nowrap"
-                >
-                  Copy
-                </button>
-              </div>
-            </div>
-          )}
-
-          {/* Existing keys */}
           {appKeys.length === 0 ? (
-            <p className="text-sm text-slate-400 mb-4">No keys for this application yet.</p>
+            <p className="text-sm text-slate-400">
+              No keys for this application.{" "}
+              <Link href="/settings/keys" className="text-blue-700 hover:underline">
+                Create one in API Keys
+              </Link>
+            </p>
           ) : (
-            <div className="space-y-2 mb-4">
+            <div className="space-y-2">
               {appKeys.map(key => (
                 <div
                   key={key.key_id}
@@ -147,33 +104,13 @@ export default function ApplicationDetailPage() {
                       </p>
                     )}
                   </div>
-                  <button
-                    onClick={() => handleRevokeKey(key.key_id)}
-                    disabled={revokingId === key.key_id}
-                    className="text-xs text-red-500 hover:text-red-700 disabled:opacity-50 ml-4 whitespace-nowrap"
-                  >
-                    {revokingId === key.key_id ? "Revoking..." : "Revoke"}
-                  </button>
+                  <span className="text-xs text-emerald-600 bg-emerald-50 px-2 py-0.5 rounded-full">
+                    Active
+                  </span>
                 </div>
               ))}
             </div>
           )}
-
-          {/* Create new key */}
-          <div className="flex gap-2 pt-2 border-t border-slate-100">
-            <input
-              type="text"
-              value={newKeyName}
-              onChange={e => setNewKeyName(e.target.value)}
-              placeholder="Key name e.g. Finance Bot Primary"
-              onKeyDown={e => e.key === "Enter" && handleCreateKey()}
-              className="flex-1 h-9 px-3 text-sm rounded-md border border-slate-200 bg-white text-slate-900 placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-blue-800"
-            />
-            <Button onClick={handleCreateKey} loading={creatingKey} disabled={!newKeyName.trim()}>
-              Create key
-            </Button>
-          </div>
-          {keyError && <p className="text-xs text-red-600 mt-2">{keyError}</p>}
         </Card>
 
         {/* Policy */}
@@ -188,6 +125,7 @@ export default function ApplicationDetailPage() {
             the <strong>{dept?.name || "parent"}</strong> department.
           </div>
         </Card>
+
       </div>
     </Shell>
   )
