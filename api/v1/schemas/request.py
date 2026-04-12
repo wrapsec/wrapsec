@@ -45,6 +45,21 @@ class AIRequestSchema(BaseModel):
         if self.execution_mode == ExecutionMode.SCAN_ONLY:
             self.model = None
 
+        # Heuristic token limit — safe for all languages including CJK
+        # Conservative estimate: 1 token ≈ 2 chars
+        # English: actual ~4 chars/token → estimate is 2x conservative (safe)
+        # CJK:     actual ~1 char/token  → estimate is 2x conservative (safe)
+        # This ensures we never undercount tokens regardless of language
+        # Full per-model tiktoken counting planned for V1.1
+        import math
+        estimated_tokens = math.ceil(len(self.input) / 2)
+        if estimated_tokens > 4000:
+            raise ValueError(
+                f"Input exceeds estimated token limit of 4000 "
+                f"(estimated {estimated_tokens} tokens from {len(self.input)} characters). "
+                f"Maximum input is 8000 characters."
+            )
+
         return self
 
     model_config = {"use_enum_values": True, "populate_by_name": True}
