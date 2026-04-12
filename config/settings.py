@@ -36,6 +36,9 @@ class Settings(BaseSettings):
     rate_limit_per_minute:   int  = 60
     rate_limit_burst:        int  = 10
 
+    # ── Audit log retention ────────────────────────────────────
+    audit_retention_days:    int  = 30  # days to keep audit logs in DB
+
     # ── Detection Engine ──────────────────────────────────────
     default_detection_mode:  str   = "fast"
     default_execution_mode:  str   = "scan_only"

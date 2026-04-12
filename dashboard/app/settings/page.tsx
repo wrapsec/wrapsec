@@ -8,23 +8,27 @@ import { ThresholdForm } from "@/components/settings/ThresholdForm"
 import { LayerToggles } from "@/components/settings/LayerToggles"
 import { LLMSettingsForm } from "@/components/settings/LLMSettings"
 import { TenantSettingsForm } from "@/components/settings/TenantSettings"
+import { RetentionSettingsForm } from "@/components/settings/RetentionSettings"
 import { PageSpinner } from "@/components/ui/Spinner"
-import { getThresholds, getLayers, getLLMSettings, getTenant } from "@/lib/api"
+import { getThresholds, getLayers, getLLMSettings, getTenant, getRetentionSettings } from "@/lib/api"
 
 export default function SettingsPage() {
-  const { data: tenant,     isLoading: tenantLoading,  mutate: mutateN } =
+  const { data: tenant,     isLoading: tenantLoading,     mutate: mutateN } =
     useSWR("tenant",       getTenant)
 
-  const { data: thresholds, isLoading: tLoading, mutate: mutateT } =
+  const { data: thresholds, isLoading: tLoading,          mutate: mutateT } =
     useSWR("thresholds",   getThresholds)
 
-  const { data: layers,     isLoading: lLoading, mutate: mutateL } =
+  const { data: layers,     isLoading: lLoading,          mutate: mutateL } =
     useSWR("layers",       getLayers)
 
-  const { data: llm,        isLoading: llmLoading, mutate: mutateM } =
+  const { data: llm,        isLoading: llmLoading,        mutate: mutateM } =
     useSWR("llm-settings", getLLMSettings)
 
-  if (tenantLoading || tLoading || lLoading || llmLoading) {
+  const { data: retention,  isLoading: retentionLoading,  mutate: mutateR } =
+    useSWR("retention",    getRetentionSettings)
+
+  if (tenantLoading || tLoading || lLoading || llmLoading || retentionLoading) {
     return <Shell title="Settings"><PageSpinner /></Shell>
   }
 
@@ -32,7 +36,7 @@ export default function SettingsPage() {
     <Shell title="Settings">
       <div className="max-w-2xl space-y-5">
 
-        {/* Tenant / Organisation */}
+        {/* Organisation */}
         <Card>
           <CardHeader
             title="Organisation"
@@ -87,6 +91,25 @@ export default function SettingsPage() {
             />
           )}
         </Card>
+
+        {/* Audit Log Retention */}
+        <Card>
+          <CardHeader
+            title="Audit Log Retention"
+            subtitle="Configure how long audit logs are kept in the database"
+          />
+          {retention && (
+            <RetentionSettingsForm
+              retentionDays={retention.retention_days}
+              source={retention.source}
+              onUpdated={(days) => mutateR(
+                { ...retention, retention_days: days },
+                false
+              )}
+            />
+          )}
+        </Card>
+
       </div>
     </Shell>
   )

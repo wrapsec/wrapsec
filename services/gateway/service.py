@@ -269,18 +269,23 @@ class GatewayService:
             )
 
         except Exception as e:
+            import traceback
             logger.error(f"GatewayService failed: {e} trace_id={request.trace_id}")
+            logger.error(traceback.format_exc())
             latency_ms = (time.perf_counter() - start) * 1000
 
             gateway_decision = GatewayDecision(
-                trace_id       = request.trace_id,
-                decision       = DecisionType.BLOCK,
-                risk_score     = RiskScore(1.0),
-                threats        = [],
-                llm_invoked    = False,
-                detection_mode = request.detection_mode,
-                execution_mode = request.execution_mode,
-                latency_ms     = latency_ms,
+                trace_id        = request.trace_id,
+                decision        = DecisionType.BLOCK,
+                risk_score      = RiskScore(1.0),
+                threats         = [],
+                llm_invoked     = False,
+                detection_mode  = request.detection_mode,
+                execution_mode  = request.execution_mode,
+                latency_ms      = latency_ms,
+                primary_reason  = "SYSTEM_ERROR",
+                confidence      = 0.0,
+                confidence_band = "LOW",
             )
 
             audit_log = AuditLog(

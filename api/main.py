@@ -16,6 +16,7 @@ from api.v1.middleware.trace import TraceMiddleware
 from api.v1.middleware.logging import LoggingMiddleware
 from api.v1.middleware.auth import AuthMiddleware
 from api.v1.middleware.rate_limit import RateLimitMiddleware
+from api.v1.middleware.idempotency import IdempotencyMiddleware
 
 settings = get_settings()
 
@@ -49,8 +50,10 @@ app = FastAPI(
 )
 
 # ── Middleware — order matters, outermost registered last ─────
-# Request flow: Trace → RateLimit → Auth → Logging → endpoint
+# Request flow: Trace → RateLimit → Auth → Idempotency → Logging → endpoint
+# Idempotency must be after Auth so key_id is available in request.state
 app.add_middleware(LoggingMiddleware)
+app.add_middleware(IdempotencyMiddleware)
 app.add_middleware(AuthMiddleware)
 app.add_middleware(RateLimitMiddleware)
 app.add_middleware(TraceMiddleware)

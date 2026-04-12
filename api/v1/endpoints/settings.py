@@ -174,3 +174,41 @@ async def update_llm_settings(
         **current,
         "updated_at": datetime.now(timezone.utc).isoformat(),
     })
+
+RETENTION_KEY = "audit_retention"
+
+
+class RetentionSettingsSchema(BaseModel):
+    retention_days: int
+
+    @model_validator(mode="after")
+    def validate_retention(self) -> "RetentionSettingsSchema":
+        if self.retention_days < 7:
+            raise ValueError("retention_days must be at least 7")
+        if self.retention_days > 3650:
+            raise ValueError("retention_days cannot exceed 3650 (10 years)")
+        return self
+
+
+@router.get("/retention")
+async def get_retention_settings(db: AsyncSession = Depends(get_db)):
+    repo    = SettingsRepository(db)
+    stored  = await repo.get(RETENTION_KEY)
+    days    = stored.get("retention_days", settings.audit_retention_days) if stored else settings.audit_retention_days
+    return JSONResponse(content={
+        "retention_days": days,
+        "source":         "database" if stored else "environment",
+    })
+
+
+@router.put("/retention")
+async def update_retention_settings(
+    body: RetentionSettingsSchema,
+    db:   AsyncSession = Depends(get_db),
+):
+    repo = SettingsRepository(db)
+    await repo.set(RETENTION_KEY, {"retention_days": body.retention_days})
+    return JSONResponse(content={
+        "retention_days": body.retention_days,
+        "updated_at":     datetime.now(timezone.utc).isoformat(),
+    })
