@@ -50,29 +50,53 @@ class IdempotencyMiddleware(BaseHTTPMiddleware):
         body      = await request.body()
         body_hash = hashlib.sha256(body).hexdigest()[:16]
 
-        # Composite cache key — ties idempotency key to specific request body
-        composite  = f"{idempotency_key}:{body_hash}".encode()
-        cache_key  = f"idempotency:{hashlib.sha256(composite).hexdigest()}"
+        # Two Redis keys — keyed by idempotency_key alone (not composite)
+        # This allows us to detect conflicts (same key, different body)
+        idem_hash    = hashlib.sha256(idempotency_key.encode()).hexdigest()
+        hash_key     = f"idempotency:{idem_hash}:hash"
+        response_key = f"idempotency:{idem_hash}:resp"
 
-        # ── Check cache ───────────────────────────────────────
         try:
             from cache.redis_client import get_redis
-            redis  = get_redis()
-            cached = await redis.get(cache_key)
+            redis = get_redis()
 
-            if cached:
-                logger.info(
-                    f"Idempotency hit — "
-                    f"key={idempotency_key[:12]}... "
-                    f"path={request.url.path}"
-                )
-                cached_data = json.loads(cached)
-                response    = JSONResponse(
-                    content     = cached_data["body"],
-                    status_code = cached_data["status_code"],
-                )
-                response.headers["X-Idempotency-Replayed"] = "true"
-                return response
+            stored_hash = await redis.get(hash_key)
+
+            if stored_hash:
+                if stored_hash != body_hash:
+                    # Same idempotency key — different body → CONFLICT
+                    logger.warning(
+                        f"Idempotency conflict — "
+                        f"key={idempotency_key[:12]}... "
+                        f"body hash mismatch"
+                    )
+                    trace_id = getattr(request.state, "trace_id", "")
+                    return JSONResponse(
+                        status_code = 409,
+                        content     = {
+                            "error": {
+                                "code":    "IDEMPOTENCY_CONFLICT",
+                                "message": "Idempotency-Key was already used with a different request body.",
+                                "trace_id": trace_id,
+                            }
+                        },
+                    )
+
+                # Same key + same body → return cached response
+                cached = await redis.get(response_key)
+                if cached:
+                    logger.info(
+                        f"Idempotency hit — "
+                        f"key={idempotency_key[:12]}... "
+                        f"path={request.url.path}"
+                    )
+                    cached_data = json.loads(cached)
+                    response    = JSONResponse(
+                        content     = cached_data["body"],
+                        status_code = cached_data["status_code"],
+                    )
+                    response.headers["X-Idempotency-Replayed"] = "true"
+                    return response
 
         except Exception as e:
             logger.warning(f"Idempotency cache check failed: {e} — processing normally")
@@ -99,14 +123,12 @@ class IdempotencyMiddleware(BaseHTTPMiddleware):
 
                 response_data = json.loads(response_body)
 
-                await redis.setex(
-                    cache_key,
-                    IDEMPOTENCY_TTL,
-                    json.dumps({
-                        "body":        response_data,
-                        "status_code": response.status_code,
-                    })
-                )
+                # Store body hash and response separately
+                await redis.setex(hash_key,     IDEMPOTENCY_TTL, body_hash)
+                await redis.setex(response_key, IDEMPOTENCY_TTL, json.dumps({
+                    "body":        response_data,
+                    "status_code": response.status_code,
+                }))
 
                 logger.debug(
                     f"Idempotency cached — "

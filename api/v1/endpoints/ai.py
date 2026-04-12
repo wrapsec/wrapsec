@@ -148,12 +148,21 @@ async def ai_request(
             status_code = 422,
         )
 
+    # Extract independent PII guardrail thresholds from resolved policy
+    # These are intentionally separate from detection thresholds —
+    # changing detection thresholds must not affect PII guardrail behaviour
+    pii_policy             = policy.get("guardrails", {}).get("pii", {})
+    pii_block_threshold    = pii_policy.get("block_threshold",    None)
+    pii_sanitize_threshold = pii_policy.get("sanitize_threshold", None)
+
     # Process through gateway
     result = await run_in_threadpool(
         _gateway.process,
         incoming,
         block_threshold,
         sanitize_threshold,
+        pii_block_threshold,
+        pii_sanitize_threshold,
         rule_enabled,
         ml_enabled,
         llm_enabled,

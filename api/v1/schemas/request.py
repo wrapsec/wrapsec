@@ -21,7 +21,9 @@ class RequestOptionsSchema(BaseModel):
 
 
 class AIRequestSchema(BaseModel):
-    input:          str                       = Field(..., min_length=1, max_length=10000)
+    input:          str                       = Field(..., min_length=1, max_length=8000)
+    # 8,000 chars ≈ 2,000 tokens (safe for all languages including CJK)
+    # Full per-model token counting with tiktoken planned for V1.1
     detection_mode: DetectionMode             = DetectionMode.FAST
     execution_mode: ExecutionMode             = ExecutionMode.SCAN_ONLY
     model:          str | None                = None

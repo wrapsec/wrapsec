@@ -91,13 +91,15 @@ class GatewayService:
 
     def process(
         self,
-        request:            IncomingRequest,
-        block_threshold:    float | None = None,
-        sanitize_threshold: float | None = None,
-        rule_enabled:       bool = True,
-        ml_enabled:         bool = True,
-        llm_enabled:        bool = True,
-        llm_settings:       dict | None = None,
+        request:               IncomingRequest,
+        block_threshold:       float | None = None,
+        sanitize_threshold:    float | None = None,
+        pii_block_threshold:   float | None = None,
+        pii_sanitize_threshold: float | None = None,
+        rule_enabled:          bool = True,
+        ml_enabled:            bool = True,
+        llm_enabled:           bool = True,
+        llm_settings:          dict | None = None,
     ) -> GatewayResult:
         start = time.perf_counter()
 
@@ -112,10 +114,21 @@ class GatewayService:
             effective_input = input_result.sanitized_text or request.input
 
             # ── Step 2: Rule detection ────────────────────────
-            rule_result = self._rule_detector.detect(effective_input) if rule_enabled else DetectionResult.clean("rule_detector")
+            detection_failed = False
+            try:
+                rule_result = self._rule_detector.detect(effective_input) if rule_enabled else DetectionResult.clean("rule_detector")
+            except Exception as e:
+                logger.error(f"Rule detector failed: {e} trace_id={request.trace_id}")
+                rule_result      = DetectionResult.clean("rule_detector")
+                detection_failed = True
 
             # ── Step 3: ML detection ──────────────────────────
-            ml_result = self._ml_detector.detect(effective_input) if ml_enabled else DetectionResult.clean("ml_detector")
+            try:
+                ml_result = self._ml_detector.detect(effective_input) if ml_enabled else DetectionResult.clean("ml_detector")
+            except Exception as e:
+                logger.error(f"ML detector failed: {e} trace_id={request.trace_id}")
+                ml_result        = DetectionResult.clean("ml_detector")
+                detection_failed = True
 
             # ── Step 4: LLM detection (conditional) ───────────
             # Only invoke LLM detector if:
@@ -137,7 +150,12 @@ class GatewayService:
                     f"LLM detector triggered — pre_score={pre_score:.2f} "
                     f"trace_id={request.trace_id}"
                 )
-                llm_result = self._llm_detector.detect(effective_input)
+                try:
+                    llm_result = self._llm_detector.detect(effective_input)
+                except Exception as e:
+                    logger.error(f"LLM detector failed: {e} trace_id={request.trace_id}")
+                    llm_result       = DetectionResult.clean("llm_detector")
+                    detection_failed = True
 
             # ── Step 5: Risk scoring ──────────────────────────
             scoring = self._risk_scorer.score(
@@ -149,11 +167,13 @@ class GatewayService:
 
             # ── Step 6: Policy decision ───────────────────────
             policy = self._policy_engine.decide(
-                risk_score         = scoring.final_score,
-                threats            = scoring.threats,
-                block_threshold    = block_threshold,
-                sanitize_threshold = sanitize_threshold,
-                pii_score          = scoring.pii_score,
+                risk_score             = scoring.final_score,
+                threats                = scoring.threats,
+                block_threshold        = block_threshold,
+                sanitize_threshold     = sanitize_threshold,
+                pii_score              = scoring.pii_score,
+                pii_block_threshold    = pii_block_threshold,
+                pii_sanitize_threshold = pii_sanitize_threshold,
             )
 
             # ── Step 7: Sanitized input ───────────────────────
@@ -193,9 +213,11 @@ class GatewayService:
 
             # Compute primary reason
             from engine.scoring.primary_reason import compute_primary_reason
+            _pii_bt = pii_block_threshold    if pii_block_threshold    is not None else block_threshold
+            _pii_st = pii_sanitize_threshold if pii_sanitize_threshold is not None else sanitize_threshold
             guardrail_triggered = (
-                scoring.pii_score >= block_threshold or
-                scoring.pii_score >= sanitize_threshold
+                scoring.pii_score >= _pii_bt or
+                scoring.pii_score >= _pii_st
             )
             primary_reason = compute_primary_reason(
                 guardrail_triggered = guardrail_triggered,
@@ -204,8 +226,9 @@ class GatewayService:
                 ml_score            = scoring.ml_score,
                 llm_score           = scoring.llm_score,
                 pii_score           = scoring.pii_score,
-                block_threshold     = block_threshold,
-                sanitize_threshold  = sanitize_threshold,
+                block_threshold     = _pii_bt,
+                sanitize_threshold  = _pii_st,
+                detection_failed    = detection_failed,
             )
 
             # Compute confidence score
