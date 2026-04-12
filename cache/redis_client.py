@@ -14,8 +14,10 @@ def get_redis_pool() -> ConnectionPool:
     if _pool is None:
         _pool = ConnectionPool.from_url(
             settings.redis_url,
-            max_connections = 20,
-            decode_responses = True,
+            max_connections   = 20,
+            decode_responses  = True,
+            socket_timeout    = 2,        # fail fast on ping
+            socket_connect_timeout = 2,
         )
     return _pool
 
@@ -28,9 +30,17 @@ def get_redis() -> Redis:
 
 
 async def ping() -> bool:
+    """Always creates a fresh connection for health checks — never uses cached pool."""
     try:
-        client = get_redis()
-        return await client.ping()
+        fresh = Redis.from_url(
+            settings.redis_url,
+            socket_timeout         = 2,
+            socket_connect_timeout = 2,
+            decode_responses       = True,
+        )
+        result = await fresh.ping()
+        await fresh.aclose()
+        return result
     except Exception as e:
         logger.error(f"Redis ping failed: {e}")
         return False
