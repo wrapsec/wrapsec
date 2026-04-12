@@ -1,6 +1,8 @@
 # WrapSec — AI Security Gateway
 
-> Production-grade security gateway for enterprise AI applications. Protects every LLM interaction with a multi-layer detection pipeline, guardrail enforcement, and a complete attribution audit trail.
+> Production-grade security gateway for enterprise AI applications. Protects every LLM interaction with a multi-layer detection pipeline, independent guardrail enforcement, and a complete attribution audit trail.
+
+WrapSec enforces security, compliance, and observability for every LLM request — before it reaches the model.
 
 [![Python](https://img.shields.io/badge/Python-3.10+-blue?style=flat-square)](https://python.org)
 [![FastAPI](https://img.shields.io/badge/FastAPI-0.100+-green?style=flat-square)](https://fastapi.tiangolo.com)
@@ -15,7 +17,7 @@
 
 WrapSec is a self-hosted AI security gateway that sits between your application and any LLM provider. Every prompt passes through a four-layer detection pipeline before reaching the model. Threats are blocked or sanitised in real time. Every decision is logged with full attribution, a confidence score, and a primary reason — giving security teams and compliance officers a complete, explainable audit trail.
 
-It is not a firewall. It is not a proxy with regex rules. It is a complete AI security platform: detection, policy enforcement, attribution, observability, and management in one system.
+**Where it fits:** WrapSec sits between your application and any LLM provider (OpenAI, Groq, Ollama, or any local model), acting as a security enforcement layer. Your application sends prompts to WrapSec instead of directly to the LLM. WrapSec scans, decides, and either blocks the request or forwards it to the model on your behalf.
 
 ---
 
@@ -24,13 +26,14 @@ It is not a firewall. It is not a proxy with regex rules. It is a complete AI se
 | Problem | WrapSec Solution |
 |---|---|
 | Prompt injection and jailbreak attacks | Rule + ML + LLM detection pipeline |
-| PII leaking into AI systems | Deterministic PII guardrail — 22+ entity types, input and output |
+| PII leaking into AI systems | Independent PII guardrail — 22+ entity types, input and output |
+| Detection threshold changes impacting PII protection | Guardrail thresholds fully decoupled from detection thresholds |
 | No audit trail for AI requests | Full attribution chain per request |
 | Black-box decisions | `primary_reason` + `confidence` on every response |
-| One security policy for all departments | Per-department policy overrides with deep merge |
-| Compliance gaps (GDPR, EU AI Act, SOC 2) | Confidence bands, decision versioning, CSV export, retention policy |
-| Duplicate processing on client retries | Idempotency-Key header with Redis cache |
-| Unknown which system made a request | One API key per application, full entity attribution |
+| Cannot distinguish clean input from system failure | `SYSTEM_ERROR` is always distinct from `NO_THREAT_DETECTED` |
+| Duplicate processing on retries | Idempotency-Key — same key + different body → 409 CONFLICT |
+| CJK and dense text overloading LLMs | Heuristic token limit — `ceil(len/2) > 4000` → 422 |
+| Compliance gaps (GDPR, EU AI Act, SOC 2) | Confidence bands, decision versioning, CSV export, retention |
 
 ---
 
@@ -43,43 +46,26 @@ It is not a firewall. It is not a proxy with regex rules. It is a complete AI se
 - PII guardrail — 22+ entity types, scans both input and LLM output
 
 **Decision model:**
-- Guardrail-first — PII score never dilutes the detection risk score
-- `risk_score = rule × 0.40 + ml × 0.30 + llm × 0.30`
-- Boost mechanism — strong signals not diluted by inactive layers
-- `primary_reason` — which layer drove the decision
-- `confidence` — variance-based certainty with HIGH/MEDIUM/LOW band
+- Guardrail-first — PII evaluated independently, always overrides detection
+- Guardrail thresholds (`guardrails.pii.*`) fully decoupled from detection thresholds
+- `risk_score = rule × 0.40 + ml × 0.30 + llm × 0.30` (PII excluded)
+- `primary_reason` — 7 values, `SYSTEM_ERROR` always distinct from `NO_THREAT_DETECTED`
+- `confidence` — variance-based with HIGH/MEDIUM/LOW band, 0.0 on system failure
 - `decision_version` — algorithm version in every response
-- `sanitization_applied` — explicit flag when input was sanitised
+- `sanitization_applied` — explicit boolean flag
 
 **Reliability:**
-- Idempotency-Key header — same key returns cached response (60s TTL)
-- ULID trace IDs — time-sortable, lexicographically ordered
-- Failure mode contract — detection failure → ALLOW + LOW confidence, system failure → BLOCK
-- LLM timeout fallback — continues with rule + ML if LLM times out
-
-**Attribution:**
-- Full chain: tenant → department → application → API key → user → IP
-- `attribution_verified: false` in V1 — clearly labelled self-reported identity
-- `tenant_id` never accepted from request metadata — always from API key
-- Rate limiting per API key with standard headers
+- Idempotency-Key — same key + same body → cached, same key + different body → 409
+- ULID trace IDs — time-sortable
+- Input limit — 8,000 chars / 4,000 estimated tokens (heuristic, safe for CJK)
+- Per-detector try/catch — individual failures do not crash the pipeline
+- `SYSTEM_ERROR` on detector failure — never confused with `NO_THREAT_DETECTED`
+- LLM timeout fallback — continues with rule + ML
 
 **Policy hierarchy:**
-- System defaults → tenant global policy → department overrides
-- Deep merge — null fields always inherit from parent
-- Per-department settings — Finance gets stricter PII, Engineering gets relaxed thresholds
-- All thresholds, layers, and LLM settings configurable at runtime without restart
-
-**Compliance:**
-- Audit log retention policy — configurable via Settings UI, stored in DB
-- Cleanup script reads retention days from DB first, falls back to config
-- CSV export with all attribution and decision fields
-- Input limits — 10,000 chars, 64KB payload enforced at Nginx
-
-**Operations:**
-- Next.js 14 dashboard — 11 pages
-- Semantic cache — identical prompts skip re-scoring
-- Prometheus metrics + structured JSON logging
-- Docker Compose — full stack in one command
+- System defaults → tenant global → department overrides
+- Detection thresholds and PII thresholds configured and resolved independently
+- All settings configurable at runtime without restart
 
 ---
 
@@ -87,56 +73,64 @@ It is not a firewall. It is not a proxy with regex rules. It is a complete AI se
 
 ```
 Calling Application
-(Finance Bot, HR System, ERP, Mobile App)
-              │
               │  x-api-key: wsk_live_...
-              │  Idempotency-Key: <uuid> (optional)
+              │  Idempotency-Key: <uuid>
               ▼
-      Nginx — 64KB payload limit, reverse proxy
-              │
+      Nginx — 64KB payload limit
               ▼
     WrapSec API (FastAPI)
-    ┌───────────────────────────────────────┐
-    │  Middleware stack                      │
-    │  Trace → RateLimit → Auth →           │
-    │  Idempotency → Logging                │
-    │                                       │
-    │  Gateway Service                      │
-    │  ├── InputGuard    (PII detection)    │
-    │  ├── RuleDetector  (~0ms)             │
-    │  ├── MLDetector    (~5ms)             │
-    │  ├── LLMDetector   (conditional)      │
-    │  ├── RiskScorer    (weighted)         │
-    │  ├── PolicyEngine  (guardrail-first)  │
-    │  ├── LLM Client    (proxy mode)       │
-    │  └── OutputGuard   (PII on output)   │
-    └───────────────────────────────────────┘
+    ┌──────────────────────────────────────────────┐
+    │  Trace → RateLimit(per-key) → Auth →         │
+    │  Idempotency(Redis,60s) → Logging            │
+    │                                              │
+    │  Gateway Service                             │
+    │  ├── InputGuard    PII detection + redaction │
+    │  ├── RuleDetector  try/catch (~0ms)          │
+    │  ├── MLDetector    try/catch (~5ms)          │
+    │  ├── LLMDetector   try/catch (conditional)   │
+    │  ├── RiskScorer    rule+ml+llm weighted      │
+    │  ├── PolicyEngine                            │
+    │  │     ├── PII thresholds (guardrails.pii.*) │
+    │  │     └── Det thresholds (thresholds.*)     │
+    │  ├── LLM Client    proxy mode only           │
+    │  └── OutputGuard   PII on LLM output         │
+    └──────────────────────────────────────────────┘
               │
-    ┌─────────┴────────────┐
-    │                      │
-PostgreSQL              Redis
-(audit, settings,      (semantic cache,
- keys, entities,        rate limiting,
- retention policy)      idempotency)
+    ┌─────────┴──────────────────┐
+    │                            │
+PostgreSQL                   Redis
+(audit, settings,            (idempotency, rate limit,
+ keys, entities,              semantic cache)
+ retention policy)
 ```
 
-**Detection scoring:**
+**Scoring:**
 
 ```
-Detection risk score (detectors only — PII excluded):
+Detection risk score (PII excluded):
   risk_score = rule × 0.40 + ml × 0.30 + llm × 0.30
-  if max(rule, ml, llm) >= 0.5:
-      risk_score = max(risk_score, max_score)  # boost
+  + boost if max(rule, ml, llm) >= 0.5
 
-Guardrail evaluation (independent — always overrides):
-  pii >= block_threshold    → BLOCK
-  pii >= sanitize_threshold → SANITIZE
+Guardrail (independent thresholds):
+  pii >= guardrails.pii.block_threshold    → BLOCK
+  pii >= guardrails.pii.sanitize_threshold → SANITIZE
 
 Policy decision (if no guardrail triggered):
-  risk_score >= block_threshold    → BLOCK
-  risk_score >= sanitize_threshold → SANITIZE
-  otherwise                        → ALLOW
+  risk_score >= thresholds.block    → BLOCK
+  risk_score >= thresholds.sanitize → SANITIZE
+  otherwise                         → ALLOW
+
+Primary reason (in order of priority):
+  detection_failed = True → SYSTEM_ERROR
+  guardrail triggered     → PII_GUARDRAIL_BLOCK/SANITIZE
+  max detector > 0        → RULE/ML/LLM_DETECTOR
+  all scores = 0          → NO_THREAT_DETECTED
 ```
+
+**Security model:**
+- **Fail-open for detection** — if detectors fail, the request is allowed through with `SYSTEM_ERROR` + LOW confidence. Blocking clean requests due to system errors is worse than a missed detection.
+- **Fail-closed for guardrails** — if the PII guardrail fails, the request is blocked. Data protection must never fail open.
+- **`SYSTEM_ERROR` events indicate infrastructure issues**, not security threats, and must be monitored separately from detection outcomes.
 
 ---
 
@@ -154,20 +148,26 @@ Policy decision (if no guardrail triggered):
   "sanitization_applied": false,
   "threats":              ["PROMPT_INJECTION"],
   "processing": {
-    "latency_ms":     2.1,
-    "llm_invoked":    false,
-    "detection_mode": "fast",
-    "execution_mode": "scan_only",
-    "policy_source":  "department_override"
+    "latency_ms": 2.1, "llm_invoked": false,
+    "detection_mode": "fast", "execution_mode": "scan_only",
+    "policy_source": "department_override"
   }
 }
 ```
 
-**Field rules:**
-- `sanitized_input` — only present when `decision = SANITIZE`
-- `output` — only present in proxy mode when LLM was invoked
-- `threats` — always present (empty array if none)
-- `X-RateLimit-Limit`, `X-RateLimit-Remaining`, `X-RateLimit-Reset` — always in headers
+**`primary_reason` — 7 values:**
+
+| Value | Meaning |
+|---|---|
+| `RULE_DETECTOR` | Rule layer dominant |
+| `ML_DETECTOR` | ML classifier dominant |
+| `LLM_DETECTOR` | LLM analysis dominant |
+| `PII_GUARDRAIL_BLOCK` | PII at block threshold |
+| `PII_GUARDRAIL_SANITIZE` | PII at sanitize threshold |
+| `NO_THREAT_DETECTED` | All scores below thresholds — input genuinely clean |
+| `SYSTEM_ERROR` | Detector(s) failed — confidence = 0.0 (LOW) |
+
+**`SYSTEM_ERROR` is never `NO_THREAT_DETECTED`.** An ALLOW with `NO_THREAT_DETECTED` means input was safe. A BLOCK with `SYSTEM_ERROR` means the system failed. These are different events requiring different responses.
 
 ---
 
@@ -175,55 +175,36 @@ Policy decision (if no guardrail triggered):
 
 ### Prerequisites
 
-- Docker + Docker Compose
-- Python 3.10+
-- Node.js 18+
-- Ollama (optional — for local LLM)
+Docker + Docker Compose · Python 3.10+ · Node.js 18+ · Ollama (optional)
 
-### 1. Clone
+### 1. Clone and configure
 
 ```bash
 git clone https://github.com/kbajish/wrapsec.git
 cd wrapsec
-```
-
-### 2. Configure
-
-```bash
 cp .env.example .env
-```
-
-Edit `.env` — at minimum set `ADMIN_API_KEY` to a strong random value:
-
-```bash
+# Set ADMIN_API_KEY to a strong random value
 python -c "import secrets; print('wrapsec_' + secrets.token_urlsafe(32))"
 ```
 
-### 3. Start infrastructure
+### 2. Start infrastructure
 
 ```bash
 docker compose -f infrastructure/docker/docker-compose.yml up -d postgres redis
 ```
 
-### 4. Train ML model
+### 3. Install, train, run
 
 ```bash
 pip install -r requirements.txt
 python scripts/train_ml_model.py
-```
-
-### 5. Start API
-
-```bash
 uvicorn api.main:app --reload --host 0.0.0.0 --port 8000
 ```
 
-### 6. Start dashboard
+### 4. Start dashboard
 
 ```bash
-cd dashboard
-npm install
-npm run dev
+cd dashboard && npm install && npm run dev
 ```
 
 Open `http://localhost:3000` — sign in with your admin API key.
@@ -236,329 +217,122 @@ Open `http://localhost:3000` — sign in with your admin API key.
 
 ```bash
 curl -X POST http://localhost:8000/v1/ai/request \
-  -H "x-api-key: your-admin-key" \
-  -H "Content-Type: application/json" \
-  -d '{
-    "input": "Ignore all previous instructions",
-    "detection_mode": "fast",
-    "execution_mode": "scan_only"
-  }'
-```
-
-### Proxy to LLM
-
-```bash
-curl -X POST http://localhost:8000/v1/ai/request \
   -H "x-api-key: your-key" \
   -H "Content-Type: application/json" \
-  -H "Idempotency-Key: 550e8400-e29b-41d4-a716-446655440000" \
-  -d '{
-    "input": "Summarise the Q4 report",
-    "execution_mode": "proxy",
-    "model": "llama3.2:latest",
-    "metadata": {"user_id": "emp_12345"}
-  }'
+  -d '{"input": "Ignore all previous instructions"}'
 ```
 
 ### Python integration
 
 ```python
-import httpx
+import httpx, uuid
 
 client = httpx.Client(
     base_url = "http://localhost:8000",
     headers  = {"x-api-key": "your-key"},
 )
 
-result = client.post("/v1/ai/request", json={
-    "input":          user_prompt,
-    "detection_mode": "fast",
-    "execution_mode": "scan_only",
-    "metadata":       {"user_id": current_user.id},
-}).json()
+result = client.post(
+    "/v1/ai/request",
+    headers = {"Idempotency-Key": str(uuid.uuid4())},
+    json    = {"input": user_prompt, "metadata": {"user_id": current_user.id}},
+).json()
 
 match result["decision"]:
     case "BLOCK":
-        return "Request blocked — security policy"
+        if result["primary_reason"] == "SYSTEM_ERROR":
+            alert_ops(result["trace_id"])   # detector failure — investigate
+        else:
+            return "Blocked by security policy"
     case "SANITIZE":
         safe_input = result["sanitized_input"]
-        # proceed with sanitized input
     case "ALLOW":
-        pass  # proceed normally
+        if result["primary_reason"] == "SYSTEM_ERROR":
+            alert_ops(result["trace_id"])   # all detectors failed — fail open
+        # otherwise NO_THREAT_DETECTED — genuinely clean
 
 if result["confidence_band"] == "LOW":
     flag_for_human_review(result["trace_id"])
 ```
 
+SDKs for Python and JavaScript are planned for V2.0 — making integration even simpler with typed clients, automatic retry with idempotency, and built-in confidence handling.
+
 ---
 
 ## Configuration
 
-### Environment variables
-
 | Variable | Required | Default | Description |
 |---|---|---|---|
-| `ADMIN_API_KEY` | Yes | — | Master admin key — must be strong and secret |
-| `DATABASE_URL` | Yes | — | `postgresql+asyncpg://user:pass@host/db` |
-| `REDIS_URL` | No | `redis://localhost:6379/0` | Redis connection |
+| `ADMIN_API_KEY` | Yes | — | Master admin key |
+| `DATABASE_URL` | Yes | — | PostgreSQL connection string |
+| `REDIS_URL` | No | `redis://localhost:6379/0` | Redis |
 | `LLM_PROVIDER` | No | `ollama` | `ollama` \| `openai` \| `groq` |
 | `LLM_MODEL` | No | `llama3.2:latest` | Model name |
-| `LLM_BASE_URL` | No | `http://localhost:11434` | Ollama server URL |
 | `OPENAI_API_KEY` | No | — | Required if provider = openai |
 | `GROQ_API_KEY` | No | — | Required if provider = groq |
-| `BLOCK_THRESHOLD` | No | `0.7` | Risk score threshold for BLOCK |
-| `SANITIZE_THRESHOLD` | No | `0.4` | Risk score threshold for SANITIZE |
-| `RATE_LIMIT_PER_MINUTE` | No | `60` | Requests per minute per API key |
-| `AUDIT_RETENTION_DAYS` | No | `30` | Days to retain audit logs |
+| `BLOCK_THRESHOLD` | No | `0.7` | Detection block threshold |
+| `SANITIZE_THRESHOLD` | No | `0.4` | Detection sanitize threshold |
+| `RATE_LIMIT_PER_MINUTE` | No | `60` | Per API key |
+| `AUDIT_RETENTION_DAYS` | No | `30` | Default audit log retention |
 
-**API keys for LLM providers are `.env` only — never stored in the database.**
-
-### Runtime configuration (no restart required)
-
-```bash
-# Policy thresholds
-curl -X PUT http://localhost:8000/v1/settings/thresholds \
-  -H "x-api-key: your-admin-key" \
-  -d '{"block_threshold": 0.8, "sanitize_threshold": 0.5}'
-
-# Detection layers
-curl -X PUT http://localhost:8000/v1/settings/layers \
-  -H "x-api-key: your-admin-key" \
-  -d '{"rule_enabled": true, "ml_enabled": true, "llm_enabled": false}'
-
-# LLM provider
-curl -X PUT http://localhost:8000/v1/settings/llm \
-  -H "x-api-key: your-admin-key" \
-  -d '{"provider": "openai", "model": "gpt-4", "timeout": 30}'
-
-# Audit retention
-curl -X PUT http://localhost:8000/v1/settings/retention \
-  -H "x-api-key: your-admin-key" \
-  -d '{"retention_days": 90}'
-```
-
-All settings are stored in the database and configurable from the Settings page in the dashboard.
+**LLM API keys are `.env` only — never in the database.**
 
 ---
 
-## Department-Based Multi-Tenancy
+## Input Limits
 
-WrapSec supports multiple departments within a single installation, each with independent policies, applications, and API keys.
+| Limit | Value | Notes |
+|---|---|---|
+| Max characters | 8,000 | Hard limit in schema → 422 |
+| Estimated token limit | 4,000 | `ceil(len/2) > 4000` → 422 |
+| Max payload | 64KB | Nginx → 413 |
+| Max export rows | 10,000 | Per request |
 
-```
-Acme Corporation (tenant)
-├── Finance Department  → block=0.5, sanitize=0.3 (stricter PII)
-│     ├── Finance Bot   → wsk_live_fin_...
-│     └── ERP System    → wsk_live_erp_...
-├── HR Department       → block=0.5, local LLM only
-│     └── HR System     → wsk_live_hr_...
-└── Engineering         → block=0.75, LLM disabled
-      └── Code Assistant → wsk_live_eng_...
-```
+The heuristic `ceil(len/2)` is conservative — it estimates 2 chars per token, which is safe for all languages including CJK (actual: ~1 char/token) and English (actual: ~4 chars/token). Full per-model token counting with tiktoken is planned for V1.1.
 
-Policy resolves per request: system defaults → tenant global → department override.
-
-Every request is attributed to the full chain: which company, which department, which application, which key, which user, from which IP.
-
-```bash
-# Create department with policy override
-curl -X POST http://localhost:8000/v1/admin/departments \
-  -H "x-api-key: your-admin-key" \
-  -d '{"slug": "finance", "name": "Finance Department"}'
-
-curl -X PUT http://localhost:8000/v1/admin/departments/{id} \
-  -H "x-api-key: your-admin-key" \
-  -d '{"policy_override": {"thresholds": {"block": 0.5, "sanitize": 0.3}}}'
-
-# Create application + scoped API key
-curl -X POST http://localhost:8000/v1/admin/applications \
-  -H "x-api-key: your-admin-key" \
-  -d '{"dept_id": "...", "slug": "finance-bot", "name": "Finance Bot", "owner_email": "john@acme.com"}'
-
-curl -X POST http://localhost:8000/v1/keys \
-  -H "x-api-key: your-admin-key" \
-  -d '{"name": "Finance Bot Key", "app_id": "..."}'
-```
-
----
-
-## Dashboard
-
-| Page | Description |
-|---|---|
-| Overview | Real-time metrics, decision distribution, top threats, recent requests |
-| Requests | Filterable audit log — trace ID, decision, threat, date range, confidence band |
-| Analytics | Threat distribution, latency percentiles |
-| Scanner | Manual prompt testing — detection layers + guardrail layers breakdown |
-| Settings | Thresholds, detection layers, LLM config, audit retention |
-| API Keys | Create, rename, revoke — instant effect |
-| Departments | Manage departments and policy overrides |
-| Applications | Manage applications and API key assignment |
-
-Every request row is clickable — shows full attribution chain, per-layer detection scores, guardrail scores, confidence, and primary reason.
-
----
-
-## Threat Categories
-
-| Category | Description |
-|---|---|
-| `PROMPT_INJECTION` | Attempts to override system instructions |
-| `JAILBREAK` | Attempts to bypass safety restrictions |
-| `MALICIOUS_INTENT` | Requests for harmful or dangerous information |
-| `DATA_EXFILTRATION` | Attempts to leak data to external systems |
-| `PII` | Personally identifiable information (22+ types) |
-| `TOXICITY` | Abusive or harmful language |
-
----
-
-## Compliance
-
-**GDPR Article 25 — Data protection by design:**
-- PII detected and redacted before reaching LLM and on LLM output
-- Raw prompts never stored — SHA-256 hash only
-- Full attribution chain in every audit record
-- Configurable retention policy — default 30 days, enforced via scheduled cleanup
-
-**EU AI Act Article 12 — Transparency:**
-- `primary_reason` identifies the dominant factor behind every decision
-- `confidence` quantifies the system's certainty
-- `decision_version` ensures audit records remain interpretable as the algorithm evolves
-
-**SOC 2 Type II:**
-- Per-key logs with IP address and user agent
-- Instant key revocation — takes effect on next request
-- Admin vs standard key access separation
-- Rate limiting per API key with standard headers
-
-**Export for compliance:**
-
-```bash
-curl "http://localhost:8000/v1/audit/export?from=2026-04-01&confidence_band=LOW" \
-  -H "x-api-key: your-admin-key" \
-  -o low_confidence_decisions.csv
-```
-
-**Cleanup audit logs:**
-
-```bash
-python scripts/cleanup_audit_logs.py --dry-run
-python scripts/cleanup_audit_logs.py --days 30
-```
+**Note:** Because the estimate is intentionally conservative, inputs near the 8,000 character boundary may be rejected even if their actual token count is below 4,000. Treat 8,000 characters as the effective hard limit in your integration.
 
 ---
 
 ## Failure Modes
 
-| Failure | Behaviour |
-|---|---|
-| Detection layer error | Score = 0.0, continues with available layers |
-| All detection layers fail | ALLOW + `confidence_band = LOW` + `primary_reason = NO_THREAT_DETECTED` |
-| Guardrail (PII) failure | BLOCK — fail closed, data protection is non-negotiable |
-| LLM timeout (detection) | `llm_score = 0.0`, `llm_invoked = false`, continues with rule + ML |
-| LLM timeout (proxy) | `output = "[LLM unavailable]"`, detection decision already made |
-| System failure | BLOCK + `risk_score = 1.0` + `confidence_band = LOW` + `primary_reason = SYSTEM_ERROR` |
+| Failure | Decision | Confidence | Primary Reason |
+|---|---|---|---|
+| One detector fails | continues | from remaining | per remaining |
+| All detectors fail | ALLOW | LOW (0.0) | **`SYSTEM_ERROR`** |
+| Guardrail (PII) fails | BLOCK | LOW (0.0) | **`SYSTEM_ERROR`** |
+| Gateway exception | BLOCK | LOW (0.0) | **`SYSTEM_ERROR`** |
+| LLM timeout (detection) | continues | from rule+ML | RULE/ML |
+| LLM timeout (proxy) | per detection | per detection | per detection |
+| Redis unavailable | allows | — | rate limit + idempotency disabled |
 
-The system always fails closed — blocking is safer than allowing unknown content through.
+**All failure paths return `SYSTEM_ERROR`.** `NO_THREAT_DETECTED` is reserved exclusively for successful detection with clean results. This is consistent across code, docs, and audit records.
+
+**`SYSTEM_ERROR` events represent system or infrastructure issues — not security threats.** They should be monitored separately from detection outcomes via `GET /v1/audit/logs?primary_reason=SYSTEM_ERROR`. A sustained rate above 0.1% warrants investigation.
 
 ---
 
 ## Full Docker Stack
 
-```bash
-docker compose -f infrastructure/docker/docker-compose.yml up -d
-```
-
 | Service | Port | Description |
 |---|---|---|
-| Nginx | 80 | Reverse proxy, 64KB payload limit |
-| API | 8000 (internal) | FastAPI application |
+| Nginx | 80 | Reverse proxy, 64KB limit |
+| API | 8000 (internal) | FastAPI |
 | PostgreSQL | 5432 | Primary database |
-| Redis | 6379 | Semantic cache, rate limiting, idempotency |
-| Prometheus | 9090 | Metrics collection |
-| Grafana | 3001 | Observability (admin/wrapsec) |
+| Redis | 6379 | Idempotency, rate limiting, cache |
+| Prometheus | 9090 | Metrics |
+| Grafana | 3001 | Observability |
 
 ---
 
 ## Running Tests
 
 ```bash
-# Windows
-$env:TESTING = "true"
-pytest tests/unit tests/integration -v
-
-# Linux / Mac
-TESTING=true pytest tests/unit tests/integration -v
+$env:TESTING = "true"; pytest tests/unit tests/integration -v  # Windows
+TESTING=true pytest tests/unit tests/integration -v            # Linux/Mac
 ```
 
 85 tests — engine scoring, confidence, primary reason, policy resolver, all API endpoints.
-
----
-
-## Project Structure
-
-```
-wrapsec/
-├── api/
-│   └── v1/
-│       ├── endpoints/      38 endpoint handlers
-│       ├── middleware/      Trace, RateLimit, Auth, Idempotency, Logging
-│       ├── schemas/         Pydantic request/response models
-│       └── dependencies/   DB session injection
-├── engine/
-│   ├── detection/          Rule, ML, LLM detectors
-│   ├── guardrails/         PII detector + redactor, input/output guards
-│   ├── scoring/            Risk scorer, confidence, primary reason
-│   └── policy/             Policy engine (guardrail-first)
-├── services/
-│   ├── gateway/            Main pipeline orchestration
-│   └── policy_resolver.py  Deep merge policy inheritance
-├── db/
-│   ├── models.py           SQLAlchemy ORM
-│   └── repositories/       Audit, keys, settings, tenant, dept, app
-├── clients/                Ollama, OpenAI, Groq LLM clients
-├── domain/                 Entities, value objects (ULID trace IDs), enums
-├── cache/                  Redis semantic cache + rate limiter
-├── observability/          Structured logging, Prometheus metrics
-├── config/                 Settings (env + DB)
-├── errors/                 Exceptions + handlers
-├── scripts/                Train ML, cleanup audit logs, seed data
-├── tests/                  85 unit + integration tests
-├── dashboard/              Next.js 14 (11 pages)
-├── infrastructure/         Docker, Nginx (64KB limit), Prometheus, Grafana
-└── docs/                   API reference, architecture, scoring model
-```
-
----
-
-## Tech Stack
-
-**Backend:** FastAPI · Python 3.10 · PostgreSQL · SQLAlchemy (async) · Redis · scikit-learn · Prometheus
-
-**Dashboard:** Next.js 14 · TypeScript · Tailwind CSS v4 · SWR · Recharts
-
-**Infrastructure:** Docker · Nginx · Grafana
-
----
-
-## API Summary
-
-38 endpoints across 8 resource groups:
-
-```
-Gateway:      POST /v1/ai/request  ·  GET /v1/ai/requests/{trace_id}
-Audit:        GET  /v1/audit/logs  ·  stats  ·  attribution  ·  export (CSV)
-Settings:     GET/PUT /v1/settings/thresholds  ·  layers  ·  llm  ·  retention
-API Keys:     POST/GET/PUT/DELETE /v1/keys  ·  GET /v1/keys/{key_id}
-Tenant:       GET/PUT /v1/admin/tenant
-Departments:  POST/GET/PUT/DELETE /v1/admin/departments/{id}
-              GET /v1/admin/departments/{id}/policy
-              GET /v1/admin/departments/{id}/stats
-Applications: POST/GET/PUT/DELETE /v1/admin/applications/{id}
-              GET /v1/admin/applications/{id}/policy
-Health:       GET /health  ·  /health/ready  ·  /health/live  ·  /health/config
-Metrics:      GET /metrics  (Prometheus)
-```
 
 ---
 
@@ -566,44 +340,27 @@ Metrics:      GET /metrics  (Prometheus)
 
 | Document | Description |
 |---|---|
-| [API Reference](docs/api.md) | Complete endpoint reference with request/response examples |
-| [Architecture](docs/architecture.md) | Entity hierarchy, policy model, DB schema, attribution chain |
-| [Scoring Model](docs/scoring_model.md) | Detection pipeline, confidence formula, primary reason logic |
-| [Implementation Plan](docs/implementation_plan.md) | Sprint breakdown, task list, roadmap |
+| [API Reference](docs/api.md) | All 39 endpoints with examples |
+| [Architecture](docs/architecture.md) | Entity model, policy, DB schema, attribution |
+| [Scoring Model](docs/scoring_model.md) | Detection pipeline, confidence, primary reason |
+| [Implementation Plan](docs/implementation_plan.md) | Sprint breakdown and roadmap |
 
 ---
 
 ## Roadmap
 
-**V1.1:**
-- Application-level policy overrides (placeholder active in V1)
-- API key rotation with grace period
-- Cursor-based pagination for large audit datasets
-- ML model improvement — 3000+ training samples from public datasets
-- Toxicity guardrail layer
-- Per-layer latency breakdown in debug mode
+**V1.1:** Per-model token counting (tiktoken) · Application policy overrides · Key rotation · Cursor pagination · ML model improvement · Toxicity guardrail
 
-**V2.0:**
-- JWT + SSO for cryptographically verified user attribution
-- Role-based policy overrides
-- Human review queue for LOW confidence decisions
-- Multi-tenant SaaS onboarding
-- SDK — Python, Node.js
-- Webhook notifications for BLOCK events
-- Streaming support
+**V2.0:** JWT + SSO · Role-based overrides · Human review queue · SaaS multi-tenancy · SDK · Webhooks · Streaming
 
 ---
 
 ## License
 
-MIT — see [LICENSE](LICENSE) for details.
-
----
+MIT — see [LICENSE](LICENSE)
 
 ## Author
 
 Built by [@kbajish](https://github.com/kbajish)
-
----
 
 *WrapSec v1.0 — Production-grade AI security for enterprise*
