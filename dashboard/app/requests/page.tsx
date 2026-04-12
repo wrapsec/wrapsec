@@ -39,8 +39,8 @@ export default function RequestsPage() {
     ["audit-logs", traceIdDebounced, decision, threatCategory, from, to, sortBy, sortOrder, offset],
     () => getAuditLogs({
       trace_id:        traceIdDebounced  || undefined,
-      decision:        decision          || undefined,
-      threat_category: threatCategory    || undefined,
+      decision:        (decision as any) || undefined,
+      threat_category: (threatCategory as any) || undefined,
       from:            from && isValidDateRange ? `${from}T00:00:00` : undefined,
       to:              to   && isValidDateRange ? `${to}T23:59:59`   : undefined,
       sort_by:         sortBy,
