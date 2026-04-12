@@ -7,7 +7,7 @@ import { Shell } from "@/components/layout/Shell"
 import { Card, CardHeader } from "@/components/ui/Card"
 import { Button } from "@/components/ui/Button"
 import { PageSpinner } from "@/components/ui/Spinner"
-import { getDepartment, updateDepartment, getApplicationsByDept } from "@/lib/api"
+import { getDepartment, updateDepartment, getApplicationsByDept, getDepartmentStats } from "@/lib/api"
 import Link from "next/link"
 
 export default function DepartmentDetailPage() {
@@ -18,6 +18,9 @@ export default function DepartmentDetailPage() {
   )
   const { data: appsData } = useSWR(
     `apps-dept-${id}`, () => getApplicationsByDept(id)
+  )
+  const { data: stats } = useSWR(
+    `dept-stats-${id}`, () => getDepartmentStats(id)
   )
 
   const [editing,     setEditing]     = useState(false)
@@ -78,6 +81,60 @@ export default function DepartmentDetailPage() {
           </svg>
           Back to departments
         </Link>
+        {/* Stats */}
+        {stats && (
+          <div className="grid grid-cols-4 gap-3">
+            {[
+              {
+                label: "Total requests",
+                value: stats.total.toLocaleString(),
+              },
+              {
+                label: "Block rate",
+                value: `${Math.round(stats.block_rate * 100)}%`,
+                color: stats.block_rate > 0.3 ? "text-red-600" : "text-slate-900",
+              },
+              {
+                label: "Avg latency",
+                value: `${stats.avg_latency_ms.toFixed(1)}ms`,
+              },
+              {
+                label: "Top threat",
+                value: stats.top_threats[0]?.category ?? "None",
+              },
+            ].map(({ label, value, color }) => (
+              <div key={label} className="bg-white rounded-xl border border-slate-200 px-4 py-3">
+                <p className="text-xs text-slate-400 mb-1">{label}</p>
+                <p className={`text-lg font-semibold ${color ?? "text-slate-900"}`}>{value}</p>
+              </div>
+            ))}
+          </div>
+        )}
+
+        {/* Decision breakdown */}
+        {stats && stats.total > 0 && (
+          <div className="bg-white rounded-xl border border-slate-200 p-4">
+            <p className="text-xs font-semibold text-slate-500 uppercase tracking-wider mb-3">Decision breakdown</p>
+            <div className="flex gap-3">
+              {Object.entries(stats.decisions).map(([decision, count]) => {
+                const pct   = Math.round((count / stats.total) * 100)
+                const color = decision === "BLOCK"    ? "#f87171" :
+                              decision === "SANITIZE" ? "#fbbf24" : "#10b981"
+                return (
+                  <div key={decision} className="flex-1 bg-slate-50 rounded-lg px-3 py-2.5">
+                    <p className="text-xs text-slate-400 mb-1">{decision}</p>
+                    <p className="text-sm font-semibold text-slate-900">{count.toLocaleString()}</p>
+                    <div className="mt-1.5 h-1.5 bg-slate-200 rounded-full overflow-hidden">
+                      <div className="h-full rounded-full" style={{ width: `${pct}%`, backgroundColor: color }} />
+                    </div>
+                    <p className="text-xs text-slate-400 mt-1">{pct}%</p>
+                  </div>
+                )
+              })}
+            </div>
+          </div>
+        )}
+
         {/* Department info */}
         <Card>
           <CardHeader title="Department Info" />
