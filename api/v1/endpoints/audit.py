@@ -269,6 +269,95 @@ async def get_attribution_report(
         "by_confidence_band": by_confidence,
     })
 
+@router.get("/analytics")
+async def get_analytics(
+    from_date:  str | None = Query(None, alias="from"),
+    to_date:    str | None = Query(None, alias="to"),
+    group_by:   str        = Query("day", pattern="^(hour|day|week|month)$"),
+    dept_id:    str | None = Query(None),
+    db:         AsyncSession = Depends(get_db),
+):
+    """
+    Advanced cross-department analytics with time-series trend data.
+    Groups requests by time period with decision breakdowns.
+    """
+    from sqlalchemy import select, func
+    from db.models import AuditLogModel
+    from datetime import datetime, timezone
+
+    # Build base query
+    stmt = select(
+        func.date_trunc(group_by, AuditLogModel.created_at).label("period"),
+        AuditLogModel.decision,
+        func.count().label("count"),
+        func.avg(AuditLogModel.risk_score).label("avg_risk_score"),
+        func.avg(AuditLogModel.latency_ms).label("avg_latency_ms"),
+    )
+
+    # Apply filters
+    if dept_id:
+        stmt = stmt.where(AuditLogModel.dept_id == dept_id)
+    if from_date:
+        try:
+            dt   = datetime.fromisoformat(from_date).replace(tzinfo=None)
+            stmt = stmt.where(AuditLogModel.created_at >= dt)
+        except ValueError:
+            pass
+    if to_date:
+        try:
+            dt   = datetime.fromisoformat(to_date + "T23:59:59").replace(tzinfo=None)
+            stmt = stmt.where(AuditLogModel.created_at <= dt)
+        except ValueError:
+            pass
+
+    stmt   = stmt.group_by("period", AuditLogModel.decision).order_by("period")
+    result = await db.execute(stmt)
+    rows   = result.fetchall()
+
+    # Aggregate into time-series
+    periods: dict = {}
+    for row in rows:
+        period_str = row.period.isoformat() if row.period else "unknown"
+        if period_str not in periods:
+            periods[period_str] = {
+                "period":         period_str,
+                "total":          0,
+                "blocked":        0,
+                "sanitized":      0,
+                "allowed":        0,
+                "avg_risk_score": 0.0,
+                "avg_latency_ms": 0.0,
+            }
+        periods[period_str]["total"]          += row.count
+        periods[period_str]["avg_risk_score"]  = round(float(row.avg_risk_score or 0), 3)
+        periods[period_str]["avg_latency_ms"]  = round(float(row.avg_latency_ms or 0), 2)
+
+        if row.decision == "BLOCK":
+            periods[period_str]["blocked"]   += row.count
+        elif row.decision == "SANITIZE":
+            periods[period_str]["sanitized"] += row.count
+        elif row.decision == "ALLOW":
+            periods[period_str]["allowed"]   += row.count
+
+    # Compute block_rate per period
+    trend = []
+    for p in periods.values():
+        p["block_rate"] = round(p["blocked"] / p["total"], 3) if p["total"] > 0 else 0.0
+        trend.append(p)
+
+    total_requests = sum(p["total"]   for p in trend)
+    total_blocked  = sum(p["blocked"] for p in trend)
+
+    return JSONResponse(content={
+        "group_by":   group_by,
+        "dept_id":    dept_id,
+        "from":       from_date,
+        "to":         to_date,
+        "total":      total_requests,
+        "block_rate": round(total_blocked / total_requests, 3) if total_requests > 0 else 0.0,
+        "trend":      trend,
+    })
+
 @router.get("/export")
 async def export_audit_logs(
     dept_id:         str | None = Query(None),

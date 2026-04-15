@@ -171,3 +171,70 @@ async def get_application_policy(
         "policy_override": app.policy_override,  # null in v1
         "resolved_policy": policy,
     })
+
+class ApplicationPolicySchema(BaseModel):
+    policy_override: dict | None = None
+
+
+@router.put("/{app_id}/policy")
+async def set_application_policy(
+    app_id: str,
+    body:   ApplicationPolicySchema,
+    db:     AsyncSession = Depends(get_db),
+):
+    """
+    Set or update application-level policy override.
+    Merged on top of department policy during request processing.
+    Pass policy_override: null to remove all overrides.
+    """
+    repo   = ApplicationRepository(db)
+    record = await repo.get_by_id(uuid.UUID(app_id))
+    if not record:
+        raise NotFoundError("application", app_id)
+
+    record = await repo.update(uuid.UUID(app_id), {
+        "policy_override": body.policy_override
+    })
+
+    from services.policy_resolver import resolve_policy
+    policy, policy_source = await resolve_policy(
+        db        = db,
+        tenant_id = str(record.tenant_id),
+        dept_id   = str(record.dept_id),
+        app_id    = app_id,
+    )
+
+    return JSONResponse(content={
+        "app_id":          app_id,
+        "app_name":        record.name,
+        "dept_id":         str(record.dept_id),
+        "policy_override": record.policy_override,
+        "policy_source":   policy_source,
+        "resolved_policy": policy,
+        "updated":         True,
+    })
+
+
+@router.delete("/{app_id}/policy")
+async def reset_application_policy(
+    app_id: str,
+    db:     AsyncSession = Depends(get_db),
+):
+    """
+    Reset application policy override to null.
+    Application will inherit from department policy.
+    """
+    repo   = ApplicationRepository(db)
+    record = await repo.get_by_id(uuid.UUID(app_id))
+    if not record:
+        raise NotFoundError("application", app_id)
+
+    await repo.update(uuid.UUID(app_id), {"policy_override": None})
+
+    return JSONResponse(content={
+        "app_id":          app_id,
+        "app_name":        record.name,
+        "policy_override": None,
+        "reset":           True,
+        "message":         "Application policy override removed. Inheriting from department.",
+    })

@@ -12,6 +12,7 @@ from db.repositories.application import ApplicationRepository
 from db.repositories.department import DepartmentRepository
 from db.repositories.tenant import TenantRepository
 from errors.exceptions import NotFoundError
+from datetime import timedelta
 
 router = APIRouter()
 
@@ -172,3 +173,68 @@ async def delete_key(
         "revoked":    True,
         "revoked_at": datetime.now(timezone.utc).isoformat(),
     })
+
+class RotateKeySchema(BaseModel):
+    grace_period_minutes: int = 60
+
+
+@router.post("/{key_id}/rotate")
+async def rotate_key(
+    key_id: str,
+    body:   RotateKeySchema,
+    db:     AsyncSession = Depends(get_db),
+):
+    """
+    Rotate an API key — generates a new secret while preserving all metadata.
+    Old key remains valid for grace_period_minutes to allow graceful migration.
+    After grace period, old key is automatically revoked.
+
+    Returns the new key secret — shown once, store securely.
+    """
+    repo   = ApiKeyRepository(db)
+    record = await repo.get_by_key_id(key_id)
+    if not record:
+        raise NotFoundError("key", key_id)
+    if record.revoked:
+        return JSONResponse(
+            content={"error": {"code": "KEY_REVOKED", "message": "Cannot rotate a revoked key."}},
+            status_code=400,
+        )
+
+    # Generate new key
+    new_api_key = generate_api_key()
+    new_key_id  = generate_key_id()
+    new_hash    = _hash_key(new_api_key)
+
+    # Calculate grace period expiry for old key
+    # Strip timezone — DB column is TIMESTAMP WITHOUT TIME ZONE
+    grace_expires = (datetime.now(timezone.utc) + timedelta(minutes=body.grace_period_minutes)).replace(tzinfo=None)
+
+    # Create new key with same metadata
+    new_record = await repo.create({
+        "key_id":    new_key_id,
+        "name":      record.name,
+        "key_hash":  new_hash,
+        "is_admin":  record.is_admin,
+        "revoked":   False,
+        "app_id":    record.app_id,
+        "dept_id":   record.dept_id,
+        "tenant_id": record.tenant_id,
+    })
+
+    # Set old key to expire at end of grace period
+    record.expires_at = grace_expires
+    await db.commit()
+
+    return JSONResponse(content={
+        "new_key_id":       new_key_id,
+        "new_api_key":      new_api_key,
+        "old_key_id":       key_id,
+        "old_expires_at":   grace_expires.isoformat(),
+        "grace_period_minutes": body.grace_period_minutes,
+        "name":             record.name,
+        "app_id":           str(record.app_id)    if record.app_id    else None,
+        "dept_id":          str(record.dept_id)   if record.dept_id   else None,
+        "created_at":       new_record.created_at.isoformat(),
+        "message":          f"New key created. Old key expires in {body.grace_period_minutes} minutes.",
+    }, status_code=201)
