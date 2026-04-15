@@ -8,7 +8,7 @@ import { Button } from "@/components/ui/Button"
 import { ApiKeyTable } from "@/components/settings/ApiKeyTable"
 import { CreateKeyModal } from "@/components/settings/CreateKeyModal"
 import { PageSpinner } from "@/components/ui/Spinner"
-import { getApiKeys, revokeApiKey } from "@/lib/api"
+import { getApiKeys, revokeApiKey, rotateApiKey } from "@/lib/api"
 import { ApiKeyCreated } from "@/lib/types"
 
 export default function ApiKeysPage() {
@@ -18,6 +18,7 @@ export default function ApiKeysPage() {
   const { data, isLoading, mutate } = useSWR("api-keys", getApiKeys)
 
   const handleRevoke = async (keyId: string) => {
+    if (!confirm("Revoke this key? This cannot be undone.")) return
     setRevoking(keyId)
     try {
       await revokeApiKey(keyId)
@@ -25,6 +26,12 @@ export default function ApiKeysPage() {
     } finally {
       setRevoking(null)
     }
+  }
+
+  const handleRotate = async (keyId: string, gracePeriodMinutes: number): Promise<string> => {
+    const result = await rotateApiKey(keyId, gracePeriodMinutes)
+    mutate()
+    return result.new_api_key
   }
 
   const handleCreated = (_key: ApiKeyCreated) => {
@@ -52,6 +59,7 @@ export default function ApiKeysPage() {
               <ApiKeyTable
                 keys={data?.keys ?? []}
                 onRevoke={handleRevoke}
+                onRotate={handleRotate}
                 revoking={revoking}
               />
             )}

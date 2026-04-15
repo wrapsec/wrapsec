@@ -93,8 +93,12 @@ async def create_key(
 
 @router.get("")
 async def list_keys(db: AsyncSession = Depends(get_db)):
+    from datetime import datetime
     repo = ApiKeyRepository(db)
     keys = await repo.list_active()
+    # Filter out keys whose grace period has expired
+    now  = datetime.utcnow()
+    keys = [k for k in keys if k.expires_at is None or k.expires_at > now]
 
     return JSONResponse(content={
         "keys": [
@@ -163,15 +167,23 @@ async def delete_key(
     db:     AsyncSession = Depends(get_db),
 ):
     repo   = ApiKeyRepository(db)
-    record = await repo.revoke(key_id)
-
+    record = await repo.get_by_key_id(key_id)
     if not record:
         raise NotFoundError("key", key_id)
 
+    was_in_grace = record.expires_at is not None and not record.revoked
+
+    await repo.revoke(key_id)
+
     return JSONResponse(content={
-        "key_id":     key_id,
-        "revoked":    True,
-        "revoked_at": datetime.now(timezone.utc).isoformat(),
+        "key_id":          key_id,
+        "revoked":         True,
+        "revoked_at":      datetime.now(timezone.utc).isoformat(),
+        "was_in_grace":    was_in_grace,
+        "warning":         (
+            "Key was in grace period and has been immediately revoked. "
+            "Integrations using the old key will stop working now."
+        ) if was_in_grace else None,
     })
 
 class RotateKeySchema(BaseModel):
@@ -200,6 +212,29 @@ async def rotate_key(
             content={"error": {"code": "KEY_REVOKED", "message": "Cannot rotate a revoked key."}},
             status_code=400,
         )
+
+    if record.expires_at is not None:
+        from datetime import datetime
+        now = datetime.utcnow()
+        if record.expires_at > now:
+            # Still in grace period
+            return JSONResponse(
+                content={"error": {"code": "KEY_IN_GRACE_PERIOD", "message": (
+                    f"This key has already been rotated and is in its grace period "
+                    f"(expires at {record.expires_at.isoformat()}). "
+                    f"Use the new key for further rotations."
+                )}},
+                status_code=400,
+            )
+        else:
+            # Grace period expired — key is effectively dead
+            return JSONResponse(
+                content={"error": {"code": "KEY_EXPIRED", "message": (
+                    "This key's grace period has expired and it is no longer valid. "
+                    "Use the new key that was created when this key was rotated."
+                )}},
+                status_code=400,
+            )
 
     # Generate new key
     new_api_key = generate_api_key()

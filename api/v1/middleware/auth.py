@@ -108,6 +108,16 @@ class AuthMiddleware(BaseHTTPMiddleware):
                 repo   = ApiKeyRepository(session)
                 record = await repo.get_by_hash(key_hash)
                 if record and not record.revoked:
+                    # Check if key has expired (grace period ended)
+                    if record.expires_at is not None:
+                        from datetime import datetime
+                        now = datetime.utcnow()
+                        import logging
+                        logging.getLogger("wrapsec.auth").warning(
+                            f"Key {record.key_id} expires_at={record.expires_at} now={now} expired={now > record.expires_at}"
+                        )
+                        if now > record.expires_at:
+                            return None  # Grace period over — key no longer valid
                     return record
                 return None
 
