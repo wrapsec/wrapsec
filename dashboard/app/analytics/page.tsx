@@ -7,7 +7,8 @@ import { ThreatChart } from "@/components/analytics/ThreatChart"
 import { LatencyStats } from "@/components/analytics/LatencyChart"
 import { PageSpinner } from "@/components/ui/Spinner"
 import { POLL_INTERVAL } from "@/lib/constants"
-import { getAuditStats, getAttribution, getDepartments, getApplications } from "@/lib/api"
+import { getAuditStats, getAttribution, getDepartments, getApplications, getAnalytics } from "@/lib/api"
+import { useState } from "react"
 
 export default function AnalyticsPage() {
   const { data: stats, isLoading: statsLoading } = useSWR(
@@ -24,7 +25,12 @@ export default function AnalyticsPage() {
 
   const { data: depts }  = useSWR("departments-list", getDepartments)
   const { data: apps }   = useSWR("applications-list", getApplications)
-
+  const [groupBy, setGroupBy] = useState<"hour" | "day" | "week" | "month">("day")
+  const { data: analytics } = useSWR(
+    ["analytics-trend", groupBy],
+    () => getAnalytics({ group_by: groupBy }),
+    { refreshInterval: POLL_INTERVAL }
+  )
   const isLoading = statsLoading || attrLoading
 
   // Build lookup maps for names
@@ -50,6 +56,15 @@ export default function AnalyticsPage() {
           {/* Confidence band distribution */}
           {attribution && attribution.by_confidence_band?.length > 0 && (
             <ConfidenceBandChart data={attribution.by_confidence_band} />
+          )}
+
+          {/* Trend chart */}
+          {analytics && analytics.trend.length > 0 && (
+            <TrendChart
+              data={analytics.trend}
+              groupBy={groupBy}
+              onGroupByChange={setGroupBy}
+            />
           )}
 
           {/* Attribution report */}
@@ -221,5 +236,136 @@ function BlockRateBadge({ rate }: { rate: number }) {
     <span className={`text-xs font-mono px-1.5 py-0.5 rounded ${color}`}>
       {pct}% blocked
     </span>
+  )
+}
+
+// ── Trend Chart ───────────────────────────────────────────────────────────
+
+function TrendChart({
+  data,
+  groupBy,
+  onGroupByChange,
+}: {
+  data:            { period: string; total: number; blocked: number; sanitized: number; allowed: number; block_rate: number }[]
+  groupBy:         "hour" | "day" | "week" | "month"
+  onGroupByChange: (v: "hour" | "day" | "week" | "month") => void
+}) {
+  const CHART_H    = 160
+  const maxTotal   = Math.max(...data.map(d => d.total), 1)
+  const [hovered, setHovered] = useState<string | null>(null)
+
+  const formatPeriod = (period: string) => {
+    const d = new Date(period)
+    if (groupBy === "hour")  return d.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })
+    if (groupBy === "month") return d.toLocaleDateString([], { month: "short", year: "numeric" })
+    return d.toLocaleDateString([], { month: "short", day: "numeric" })
+  }
+
+  const hoveredData = data.find(d => d.period === hovered)
+
+  return (
+    <div className="bg-white rounded-xl border border-slate-200 p-5">
+      <div className="flex items-center justify-between mb-4">
+        <div>
+          <h3 className="text-sm font-semibold text-slate-800">Request Trend</h3>
+          <p className="text-xs text-slate-400 mt-0.5">Requests over time by decision</p>
+        </div>
+        <div className="flex items-center gap-1 bg-slate-100 rounded-lg p-1">
+          {(["hour", "day", "week", "month"] as const).map(g => (
+            <button
+              key={g}
+              onClick={() => onGroupByChange(g)}
+              className={`text-xs px-2.5 py-1 rounded-md transition-colors ${
+                groupBy === g
+                  ? "bg-white text-slate-800 font-medium shadow-sm"
+                  : "text-slate-500 hover:text-slate-700"
+              }`}
+            >
+              {g.charAt(0).toUpperCase() + g.slice(1)}
+            </button>
+          ))}
+        </div>
+      </div>
+
+      {/* Legend + live tooltip values */}
+      <div className="flex items-center justify-between mb-3">
+        <div className="flex items-center gap-4">
+          {[
+            { label: "Blocked",   color: "#f87171" },
+            { label: "Sanitized", color: "#fbbf24" },
+            { label: "Allowed",   color: "#10b981" },
+          ].map(({ label, color }) => (
+            <div key={label} className="flex items-center gap-1.5">
+              <div className="h-2.5 w-2.5 rounded-sm" style={{ backgroundColor: color }} />
+              <span className="text-xs text-slate-500">{label}</span>
+            </div>
+          ))}
+        </div>
+        {/* Live values on hover */}
+        {hoveredData ? (
+          <div className="flex items-center gap-3 text-xs">
+            <span className="text-slate-400 font-medium">{formatPeriod(hoveredData.period)}</span>
+            <span className="text-red-500 font-mono">{hoveredData.blocked} blocked</span>
+            <span className="text-amber-500 font-mono">{hoveredData.sanitized} sanitized</span>
+            <span className="text-emerald-500 font-mono">{hoveredData.allowed} allowed</span>
+            <span className="text-slate-400 font-mono">{hoveredData.total} total</span>
+            <span className="text-slate-400 font-mono">{Math.round(hoveredData.block_rate * 100)}% block rate</span>
+          </div>
+        ) : (
+          <span className="text-xs text-slate-400">Hover a bar to see details</span>
+        )}
+      </div>
+
+      {/* Bars */}
+      <div className="flex items-end gap-1.5" style={{ height: `${CHART_H}px` }}>
+        {data.map((d) => {
+          const totalH    = Math.max(Math.round((d.total    / maxTotal) * CHART_H), 4)
+          const blockH    = d.total > 0 ? Math.round((d.blocked   / d.total) * totalH) : 0
+          const sanitizeH = d.total > 0 ? Math.round((d.sanitized / d.total) * totalH) : 0
+          const allowH    = totalH - blockH - sanitizeH
+          const isHovered = hovered === d.period
+
+          return (
+            <div
+              key={d.period}
+              className="flex-shrink-0 flex flex-col justify-end cursor-default transition-opacity duration-100"
+              style={{
+                width:   "32px",
+                height:  `${CHART_H}px`,
+                opacity: hovered && !isHovered ? 0.4 : 1,
+              }}
+              onMouseEnter={() => setHovered(d.period)}
+              onMouseLeave={() => setHovered(null)}
+            >
+              <div
+                className="flex flex-col w-full rounded-sm overflow-hidden transition-all duration-100"
+                style={{
+                  height:  `${totalH}px`,
+                  outline: isHovered ? "2px solid #334155" : "none",
+                  outlineOffset: "1px",
+                }}
+              >
+                {blockH    > 0 && <div style={{ height: `${blockH}px`,    backgroundColor: "#f87171" }} />}
+                {sanitizeH > 0 && <div style={{ height: `${sanitizeH}px`, backgroundColor: "#fbbf24" }} />}
+                {allowH    > 0 && <div style={{ height: `${allowH}px`,    backgroundColor: "#10b981" }} />}
+              </div>
+            </div>
+          )
+        })}
+      </div>
+
+      {/* X-axis labels */}
+      <div className="flex gap-1.5 mt-1.5">
+        {data.map((d, i) => (
+          <div key={d.period} className="flex-shrink-0 text-center" style={{ width: "32px" }}>
+            {(i === 0 || i === data.length - 1 || i === Math.floor(data.length / 2)) && (
+              <span className="text-slate-400" style={{ fontSize: "9px" }}>
+                {formatPeriod(d.period)}
+              </span>
+            )}
+          </div>
+        ))}
+      </div>
+    </div>
   )
 }
