@@ -96,30 +96,38 @@ class AuthMiddleware(BaseHTTPMiddleware):
         )
 
     async def _get_standard_key(self, api_key: str):
-        """Validate standard key and return the record."""
+        """Validate standard key, enforce grace period, update last_used_at."""
         try:
             import hashlib
+            import logging
+            from datetime import datetime
             from db.session import AsyncSessionFactory
             from db.repositories.api_key import ApiKeyRepository
 
+            logger   = logging.getLogger("wrapsec.auth")
             key_hash = hashlib.sha256(api_key.encode()).hexdigest()
 
             async with AsyncSessionFactory() as session:
                 repo   = ApiKeyRepository(session)
                 record = await repo.get_by_hash(key_hash)
-                if record and not record.revoked:
-                    # Check if key has expired (grace period ended)
-                    if record.expires_at is not None:
-                        from datetime import datetime
-                        now = datetime.utcnow()
-                        import logging
-                        logging.getLogger("wrapsec.auth").warning(
-                            f"Key {record.key_id} expires_at={record.expires_at} now={now} expired={now > record.expires_at}"
-                        )
-                        if now > record.expires_at:
-                            return None  # Grace period over — key no longer valid
-                    return record
-                return None
+
+                if not record or record.revoked:
+                    return None
+
+                # Check grace period expiry
+                if record.expires_at is not None:
+                    now = datetime.utcnow()
+                    if now > record.expires_at:
+                        return None  # Grace period over — key no longer valid
+
+                # Update last_used_at on every successful auth
+                try:
+                    record.last_used_at = datetime.utcnow()
+                    await session.commit()
+                except Exception as e:
+                    logger.warning(f"Failed to update last_used_at for {record.key_id}: {e}")
+
+                return record
 
         except Exception as e:
             import logging

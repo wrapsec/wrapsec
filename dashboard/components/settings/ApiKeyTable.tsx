@@ -84,10 +84,10 @@ export function ApiKeyTable({ keys, onRevoke, onRotate, revoking }: ApiKeyTableP
 
                   {/* Name + grace badge */}
                   <td className="py-3 text-sm font-medium text-slate-900">
-                    <div className="flex items-center gap-2 flex-wrap">
+                    <div className="flex flex-col gap-1">
                       {key.name}
                       {inGrace && (
-                        <span className="text-xs px-1.5 py-0.5 rounded-full bg-amber-50 text-amber-700 border border-amber-200 whitespace-nowrap">
+                        <span className="text-xs px-1.5 py-0.5 rounded-full bg-amber-50 text-amber-700 border border-amber-200 whitespace-nowrap w-fit">
                           Expiring — grace period active
                         </span>
                       )}

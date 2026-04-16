@@ -93,7 +93,6 @@ async def create_key(
 
 @router.get("")
 async def list_keys(db: AsyncSession = Depends(get_db)):
-    from datetime import datetime
     repo = ApiKeyRepository(db)
     keys = await repo.list_active()
     # Filter out keys whose grace period has expired
@@ -214,7 +213,6 @@ async def rotate_key(
         )
 
     if record.expires_at is not None:
-        from datetime import datetime
         now = datetime.utcnow()
         if record.expires_at > now:
             # Still in grace period
