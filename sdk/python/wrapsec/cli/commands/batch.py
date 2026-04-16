@@ -1,0 +1,284 @@
+"""
+wrapsec batch — scan prompts from a file.
+
+Spec reference: Section 13.2 (wrapsec batch), Section 11.3 (Batch Exit Code Priority)
+
+Key rules:
+  - File path only — no inline text argument (security rule 2)
+  - Streamed line by line — never fully loaded into memory
+  - Empty lines and # comments skipped
+  - Max file size: 10MB
+  - Max line length: 8000 chars (longer lines skipped with warning)
+  - Exit priority: ERROR (1) > BLOCK (2) > SUCCESS (0)
+  - --json outputs JSONL (newline-delimited JSON, one object per line)
+"""
+
+from __future__ import annotations
+
+import json
+import os
+import signal
+import sys
+import time
+from pathlib import Path
+
+import click
+
+from wrapsec.client import Client
+from wrapsec.config.loader import load_config
+from wrapsec.core.validation import normalize_text, validate_input
+from wrapsec.exceptions import WrapSecError, WrapSecRateLimitError
+from wrapsec.cli._output import (
+    get_scan_exit_code,
+    print_error,
+    print_warning,
+    scan_result_to_dict,
+)
+
+MAX_FILE_BYTES  = 10 * 1024 * 1024   # 10MB
+MAX_LINE_CHARS  = 8000
+LARGE_FILE_WARN = 100                 # lines
+
+
+@click.command()
+@click.argument("file", type=click.Path(exists=True, dir_okay=False, readable=True))
+@click.option(
+    "--mode", "-m",
+    default="fast",
+    type=click.Choice(["fast", "full"]),
+    show_default=True,
+    help="Detection mode.",
+)
+@click.option(
+    "--timeout",
+    default=None,
+    type=int,
+    help="Per-request timeout in seconds (min 1, default 30).",
+)
+@click.option(
+    "--delay",
+    default=0,
+    type=int,
+    help="Milliseconds to wait between requests (default 0). "
+         "Use --delay 100 for large files to avoid rate limiting.",
+)
+@click.option(
+    "--limit",
+    default=None,
+    type=int,
+    help="Maximum number of lines to process.",
+)
+@click.option(
+    "--summary",
+    is_flag=True,
+    help="Show counts only — no individual scores or trace IDs. Recommended for CI.",
+)
+@click.option(
+    "--json", "json_output",
+    is_flag=True,
+    help="JSONL output (newline-delimited JSON, one object per line). "
+         "Compatible with jq, pandas, BigQuery.",
+)
+@click.option(
+    "--quiet", "-q",
+    is_flag=True,
+    help="No stdout output. Errors to stderr. Exit code only.",
+)
+def batch(
+    file:        str,
+    mode:        str,
+    timeout:     int | None,
+    delay:       int,
+    limit:       int | None,
+    summary:     bool,
+    json_output: bool,
+    quiet:       bool,
+) -> None:
+    """Scan prompts from FILE (one prompt per line).
+
+    FILE is streamed line by line — never fully loaded into memory.
+    Empty lines and lines starting with # are skipped.
+
+    \b
+    Limits:
+      Max file size:   10MB
+      Max line length: 8000 chars (longer lines skipped with warning)
+
+    \b
+    Exit code priority: ERROR (1) > BLOCK (2) > SUCCESS (0)
+    An error means some prompts were not scanned — results are incomplete.
+
+    \b
+    Examples:
+      wrapsec batch prompts.txt
+      wrapsec batch prompts.txt --delay 100 --summary
+      wrapsec batch prompts.txt --json > results.jsonl
+      wrapsec batch prompts.txt --quiet   # CI — exit code only
+    """
+    # Validate timeout at CLI level
+    if timeout is not None and timeout < 1:
+        print_error(f"timeout must be at least 1 second, got {timeout}")
+        sys.exit(1)
+
+    # Check file size before starting
+    file_size = os.path.getsize(file)
+    if file_size > MAX_FILE_BYTES:
+        mb = file_size / (1024 * 1024)
+        print_error(f"File too large ({mb:.1f}MB). Maximum is 10MB.")
+        sys.exit(1)
+
+    # Require API key
+    cfg = load_config()
+    if not cfg.api_key:
+        print_error(
+            "No API key configured.\n"
+            "Run: wrapsec config set api_key wsk_live_..."
+        )
+        sys.exit(1)
+
+    # Count lines for large-file warning (cheap — just count newlines)
+    if not quiet and not json_output:
+        with open(file, "r", encoding="utf-8", errors="replace") as f:
+            line_count = sum(
+                1 for ln in f
+                if ln.strip() and not ln.strip().startswith("#")
+            )
+
+        effective = min(line_count, limit) if limit else line_count
+
+        if effective > LARGE_FILE_WARN and delay == 0:
+            click.echo(
+                f"Warning: scanning {effective:,} prompts with no delay between requests.\n"
+                f"Consider --delay 100 to avoid rate limiting.",
+                err=True,
+            )
+            if not click.confirm("Continue?", default=False):
+                click.echo("Cancelled.")
+                sys.exit(0)
+
+    client = Client(api_key=cfg.api_key, base_url=cfg.base_url, timeout=cfg.timeout)
+
+    # Batch state
+    had_error  = False
+    had_block  = False
+    processed  = 0
+    skipped    = 0
+    blocked    = 0
+    sanitized  = 0
+    allowed    = 0
+    errors     = 0
+
+    # SIGINT handler
+    interrupted = False
+
+    def _sigint(sig: int, frame: object) -> None:
+        nonlocal interrupted
+        interrupted = True
+
+    signal.signal(signal.SIGINT, _sigint)
+
+    with open(file, "r", encoding="utf-8", errors="replace") as fh:
+        for raw_line in fh:
+            if interrupted:
+                print_warning("Interrupted by user.", )
+                had_error = True
+                break
+
+            if limit is not None and processed >= limit:
+                break
+
+            line = raw_line.strip()
+
+            # Skip empty lines and comments
+            if not line or line.startswith("#"):
+                continue
+
+            # Skip lines that are too long
+            if len(line) > MAX_LINE_CHARS:
+                click.secho(
+                    f"Line {processed + skipped + 1} skipped: "
+                    f"{len(line):,} chars exceeds {MAX_LINE_CHARS:,} char limit.",
+                    fg="yellow",
+                    err=True,
+                )
+                skipped += 1
+                continue
+
+            # Apply delay between requests
+            if delay > 0 and processed > 0:
+                time.sleep(delay / 1000)
+
+            # Normalise and validate
+            try:
+                text = normalize_text(line)
+                text = validate_input(text)
+            except ValueError as e:
+                click.secho(f"Line {processed + 1} skipped: {e}", fg="yellow", err=True)
+                skipped += 1
+                continue
+
+            # Scan
+            try:
+                result = client.scan(text, mode=mode, user="cli-batch", timeout=timeout)
+                processed += 1
+
+                exit_code = get_scan_exit_code(result)
+                if exit_code == 1:
+                    had_error = True
+                    errors   += 1
+                elif result.decision == "BLOCK":
+                    had_block = True
+                    blocked  += 1
+                elif result.decision == "SANITIZE":
+                    sanitized += 1
+                else:
+                    allowed += 1
+
+                if json_output:
+                    # JSONL — one object per line, independently parseable
+                    # Spec: Section 13.2 (batch JSON output format)
+                    sys.stdout.write(json.dumps(scan_result_to_dict(result)) + "\n")
+                    sys.stdout.flush()
+                elif not quiet and not summary:
+                    color = {"BLOCK": "red", "SANITIZE": "yellow", "ALLOW": "green"}.get(
+                        result.decision, "white"
+                    )
+                    click.secho(
+                        f"[{processed:>4}] {result.decision:<8} "
+                        f"{round(result.confidence, 1):.1f}  "
+                        f"{result.trace_id}  "
+                        f"{text[:60]}{'...' if len(text) > 60 else ''}",
+                        fg=color,
+                    )
+
+            except WrapSecRateLimitError as e:
+                print_error(
+                    f"Rate limit hit after {processed} prompts. "
+                    f"Use --delay to slow requests."
+                )
+                had_error = True
+                break
+
+            except WrapSecError as e:
+                click.secho(f"Error on prompt {processed + 1}: {e}", fg="red", err=True)
+                had_error = True
+                errors   += 1
+
+    # Summary output
+    if not quiet and not json_output:
+        click.echo("")
+        click.echo(f"Results:  {processed} scanned, {skipped} skipped")
+        click.secho(f"  BLOCK:    {blocked}",    fg="red"     if blocked    else None)
+        click.secho(f"  SANITIZE: {sanitized}",  fg="yellow"  if sanitized  else None)
+        click.secho(f"  ALLOW:    {allowed}",    fg="green"   if allowed    else None)
+        if errors:
+            click.secho(f"  ERRORS:   {errors}", fg="red", err=True)
+
+    # Exit code priority: ERROR (1) > BLOCK (2) > SUCCESS (0)
+    # Spec: Section 11.3
+    if had_error:
+        sys.exit(1)
+    elif had_block:
+        sys.exit(2)
+    else:
+        sys.exit(0)
