@@ -42,6 +42,7 @@ def _format_item(item) -> dict:
         "ip_address":            item.ip_address,
         "attribution_verified":  item.attribution_verified,
         "policy_source":         item.policy_source,
+        "input_length":          item.input_length or 0,
     }
 
 

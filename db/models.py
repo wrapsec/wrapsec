@@ -96,6 +96,7 @@ class AuditLogModel(Base):
     confidence_band = Column(String(10), nullable=True)
     source         = Column(String(100), nullable=True)
     user_id        = Column(String(100), nullable=True)
+    input_length   = Column(Integer,     nullable=True,  default=0)
     created_at     = Column(DateTime,    nullable=False, default=datetime.utcnow)
 
     __table_args__ = (

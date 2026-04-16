@@ -216,6 +216,7 @@ async def ai_request(
         "primary_reason":  result.decision.primary_reason,
         "confidence":      result.decision.confidence,
         "confidence_band": result.decision.confidence_band,
+        "input_length":    len(body.input),
     })
 
     # Record Prometheus metrics
