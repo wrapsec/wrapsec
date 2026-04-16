@@ -50,7 +50,10 @@ class ScanResult:
             confidence_band = data.get("confidence_band", "LOW"),
             trace_id        = data.get("trace_id", ""),
             threats         = data.get("threats") or [],
-            latency_ms      = float(data.get("latency_ms", 0.0)),
+            latency_ms      = float(
+                data.get("latency_ms")
+                or data.get("processing", {}).get("latency_ms", 0.0)
+            ),
             sanitized_input = data.get("sanitized_input"),
         )
 

@@ -36,7 +36,11 @@ MAX_INPUT_CHARS = 8000
     default="fast",
     type=click.Choice(["fast", "full"]),
     show_default=True,
-    help="Detection mode. full adds LLM semantic analysis (~100-500ms extra).",
+    help=(
+        "Detection mode. full enables LLM semantic analysis for deeper "
+        "inspection of ambiguous inputs. Results may differ from fast mode. "
+        "Latency increases by ~100-2300ms depending on LLM model."
+    ),
 )
 @click.option(
     "--timeout",
