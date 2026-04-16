@@ -223,16 +223,25 @@ class Client:
         if to_date:   params["to"]       = to_date
 
         data = self._request("GET", "/audit/logs", self._resolve_timeout(timeout), params=params)
-        return [AuditLog.from_dict(item) for item in data.get("logs", [])]
+        return [AuditLog.from_dict(item) for item in data.get("items", data.get("logs", []))]
 
     def audit_get(self, trace_id: str, timeout: int | None = None) -> AuditLog:
         """
         Retrieve a single audit log entry by trace ID. Read-only.
+        Uses the list endpoint with trace_id filter — no dedicated detail endpoint.
 
         Spec: Section 13.2 (wrapsec audit get)
         """
-        data = self._request("GET", f"/audit/logs/{trace_id}", self._resolve_timeout(timeout))
-        return AuditLog.from_dict(data)
+        data  = self._request(
+            "GET", "/audit/logs",
+            self._resolve_timeout(timeout),
+            params={"trace_id": trace_id, "limit": "1"},
+        )
+        items = data.get("items", data.get("logs", []))
+        if not items:
+            from wrapsec.exceptions import WrapSecError
+            raise WrapSecError(f"Audit record not found: {trace_id}")
+        return AuditLog.from_dict(items[0])
 
     def audit_stats(
         self,

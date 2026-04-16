@@ -27,6 +27,7 @@ from wrapsec.exceptions import WrapSecError
 
 # Expected API version — matches BASE_PATH "/v1"
 EXPECTED_API_VERSION = "v1"
+COMPATIBLE_API_VERSIONS = {"1.0.0", "1.0.1", "1.1.0"}  # semantic versions from /health/config
 
 
 @click.command()
@@ -192,18 +193,23 @@ def doctor() -> None:
 
     click.echo(f"   API version:   {api_version}")
 
-    # Warn on mismatch — never block
-    # Spec: Section 6.6 — version mismatch warning only
-    if api_version != "Unknown" and not api_version.startswith(EXPECTED_API_VERSION):
+    # API version from /health/config is a semantic version (e.g. "1.0.0")
+    # CLI expected API is a path version ("v1") — major version 1.x.x = v1 compatible
+    # Spec: Section 6.6 — version mismatch warning only, never blocks
+    compatible = (
+        api_version == "Unknown"
+        or api_version.startswith("1.")   # 1.x.x = API v1 compatible
+    )
+    if not compatible:
         click.secho(
-            f"   ⚠ Version mismatch: CLI expects {EXPECTED_API_VERSION}, "
+            f"   ⚠ Version mismatch: CLI expects API v1 (1.x.x), "
             f"API reports {api_version}.\n"
             f"     Some features may not work correctly.",
             fg="yellow",
             err=True,
         )
     else:
-        click.secho(f"   ✔ Compatible", fg="green")
+        click.secho(f"   ✔ Compatible ({api_version})", fg="green")
 
     # ── Final summary ───────────────────────────────────────────────────────
     _print_final(all_ok)

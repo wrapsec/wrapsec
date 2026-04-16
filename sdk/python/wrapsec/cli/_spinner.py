@@ -74,15 +74,21 @@ class Spinner:
     def stop(self) -> None:
         """
         Stop spinner and clear the line.
-        Writes \\r\\033[K — cursor return + clear line.
-        Spec: Section 12.2 — NOT just \\r, partial chars corrupt some terminals.
+        Spec: Section 12.2 — clear line properly on all platforms.
         """
         with self._lock:
             self._running = False
         if self._thread:
             self._thread.join(timeout=1)
             self._thread = None
-        sys.stdout.write("\r\033[K")
+        # On Windows cmd.exe \033[K may not be supported
+        # Use \r + spaces to overwrite the line instead
+        if sys.platform == "win32" and not (
+            os.environ.get("WT_SESSION") or os.environ.get("TERM")
+        ):
+            sys.stdout.write("\r" + " " * 60 + "\r")
+        else:
+            sys.stdout.write("\r\033[K")
         sys.stdout.flush()
 
     def _spin(self) -> None:

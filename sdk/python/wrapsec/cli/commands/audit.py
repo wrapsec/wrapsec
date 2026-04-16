@@ -102,16 +102,24 @@ def audit_list(
         return
 
     # Human-readable table
-    click.echo(f"{'TRACE ID':<20}  {'DECISION':<10}  {'REASON':<30}  {'CONF':<6}  CREATED")
-    click.echo("-" * 90)
+    click.echo(
+        f"{'TRACE ID':<32}  {'DECISION':<10}  {'REASON':<30}  "
+        f"{'CONF':<5}  {'BAND':<6}  {'SOURCE':<18}  CREATED"
+    )
+    click.echo("-" * 120)
     for log in logs:
-        color = {"BLOCK": "red", "SANITIZE": "yellow", "ALLOW": "green"}.get(log.decision)
+        color   = {"BLOCK": "red", "SANITIZE": "yellow", "ALLOW": "green"}.get(log.decision)
+        reason  = (log.primary_reason or "—")[:30]
+        source  = (log.source or "—")[:18]
+        created = log.created_at[:19] if log.created_at else "—"
         click.secho(
-            f"{log.trace_id:<20}  "
+            f"{log.trace_id:<32}  "
             f"{log.decision:<10}  "
-            f"{log.primary_reason:<30}  "
-            f"{round(log.confidence, 1):<6.1f}  "
-            f"{log.created_at[:19]}",
+            f"{reason:<30}  "
+            f"{round(log.confidence, 2):<5.2f}  "
+            f"{log.confidence_band or '—':<5}  "
+            f"{source:<18}  "
+            f"{created}",
             fg=color,
         )
 

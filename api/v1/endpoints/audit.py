@@ -25,16 +25,23 @@ def _format_item(item) -> dict:
         "timestamp":             item.created_at.isoformat(),
         "tenant_id":             item.tenant_id,
         "decision":              item.decision,
+        "primary_reason":        item.primary_reason,
         "risk_score":            item.risk_score,
+        "confidence":            item.confidence,
+        "confidence_band":       item.confidence_band,
         "threats":               item.threats or [],
         "input_hash":            item.input_hash,
         "detection_mode":        item.detection_mode,
         "execution_mode":        item.execution_mode,
         "latency_ms":            item.latency_ms,
         "key_id":                item.key_id,
+        "dept_id":               item.dept_id,
+        "app_id":                item.app_id,
+        "user_id":               item.user_id,
         "source":                item.source,
         "ip_address":            item.ip_address,
         "attribution_verified":  item.attribution_verified,
+        "policy_source":         item.policy_source,
     }
 
 

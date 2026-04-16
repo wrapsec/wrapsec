@@ -78,7 +78,6 @@ def settings_get(json_output: bool) -> None:
     click.echo("\nDetection Thresholds:")
     click.echo(f"  Block threshold:     {thresholds.get('block_threshold', '—')}")
     click.echo(f"  Sanitize threshold:  {thresholds.get('sanitize_threshold', '—')}")
-    click.echo(f"  Source:              {thresholds.get('source', '—')}")
 
     # Detection layers
     click.echo("\nDetection Layers:")
@@ -91,7 +90,6 @@ def settings_get(json_output: bool) -> None:
             click.secho(f"  {name:<6}  ✗ disabled", fg="yellow")
         else:
             click.echo(f"  {name:<6}  — unknown")
-    click.echo(f"  Source:  {layers.get('source', '—')}")
 
     # LLM
     click.echo("\nLLM Configuration:")
@@ -99,4 +97,3 @@ def settings_get(json_output: bool) -> None:
     click.echo(f"  Model:       {llm.get('model', '—')}")
     click.echo(f"  Timeout:     {llm.get('timeout', '—')}s")
     click.echo(f"  LLM trigger: {llm.get('llm_trigger', '—')}")
-    click.echo(f"  Source:      {llm.get('source', '—')}")

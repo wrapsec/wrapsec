@@ -180,8 +180,16 @@ class AsyncClient:
         return [AuditLog.from_dict(item) for item in data.get("logs", [])]
 
     async def audit_get(self, trace_id: str, timeout: int | None = None) -> AuditLog:
-        data = await self._request("GET", f"/audit/logs/{trace_id}", self._resolve_timeout(timeout))
-        return AuditLog.from_dict(data)
+        data  = await self._request(
+            "GET", "/audit/logs",
+            self._resolve_timeout(timeout),
+            params={"trace_id": trace_id, "limit": "1"},
+        )
+        items = data.get("items", data.get("logs", []))
+        if not items:
+            from wrapsec.exceptions import WrapSecError
+            raise WrapSecError(f"Audit record not found: {trace_id}")
+        return AuditLog.from_dict(items[0])
 
     async def audit_stats(
         self,

@@ -98,7 +98,7 @@ class AuditLog:
             trace_id        = data.get("trace_id", ""),
             decision        = data.get("decision", ""),
             primary_reason  = data.get("primary_reason", ""),
-            confidence      = float(data.get("confidence", 0.0)),
+            confidence      = float(data.get("confidence", data.get("risk_score", 0.0))),
             confidence_band = data.get("confidence_band", ""),
             threats         = data.get("threats") or [],
             latency_ms      = float(data.get("latency_ms", 0.0)),
@@ -108,7 +108,7 @@ class AuditLog:
             app_id          = data.get("app_id"),
             user_id         = data.get("user_id"),
             source          = data.get("source"),
-            created_at      = data.get("created_at", ""),
+            created_at      = data.get("timestamp", data.get("created_at", "")),
         )
 
 
@@ -129,12 +129,16 @@ class AuditStats:
 
     @classmethod
     def from_dict(cls, data: dict[str, Any]) -> "AuditStats":
+        total      = int(data.get("total_requests", 0))
+        block_rate = float(data.get("block_rate", 0.0))
+        san_rate   = float(data.get("sanitize_rate", 0.0))
+        allow_rate = float(data.get("allow_rate", 0.0))
         return cls(
-            total_requests = int(data.get("total_requests", 0)),
-            block_count    = int(data.get("block_count", 0)),
-            sanitize_count = int(data.get("sanitize_count", 0)),
-            allow_count    = int(data.get("allow_count", 0)),
-            block_rate     = float(data.get("block_rate", 0.0)),
+            total_requests = total,
+            block_count    = int(data.get("block_count",    round(total * block_rate))),
+            sanitize_count = int(data.get("sanitize_count", round(total * san_rate))),
+            allow_count    = int(data.get("allow_count",    round(total * allow_rate))),
+            block_rate     = block_rate,
             avg_latency_ms = float(data.get("avg_latency_ms", 0.0)),
             p95_latency_ms = float(data.get("p95_latency_ms", 0.0)),
             top_threats    = data.get("top_threats") or [],
