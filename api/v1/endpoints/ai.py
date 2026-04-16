@@ -302,6 +302,7 @@ async def get_request(
         "confidence_band": record.confidence_band,
         "threats":         record.threats or [],
         "input_hash":        record.input_hash,
+        "input_length":      record.input_length or 0,
         "detection_scores":  record.detection_scores or {},
         "guardrail_scores":  record.guardrail_scores or {},
         "processing": {

@@ -228,13 +228,14 @@ export function RequestDetailModal({ traceId, onClose }: RequestDetailModalProps
                   {[
                     { label: "Source",         value: detail.attribution.source      || "—" },
                     { label: "Key ID",         value: detail.attribution.key_id      || "—" },
-                    { label: "Department",  value: detail.attribution.dept_name || detail.attribution.dept_id || "—" },
-                    { label: "Application", value: detail.attribution.app_name  || detail.attribution.app_id  || "—" },
+                    { label: "Department",     value: detail.attribution.dept_name || detail.attribution.dept_id || "—" },
+                    { label: "Application",    value: detail.attribution.app_name  || detail.attribution.app_id  || "—" },
                     { label: "User ID",        value: detail.attribution.user_id     || "—" },
                     { label: "IP Address",     value: detail.attribution.ip_address  || "—" },
                     { label: "Detection mode", value: detail.processing.detection_mode },
                     { label: "Execution mode", value: detail.processing.execution_mode },
                     { label: "LLM invoked",    value: detail.processing.llm_invoked ? "Yes" : "No" },
+                    { label: "Input length",   value: detail.input_length != null ? `${detail.input_length} chars` : "—" },
                     { label: "Input hash",     value: detail.input_hash },
                   ].map(({ label, value }) => (
                     <div key={label} className="bg-slate-50 rounded-lg px-3 py-2.5">
