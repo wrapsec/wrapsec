@@ -1,5 +1,9 @@
 # WrapSec + FastAPI Integration Example
 
+> **Reference architecture** for securing FastAPI applications that use LLMs.
+> Demonstrates how to add WrapSec as a security layer in front of your model,
+> with minimal changes to existing application code.
+
 This example demonstrates two integration patterns for using WrapSec
 with FastAPI to secure LLM inputs before sending to your model.
 

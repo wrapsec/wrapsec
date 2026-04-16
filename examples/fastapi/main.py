@@ -113,6 +113,7 @@ async def wrapsec_middleware(request: Request, call_next):
     try:
         body = await request.json()
     except Exception:
+        logger.warning("Invalid JSON body — skipping WrapSec scan")
         return await call_next(request)
 
     message = body.get("message", "")
@@ -194,10 +195,14 @@ async def chat_middleware_pattern(
     # Simulate LLM call with the (possibly sanitized) message
     reply = _simulate_llm_call(message_to_use)
 
-    logger.info(
-        f"Request processed | trace={trace_id} "
-        f"decision={decision} user={body.user_id}"
-    )
+    if decision == "SANITIZE":
+        logger.info(
+            f"Request sanitized and processed | trace={trace_id} user={body.user_id}"
+        )
+    else:
+        logger.info(
+            f"Request allowed and processed | trace={trace_id} user={body.user_id}"
+        )
 
     return ChatResponse(
         reply    = reply,

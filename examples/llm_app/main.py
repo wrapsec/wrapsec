@@ -76,6 +76,16 @@ logger = logging.getLogger("wrapsec.llm_app")
 
 LLM_PROVIDER    = os.environ.get("LLM_PROVIDER", "ollama").lower()
 
+# Fix 4 — validate LLM_PROVIDER at startup, not at first request
+if LLM_PROVIDER not in ("ollama", "openai"):
+    raise RuntimeError(
+        f"Invalid LLM_PROVIDER={LLM_PROVIDER!r}. "
+        f"Allowed values: ollama, openai"
+    )
+
+# Fix 1 — configurable LLM timeout
+LLM_TIMEOUT     = int(os.environ.get("LLM_TIMEOUT", "60"))
+
 # Ollama config
 OLLAMA_BASE_URL = os.environ.get("OLLAMA_BASE_URL", "http://localhost:11434")
 OLLAMA_MODEL    = os.environ.get("OLLAMA_MODEL",    "llama3.2:latest")
@@ -225,7 +235,7 @@ async def chat(body: ChatRequest):
                 system     = body.system,
             )
     except Exception as e:
-        logger.error(f"LLM call failed: {e}")
+        logger.error(f"LLM call failed | trace={scan_result.trace_id} error={e}")
         raise HTTPException(
             status_code = 502,
             detail      = f"LLM provider error: {str(e)}",
@@ -265,22 +275,22 @@ async def chat_batch(body: BatchRequest):
             scan_result = wrapsec_client.scan(message, user=body.user_id)
         except WrapSecError as e:
             results.append({
-                "index":    i,
-                "message":  message[:50],
-                "decision": "ERROR",
-                "error":    str(e),
+                "index":          i,
+                "message_length": len(message),
+                "decision":       "ERROR",
+                "error":          str(e),
             })
             continue
 
         if scan_result.decision == "BLOCK":
             results.append({
-                "index":    i,
-                "message":  message[:50],
-                "decision": "BLOCK",
-                "reason":   scan_result.primary_reason,
-                "threats":  scan_result.threats,
-                "trace_id": scan_result.trace_id,
-                "reply":    None,
+                "index":          i,
+                "message_length": len(message),
+                "decision":       "BLOCK",
+                "reason":         scan_result.primary_reason,
+                "threats":        scan_result.threats,
+                "trace_id":       scan_result.trace_id,
+                "reply":          None,
             })
             continue
 
@@ -299,13 +309,13 @@ async def chat_batch(body: BatchRequest):
             reply = f"[LLM error: {e}]"
 
         results.append({
-            "index":     i,
-            "message":   message[:50],
-            "decision":  scan_result.decision,
-            "reason":    scan_result.primary_reason,
-            "trace_id":  scan_result.trace_id,
-            "sanitized": scan_result.decision == "SANITIZE",
-            "reply":     reply,
+            "index":          i,
+            "message_length": len(message),
+            "decision":       scan_result.decision,
+            "reason":         scan_result.primary_reason,
+            "trace_id":       scan_result.trace_id,
+            "sanitized":      scan_result.decision == "SANITIZE",
+            "reply":          reply,
         })
 
     blocked = sum(1 for r in results if r.get("decision") == "BLOCK")
@@ -343,7 +353,7 @@ async def _call_ollama(
     Call Ollama API (local).
     Returns (reply_text, model_name).
     """
-    async with httpx.AsyncClient(timeout=60) as client:
+    async with httpx.AsyncClient(timeout=LLM_TIMEOUT) as client:
         resp = await client.post(
             f"{OLLAMA_BASE_URL}/api/chat",
             json = {
@@ -376,7 +386,7 @@ async def _call_openai(
             "Set it with: export OPENAI_API_KEY=sk-..."
         )
 
-    async with httpx.AsyncClient(timeout=60) as client:
+    async with httpx.AsyncClient(timeout=LLM_TIMEOUT) as client:
         resp = await client.post(
             f"{OPENAI_BASE_URL}/chat/completions",
             headers = {

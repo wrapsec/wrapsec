@@ -1,5 +1,9 @@
 # WrapSec + LLM App Integration Example
 
+> **Reference architecture** for building LLM-powered applications with
+> WrapSec security scanning. Shows the complete request lifecycle from
+> user input through security scanning to LLM response.
+
 This example shows how to protect **your own LLM application** with WrapSec.
 It is not about configuring WrapSec's internal detection layers.
 
@@ -107,6 +111,9 @@ pip install fastapi uvicorn httpx
 # WrapSec configuration
 export WRAPSEC_API_KEY=wsk_live_...
 export WRAPSEC_BASE_URL=http://localhost:8000
+
+# LLM timeout (default 60s — increase for slower models)
+export LLM_TIMEOUT=60
 
 # LLM configuration (see above)
 export LLM_PROVIDER=ollama
