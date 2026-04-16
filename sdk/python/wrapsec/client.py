@@ -217,10 +217,10 @@ class Client:
         Spec: Section 13.2 (wrapsec audit list)
         """
         params: dict[str, str] = {"limit": str(min(limit, 100))}
-        if decision:  params["decision"] = decision
-        if reason:    params["reason"]   = reason
-        if from_date: params["from"]     = from_date
-        if to_date:   params["to"]       = to_date
+        if decision:  params["decision"]        = decision
+        if reason:    params["primary_reason"]  = reason
+        if from_date: params["from"]            = from_date
+        if to_date:   params["to"]              = to_date
 
         data = self._request("GET", "/audit/logs", self._resolve_timeout(timeout), params=params)
         return [AuditLog.from_dict(item) for item in data.get("items", data.get("logs", []))]
