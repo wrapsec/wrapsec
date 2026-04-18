@@ -22,8 +22,8 @@ import pandas as pd
 
 logger = logging.getLogger("wrapsec.ml.augment")
 
-MIN_SAMPLES   = 200   # augment classes below this threshold
-TARGET_SAMPLES = 400  # augment up to this many samples per class
+MIN_SAMPLES   = 400   # augment classes below this threshold
+TARGET_SAMPLES = 800  # augment up to this many samples per class
 
 # Simple synonym map for key security terms
 SYNONYMS = {
