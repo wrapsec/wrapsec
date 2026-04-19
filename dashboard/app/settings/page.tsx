@@ -9,8 +9,16 @@ import { LayerToggles } from "@/components/settings/LayerToggles"
 import { LLMSettingsForm } from "@/components/settings/LLMSettings"
 import { TenantSettingsForm } from "@/components/settings/TenantSettings"
 import { RetentionSettingsForm } from "@/components/settings/RetentionSettings"
+import { ProxySettingsForm } from "@/components/settings/ProxySettings"
 import { PageSpinner } from "@/components/ui/Spinner"
-import { getThresholds, getLayers, getLLMSettings, getTenant, getRetentionSettings } from "@/lib/api"
+import {
+  getThresholds,
+  getLayers,
+  getLLMSettings,
+  getTenant,
+  getRetentionSettings,
+  getProxySettings,
+} from "@/lib/api"
 
 export default function SettingsPage() {
   const { data: tenant,     isLoading: tenantLoading,     mutate: mutateN } =
@@ -27,6 +35,15 @@ export default function SettingsPage() {
 
   const { data: retention,  isLoading: retentionLoading,  mutate: mutateR } =
     useSWR("retention",    getRetentionSettings)
+
+  // Proxy config -- 404 is expected when not configured, treat as null
+  const { data: proxy, mutate: mutateProxy } = useSWR(
+    "proxy-settings",
+    () => getProxySettings().catch((e) => {
+      if (e.message?.includes("404") || e.message?.includes("NOT_FOUND")) return null
+      throw e
+    })
+  )
 
   if (tenantLoading || tLoading || lLoading || llmLoading || retentionLoading) {
     return <Shell title="Settings"><PageSpinner /></Shell>
@@ -82,7 +99,7 @@ export default function SettingsPage() {
         <Card>
           <CardHeader
             title="LLM Configuration"
-            subtitle="Configure the LLM provider for detection and proxy mode"
+            subtitle="Configure the LLM provider for semantic detection (Layer 3)"
           />
           {llm && (
             <LLMSettingsForm
@@ -90,6 +107,26 @@ export default function SettingsPage() {
               onUpdated={(s) => mutateM(s, false)}
             />
           )}
+        </Card>
+
+        {/* Proxy Provider -- AI Interaction Firewall */}
+        <Card>
+          <CardHeader
+            title="Proxy Provider"
+            subtitle="Configure the LLM provider for proxy mode (POST /v1/chat/completions)"
+            action={
+              <a
+                href="/settings/proxy-interactions"
+                className="text-xs text-blue-700 hover:underline"
+              >
+                View interactions
+              </a>
+            }
+          />
+          <ProxySettingsForm
+            config={proxy ?? null}
+            onUpdated={(c) => mutateProxy(c ?? undefined, false)}
+          />
         </Card>
 
         {/* Audit Log Retention */}
