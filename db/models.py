@@ -183,7 +183,7 @@ class ProxyInteractionModel(Base):
     user_id               = Column(String(256), nullable=True)
 
     # -- Input --
-    input_raw             = Column(Text,        nullable=False)
+    input_raw             = Column(Text,        nullable=True)
     input_sanitized       = Column(Text,        nullable=True)
     # null if input_decision = ALLOW or BLOCK (no sanitization applied)
 
