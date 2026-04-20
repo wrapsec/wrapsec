@@ -97,6 +97,7 @@ class AuditLogModel(Base):
     source         = Column(String(100), nullable=True)
     user_id        = Column(String(100), nullable=True)
     input_length   = Column(Integer,     nullable=True,  default=0)
+    proxy_interaction_id = Column(UUID(as_uuid=True), nullable=True)
     created_at     = Column(DateTime,    nullable=False, default=datetime.utcnow)
 
     __table_args__ = (
@@ -106,6 +107,8 @@ class AuditLogModel(Base):
         Index("ix_audit_app_created",           "app_id",     "created_at"),
         Index("ix_audit_dept_created",          "dept_id",    "created_at"),
         Index("ix_audit_user_created",          "user_id",    "created_at"),
+        Index("ix_audit_logs_exec_mode",        "execution_mode"),
+        Index("ix_audit_logs_created_desc",     "created_at"),
     )
 
 

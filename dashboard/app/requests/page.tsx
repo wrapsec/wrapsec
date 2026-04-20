@@ -17,6 +17,7 @@ export default function RequestsPage() {
   const [traceIdDebounced,  setTraceIdDebounced]  = useState("")
   const [decision,          setDecision]          = useState("")
   const [threatCategory,    setThreatCategory]    = useState("")
+  const [executionMode,     setExecutionMode]     = useState("")
   const [from,              setFrom]              = useState("")
   const [to,                setTo]                = useState("")
   const [sortBy,            setSortBy]            = useState("created_at")
@@ -24,7 +25,7 @@ export default function RequestsPage() {
   const [offset,            setOffset]            = useState(0)
   const [selectedId,        setSelectedId]        = useState<string | null>(null)
 
-  // Debounce trace ID search — wait 400ms after user stops typing
+  // Debounce trace ID search
   useEffect(() => {
     const timer = setTimeout(() => {
       setTraceIdDebounced(traceId)
@@ -36,11 +37,12 @@ export default function RequestsPage() {
   const isValidDateRange = !from || !to || from <= to
 
   const { data, isLoading } = useSWR(
-    ["audit-logs", traceIdDebounced, decision, threatCategory, from, to, sortBy, sortOrder, offset],
+    ["audit-logs", traceIdDebounced, decision, threatCategory, executionMode, from, to, sortBy, sortOrder, offset],
     () => getAuditLogs({
       trace_id:        traceIdDebounced  || undefined,
       decision:        (decision as any) || undefined,
       threat_category: (threatCategory as any) || undefined,
+      execution_mode:  (executionMode as any) || undefined,
       from:            from && isValidDateRange ? `${from}T00:00:00` : undefined,
       to:              to   && isValidDateRange ? `${to}T23:59:59`   : undefined,
       sort_by:         sortBy,
@@ -59,17 +61,19 @@ export default function RequestsPage() {
             traceId={traceId}
             decision={decision}
             threatCategory={threatCategory}
+            executionMode={executionMode}
             from={from}
             to={to}
             sortBy={sortBy}
             sortOrder={sortOrder}
-            onTraceId={(v)   => setTraceId(v)}
-            onDecision={(v)  => { setDecision(v);       setOffset(0) }}
-            onThreat={(v)    => { setThreatCategory(v); setOffset(0) }}
-            onFrom={(v)      => { setFrom(v);           setOffset(0) }}
-            onTo={(v)        => { setTo(v);             setOffset(0) }}
-            onSortBy={(v)    => { setSortBy(v);         setOffset(0) }}
-            onSortOrder={(v) => { setSortOrder(v as "asc" | "desc"); setOffset(0) }}
+            onTraceId={(v)        => setTraceId(v)}
+            onDecision={(v)       => { setDecision(v);       setOffset(0) }}
+            onThreat={(v)         => { setThreatCategory(v); setOffset(0) }}
+            onExecutionMode={(v)  => { setExecutionMode(v);  setOffset(0) }}
+            onFrom={(v)           => { setFrom(v);           setOffset(0) }}
+            onTo={(v)             => { setTo(v);             setOffset(0) }}
+            onSortBy={(v)         => { setSortBy(v);         setOffset(0) }}
+            onSortOrder={(v)      => { setSortOrder(v as "asc" | "desc"); setOffset(0) }}
           />
           {data && (
             <div className="flex items-center gap-3 mt-7">
@@ -117,8 +121,6 @@ export default function RequestsPage() {
   )
 }
 
-// ── Export CSV Button ──────────────────────────────────────────────────────
-
 function ExportButton({
   decision,
   threatCategory,
@@ -143,10 +145,10 @@ function ExportButton({
         from:            from && isValidDateRange ? `${from}T00:00:00` : undefined,
         to:              to   && isValidDateRange ? `${to}T23:59:59`   : undefined,
       })
-      const url      = URL.createObjectURL(blob)
-      const a        = document.createElement("a")
-      a.href         = url
-      a.download     = `wrapsec_audit_${new Date().toISOString().slice(0, 10)}.csv`
+      const url  = URL.createObjectURL(blob)
+      const a    = document.createElement("a")
+      a.href     = url
+      a.download = `wrapsec_audit_${new Date().toISOString().slice(0, 10)}.csv`
       a.click()
       URL.revokeObjectURL(url)
     } catch (e) {

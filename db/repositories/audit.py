@@ -22,6 +22,7 @@ class AuditRepository(BaseRepository):
     async def list(
         self,
         tenant_id:       str | None = None,
+        execution_mode:  str | None = None,
         dept_id:         str | None = None,
         app_id:          str | None = None,
         key_id:          str | None = None,
@@ -72,6 +73,8 @@ class AuditRepository(BaseRepository):
             query = query.where(AuditLogModel.created_at >= from_dt)
         if to_dt:
             query = query.where(AuditLogModel.created_at <= to_dt)
+        if execution_mode:
+            query = query.where(AuditLogModel.execution_mode == execution_mode)
 
         # Count total
         count_query = select(func.count()).select_from(query.subquery())

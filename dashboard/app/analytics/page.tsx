@@ -154,7 +154,7 @@ function AttributionReport({ attribution, deptNames, appNames }: {
           ) : (
             <div className="space-y-2">
               {attribution.by_key.slice(0, 8).map(row => (
-                <div key={row.key_id} className="flex items-center justify-between py-1.5 border-b border-slate-50 last:border-0">
+                <div key={`${row.key_id}-${row.total}`} className="flex items-center justify-between py-1.5 border-b border-slate-50 last:border-0">
                   <div className="min-w-0">
                     <p className="text-xs font-medium text-slate-700 truncate">{row.source || row.key_id || "—"}</p>
                     <p className="text-xs text-slate-400">{row.total.toLocaleString()} requests</p>

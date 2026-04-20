@@ -3,6 +3,7 @@ import hashlib
 from fastapi import APIRouter, Request, Depends
 from fastapi.concurrency import run_in_threadpool
 from fastapi.responses import JSONResponse
+from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from api.v1.schemas.request import AIRequestSchema
@@ -24,7 +25,7 @@ _gateway = GatewayService()
 
 
 def _mode_str(value) -> str:
-    """Extract clean string from enum or string — always returns lowercase."""
+    """Extract clean string from enum or string -- always returns lowercase."""
     return str(value).split(".")[-1].lower()
 
 
@@ -47,11 +48,9 @@ def _build_response(decision, debug: bool = False) -> dict:
         },
     }
 
-    # sanitized_input only present when decision = SANITIZE
     if decision.decision.value == "SANITIZE":
         response["sanitized_input"] = decision.sanitized_input
 
-    # output only present in proxy mode
     if decision.output is not None:
         response["output"] = decision.output
 
@@ -84,15 +83,12 @@ async def ai_request(
     request: Request,
     db:      AsyncSession = Depends(get_db),
 ):
-    # Debug mode requires admin
     if body.options.debug and not getattr(request.state, "is_admin", False):
         raise DebugForbiddenError()
 
-    # Extract clean mode strings
     det_mode_str = _mode_str(body.detection_mode)
     exe_mode_str = _mode_str(body.execution_mode)
 
-    # Check semantic cache
     from cache.semantic_cache import get_cached_result, set_cached_result
     from observability.metrics import CACHE_HITS, CACHE_MISSES
     cached = await get_cached_result(body.input, det_mode_str, exe_mode_str)
@@ -101,14 +97,12 @@ async def ai_request(
         return JSONResponse(content=cached)
     CACHE_MISSES.inc()
 
-    # Build domain request
     incoming = IncomingRequest(
         input          = body.input,
         detection_mode = DetectionMode(det_mode_str),
         execution_mode = ExecutionMode(exe_mode_str),
         model          = body.model,
         metadata       = RequestMetadata(
-            # tenant_id always from API key — never from caller metadata
             tenant_id = getattr(request.state, "tenant_id", None),
             source    = body.metadata.source  if body.metadata else None,
             user_id   = body.metadata.user_id if body.metadata else None,
@@ -123,7 +117,6 @@ async def ai_request(
         ),
     )
 
-    # Resolve effective policy for this request
     from services.policy_resolver import resolve_policy
     policy, policy_source = await resolve_policy(
         db        = db,
@@ -139,23 +132,18 @@ async def ai_request(
     llm_enabled        = policy["detection"]["llm_enabled"]
     llm_settings       = policy["llm"]
 
-    # Proxy mode requires LLM to be enabled
     if body.execution_mode == ExecutionMode.PROXY and not llm_enabled:
         from errors.exceptions import WrapSecError
         raise WrapSecError(
-            code       = "VALIDATION_ERROR",
-            message    = "Proxy mode requires LLM layer to be enabled",
+            code        = "VALIDATION_ERROR",
+            message     = "Proxy mode requires LLM layer to be enabled",
             status_code = 422,
         )
 
-    # Extract independent PII guardrail thresholds from resolved policy
-    # These are intentionally separate from detection thresholds —
-    # changing detection thresholds must not affect PII guardrail behaviour
     pii_policy             = policy.get("guardrails", {}).get("pii", {})
     pii_block_threshold    = pii_policy.get("block_threshold",    None)
     pii_sanitize_threshold = pii_policy.get("sanitize_threshold", None)
 
-    # Process through gateway
     result = await run_in_threadpool(
         _gateway.process,
         incoming,
@@ -169,9 +157,8 @@ async def ai_request(
         llm_settings,
     )
 
-    # Persist audit log to PostgreSQL
-    detection_scores  = {}
-    guardrail_scores  = {}
+    detection_scores = {}
+    guardrail_scores = {}
     if result.decision.layer_scores:
         detection_scores = {
             "rule": result.decision.layer_scores.rule_score,
@@ -179,10 +166,9 @@ async def ai_request(
             "llm":  result.decision.layer_scores.llm_score,
         }
         guardrail_scores = {
-            "pii":  result.decision.layer_scores.pii_score,
+            "pii": result.decision.layer_scores.pii_score,
         }
 
-    # TASK-004 — default source to key name if metadata.source empty
     source = (
         (body.metadata.source if body.metadata and body.metadata.source else None)
         or getattr(request.state, "key_name", None)
@@ -205,21 +191,21 @@ async def ai_request(
         "tenant_id":             getattr(request.state, "tenant_id", None),
         "source":                source,
         "user_id":               body.metadata.user_id if body.metadata else None,
-        "key_id":               getattr(request.state, "key_id",    None),
-        "ip_address":           getattr(request.state, "ip_address", None),
-        "user_agent":           getattr(request.state, "user_agent", None),
-        "attribution_verified": False,
-        "app_id":               getattr(request.state, "app_id",    None),
-        "dept_id":              getattr(request.state, "dept_id",   None),
-        "tenant_id":            getattr(request.state, "tenant_id", None),
-        "policy_source":   policy_source,
-        "primary_reason":  result.decision.primary_reason,
-        "confidence":      result.decision.confidence,
-        "confidence_band": result.decision.confidence_band,
-        "input_length":    len(body.input),
+        "key_id":                getattr(request.state, "key_id",     None),
+        "ip_address":            getattr(request.state, "ip_address",  None),
+        "user_agent":            getattr(request.state, "user_agent",  None),
+        "attribution_verified":  False,
+        "app_id":                getattr(request.state, "app_id",     None),
+        "dept_id":               getattr(request.state, "dept_id",    None),
+        "policy_source":         policy_source,
+        "primary_reason":        result.decision.primary_reason,
+        "confidence":            result.decision.confidence,
+        "confidence_band":       result.decision.confidence_band,
+        "input_length":          len(body.input),
+        # proxy_interaction_id is null for scan-only requests
+        "proxy_interaction_id":  None,
     })
 
-    # Record Prometheus metrics
     from observability.metrics import record_request
     record_request(
         decision       = result.decision.decision.value,
@@ -234,13 +220,11 @@ async def ai_request(
         } if result.decision.layer_scores else None,
     )
 
-    # Build response
     response = _build_response(
         result.decision,
         debug=body.options.debug and getattr(request.state, "is_admin", False)
     )
 
-    # Cache ALLOW results
     await set_cached_result(body.input, det_mode_str, exe_mode_str, response)
 
     return JSONResponse(content=response)
@@ -279,9 +263,11 @@ async def get_request(
         except Exception:
             pass
 
-    return JSONResponse(content={
+    # Build base response (same structure as before -- no breaking changes)
+    response = {
         "trace_id":  record.trace_id,
         "timestamp": record.created_at.isoformat(),
+        "is_proxy":  record.execution_mode == "proxy",
         "attribution": {
             "tenant_id":            record.tenant_id,
             "dept_id":              record.dept_id,
@@ -312,4 +298,46 @@ async def get_request(
             "execution_mode": record.execution_mode,
             "policy_source":  record.policy_source,
         },
-    })
+    }
+
+    # If this is a proxy request, JOIN proxy_interactions for extended lifecycle data
+    # Single query -- no extra round trip
+    if record.proxy_interaction_id:
+        try:
+            from db.models import ProxyInteractionModel
+            pi_result = await db.execute(
+                select(ProxyInteractionModel).where(
+                    ProxyInteractionModel.id == record.proxy_interaction_id
+                )
+            )
+            pi = pi_result.scalar_one_or_none()
+            if pi:
+                response["proxy"] = {
+                    "provider":            pi.provider,
+                    "model":               pi.model,
+                    "provider_latency_ms": pi.provider_latency_ms,
+                    "execution_status":    pi.execution_status,
+                    "input_raw":           pi.input_raw,
+                    "input_sanitized":     pi.input_sanitized,
+                    "input_decision":      pi.input_decision,
+                    "input_primary_reason": pi.input_primary_reason,
+                    "input_confidence":    pi.input_confidence,
+                    "input_threats":       pi.input_threats or [],
+                    "input_attack_type":   pi.input_attack_type,
+                    "output_raw":          pi.output_raw,
+                    "output_sanitized":    pi.output_sanitized,
+                    "output_decision":     pi.output_decision,
+                    "output_primary_reason": pi.output_primary_reason,
+                    "output_confidence":   pi.output_confidence,
+                    "output_threats":      pi.output_threats or [],
+                    "behavior_flag":       pi.behavior_flag,
+                    "output_flags":        pi.output_flags,
+                }
+        except Exception as exc:
+            import logging
+            logging.getLogger("wrapsec.ai").error(
+                f"Failed to join proxy_interactions for trace_id={trace_id}: {exc}"
+            )
+            # Do not fail the request -- return without proxy data
+
+    return JSONResponse(content=response)

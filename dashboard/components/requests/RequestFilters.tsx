@@ -6,6 +6,7 @@ interface RequestFiltersProps {
   traceId:        string
   decision:       string
   threatCategory: string
+  executionMode:  string
   from:           string
   to:             string
   sortBy:         string
@@ -13,6 +14,7 @@ interface RequestFiltersProps {
   onTraceId:      (v: string) => void
   onDecision:     (v: string) => void
   onThreat:       (v: string) => void
+  onExecutionMode:(v: string) => void
   onFrom:         (v: string) => void
   onTo:           (v: string) => void
   onSortBy:       (v: string) => void
@@ -20,12 +22,12 @@ interface RequestFiltersProps {
 }
 
 export function RequestFilters({
-  traceId, decision, threatCategory, from, to, sortBy, sortOrder,
-  onTraceId, onDecision, onThreat, onFrom, onTo, onSortBy, onSortOrder,
+  traceId, decision, threatCategory, executionMode, from, to, sortBy, sortOrder,
+  onTraceId, onDecision, onThreat, onExecutionMode, onFrom, onTo, onSortBy, onSortOrder,
 }: RequestFiltersProps) {
   return (
     <div className="space-y-3">
-      {/* Row 1 — search + filters + sort */}
+      {/* Row 1 -- search + filters + sort */}
       <div className="flex items-end gap-3 flex-wrap">
 
         {/* Trace ID search */}
@@ -79,6 +81,19 @@ export function RequestFilters({
           className="w-44"
         />
 
+        {/* Execution mode filter -- shows all traffic or scan-only or proxy only */}
+        <Select
+          label="Mode"
+          value={executionMode}
+          onChange={(e) => onExecutionMode(e.target.value)}
+          options={[
+            { value: "",          label: "All modes" },
+            { value: "scan_only", label: "Scan only" },
+            { value: "proxy",     label: "Proxy" },
+          ]}
+          className="w-36"
+        />
+
         <Select
           label="Sort by"
           value={sortBy}
@@ -110,7 +125,7 @@ export function RequestFilters({
         />
       </div>
 
-      {/* Row 2 — date range */}
+      {/* Row 2 -- date range */}
       <div className="flex items-end gap-3">
         <div className="flex flex-col gap-1">
           <label className="text-xs font-medium text-slate-700">From</label>

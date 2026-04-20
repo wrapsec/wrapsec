@@ -209,8 +209,14 @@ async def _log_interaction(
     output_confidence: float | None,
     output_threats:   list | None,
     total_latency_ms: int,
+    # Audit fields for audit_logs
+    risk_score:       float = 0.0,
+    detection_scores: dict  = None,
+    guardrail_scores: dict  = None,
+    input_length:     int   = 0,
 ) -> None:
     try:
+        # 1. Insert into proxy_interactions
         interaction = ProxyInteractionModel(
             trace_id              = trace_id,
             key_id                = key_id,
@@ -232,13 +238,37 @@ async def _log_interaction(
             output_primary_reason = output_reason,
             output_confidence     = output_confidence,
             output_threats        = output_threats,
-            behavior_flag         = None,   # V2
-            output_flags          = None,   # V2
+            behavior_flag         = None,
+            output_flags          = None,
             total_latency_ms      = total_latency_ms,
             created_at            = datetime.utcnow(),
         )
         db.add(interaction)
-        await db.commit()
+        await db.flush()   # flush to get interaction.id before audit_logs insert
+
+        # 2. Insert into audit_logs with FK
+        from db.repositories.audit import AuditRepository
+        repo = AuditRepository(db)
+        await repo.create({
+            "trace_id":              trace_id,
+            "decision":              input_decision,
+            "risk_score":            risk_score,
+            "threats":               input_threats or [],
+            "input_hash":            "proxy:" + trace_id,
+            "detection_mode":        "fast",
+            "execution_mode":        "proxy",
+            "llm_invoked":           False,
+            "latency_ms":            float(total_latency_ms),
+            "detection_scores":      detection_scores or {},
+            "guardrail_scores":      guardrail_scores or {},
+            "key_id":                key_id,
+            "primary_reason":        input_reason,
+            "confidence":            input_confidence,
+            "confidence_band":       "HIGH" if input_confidence >= 0.7 else "MEDIUM" if input_confidence >= 0.4 else "LOW",
+            "input_length":          input_length,
+            "proxy_interaction_id":  interaction.id,
+        })
+
     except Exception as exc:
         logger.error(f"Failed to log proxy interaction trace_id={trace_id}: {exc}")
 
@@ -381,6 +411,14 @@ async def proxy_chat_completions(
             output_decision=None, output_reason=None,
             output_confidence=None, output_threats=None,
             total_latency_ms=total_ms,
+            risk_score       = gd.risk_score.value if hasattr(gd, "risk_score") else 0.0,
+            detection_scores = {
+                "rule": gd.layer_scores.rule_score,
+                "ml":   gd.layer_scores.ml_score,
+                "llm":  gd.layer_scores.llm_score,
+            } if gd.layer_scores else {},
+            guardrail_scores = {"pii": gd.layer_scores.pii_score} if gd.layer_scores else {},
+            input_length     = len(scan_input),
         )
         return _error_response(
             status_code  = 400,
@@ -457,6 +495,14 @@ async def proxy_chat_completions(
             output_decision=None, output_reason=None,
             output_confidence=None, output_threats=None,
             total_latency_ms=total_ms,
+            risk_score       = gd.risk_score.value if hasattr(gd, "risk_score") else 0.0,
+            detection_scores = {
+                "rule": gd.layer_scores.rule_score,
+                "ml":   gd.layer_scores.ml_score,
+                "llm":  gd.layer_scores.llm_score,
+            } if gd.layer_scores else {},
+            guardrail_scores = {"pii": gd.layer_scores.pii_score} if gd.layer_scores else {},
+            input_length     = len(scan_input),
         )
         return _error_response(
             status_code  = 504,
@@ -491,6 +537,14 @@ async def proxy_chat_completions(
             output_decision=None, output_reason=None,
             output_confidence=None, output_threats=None,
             total_latency_ms=total_ms,
+            risk_score       = gd.risk_score.value if hasattr(gd, "risk_score") else 0.0,
+            detection_scores = {
+                "rule": gd.layer_scores.rule_score,
+                "ml":   gd.layer_scores.ml_score,
+                "llm":  gd.layer_scores.llm_score,
+            } if gd.layer_scores else {},
+            guardrail_scores = {"pii": gd.layer_scores.pii_score} if gd.layer_scores else {},
+            input_length     = len(scan_input),
         )
         return _error_response(
             status_code  = 502,
@@ -536,6 +590,14 @@ async def proxy_chat_completions(
             output_decision=output_decision, output_reason=output_reason,
             output_confidence=output_conf, output_threats=output_threats,
             total_latency_ms=total_ms,
+            risk_score       = gd.risk_score.value if hasattr(gd, "risk_score") else 0.0,
+            detection_scores = {
+                "rule": gd.layer_scores.rule_score,
+                "ml":   gd.layer_scores.ml_score,
+                "llm":  gd.layer_scores.llm_score,
+            } if gd.layer_scores else {},
+            guardrail_scores = {"pii": gd.layer_scores.pii_score} if gd.layer_scores else {},
+            input_length     = len(scan_input),
         )
         return _error_response(
             status_code  = 400,
@@ -570,6 +632,14 @@ async def proxy_chat_completions(
         output_decision=output_decision, output_reason=output_reason,
         output_confidence=output_conf, output_threats=output_threats,
         total_latency_ms=total_ms,
+        risk_score       = gd.risk_score.value if hasattr(gd, "risk_score") else 0.0,
+            detection_scores = {
+                "rule": gd.layer_scores.rule_score,
+                "ml":   gd.layer_scores.ml_score,
+                "llm":  gd.layer_scores.llm_score,
+            } if gd.layer_scores else {},
+            guardrail_scores = {"pii": gd.layer_scores.pii_score} if gd.layer_scores else {},
+            input_length     = len(scan_input),
     )
 
     # -- 12. Build OpenAI-compatible response --
