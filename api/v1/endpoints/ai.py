@@ -202,7 +202,6 @@ async def ai_request(
         "confidence":            result.decision.confidence,
         "confidence_band":       result.decision.confidence_band,
         "input_length":          len(body.input),
-        # proxy_interaction_id is null for scan-only requests
         "proxy_interaction_id":  None,
     })
 
@@ -263,7 +262,7 @@ async def get_request(
         except Exception:
             pass
 
-    # Build base response (same structure as before -- no breaking changes)
+    # Build base response
     response = {
         "trace_id":  record.trace_id,
         "timestamp": record.created_at.isoformat(),
@@ -300,8 +299,7 @@ async def get_request(
         },
     }
 
-    # If this is a proxy request, JOIN proxy_interactions for extended lifecycle data
-    # Single query -- no extra round trip
+    # If proxy request, JOIN proxy_interactions for extended lifecycle data
     if record.proxy_interaction_id:
         try:
             from db.models import ProxyInteractionModel
@@ -313,31 +311,30 @@ async def get_request(
             pi = pi_result.scalar_one_or_none()
             if pi:
                 response["proxy"] = {
-                    "provider":            pi.provider,
-                    "model":               pi.model,
-                    "provider_latency_ms": pi.provider_latency_ms,
-                    "execution_status":    pi.execution_status,
-                    "input_raw":           pi.input_raw,
-                    "input_sanitized":     pi.input_sanitized,
-                    "input_decision":      pi.input_decision,
-                    "input_primary_reason": pi.input_primary_reason,
-                    "input_confidence":    pi.input_confidence,
-                    "input_threats":       pi.input_threats or [],
-                    "input_attack_type":   pi.input_attack_type,
-                    "output_raw":          pi.output_raw,
-                    "output_sanitized":    pi.output_sanitized,
-                    "output_decision":     pi.output_decision,
+                    "provider":              pi.provider,
+                    "model":                 pi.model,
+                    "provider_latency_ms":   pi.provider_latency_ms,
+                    "execution_status":      pi.execution_status,
+                    "input_raw":             pi.input_raw,
+                    "input_sanitized":       pi.input_sanitized,
+                    "input_decision":        pi.input_decision,
+                    "input_primary_reason":  pi.input_primary_reason,
+                    "input_confidence":      pi.input_confidence,
+                    "input_threats":         pi.input_threats or [],
+                    "input_attack_type":     pi.input_attack_type,
+                    "output_raw":            pi.output_raw,
+                    "output_sanitized":      pi.output_sanitized,
+                    "output_decision":       pi.output_decision,
                     "output_primary_reason": pi.output_primary_reason,
-                    "output_confidence":   pi.output_confidence,
-                    "output_threats":      pi.output_threats or [],
-                    "behavior_flag":       pi.behavior_flag,
-                    "output_flags":        pi.output_flags,
+                    "output_confidence":     pi.output_confidence,
+                    "output_threats":        pi.output_threats or [],
+                    "behavior_flag":         pi.behavior_flag,
+                    "output_flags":          pi.output_flags,
                 }
         except Exception as exc:
             import logging
             logging.getLogger("wrapsec.ai").error(
                 f"Failed to join proxy_interactions for trace_id={trace_id}: {exc}"
             )
-            # Do not fail the request -- return without proxy data
 
     return JSONResponse(content=response)

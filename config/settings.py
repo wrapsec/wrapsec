@@ -63,6 +63,13 @@ class Settings(BaseSettings):
     prometheus_enabled:      bool = True
     prometheus_port:         int  = 9090
 
+    # -- Data storage ----------------------------------------------------------
+    data_storage_mode:        str = Field(default="masked")
+    # full   -- store input_raw and output_raw as-is (development)
+    # masked -- run PII redactor before storing (production default)
+    # none   -- store None for input_raw and output_raw (strict compliance)
+    data_retention_days_proxy: int = 7
+
     class Config:
         env_file         = ".env"
         env_file_encoding = "utf-8"
