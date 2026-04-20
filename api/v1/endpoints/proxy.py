@@ -70,6 +70,35 @@ STATUS_TIMEOUT        = "TIMEOUT"
 
 
 # ---------------------------------------------------------------------------
+# Storage mode helper
+# ---------------------------------------------------------------------------
+
+def _apply_storage_mode(text: str | None, mode: str) -> str | None:
+    """
+    Apply the configured data_storage_mode before persisting input/output text.
+
+    full   -- store as-is (development default)
+    masked -- run PII redactor before storing (production default)
+    none   -- store None, text is never persisted (strict compliance)
+    """
+    if text is None:
+        return None
+    if mode == "none":
+        return None
+    if mode == "masked":
+        try:
+            from engine.guardrails.pii.redactor import PIIRedactor
+            redactor = PIIRedactor()
+            masked, _ = redactor.redact(text)
+            return masked
+        except Exception:
+            logger.warning("PII redactor failed during storage masking -- storing [REDACTED]")
+            return "[STORAGE ERROR]"
+    # full mode -- return as-is
+    return text
+
+
+# ---------------------------------------------------------------------------
 # Request schema
 # ---------------------------------------------------------------------------
 
@@ -216,12 +245,20 @@ async def _log_interaction(
     input_length:     int   = 0,
 ) -> None:
     try:
+        # Apply storage mode before persisting text content
+        # full   -- store as-is
+        # masked -- run PII redactor (production default)
+        # none   -- store None (strict compliance)
+        storage_mode  = settings.data_storage_mode
+        stored_input  = _apply_storage_mode(input_raw,  storage_mode)
+        stored_output = _apply_storage_mode(output_raw, storage_mode)
+
         # 1. Insert into proxy_interactions
         interaction = ProxyInteractionModel(
             trace_id              = trace_id,
             key_id                = key_id,
             user_id               = user_id,
-            input_raw             = input_raw,
+            input_raw             = stored_input,
             input_sanitized       = input_sanitized,
             input_decision        = input_decision,
             input_primary_reason  = input_reason,
@@ -232,7 +269,7 @@ async def _log_interaction(
             model                 = model,
             provider_latency_ms   = provider_latency,
             execution_status      = execution_status,
-            output_raw            = output_raw,
+            output_raw            = stored_output,
             output_sanitized      = output_sanitized,
             output_decision       = output_decision,
             output_primary_reason = output_reason,
