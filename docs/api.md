@@ -86,6 +86,8 @@ The heuristic `ceil(len/2)` assumes 2 chars per token — conservative for all l
 | `proxy_not_configured` | 400 | Proxy: no provider configured for this API key |
 | `invalid_model_format` | 400 | Proxy: model must be "provider/model" format |
 
+Proxy error responses include a `wrapsec` key alongside `error` for security context. The `type` field is not present in WrapSec errors — only `code`, `message`, and `trace_id`.
+
 ---
 
 ## Idempotency
@@ -184,10 +186,15 @@ input -> InputGuard -> input decision -> provider call -> OutputGuard -> output 
 **Latency fields defined:**
 
 ```
-processing.latency_ms     = WrapSec detection pipeline only (excludes provider time)
+processing.latency_ms     = detection pipeline time for scan_only rows
+                            total end-to-end time for proxy rows (stored in audit_logs)
 proxy.provider_latency_ms = external provider round-trip only
-X-WrapSec-Latency-Ms      = total end-to-end wall time (detection + provider + overhead)
+proxy.total_latency_ms    = total end-to-end wall time (canonical total for proxy)
+X-WrapSec-Latency-Ms      = total end-to-end wall time (same as proxy.total_latency_ms)
 ```
+
+For proxy requests, `processing.latency_ms` in `audit_logs` equals `proxy.total_latency_ms`.
+Use `proxy.total_latency_ms` as the authoritative total for proxy requests.
 
 **Detection scores contract:**
 
@@ -279,7 +286,7 @@ Retrieve a request by trace ID. For proxy requests, joins `proxy_interactions` a
 {
   "trace_id":       "req_01...",
   "execution_mode": "proxy",
-  "is_proxy":       true,
+  "is_proxy":       true,      // derived: is_proxy = (execution_mode == "proxy")
   "decision":       "SANITIZE",
   "...":            "all scan_only fields present",
   "proxy": {
@@ -308,6 +315,10 @@ Retrieve a request by trace ID. For proxy requests, joins `proxy_interactions` a
 
 **Note:** `input_decision` is not present in `proxy` — it is always identical to the top-level `decision` field. Use `decision` as the canonical input verdict.
 
+**`execution_mode` appears twice in the response:**
+- Top-level `execution_mode` — canonical field, use this for routing logic
+- `processing.execution_mode` — same value, present for pipeline context and backward compatibility
+
 **Latency fields:**
 
 | Field | Meaning |
@@ -325,6 +336,8 @@ Retrieve a request by trace ID. For proxy requests, joins `proxy_interactions` a
 | `none` | `null` — never persisted | `null` — never persisted |
 
 Text is purged (set to `null`) after `DATA_RETENTION_DAYS_PROXY` days regardless of mode. Security metadata (decisions, threats, scores, latency, execution_status) is retained permanently.
+
+**`input_raw` field naming:** Despite the name "raw", `input_raw` stores the text according to the configured storage mode — it is not always the original unmodified text. In `masked` mode it contains PII-redacted text. The field name refers to "input text as stored", not "original input".
 
 **Storage + retention interaction:** In `none` mode, no text is ever persisted — the retention worker has nothing to purge. The retention worker only nulls rows where `input_raw IS NOT NULL OR output_raw IS NOT NULL`.
 
@@ -452,7 +465,7 @@ The `provider/model` format is required. Requests without a provider prefix are 
   "choices": [...],
   "wrapsec": {
     "trace_id":             "req_01...",
-    "input_decision":       "ALLOW",
+    "decision":             "ALLOW",
     "input_primary_reason": "NO_THREAT_DETECTED",
     "input_confidence":     1.0,
     "input_sanitized":      false,
@@ -471,13 +484,12 @@ The `provider/model` format is required. Requests without a provider prefix are 
 ```json
 {
   "error": {
-    "message": "Request blocked by security policy.",
-    "type":    "invalid_request_error",
-    "code":    "input_blocked"
+    "code":     "input_blocked",
+    "message":  "Request blocked by security policy.",
+    "trace_id": "req_01..."
   },
   "wrapsec": {
-    "trace_id":             "req_01...",
-    "input_decision":       "BLOCK",
+    "decision":             "BLOCK",
     "input_primary_reason": "RULE_DETECTOR",
     "input_threats":        ["PROMPT_INJECTION", "JAILBREAK"],
     "input_confidence":     0.9642,
@@ -491,13 +503,12 @@ The `provider/model` format is required. Requests without a provider prefix are 
 ```json
 {
   "error": {
-    "message": "Model response blocked by output security policy.",
-    "type":    "policy_violation",
-    "code":    "output_blocked"
+    "code":     "output_blocked",
+    "message":  "Model response blocked by output security policy.",
+    "trace_id": "req_01..."
   },
   "wrapsec": {
-    "trace_id":              "req_01...",
-    "input_decision":        "ALLOW",
+    "decision":              "ALLOW",
     "output_decision":       "BLOCK",
     "output_primary_reason": "PII_GUARDRAIL_BLOCK",
     "execution_status":      "OUTPUT_BLOCKED"
@@ -510,13 +521,12 @@ The `provider/model` format is required. Requests without a provider prefix are 
 ```json
 {
   "error": {
-    "message": "Provider timed out.",
-    "type":    "provider_error",
-    "code":    "provider_timeout"
+    "code":     "provider_timeout",
+    "message":  "Provider timed out.",
+    "trace_id": "req_01..."
   },
   "wrapsec": {
-    "trace_id":         "req_01...",
-    "input_decision":   "ALLOW",
+    "decision":         "ALLOW",
     "execution_status": "TIMEOUT"
   }
 }

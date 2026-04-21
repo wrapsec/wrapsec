@@ -70,35 +70,6 @@ STATUS_TIMEOUT        = "TIMEOUT"
 
 
 # ---------------------------------------------------------------------------
-# Storage mode helper
-# ---------------------------------------------------------------------------
-
-def _apply_storage_mode(text: str | None, mode: str) -> str | None:
-    """
-    Apply the configured data_storage_mode before persisting input/output text.
-
-    full   -- store as-is (development default)
-    masked -- run PII redactor before storing (production default)
-    none   -- store None, text is never persisted (strict compliance)
-    """
-    if text is None:
-        return None
-    if mode == "none":
-        return None
-    if mode == "masked":
-        try:
-            from engine.guardrails.pii.redactor import PIIRedactor
-            redactor = PIIRedactor()
-            masked, _ = redactor.redact(text)
-            return masked
-        except Exception:
-            logger.warning("PII redactor failed during storage masking -- storing [REDACTED]")
-            return "[STORAGE ERROR]"
-    # full mode -- return as-is
-    return text
-
-
-# ---------------------------------------------------------------------------
 # Request schema
 # ---------------------------------------------------------------------------
 
@@ -208,7 +179,6 @@ def _error_response(
                 "message": message,
                 "type":    error_type,
                 "code":    error_code,
-                "trace_id": wrapsec_meta.get("trace_id"),
             },
             "wrapsec": wrapsec_meta,
         },
@@ -246,20 +216,12 @@ async def _log_interaction(
     input_length:     int   = 0,
 ) -> None:
     try:
-        # Apply storage mode before persisting text content
-        # full   -- store as-is
-        # masked -- run PII redactor (production default)
-        # none   -- store None (strict compliance)
-        storage_mode  = settings.data_storage_mode
-        stored_input  = _apply_storage_mode(input_raw,  storage_mode)
-        stored_output = _apply_storage_mode(output_raw, storage_mode)
-
         # 1. Insert into proxy_interactions
         interaction = ProxyInteractionModel(
             trace_id              = trace_id,
             key_id                = key_id,
             user_id               = user_id,
-            input_raw             = stored_input,
+            input_raw             = input_raw,
             input_sanitized       = input_sanitized,
             input_decision        = input_decision,
             input_primary_reason  = input_reason,
@@ -270,7 +232,7 @@ async def _log_interaction(
             model                 = model,
             provider_latency_ms   = provider_latency,
             execution_status      = execution_status,
-            output_raw            = stored_output,
+            output_raw            = output_raw,
             output_sanitized      = output_sanitized,
             output_decision       = output_decision,
             output_primary_reason = output_reason,
@@ -465,7 +427,7 @@ async def proxy_chat_completions(
             error_code   = "input_blocked",
             wrapsec_meta = {
                 "trace_id":             trace_id,
-                "input_decision":       input_decision,
+                "decision":             input_decision,
                 "input_primary_reason": input_reason,
                 "input_threats":        input_threats,
                 "input_confidence":     round(input_conf, 4),
@@ -549,7 +511,7 @@ async def proxy_chat_completions(
             error_code   = "provider_timeout",
             wrapsec_meta = {
                 "trace_id":         trace_id,
-                "input_decision":   input_decision,
+                "decision":         input_decision,
                 "execution_status": STATUS_TIMEOUT,
             },
             headers=headers,
@@ -591,7 +553,7 @@ async def proxy_chat_completions(
             error_code   = "provider_unreachable",
             wrapsec_meta = {
                 "trace_id":         trace_id,
-                "input_decision":   input_decision,
+                "decision":         input_decision,
                 "execution_status": STATUS_FAILED,
             },
             headers=headers,
@@ -644,7 +606,7 @@ async def proxy_chat_completions(
             error_code   = "output_blocked",
             wrapsec_meta = {
                 "trace_id":              trace_id,
-                "input_decision":        input_decision,
+                "decision":              input_decision,
                 "output_decision":       output_decision,
                 "output_primary_reason": output_reason,
                 "execution_status":      STATUS_OUTPUT_BLOCKED,
@@ -704,17 +666,17 @@ async def proxy_chat_completions(
     # Optional inline meta field (opt-in via header)
     if inline:
         response_body["wrapsec"] = {
-            "trace_id":              trace_id,
-            "input_decision":        input_decision,
-            "input_primary_reason":  input_reason,
-            "input_confidence":      round(input_conf, 4),
-            "input_sanitized":       input_decision == "SANITIZE",
-            "output_decision":       output_decision,
-            "output_sanitized":      output_decision == "SANITIZE",
-            "execution_status":      execution_status,
-            "provider":              provider_name,
-            "model":                 provider_response.model,
-            "total_latency_ms":      total_ms,
+            "trace_id":             trace_id,
+            "decision":             input_decision,   # canonical -- same as top-level decision field
+            "input_primary_reason": input_reason,
+            "input_confidence":     round(input_conf, 4),
+            "input_sanitized":      input_decision == "SANITIZE",
+            "output_decision":      output_decision,
+            "output_sanitized":     output_decision == "SANITIZE",
+            "execution_status":     execution_status,
+            "provider":             provider_name,
+            "model":                provider_response.model,
+            "total_latency_ms":     total_ms,
         }
 
     logger.info(

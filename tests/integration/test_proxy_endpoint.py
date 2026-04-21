@@ -170,7 +170,7 @@ class TestProxyChatCompletions:
         assert resp.status_code == 400
         data = resp.json()
         assert data["error"]["code"]                   == "input_blocked"
-        assert data["wrapsec"]["input_decision"]       == "BLOCK"
+        assert data["wrapsec"]["decision"]       == "BLOCK"
         assert data["wrapsec"]["execution_status"]     == "BLOCKED"
         # Provider must never have been called
         assert len(provider_called) == 0
@@ -181,7 +181,7 @@ class TestProxyChatCompletions:
 
     @pytest.mark.asyncio
     async def test_provider_timeout_returns_504(self, app):
-        """Provider timeout -> 504, input_decision preserved as ALLOW."""
+        """Provider timeout -> 504, decision preserved as ALLOW."""
         config               = _make_config()
         fake_get_db, mock_db = _patch_config(config)
 
@@ -206,8 +206,8 @@ class TestProxyChatCompletions:
         assert resp.status_code == 504
         data = resp.json()
         assert data["error"]["code"]               == "provider_timeout"
-        # input_decision is ALLOW -- the input was clean
-        assert data["wrapsec"]["input_decision"]   == "ALLOW"
+        # decision is ALLOW -- the input was clean
+        assert data["wrapsec"]["decision"]   == "ALLOW"
         assert data["wrapsec"]["execution_status"] == "TIMEOUT"
 
     # -----------------------------------------------------------------------
@@ -216,7 +216,7 @@ class TestProxyChatCompletions:
 
     @pytest.mark.asyncio
     async def test_provider_unreachable_returns_502(self, app):
-        """Provider ConnectError -> 502, input_decision preserved as ALLOW."""
+        """Provider ConnectError -> 502, decision preserved as ALLOW."""
         config               = _make_config()
         fake_get_db, mock_db = _patch_config(config)
 
@@ -241,7 +241,7 @@ class TestProxyChatCompletions:
         assert resp.status_code == 502
         data = resp.json()
         assert data["error"]["code"]               == "provider_unreachable"
-        assert data["wrapsec"]["input_decision"]   == "ALLOW"
+        assert data["wrapsec"]["decision"]   == "ALLOW"
         assert data["wrapsec"]["execution_status"] == "FAILED"
 
     # -----------------------------------------------------------------------
@@ -372,7 +372,7 @@ class TestProxyChatCompletions:
         data = resp.json()
         assert "wrapsec" in data
         assert "trace_id"        in data["wrapsec"]
-        assert "input_decision"  in data["wrapsec"]
+        assert "decision"  in data["wrapsec"]
         assert "output_decision" in data["wrapsec"]
 
     @pytest.mark.asyncio

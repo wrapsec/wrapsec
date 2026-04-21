@@ -386,6 +386,8 @@ Results:  5 scanned, 0 skipped
 {"decision": "ALLOW", "primary_reason": "NO_THREAT_DETECTED", "confidence": 1.0, "confidence_band": "HIGH", "trace_id": "req_...", "latency_ms": 1.6, ...}
 {"decision": "BLOCK", "primary_reason": "RULE_DETECTOR", "confidence": 0.75, "confidence_band": "HIGH", "trace_id": "req_...", "latency_ms": 1.18, ...}
 {"decision": "SANITIZE", "primary_reason": "PII_GUARDRAIL_SANITIZE", "confidence": 0.75, "sanitized_input": "my SSN is [SSN REDACTED]", ...}
+
+// latency_ms = detection pipeline time (scan_only). For proxy requests use audit get <trace_id> for full breakdown.
 ```
 
 ---

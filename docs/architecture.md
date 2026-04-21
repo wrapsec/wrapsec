@@ -142,6 +142,16 @@ GET /v1/ai/requests/:trace_id
   → returns unified response with "proxy" key
 ```
 
+**Latency storage rule:**
+
+```
+audit_logs.latency_ms for scan_only rows = detection pipeline time only
+audit_logs.latency_ms for proxy rows     = total end-to-end time (same as proxy.total_latency_ms)
+
+proxy_interactions.provider_latency_ms   = external provider round-trip only
+proxy_interactions.total_latency_ms      = total end-to-end wall time (canonical for proxy)
+```
+
 ---
 
 ## Proxy Request Lifecycle
@@ -402,6 +412,8 @@ CREATE TABLE proxy_interactions (
     input_raw             TEXT,        -- NULL after retention period or mode=none
     input_sanitized       TEXT,        -- PII-redacted version if SANITIZE applied
     input_decision        VARCHAR(16)  NOT NULL,  -- ALLOW | BLOCK | SANITIZE
+    -- internal field: identical to audit_logs.decision
+    -- audit_logs.decision is the canonical API-exposed field
     input_primary_reason  VARCHAR(64)  NOT NULL,
     input_confidence      FLOAT        NOT NULL,
     input_threats         JSONB,
