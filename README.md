@@ -223,7 +223,7 @@ X-WrapSec-Latency-Ms:        3047
   "error": {"message": "Request blocked by security policy.", "code": "input_blocked"},
   "wrapsec": {
     "trace_id":         "req_01...",
-    "input_decision":   "BLOCK",
+    "decision":   "BLOCK",
     "input_threats":    ["PROMPT_INJECTION", "JAILBREAK"],
     "input_confidence": 0.9642,
     "execution_status": "BLOCKED"
