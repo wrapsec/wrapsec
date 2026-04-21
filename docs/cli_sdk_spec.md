@@ -265,6 +265,44 @@ print(result.confidence)      # 0.85
 print(result.trace_id)        # "req_01knzhh8..."
 ```
 
+**SYSTEM_ERROR handling contract for SDK consumers:**
+```
+result.primary_reason == "SYSTEM_ERROR" means all detectors failed internally.
+result.decision will be "ALLOW" at the engine level — detection did not confirm a threat.
+
+SDK consumers MUST NOT treat SYSTEM_ERROR as a clean result.
+Do not forward input to an LLM when primary_reason == "SYSTEM_ERROR".
+Treat it as a failure condition and apply your fail-open or fail-closed policy.
+
+WrapSecSystemError (the exception) is raised for infrastructure failures:
+  HTTP 5xx, timeout, connection error — after retries are exhausted.
+This is distinct from primary_reason="SYSTEM_ERROR" (a valid scan result
+where detection itself failed internally). Both require the same client
+response: do not forward input.
+```
+
+**`sanitized_input` vs `sanitization_applied`:**
+```
+result.sanitization_applied  → boolean, True when decision = SANITIZE
+result.sanitized_input       → string, the actual redacted text (present only when
+                               sanitization_applied is True)
+
+Always check result.decision as the primary signal.
+Use result.sanitized_input to read the redacted content before forwarding to your LLM.
+result.sanitized_input is None when sanitization_applied is False.
+```
+
+**`risk_score` interpretation:**
+```
+result.risk_score reflects detection only (rule + ML + LLM weighted).
+PII guardrail decisions (BLOCK/SANITIZE) always produce risk_score = 0.0
+because detection is not involved in the guardrail path.
+
+risk_score = 0.0 does NOT mean the input is safe.
+Always use result.decision and result.primary_reason as the authoritative verdict.
+Never use risk_score alone to decide whether to forward input to an LLM.
+```
+
 ---
 
 ## 5. Field Naming Convention
@@ -290,6 +328,7 @@ The Node SDK transforms all API response field names from `snake_case` to `camel
 | `confidence_band` | `result.confidence_band` | `result.confidenceBand` |
 | `trace_id` | `result.trace_id` | `result.traceId` |
 | `sanitized_input` | `result.sanitized_input` | `result.sanitizedInput` |
+| `sanitization_applied` | `result.sanitization_applied` | `result.sanitizationApplied` |
 | `threats` | `result.threats` | `result.threats` |
 | `latency_ms` | `result.latency_ms` | `result.latencyMs` |
 
@@ -471,6 +510,19 @@ The SDK never raises WrapSecBlockError automatically.
 This matches Stripe's pattern: charge.status is checked, not caught.
 ```
 
+**`WrapSecSystemError` — two distinct sources:**
+```
+WrapSecSystemError (exception) is raised for infrastructure failures:
+  HTTP 5xx, timeout, connection error — after retries are exhausted.
+
+primary_reason = "SYSTEM_ERROR" (scan result field) means the API was reached
+  successfully but all detectors failed internally. The response is valid JSON
+  with decision = "ALLOW" — no exception is raised.
+
+Both require the same client action: do not forward input to an LLM.
+They are distinct failure modes with the same required handling.
+```
+
 ---
 
 ## 9. Retry Logic
@@ -493,6 +545,9 @@ Backoff schedule:
   Attempt 2: wait 1s
   Attempt 3: wait 2s
   After 3 failures: raise WrapSecSystemError
+
+CLI exit 1 on infrastructure errors means retries have already been exhausted.
+The CLI never retries — it receives the final exception from core/retry.py.
 
 Note: Section 15 (HTTP error table) reflects this behaviour.
       If retry logic in this section changes, Section 15 must be updated.
@@ -1055,6 +1110,10 @@ res.status(413).json({
 })
 ```
 
+Note: The middleware uses `PAYLOAD_TOO_LARGE` as its own error code for the
+client-side 64KB check. This is enforced before the API call and is distinct
+from the server-side `VALIDATION_ERROR` (422) returned by the WrapSec API.
+
 ---
 
 ## 19. V3 - Gateway Installer (After V1 is Enterprise-Ready)
@@ -1178,6 +1237,6 @@ where every change is authenticated, audited, and attributable.
 ---
 
 *WrapSec CLI & SDK Design Specification (Internal)*  
-*Version 1.5 - Final - Approved for Implementation*  
-*Review cycles: 6 (initial + 5 external reviews)*  
+*Version 1.6 - April 2026*  
+*Review cycles: 7 (initial + 6 external reviews)*  
 *Last updated: April 2026*

@@ -88,6 +88,11 @@ The heuristic `ceil(len/2)` assumes 2 chars per token — conservative for all l
 
 Proxy error responses include a `wrapsec` key alongside `error` for security context. The `type` field is not present in WrapSec errors — only `code`, `message`, and `trace_id`.
 
+**Error code casing convention:**
+Platform and infrastructure errors use `UPPERCASE` (e.g. `UNAUTHORIZED`, `VALIDATION_ERROR`, `INTERNAL_ERROR`).
+Runtime security and proxy errors use `lowercase` (e.g. `input_blocked`, `output_blocked`, `system_error`).
+This distinction is intentional and stable — uppercase for platform, lowercase for security decisions.
+
 ---
 
 ## Idempotency
@@ -130,7 +135,8 @@ Callers must use a new UUID for each distinct operation. If Redis is unavailable
 ```
 
 **Field rules:**
-- `sanitized_input` — only present when `decision = SANITIZE`
+- `sanitized_input` — only present when `decision = SANITIZE`. Contains the actual redacted text sent to the LLM.
+- `sanitization_applied` — boolean indicator; `true` when `decision = SANITIZE`. Use `sanitized_input` to read the redacted content.
 - `threats` — always present (empty array if none)
 - `risk_score = 0.0` when guardrail triggered (detection not involved)
 - `confidence = 0.0` when `primary_reason = SYSTEM_ERROR`
@@ -177,6 +183,27 @@ proxy:
   The top-level decision field is authoritative.
 ```
 
+**`risk_score` vs `confidence`:**
+
+```
+risk_score   = likelihood of a detected threat (detection only, 0.0–1.0)
+confidence   = certainty of the decision (agreement between detectors, 0.0–1.0)
+
+risk_score=0.9 + confidence=0.4 → strong signal, low detector agreement
+risk_score=0.9 + confidence=0.9 → strong signal, high agreement — most trustworthy
+```
+
+**`risk_score` interpretation:**
+
+```
+risk_score reflects detection only (rule + ML + LLM weighted).
+PII guardrail decisions (BLOCK/SANITIZE) may produce risk_score=0.0.
+risk_score=0.0 does NOT mean the input is safe — check decision and primary_reason.
+
+Always use decision as the authoritative security verdict.
+Never use risk_score alone to decide whether to forward input to an LLM.
+```
+
 **Proxy lifecycle:**
 
 ```
@@ -196,6 +223,16 @@ X-WrapSec-Latency-Ms      = total end-to-end wall time (same as proxy.total_late
 For proxy requests, `processing.latency_ms` in `audit_logs` equals `proxy.total_latency_ms`.
 Use `proxy.total_latency_ms` as the authoritative total for proxy requests.
 
+**`sanitized_input` vs `sanitization_applied`:**
+
+```
+sanitization_applied  boolean — true when decision = SANITIZE
+sanitized_input       string  — the actual redacted text (present only when sanitization_applied = true)
+
+Always check decision, not sanitization_applied, as the primary signal.
+Use sanitized_input to read the redacted content before forwarding to your LLM.
+```
+
 **Detection scores contract:**
 
 ```
@@ -208,6 +245,14 @@ Scores represent detector confidence, not probability of attack.
 A score of 0.9 means the detector is highly confident a threat is present.
 All API values are raw 0.0-1.0. The dashboard displays these as percentages (value * 100).
 SYSTEM_ERROR always implies confidence = 0.0 and confidence_band = LOW.
+
+confidence reflects agreement between active detectors, not absolute correctness.
+Single-detector paths (e.g. LLM disabled, only rule fires) may yield confidence=1.0
+due to absence of variance across detectors. This is expected behaviour.
+
+SYSTEM_ERROR returns decision=ALLOW at the engine level (detection did not confirm a threat).
+However, SYSTEM_ERROR MUST be treated as a failure condition by all clients.
+Applications must NOT forward input to an LLM when primary_reason=SYSTEM_ERROR.
 ```
 
 ---
@@ -323,7 +368,7 @@ Retrieve a request by trace ID. For proxy requests, joins `proxy_interactions` a
 
 | Field | Meaning |
 |---|---|
-| `processing.latency_ms` | Detection pipeline only (scan_only) / total end-to-end (proxy rows in audit_logs) |
+| `processing.latency_ms` | Detection pipeline time (scan_only rows) / total end-to-end time (proxy rows in audit_logs) — same value as `proxy.total_latency_ms` for proxy |
 | `proxy.provider_latency_ms` | External provider round-trip only |
 | `proxy.total_latency_ms` | Total end-to-end wall time (same as `X-WrapSec-Latency-Ms` header) |
 
@@ -822,7 +867,7 @@ response = client.chat.completions.create(
 
 # Security metadata available in response body
 meta = response.model_extra.get("wrapsec", {})
-if meta.get("input_decision") == "SANITIZE":
+if meta.get("decision") == "SANITIZE":
     logger.info(f"PII was redacted before forwarding: {meta['trace_id']}")
 ```
 

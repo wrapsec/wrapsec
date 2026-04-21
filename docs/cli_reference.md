@@ -44,6 +44,8 @@ wrapsec scan "hello world"
 | `1` | CLI error, network failure, auth error, rate limit, SYSTEM_ERROR |
 | `2` | BLOCK — input rejected by security policy |
 
+Network and server errors (5xx, timeout, connection failure) are retried up to 3 times with exponential backoff before exit 1 is returned. A CLI exit 1 on infrastructure errors means retries have already been exhausted.
+
 Exit codes apply to all commands and all output modes (`--quiet`, `--json`).
 
 ---
@@ -283,7 +285,8 @@ Threats:    PROMPT_INJECTION
 }
 ```
 
-Confidence is consistent between human and JSON output — both show 2 decimal places.
+`sanitized_input` matches the `sanitized_input` field in the API response — present and non-null only when `decision = SANITIZE`. `sanitization_applied` is the corresponding boolean indicator in the full API response.
+Confidence is shown to 4 decimal places in JSON output.
 
 ### Validation errors
 
@@ -387,7 +390,7 @@ Results:  5 scanned, 0 skipped
 {"decision": "BLOCK", "primary_reason": "RULE_DETECTOR", "confidence": 0.75, "confidence_band": "HIGH", "trace_id": "req_...", "latency_ms": 1.18, ...}
 {"decision": "SANITIZE", "primary_reason": "PII_GUARDRAIL_SANITIZE", "confidence": 0.75, "sanitized_input": "my SSN is [SSN REDACTED]", ...}
 
-// latency_ms = detection pipeline time (scan_only). For proxy requests use audit get <trace_id> for full breakdown.
+// latency_ms = detection pipeline time (scan_only). For proxy requests, latency_ms reflects total end-to-end time. Use: wrapsec audit get <trace_id> for the full proxy latency breakdown.
 ```
 
 ---

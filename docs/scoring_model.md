@@ -35,13 +35,17 @@ if max(scores) > 0:            return dominant_detector()
 return "NO_THREAT_DETECTED"    # only reachable when detection succeeded + clean
 ```
 
+**SYSTEM_ERROR client contract**
+
+At the engine level, `SYSTEM_ERROR` returns `decision = ALLOW` because detection did not confirm a threat. All clients — applications, SDKs, CLI — must treat `primary_reason = SYSTEM_ERROR` as a failure condition and must not forward input to an LLM. The distinction is intentional: the engine reports what it knows; the client enforces safety.
+
 **Failure-safe confidence**
 
 System failures always produce `confidence = 0.0` and `confidence_band = LOW`. This signals to operators that the decision came from a failure, not a detection.
 
 **Conservative input limits**
 
-8,000 characters / 4,000 estimated tokens (heuristic: `ceil(len/2)`). Safe for all languages including CJK. Full tiktoken enforcement in V1.1.
+8,000 characters / 4,000 estimated tokens (heuristic: `ceil(len/2)`). Safe for all languages including CJK. Full tiktoken enforcement in V1.2.
 
 ---
 
@@ -116,9 +120,7 @@ max_estimated_tokens  = 4000         # enforced by validator → 422
 #   Both cases stay under the actual token limit
 ```
 
-**Important for integrators:** Because the heuristic is conservative, inputs near the 8,000 character boundary may be rejected even if their actual token count is below 4,000. Treat 8,000 characters as the effective hard limit. V1.1 replaces this with per-model tiktoken counting.
-
-Full per-model token counting with tiktoken planned for V1.1.
+**Important for integrators:** Because the heuristic is conservative, inputs near the 8,000 character boundary may be rejected even if their actual token count is below 4,000. Treat 8,000 characters as the effective hard limit. V1.2 replaces this with per-model tiktoken counting.
 
 ---
 
@@ -171,6 +173,12 @@ except Exception:
 
 # Same pattern for ML and LLM detectors
 ```
+
+**`risk_score` and guardrail decisions:**
+
+`risk_score` reflects detection only. PII guardrail decisions always produce `risk_score = 0.0` because detection is not involved in the guardrail path.
+
+`risk_score = 0.0` does NOT mean the input is safe. A guardrail BLOCK with `risk_score = 0.0` is a fully enforced security decision. Always use `decision` and `primary_reason` as the authoritative verdict — never `risk_score` alone.
 
 ---
 
@@ -251,6 +259,15 @@ def compute_primary_reason(
 
 ## 6. Confidence Score
 
+**`risk_score` vs `confidence` — definitions:**
+
+```
+risk_score   = likelihood of a detected threat (detection only, 0.0–1.0)
+confidence   = certainty of the decision (agreement between active detectors, 0.0–1.0)
+```
+
+These measure different things. A high `risk_score` with low `confidence` means detectors disagree on severity. A high `risk_score` with high `confidence` means strong, consistent signal — most trustworthy. Both fields are always present in responses.
+
 ### Detector Confidence
 
 ```python
@@ -270,6 +287,8 @@ else:
 if max(invoked_scores) >= 0.8:
     confidence = max(confidence, 0.75)
 ```
+
+**Single-detector confidence note:** When only one detector is active (e.g. LLM disabled, only rule fires), `len(invoked_scores) <= 1` evaluates to `True` and `confidence = 1.0`. This is expected behaviour — confidence reflects agreement between active detectors, not absolute correctness. `confidence = 1.0` from a single-detector path does not imply stronger certainty than a multi-detector path with high agreement.
 
 ### Guardrail Confidence (Tiered)
 
@@ -411,7 +430,7 @@ primary_reason  = "SYSTEM_ERROR"
 ✅ Policy resolution: system → tenant → department
 ```
 
-### V1.1 — Planned
+### V1.2 — Planned
 
 ```
 → Per-model token counting with tiktoken (replaces heuristic)
@@ -434,4 +453,4 @@ primary_reason  = "SYSTEM_ERROR"
 
 > **Secure by default · Explainable by design · Auditable by architecture**
 
-*Version: 1.0 — Final · April 2026*
+*Version: 1.1 — April 2026*

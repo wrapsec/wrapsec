@@ -35,6 +35,10 @@ Guardrail decisions override detection decisions unconditionally.
 
 These are produced by mutually exclusive code paths. `NO_THREAT_DETECTED` is only reachable when `detection_failed=False` and all scores are 0.0. `SYSTEM_ERROR` is always returned when `detection_failed=True`. This consistency is guaranteed across the codebase, docs, and audit records.
 
+**SYSTEM_ERROR client contract**
+
+At the engine level, `SYSTEM_ERROR` returns `decision=ALLOW` because detection did not confirm a threat. However, all clients — applications, SDKs, examples — must treat `primary_reason=SYSTEM_ERROR` as a failure condition and must not forward input to an LLM. The distinction between engine-level decision and application-level handling is intentional: the engine reports what it knows; the client enforces safety.
+
 **All failure paths → LOW confidence**
 
 Detection failure, guardrail failure, and gateway exceptions all produce `confidence=0.0` and `confidence_band=LOW`. There is no failure path that produces a non-LOW confidence.
