@@ -35,6 +35,10 @@ if max(scores) > 0:            return dominant_detector()
 return "NO_THREAT_DETECTED"    # only reachable when detection succeeded + clean
 ```
 
+**SYSTEM_ERROR semantics**
+
+SYSTEM_ERROR occurs when the detection pipeline fails (e.g., detector failure, timeout, or internal exception).
+
 **SYSTEM_ERROR client contract**
 
 At the engine level, `SYSTEM_ERROR` returns `decision = ALLOW` because detection did not confirm a threat. All clients — applications, SDKs, CLI — must treat `primary_reason = SYSTEM_ERROR` as a failure condition and must not forward input to an LLM. The distinction is intentional: the engine reports what it knows; the client enforces safety.
@@ -263,10 +267,10 @@ def compute_primary_reason(
 
 ```
 risk_score   = likelihood of a detected threat (detection only, 0.0–1.0)
-confidence   = certainty of the decision (agreement between active detectors, 0.0–1.0)
+confidence   = certainty of the decision (agreement between detectors, 0.0–1.0)
 ```
 
-These measure different things. A high `risk_score` with low `confidence` means detectors disagree on severity. A high `risk_score` with high `confidence` means strong, consistent signal — most trustworthy. Both fields are always present in responses.
+confidence reflects agreement between detectors, not probability of attack. These measure different things. A high `risk_score` with low `confidence` means detectors disagree on severity. A high `risk_score` with high `confidence` means strong, consistent signal — most trustworthy. Both fields are always present in responses.
 
 ### Detector Confidence
 

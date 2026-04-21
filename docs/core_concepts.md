@@ -33,7 +33,7 @@ WrapSec may return:
 primary_reason = SYSTEM_ERROR
 ```
 
-This means the detection pipeline failed internally (e.g., one or more detectors threw an exception). This is distinct from a clean result — `NO_THREAT_DETECTED` is only returned when detection succeeds and all scores are 0.0.
+SYSTEM_ERROR occurs when the detection pipeline fails (e.g., detector failure, timeout, or internal exception). This is distinct from a clean result — `NO_THREAT_DETECTED` is only returned when detection succeeds and all scores are 0.0.
 
 **Important:**
 
@@ -72,7 +72,8 @@ PII detected → decision = SANITIZE
 risk_score = 0.0
 ```
 
-Always rely on `decision`, not `risk_score`
+`risk_score = 0.0` does NOT mean the input is safe.
+Always rely on `decision` as the authoritative verdict.
 
 ---
 
@@ -82,8 +83,7 @@ Always rely on `decision`, not `risk_score`
 confidence = certainty of the decision
 ```
 
-* Based on agreement between detectors
-* Not a probability of attack
+confidence reflects agreement between detectors, not probability of attack.
 
 Edge case:
 
@@ -104,8 +104,8 @@ sanitized_input      → redacted content (if applicable)
 
 Rules:
 
-* `sanitized_input` is present only when `sanitization_applied = true`
-* When `sanitization_applied = true`, always use `sanitized_input` as the input to your LLM — not the original
+`sanitized_input` is present only when `decision = SANITIZE`.
+Use `sanitized_input` instead of the original input when forwarding to an LLM.
 
 ---
 
@@ -163,7 +163,7 @@ proxy     → latency = total end-to-end time (WrapSec + provider)
 Each item contains either:
 
 ```json
-{ "decision": "ALLOW" }
+{ "decision": "ALLOW", "trace_id": "req_..." }
 ```
 
 OR

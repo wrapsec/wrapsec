@@ -1,5 +1,7 @@
 # WrapSec CLI — Command Reference
 
+> CLI behavior follows [Core Concepts](core_concepts.md) for decision semantics and SYSTEM_ERROR handling.
+
 Version: 0.1.1  
 Last updated: April 2026
 
@@ -390,7 +392,9 @@ Results:  5 scanned, 0 skipped
 {"decision": "BLOCK", "primary_reason": "RULE_DETECTOR", "confidence": 0.75, "confidence_band": "HIGH", "trace_id": "req_...", "latency_ms": 1.18, ...}
 {"decision": "SANITIZE", "primary_reason": "PII_GUARDRAIL_SANITIZE", "confidence": 0.75, "sanitized_input": "my SSN is [SSN REDACTED]", ...}
 
-// latency_ms = detection pipeline time (scan_only). For proxy requests, latency_ms reflects total end-to-end time. Use: wrapsec audit get <trace_id> for the full proxy latency breakdown.
+// latency_ms corresponds to processing.latency_ms in the API response.
+// scan_only: detection pipeline time. proxy: total end-to-end time (WrapSec + provider).
+// For full proxy latency breakdown use: wrapsec audit get <trace_id>
 ```
 
 ---

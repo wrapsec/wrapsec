@@ -1,4 +1,6 @@
 # WrapSec - CLI & SDK Design Specification (Internal)
+
+> See [Core Concepts](core_concepts.md) for canonical behavior definitions.
  
 This document is intended for contributors and maintainers.It defines architecture, constraints, and implementation contracts.
 
@@ -267,7 +269,8 @@ print(result.trace_id)        # "req_01knzhh8..."
 
 **SYSTEM_ERROR handling contract for SDK consumers:**
 ```
-result.primary_reason == "SYSTEM_ERROR" means all detectors failed internally.
+SYSTEM_ERROR occurs when the detection pipeline fails (e.g., detector failure, timeout, or internal exception).
+result.primary_reason == "SYSTEM_ERROR" indicates this condition.
 result.decision will be "ALLOW" at the engine level — detection did not confirm a threat.
 
 SDK consumers MUST NOT treat SYSTEM_ERROR as a clean result.
@@ -284,12 +287,11 @@ response: do not forward input.
 **`sanitized_input` vs `sanitization_applied`:**
 ```
 result.sanitization_applied  → boolean, True when decision = SANITIZE
-result.sanitized_input       → string, the actual redacted text (present only when
-                               sanitization_applied is True)
+result.sanitized_input       → string, present only when decision = SANITIZE
 
 Always check result.decision as the primary signal.
-Use result.sanitized_input to read the redacted content before forwarding to your LLM.
-result.sanitized_input is None when sanitization_applied is False.
+`sanitized_input` is present only when `decision = SANITIZE`.
+Use `sanitized_input` instead of the original input when forwarding to an LLM.
 ```
 
 **`risk_score` interpretation:**
@@ -298,9 +300,9 @@ result.risk_score reflects detection only (rule + ML + LLM weighted).
 PII guardrail decisions (BLOCK/SANITIZE) always produce risk_score = 0.0
 because detection is not involved in the guardrail path.
 
-risk_score = 0.0 does NOT mean the input is safe.
-Always use result.decision and result.primary_reason as the authoritative verdict.
-Never use risk_score alone to decide whether to forward input to an LLM.
+`risk_score = 0.0` does NOT mean the input is safe.
+Always use `result.decision` as the authoritative verdict.
+Never use `risk_score` alone to decide whether to forward input to an LLM.
 ```
 
 ---

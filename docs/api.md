@@ -1,5 +1,7 @@
 # WrapSec API Reference
 
+> See [Core Concepts](core_concepts.md) for canonical definitions of decision model, SYSTEM_ERROR, and scoring semantics.
+
 Version: 1.1 — Proxy Mode  
 Base URL: `http://your-host:8000`  
 Total endpoints: 43  
@@ -135,7 +137,7 @@ Callers must use a new UUID for each distinct operation. If Redis is unavailable
 ```
 
 **Field rules:**
-- `sanitized_input` — only present when `decision = SANITIZE`. Contains the actual redacted text sent to the LLM.
+- `sanitized_input` is present only when `decision = SANITIZE`. Use `sanitized_input` instead of the original input when forwarding to an LLM.
 - `sanitization_applied` — boolean indicator; `true` when `decision = SANITIZE`. Use `sanitized_input` to read the redacted content.
 - `threats` — always present (empty array if none)
 - `risk_score = 0.0` when guardrail triggered (detection not involved)
@@ -244,9 +246,10 @@ guardrail_scores.pii  = 0.0 - 1.0
 Scores represent detector confidence, not probability of attack.
 A score of 0.9 means the detector is highly confident a threat is present.
 All API values are raw 0.0-1.0. The dashboard displays these as percentages (value * 100).
+SYSTEM_ERROR occurs when the detection pipeline fails (e.g., detector failure, timeout, or internal exception).
 SYSTEM_ERROR always implies confidence = 0.0 and confidence_band = LOW.
 
-confidence reflects agreement between active detectors, not absolute correctness.
+confidence reflects agreement between detectors, not probability of attack.
 Single-detector paths (e.g. LLM disabled, only rule fires) may yield confidence=1.0
 due to absence of variance across detectors. This is expected behaviour.
 

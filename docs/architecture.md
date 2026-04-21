@@ -1,5 +1,7 @@
 # WrapSec — Architecture Specification
 
+> This document builds on [Core Concepts](core_concepts.md) as the canonical behavior definition.
+
 Version: 1.1 — Proxy Mode  
 Status: Implemented  
 Last updated: April 2026
@@ -30,6 +32,10 @@ Detection thresholds (`thresholds.block`, `thresholds.sanitize`) and guardrail t
 **Guardrail-first enforcement**
 
 Guardrail decisions override detection decisions unconditionally.
+
+**SYSTEM_ERROR semantics**
+
+SYSTEM_ERROR occurs when the detection pipeline fails (e.g., detector failure, timeout, or internal exception).
 
 **SYSTEM_ERROR is never NO_THREAT_DETECTED**
 
