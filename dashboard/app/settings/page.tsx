@@ -18,6 +18,7 @@ import {
   getTenant,
   getRetentionSettings,
   getProxySettings,
+  getStorageSettings,
 } from "@/lib/api"
 
 export default function SettingsPage() {
@@ -35,6 +36,8 @@ export default function SettingsPage() {
 
   const { data: retention,  isLoading: retentionLoading,  mutate: mutateR } =
     useSWR("retention",    getRetentionSettings)
+
+  const { data: storage } = useSWR("storage-settings", getStorageSettings)
 
   // Proxy config -- 404 is expected when not configured, treat as null
   const { data: proxy, mutate: mutateProxy } = useSWR(
@@ -139,6 +142,8 @@ export default function SettingsPage() {
             <RetentionSettingsForm
               retentionDays={retention.retention_days}
               source={retention.source}
+              proxyRetentionDays={storage?.retention_days_proxy ?? 7}
+              storageMode={storage?.storage_mode ?? "masked"}
               onUpdated={(days) => mutateR(
                 { ...retention, retention_days: days },
                 false

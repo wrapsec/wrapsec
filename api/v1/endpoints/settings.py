@@ -212,3 +212,15 @@ async def update_retention_settings(
         "retention_days": body.retention_days,
         "updated_at":     datetime.now(timezone.utc).isoformat(),
     })
+
+@router.get("/storage")
+async def get_storage_settings():
+    """
+    Returns the current data storage mode and proxy retention period.
+    Read-only in V1 -- configured via environment variables.
+    """
+    cfg = get_settings()
+    return JSONResponse(content={
+        "storage_mode":         cfg.data_storage_mode,
+        "retention_days_proxy": cfg.data_retention_days_proxy,
+    })
