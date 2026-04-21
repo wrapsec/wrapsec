@@ -42,9 +42,8 @@ Test:
 
 import os
 import logging
-from typing import Any
 
-from fastapi import FastAPI, Request, HTTPException
+from fastapi import FastAPI, Request
 from fastapi.responses import JSONResponse
 from pydantic import BaseModel
 
@@ -77,9 +76,9 @@ class ChatRequest(BaseModel):
     user_id: str = "anonymous"
 
 class ChatResponse(BaseModel):
-    reply:      str
-    trace_id:   str
-    decision:   str
+    reply:    str
+    trace_id: str
+    decision: str
 
 class ScanDetail(BaseModel):
     decision:        str
@@ -89,21 +88,28 @@ class ScanDetail(BaseModel):
     trace_id:        str
     threats:         list[str]
     sanitized:       bool
-    message_used:    str   # the actual message sent to LLM (may be sanitized)
+    message_used:    str
+
+
+def _error(code: str, message: str, trace_id: str | None = None, wrapsec_meta: dict | None = None) -> dict:
+    """Build a standard WrapSec error response body."""
+    body: dict = {
+        "error": {
+            "code":     code,
+            "message":  message,
+            "trace_id": trace_id,
+        }
+    }
+    if wrapsec_meta:
+        body["wrapsec"] = wrapsec_meta
+    return body
 
 
 # ── Pattern A — WrapSec middleware ────────────────────────────────────────────
 #
-# This middleware intercepts every request to paths starting with /api/
-# and scans the request body before it reaches any endpoint.
-#
-# ALLOW    → request proceeds normally
-# SANITIZE → request proceeds with sanitized input stored in request.state
-# BLOCK    → request is rejected with 400 before reaching the endpoint
-#
-# SYSTEM_ERROR → result unreliable, log and fail open (configurable)
-#
-# The endpoint reads request.state.wrapsec_result to access scan metadata.
+# IMPORTANT: FastAPI parses the request body before middleware runs.
+# body.message in the endpoint will always contain the ORIGINAL (pre-sanitization) text.
+# Use request.state.original_body["message"] to access the sanitized version.
 
 @app.middleware("http")
 async def wrapsec_middleware(request: Request, call_next):
@@ -111,7 +117,6 @@ async def wrapsec_middleware(request: Request, call_next):
     if not (request.method == "POST" and request.url.path.startswith("/api/")):
         return await call_next(request)
 
-    # Read and parse body
     try:
         body = await request.json()
     except Exception:
@@ -128,24 +133,21 @@ async def wrapsec_middleware(request: Request, call_next):
     try:
         result = client.scan(message, user=user_id)
     except WrapSecAuthError:
-        logger.error("WrapSec auth failed — check WRAPSEC_API_KEY")
-        # Fail open — let request through if WrapSec is misconfigured
-        # In production you may prefer to fail closed depending on your risk tolerance
+        logger.error("WrapSec auth failed — check WRAPSEC_API_KEY — failing open")
         return await call_next(request)
     except WrapSecRateLimitError:
-        logger.warning("WrapSec rate limit hit")
+        logger.warning("WrapSec rate limit hit — failing open")
         return await call_next(request)
     except WrapSecError as e:
-        logger.error(f"WrapSec error: {e}")
+        logger.error(f"WrapSec error: {e} — failing open")
         return await call_next(request)
 
-    # SYSTEM_ERROR — scanner ran but result is unreliable (confidence = 0.0)
-    # This is a valid scan result, not an exception.
-    # Fail open: request proceeds but the event is logged for ops review.
+    # SYSTEM_ERROR — scanner ran but result unreliable (confidence = 0.0)
+    # Fail open: request proceeds, event logged for ops review.
     # Change to fail closed if your risk tolerance requires it.
     if result.primary_reason == "SYSTEM_ERROR":
         logger.error(
-            f"WrapSec SYSTEM_ERROR | trace={result.trace_id} "
+            f"WrapSec SYSTEM_ERROR | trace_id={result.trace_id} "
             f"decision={result.decision} — failing open, flag for review"
         )
         request.state.wrapsec_result = result
@@ -155,36 +157,38 @@ async def wrapsec_middleware(request: Request, call_next):
     # BLOCK — reject before reaching endpoint
     if result.decision == "BLOCK":
         logger.warning(
-            f"Request blocked | trace={result.trace_id} "
+            f"Request blocked | trace_id={result.trace_id} "
             f"reason={result.primary_reason} threats={result.threats}"
         )
         return JSONResponse(
             status_code = 400,
-            content     = {
-                "error": {
-                    "code":     "INPUT_BLOCKED",
-                    "message":  "Your request was blocked by security policy.",
-                    "trace_id": result.trace_id,
-                }
-            },
+            content     = _error(
+                code      = "input_blocked",
+                message   = "Your request was blocked by security policy.",
+                trace_id  = result.trace_id,
+                wrapsec_meta = {
+                    "reason":  result.primary_reason,
+                    "threats": result.threats,
+                },
+            ),
         )
 
-    # SANITIZE — replace message with sanitized version
+    # SANITIZE — replace message with redacted version before forwarding
     if result.decision == "SANITIZE" and result.sanitized_input:
         logger.info(
-            f"Input sanitized | trace={result.trace_id} "
+            f"Input sanitized | trace_id={result.trace_id} "
             f"reason={result.primary_reason}"
         )
         body["message"] = result.sanitized_input
 
-    # Attach scan result to request state for endpoint access
+    # Attach scan result and (possibly sanitized) body to request state
     request.state.wrapsec_result = result
     request.state.original_body  = body
 
     return await call_next(request)
 
 
-# ── Pattern A endpoint — middleware handles scanning ──────────────────────────
+# ── Pattern A endpoint ────────────────────────────────────────────────────────
 
 @app.post("/api/chat", response_model=ChatResponse)
 async def chat_middleware_pattern(
@@ -195,49 +199,43 @@ async def chat_middleware_pattern(
     Pattern A: Middleware scans the request automatically.
     This endpoint only sees allowed or sanitized input.
     Scan metadata is available via request.state.wrapsec_result.
+
+    IMPORTANT: Use request.state.original_body["message"] — not body.message —
+    to get the sanitized input. FastAPI parses body before middleware runs.
     """
-    # Access scan result attached by middleware
     scan_result = getattr(request.state, "wrapsec_result", None)
     trace_id    = scan_result.trace_id if scan_result else "no-scan"
-    decision    = scan_result.decision if scan_result else "UNKNOWN"
+    decision    = scan_result.decision if scan_result else None
 
-    # Use sanitized message if middleware replaced it.
-    # body.message is parsed from the original request — middleware cannot mutate it.
-    # The sanitized version is stored in request.state.original_body.
+    # IMPORTANT: FastAPI parses the body before middleware runs.
+    # body.message always contains original text. Use original_body for sanitized version.
     original_body  = getattr(request.state, "original_body", {})
     message_to_use = original_body.get("message", body.message)
 
-    # Simulate LLM call with the (possibly sanitized) message
     reply = _simulate_llm_call(message_to_use)
 
     if decision == "SANITIZE":
-        logger.info(
-            f"Request sanitized and processed | trace={trace_id} user={body.user_id}"
-        )
+        logger.info(f"Request sanitized and processed | trace_id={trace_id} user={body.user_id}")
     else:
-        logger.info(
-            f"Request allowed and processed | trace={trace_id} user={body.user_id}"
-        )
+        logger.info(f"Request allowed and processed | trace_id={trace_id} user={body.user_id}")
 
-    return ChatResponse(
-        reply    = reply,
-        trace_id = trace_id,
-        decision = decision,
-    )
+    return ChatResponse(reply=reply, trace_id=trace_id, decision=decision or "ALLOW")
 
 
-# ── Pattern B endpoint — explicit scan with decision handling ─────────────────
+# ── Pattern B endpoint ────────────────────────────────────────────────────────
 
-@app.post("/api/chat/explicit", response_model=ScanDetail)
+@app.post("/api/chat/explicit")
 async def chat_explicit_pattern(body: ChatRequest):
     """
-    Pattern B: Endpoint scans input explicitly and handles each
-    decision with custom logic.
+    Pattern B: Endpoint scans input explicitly and handles each decision.
 
     ALLOW        → proceed with original message
-    SANITIZE     → proceed with sanitized message, log the event
-    BLOCK        → return 400 with reason and trace ID
-    SYSTEM_ERROR → return 503 (scanner ran but result unreliable)
+    SANITIZE     → proceed with sanitized message
+    BLOCK        → 400 with structured error
+    SYSTEM_ERROR → 503 (scanner ran but result unreliable, fail closed)
+
+    All error responses follow the standard WrapSec format:
+      {"error": {"code": "...", "message": "...", "trace_id": "..."}, "wrapsec": {...}}
     """
     try:
         result = client.scan(
@@ -246,72 +244,88 @@ async def chat_explicit_pattern(body: ChatRequest):
             # mode="full"  # uncomment for LLM-level semantic analysis on sensitive endpoints
         )
     except WrapSecAuthError:
-        raise HTTPException(status_code=500, detail="Security scanning unavailable — auth error")
+        logger.error("WrapSec auth failed — check WRAPSEC_API_KEY")
+        return JSONResponse(
+            status_code = 500,
+            content     = _error(
+                code    = "system_error",
+                message = "Security scanning unavailable — configuration error.",
+            ),
+        )
     except WrapSecRateLimitError:
-        raise HTTPException(status_code=429, detail="Security scan rate limit exceeded")
+        logger.warning("WrapSec rate limit exceeded")
+        return JSONResponse(
+            status_code = 429,
+            content     = _error(
+                code    = "system_error",
+                message = "Security scan rate limit exceeded. Please retry.",
+            ),
+        )
     except WrapSecError as e:
         # Infrastructure failure — network error, unexpected server error
         logger.error(f"WrapSec infrastructure error: {e}")
-        raise HTTPException(
+        return JSONResponse(
             status_code = 503,
-            detail      = "Security scanning temporarily unavailable. Please retry.",
+            content     = _error(
+                code    = "system_error",
+                message = "Security scanning temporarily unavailable. Please retry.",
+            ),
         )
 
-    # SYSTEM_ERROR — scanner ran but confidence = 0.0, result unreliable.
-    # This is a valid scan result (not an exception) where all detectors failed.
-    # primary_reason = SYSTEM_ERROR always implies confidence = 0.0 and band = LOW.
-    # Fail closed: reject the request when the scan result cannot be trusted.
+    # SYSTEM_ERROR — scanner ran but confidence = 0.0, result unreliable
+    # primary_reason = SYSTEM_ERROR always implies confidence = 0.0 and band = LOW
+    # Fail closed: reject the request when the scan result cannot be trusted
     if result.primary_reason == "SYSTEM_ERROR":
         logger.error(
-            f"WrapSec SYSTEM_ERROR | trace={result.trace_id} "
+            f"WrapSec SYSTEM_ERROR | trace_id={result.trace_id} "
             f"decision={result.decision} — failing closed"
         )
-        raise HTTPException(
+        return JSONResponse(
             status_code = 503,
-            detail      = "Security scanning temporarily unavailable. Please retry.",
+            content     = _error(
+                code     = "system_error",
+                message  = "Security scanning temporarily unavailable. Please retry.",
+                trace_id = result.trace_id,
+            ),
         )
 
-    # BLOCK — input rejected by security policy
+    # BLOCK
     if result.decision == "BLOCK":
         logger.warning(
-            f"Input blocked | trace={result.trace_id} "
-            f"reason={result.primary_reason} "
-            f"threats={result.threats} "
-            f"user={body.user_id}"
+            f"Input blocked | trace_id={result.trace_id} "
+            f"reason={result.primary_reason} threats={result.threats} user={body.user_id}"
         )
-        raise HTTPException(
+        return JSONResponse(
             status_code = 400,
-            detail      = {
-                "code":     "INPUT_BLOCKED",
-                "message":  "Your request was blocked by security policy.",
-                "reason":   result.primary_reason,
-                "threats":  result.threats,
-                "trace_id": result.trace_id,
-            },
+            content     = _error(
+                code     = "input_blocked",
+                message  = "Your request was blocked by security policy.",
+                trace_id = result.trace_id,
+                wrapsec_meta = {
+                    "reason":  result.primary_reason,
+                    "threats": result.threats,
+                },
+            ),
         )
 
-    # SANITIZE — PII detected and redacted, use sanitized input for LLM call
+    # SANITIZE
     if result.decision == "SANITIZE":
         logger.info(
-            f"Input sanitized | trace={result.trace_id} "
-            f"reason={result.primary_reason} "
-            f"user={body.user_id}"
+            f"Input sanitized | trace_id={result.trace_id} "
+            f"reason={result.primary_reason} user={body.user_id}"
         )
         message_to_use = result.sanitized_input or body.message
         sanitized      = True
     else:
-        # ALLOW — use original message
+        # ALLOW
         message_to_use = body.message
         sanitized      = False
 
-    # Simulate LLM call
     _simulate_llm_call(message_to_use)
 
     logger.info(
-        f"Request allowed | trace={result.trace_id} "
-        f"confidence={result.confidence} "
-        f"band={result.confidence_band} "
-        f"user={body.user_id}"
+        f"Request processed | trace_id={result.trace_id} decision={result.decision} "
+        f"confidence={result.confidence} band={result.confidence_band} user={body.user_id}"
     )
 
     return ScanDetail(
@@ -326,7 +340,7 @@ async def chat_explicit_pattern(body: ChatRequest):
     )
 
 
-# ── Health check ──────────────────────────────────────────────────────────────
+# ── Health ────────────────────────────────────────────────────────────────────
 
 @app.get("/health")
 async def health():
@@ -341,8 +355,5 @@ async def health():
 # ── Simulate LLM call ─────────────────────────────────────────────────────────
 
 def _simulate_llm_call(message: str) -> str:
-    """
-    Placeholder for a real LLM call.
-    In production replace this with your actual LLM integration.
-    """
+    """Placeholder — replace with your actual LLM integration."""
     return f"[LLM response to: {message[:50]}{'...' if len(message) > 50 else ''}]"
