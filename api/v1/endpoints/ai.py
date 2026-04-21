@@ -264,9 +264,10 @@ async def get_request(
 
     # Build base response
     response = {
-        "trace_id":  record.trace_id,
-        "timestamp": record.created_at.isoformat(),
-        "is_proxy":  record.execution_mode == "proxy",
+        "trace_id":       record.trace_id,
+        "timestamp":      record.created_at.isoformat(),
+        "execution_mode": record.execution_mode,
+        "is_proxy":       record.execution_mode == "proxy",
         "attribution": {
             "tenant_id":            record.tenant_id,
             "dept_id":              record.dept_id,
@@ -292,6 +293,8 @@ async def get_request(
         "guardrail_scores":  record.guardrail_scores or {},
         "processing": {
             "latency_ms":     record.latency_ms,
+            # For scan_only: detection pipeline time only
+            # For proxy:     total end-to-end time (detection + provider + overhead)
             "llm_invoked":    record.llm_invoked,
             "detection_mode": record.detection_mode,
             "execution_mode": record.execution_mode,
@@ -314,20 +317,20 @@ async def get_request(
                     "provider":              pi.provider,
                     "model":                 pi.model,
                     "provider_latency_ms":   pi.provider_latency_ms,
+                    "total_latency_ms":      pi.total_latency_ms,
                     "execution_status":      pi.execution_status,
-                    "input_raw":             pi.input_raw,
-                    "input_sanitized":       pi.input_sanitized,
-                    "input_decision":        pi.input_decision,
                     "input_primary_reason":  pi.input_primary_reason,
                     "input_confidence":      pi.input_confidence,
                     "input_threats":         pi.input_threats or [],
                     "input_attack_type":     pi.input_attack_type,
-                    "output_raw":            pi.output_raw,
-                    "output_sanitized":      pi.output_sanitized,
+                    "input_raw":             pi.input_raw,
+                    "input_sanitized":       pi.input_sanitized,
                     "output_decision":       pi.output_decision,
                     "output_primary_reason": pi.output_primary_reason,
                     "output_confidence":     pi.output_confidence,
                     "output_threats":        pi.output_threats or [],
+                    "output_raw":            pi.output_raw,
+                    "output_sanitized":      pi.output_sanitized,
                     "behavior_flag":         pi.behavior_flag,
                     "output_flags":          pi.output_flags,
                 }

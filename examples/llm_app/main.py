@@ -20,6 +20,9 @@ Setup:
   export WRAPSEC_API_KEY=wsk_live_...
   export WRAPSEC_BASE_URL=http://localhost:8000
 
+  # Detection mode (default: fast, use full for sensitive endpoints)
+  export WRAPSEC_DETECTION_MODE=fast
+
   # LLM provider — choose one:
 
   # Option A: Ollama (default)
@@ -61,7 +64,6 @@ from wrapsec.exceptions import (
     WrapSecError,
     WrapSecAuthError,
     WrapSecRateLimitError,
-    WrapSecSystemError,
 )
 
 # ── Logging ───────────────────────────────────────────────────────────────────
@@ -74,17 +76,26 @@ logger = logging.getLogger("wrapsec.llm_app")
 
 # ── Configuration ─────────────────────────────────────────────────────────────
 
-LLM_PROVIDER    = os.environ.get("LLM_PROVIDER", "ollama").lower()
+LLM_PROVIDER = os.environ.get("LLM_PROVIDER", "ollama").lower()
 
-# Fix 4 — validate LLM_PROVIDER at startup, not at first request
+# Validate LLM_PROVIDER at startup — fail fast before accepting any requests
 if LLM_PROVIDER not in ("ollama", "openai"):
     raise RuntimeError(
         f"Invalid LLM_PROVIDER={LLM_PROVIDER!r}. "
         f"Allowed values: ollama, openai"
     )
 
-# Fix 1 — configurable LLM timeout
-LLM_TIMEOUT     = int(os.environ.get("LLM_TIMEOUT", "60"))
+# Detection mode — fast (rule+ML) or full (rule+ML+LLM semantic)
+# Use full for high-sensitivity endpoints. Adds ~100-500ms latency.
+WRAPSEC_DETECTION_MODE = os.environ.get("WRAPSEC_DETECTION_MODE", "fast")
+if WRAPSEC_DETECTION_MODE not in ("fast", "full"):
+    raise RuntimeError(
+        f"Invalid WRAPSEC_DETECTION_MODE={WRAPSEC_DETECTION_MODE!r}. "
+        f"Allowed values: fast, full"
+    )
+
+# LLM timeout — increase for larger/slower models
+LLM_TIMEOUT = int(os.environ.get("LLM_TIMEOUT", "60"))
 
 # Ollama config
 OLLAMA_BASE_URL = os.environ.get("OLLAMA_BASE_URL", "http://localhost:11434")
@@ -110,9 +121,9 @@ app = FastAPI(
 
 class ChatRequest(BaseModel):
     message:    str
-    user_id:    str  = "anonymous"
-    system:     str  = "You are a helpful assistant."
-    max_tokens: int  = 500
+    user_id:    str = "anonymous"
+    system:     str = "You are a helpful assistant."
+    max_tokens: int = 500
 
 class ChatResponse(BaseModel):
     reply:          str
@@ -123,33 +134,33 @@ class ChatResponse(BaseModel):
     llm_provider:   str
     llm_model:      str
 
-class BlockedResponse(BaseModel):
-    error:          str
-    code:           str
-    trace_id:       str
-    reason:         str
-    threats:        list[str]
+class BatchRequest(BaseModel):
+    messages: list[str]
+    user_id:  str = "anonymous"
+    system:   str = "You are a helpful assistant."
+
 
 # ── Main chat endpoint ────────────────────────────────────────────────────────
 
-@app.post("/chat")
+@app.post("/chat", response_model=ChatResponse)
 async def chat(body: ChatRequest):
     """
     End-to-end secured LLM chat endpoint.
 
     Flow:
       1. Scan user input with WrapSec
-      2. BLOCK  → reject with 400, LLM never called
-      3. SANITIZE → call LLM with sanitized input, log the event
-      4. ALLOW  → call LLM with original input
-      5. Return LLM response with scan metadata
+      2. BLOCK        → reject with 400, LLM never called
+      3. SYSTEM_ERROR → reject with 503, LLM never called (fail closed)
+      4. SANITIZE     → call LLM with sanitized input, log the event
+      5. ALLOW        → call LLM with original input
+      6. Return LLM response with scan metadata
     """
 
     # ── Step 1: Scan with WrapSec ─────────────────────────────────────────────
     try:
         scan_result = wrapsec_client.scan(
             body.message,
-            mode = "fast",
+            mode = WRAPSEC_DETECTION_MODE,
             user = body.user_id,
         )
     except WrapSecAuthError:
@@ -164,22 +175,30 @@ async def chat(body: ChatRequest):
             status_code = 429,
             detail      = "Too many requests. Please try again later.",
         )
-    except WrapSecSystemError as e:
-        # Scanner infrastructure failure — fail closed
-        # Never send unscanned input to LLM
-        logger.error(f"WrapSec system error: {e} — failing closed")
+    except WrapSecError as e:
+        # Infrastructure failure — network error, unexpected server error
+        # Fail closed: never send unscanned input to LLM
+        logger.error(f"WrapSec error: {e} — failing closed")
         raise HTTPException(
             status_code = 503,
             detail      = "Security scanning temporarily unavailable. Please retry.",
         )
-    except WrapSecError as e:
-        logger.error(f"WrapSec unexpected error: {e}")
+
+    # ── Step 2: Handle SYSTEM_ERROR ───────────────────────────────────────────
+    # SYSTEM_ERROR is a valid scan result (not an exception) returned when
+    # all detectors failed internally. confidence = 0.0, band = LOW.
+    # The result is unreliable — fail closed, never send to LLM.
+    if scan_result.primary_reason == "SYSTEM_ERROR":
+        logger.error(
+            f"WrapSec SYSTEM_ERROR | trace={scan_result.trace_id} "
+            f"decision={scan_result.decision} — failing closed"
+        )
         raise HTTPException(
             status_code = 503,
-            detail      = "Security scanning error. Please retry.",
+            detail      = "Security scanning temporarily unavailable. Please retry.",
         )
 
-    # ── Step 2: Handle BLOCK ──────────────────────────────────────────────────
+    # ── Step 3: Handle BLOCK ──────────────────────────────────────────────────
     if scan_result.decision == "BLOCK":
         logger.warning(
             f"Input BLOCKED | "
@@ -199,7 +218,7 @@ async def chat(body: ChatRequest):
             },
         )
 
-    # ── Step 3: Handle SANITIZE ───────────────────────────────────────────────
+    # ── Step 4: Handle SANITIZE ───────────────────────────────────────────────
     if scan_result.decision == "SANITIZE":
         message_to_send = scan_result.sanitized_input or body.message
         sanitized       = True
@@ -217,10 +236,11 @@ async def chat(body: ChatRequest):
             f"Input ALLOWED | "
             f"trace={scan_result.trace_id} "
             f"confidence={scan_result.confidence} "
+            f"band={scan_result.confidence_band} "
             f"user={body.user_id}"
         )
 
-    # ── Step 4: Call LLM ──────────────────────────────────────────────────────
+    # ── Step 5: Call LLM ──────────────────────────────────────────────────────
     try:
         if LLM_PROVIDER == "openai":
             reply, model_used = await _call_openai(
@@ -229,10 +249,9 @@ async def chat(body: ChatRequest):
                 max_tokens = body.max_tokens,
             )
         else:
-            # Default: Ollama
             reply, model_used = await _call_ollama(
-                message    = message_to_send,
-                system     = body.system,
+                message = message_to_send,
+                system  = body.system,
             )
     except Exception as e:
         logger.error(f"LLM call failed | trace={scan_result.trace_id} error={e}")
@@ -241,7 +260,7 @@ async def chat(body: ChatRequest):
             detail      = f"LLM provider error: {str(e)}",
         )
 
-    # ── Step 5: Return response ───────────────────────────────────────────────
+    # ── Step 6: Return response ───────────────────────────────────────────────
     return ChatResponse(
         reply          = reply,
         trace_id       = scan_result.trace_id,
@@ -255,30 +274,44 @@ async def chat(body: ChatRequest):
 
 # ── Batch endpoint ────────────────────────────────────────────────────────────
 
-class BatchRequest(BaseModel):
-    messages: list[str]
-    user_id:  str = "anonymous"
-    system:   str = "You are a helpful assistant."
-
 @app.post("/chat/batch")
 async def chat_batch(body: BatchRequest):
     """
     Scan and process multiple messages.
     Each message is scanned independently.
-    Blocked messages are skipped — others are sent to LLM.
+    Blocked and SYSTEM_ERROR messages are skipped — others are sent to LLM.
     Returns per-message results.
     """
     results = []
 
     for i, message in enumerate(body.messages):
         try:
-            scan_result = wrapsec_client.scan(message, user=body.user_id)
+            scan_result = wrapsec_client.scan(
+                message,
+                mode = WRAPSEC_DETECTION_MODE,
+                user = body.user_id,
+            )
         except WrapSecError as e:
             results.append({
                 "index":          i,
                 "message_length": len(message),
                 "decision":       "ERROR",
                 "error":          str(e),
+            })
+            continue
+
+        # SYSTEM_ERROR — skip, do not forward to LLM
+        if scan_result.primary_reason == "SYSTEM_ERROR":
+            logger.error(
+                f"WrapSec SYSTEM_ERROR in batch | "
+                f"index={i} trace={scan_result.trace_id}"
+            )
+            results.append({
+                "index":          i,
+                "message_length": len(message),
+                "decision":       "ERROR",
+                "error":          "SYSTEM_ERROR — scanner result unreliable",
+                "trace_id":       scan_result.trace_id,
             })
             continue
 
@@ -336,18 +369,19 @@ async def health():
     wrapsec_ok = wrapsec_client.health_live()
     llm_ok     = await _check_llm_health()
     return {
-        "status":       "ok" if (wrapsec_ok and llm_ok) else "degraded",
-        "wrapsec":      "reachable" if wrapsec_ok else "unreachable",
-        "llm_provider": LLM_PROVIDER,
-        "llm":          "reachable" if llm_ok else "unreachable",
+        "status":           "ok" if (wrapsec_ok and llm_ok) else "degraded",
+        "wrapsec":          "reachable" if wrapsec_ok else "unreachable",
+        "llm_provider":     LLM_PROVIDER,
+        "llm":              "reachable" if llm_ok else "unreachable",
+        "detection_mode":   WRAPSEC_DETECTION_MODE,
     }
 
 
 # ── LLM provider implementations ─────────────────────────────────────────────
 
 async def _call_ollama(
-    message:    str,
-    system:     str = "You are a helpful assistant.",
+    message: str,
+    system:  str = "You are a helpful assistant.",
 ) -> tuple[str, str]:
     """
     Call Ollama API (local).
@@ -360,8 +394,8 @@ async def _call_ollama(
                 "model":  OLLAMA_MODEL,
                 "stream": False,
                 "messages": [
-                    {"role": "system",  "content": system},
-                    {"role": "user",    "content": message},
+                    {"role": "system", "content": system},
+                    {"role": "user",   "content": message},
                 ],
             },
         )

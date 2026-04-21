@@ -299,7 +299,7 @@ export function RequestDetailModal({ traceId, onClose }: RequestDetailModalProps
 
                     {/* Decisions and status -- clear separation */}
                     <div className="grid grid-cols-3 gap-3 mb-4">
-                      <DecisionChip label="Input decision"  decision={detail.proxy.input_decision} />
+                      <DecisionChip label="Input decision"  decision={detail.decision} />
                       <DecisionChip label="Output decision" decision={detail.proxy.output_decision} />
                       <div className="flex flex-col gap-1">
                         <p className="text-xs text-slate-400">Execution status</p>

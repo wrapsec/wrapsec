@@ -1,6 +1,6 @@
 # WrapSec — Architecture Specification
 
-Version: 1.0 — Final  
+Version: 1.1 — Proxy Mode  
 Status: Implemented  
 Last updated: April 2026
 
@@ -9,6 +9,11 @@ Last updated: April 2026
 ## Overview
 
 WrapSec is a production-grade AI security gateway. It operates as a security layer between calling applications and any LLM provider, scanning every prompt through a four-layer detection pipeline before it reaches the model.
+
+WrapSec supports two execution modes:
+
+- **Scan-only** — inspect and decide. The calling application forwards the prompt to the LLM itself.
+- **Proxy** — inspect, decide, and forward. WrapSec forwards the prompt to the LLM provider on the application's behalf, enforcing security on both input and output.
 
 ---
 
@@ -36,7 +41,7 @@ Detection failure, guardrail failure, and gateway exceptions all produce `confid
 
 **Conservative input limits**
 
-8,000 characters + heuristic token limit `ceil(len/2) > 4000` → 422. Safe for English and CJK. Full tiktoken in V1.1.
+8,000 characters + heuristic token limit `ceil(len/2) > 4000` → 422. Safe for English and CJK. Full tiktoken in V1.2.
 
 **Idempotency with conflict detection**
 
@@ -46,49 +51,142 @@ Same key + same body → cached response. Same key + different body → 409 CONF
 
 Each phase is additive. Existing integrations work without modification.
 
+**Configurable data storage**
+
+Proxy interaction text is stored according to `DATA_STORAGE_MODE`: `full` (store as-is), `masked` (PII redacted before storing), or `none` (text never persisted). Metadata is always retained regardless of mode.
+
 ---
 
 ## System Architecture
 
+### Scan-Only Mode
+
 ```
-Calling Applications
-              │  x-api-key: wsk_live_...
-              │  Idempotency-Key: <uuid> (optional)
-              ▼
-    Nginx (port 80) — 64KB payload limit
-              ▼
-    WrapSec API (FastAPI, port 8000)
-    ┌──────────────────────────────────────────────────┐
-    │  Trace → RateLimit(per-key) → Auth →             │
-    │  Idempotency(Redis,60s,409 conflict) → Logging   │
-    │                                                  │
-    │  Policy resolver                                 │
-    │  system → tenant → department (→ app V1.1)      │
-    │  → detection thresholds  (thresholds.*)          │
-    │  → PII thresholds        (guardrails.pii.*)      │
-    │    (resolved independently, passed separately)   │
-    │                                                  │
-    │  Gateway Service                                 │
-    │  ├── InputGuard    PII detection + redaction     │
-    │  ├── RuleDetector  try/catch → detection_failed  │
-    │  ├── MLDetector    try/catch → detection_failed  │
-    │  ├── LLMDetector   try/catch → detection_failed  │
-    │  ├── RiskScorer    rule+ml+llm (PII excluded)    │
-    │  ├── PolicyEngine                                │
-    │  │     ├── PII:   guardrails.pii.* thresholds   │
-    │  │     └── Det:   thresholds.* thresholds        │
-    │  ├── Primary reason (detection_failed → SYSTEM_ERROR first)
-    │  ├── LLM Client    proxy mode only               │
-    │  └── OutputGuard   PII on LLM output             │
-    └──────────────────────────────────────────────────┘
-              │
-    ┌─────────┴──────────────────┐
-    │                            │
-PostgreSQL                   Redis
-(audit, settings,            idempotency (60s TTL)
- keys, entities,             rate limiting (per key)
- retention policy)           semantic cache
+Calling Application
+        │  x-api-key: wsk_live_...
+        │  POST /v1/ai/request
+        ▼
+WrapSec API (FastAPI, port 8000)
+┌──────────────────────────────────────────────────┐
+│  Trace → RateLimit → Auth → Idempotency → Log   │
+│                                                  │
+│  Policy resolver                                 │
+│  system → tenant → department → application      │
+│                                                  │
+│  Gateway Service                                 │
+│  ├── InputGuard    PII detection + redaction     │
+│  ├── RuleDetector  try/catch → detection_failed  │
+│  ├── MLDetector    try/catch → detection_failed  │
+│  ├── LLMDetector   try/catch → detection_failed  │
+│  ├── RiskScorer    rule+ml+llm (PII excluded)    │
+│  └── PolicyEngine  BLOCK / SANITIZE / ALLOW      │
+└──────────────────────────────────────────────────┘
+        │
+        ├── audit_logs (decision, scores, threats)
+        │
+        └── Response → Calling Application
+               (application forwards to LLM itself)
 ```
+
+### Proxy Mode — AI Interaction Firewall
+
+```
+Calling Application
+        │  x-api-key: wsk_live_...
+        │  POST /v1/chat/completions
+        │  model: "openai/gpt-4o" | "ollama/gemma3:4b"
+        ▼
+WrapSec API (FastAPI, port 8000)
+┌──────────────────────────────────────────────────┐
+│  Trace → RateLimit → Auth → Log                  │
+│                                                  │
+│  Input Guard                                     │
+│  ├── Detection pipeline (same as scan-only)      │
+│  ├── BLOCK  → return 400, provider never called  │
+│  └── SANITIZE → redact PII before forwarding     │
+│                                                  │
+│  Provider Layer                                  │
+│  ├── OpenAI / OpenAI-compatible (Groq, Azure)    │
+│  ├── Ollama (local)                              │
+│  └── Custom (any OpenAI-compatible endpoint)     │
+│                                                  │
+│  Output Guard                                    │
+│  ├── PII scan on provider response               │
+│  ├── BLOCK  → return 400, response suppressed    │
+│  └── SANITIZE → redact PII before returning      │
+└──────────────────────────────────────────────────┘
+        │
+        ├── proxy_interactions (full lifecycle)
+        │     input_raw*, output_raw*, decisions,
+        │     threats, provider, model, latency
+        │     (* subject to DATA_STORAGE_MODE)
+        │
+        ├── audit_logs (FK → proxy_interactions.id)
+        │     execution_mode=proxy, unified view
+        │
+        └── OpenAI-compatible response → Application
+               + X-WrapSec-* headers on every response
+```
+
+### Dual-Write Pattern
+
+Every proxy request writes to two tables atomically:
+
+```
+proxy_interactions → id (UUID, primary key)
+audit_logs         → proxy_interaction_id = proxy_interactions.id (FK)
+
+GET /v1/ai/requests/:trace_id
+  → reads audit_logs
+  → LEFT JOIN proxy_interactions ON proxy_interaction_id
+  → returns unified response with "proxy" key
+```
+
+---
+
+## Proxy Request Lifecycle
+
+```
+1. Parse model string:  "openai/gpt-4o" → provider=openai, model=gpt-4o
+2. Load provider config from DB (provider_api_key is AES-256-GCM encrypted)
+3. Extract scan target: last user message (default) or all user messages
+4. Run detection pipeline (same as scan_only mode)
+5. Input decision:
+   BLOCK    → log, return 400, provider never called
+   SANITIZE → redact PII in messages, forward sanitized text
+   ALLOW    → forward messages unchanged
+6. Provider call (OpenAI / Ollama / custom endpoint)
+7. Output guard: scan provider response for PII
+   BLOCK    → log, return 400, response suppressed
+   SANITIZE → redact PII, return sanitized response
+   ALLOW    → return response unchanged
+8. Log to proxy_interactions + audit_logs (dual write, atomic)
+9. Return OpenAI-compatible response + X-WrapSec-* headers
+```
+
+---
+
+## Execution Status Values
+
+| Status | Meaning |
+|---|---|
+| `SUCCESS` | Input ALLOW/SANITIZE, provider responded, output ALLOW/SANITIZE |
+| `BLOCKED` | Input decision was BLOCK, provider never called |
+| `OUTPUT_BLOCKED` | Input clean, provider responded, output was BLOCK |
+| `FAILED` | Provider call failed (network error, auth error) |
+| `TIMEOUT` | Provider call timed out |
+
+---
+
+## Data Storage Modes
+
+| Mode | input_raw / output_raw | Use case |
+|---|---|---|
+| `full` | Stored as-is | Development, debugging |
+| `masked` | PII redacted before storing (default) | Production |
+| `none` | NULL — text never persisted | Strict compliance |
+
+Metadata (decisions, threats, scores, latency, execution_status) is **always retained** regardless of mode. Text is purged via the retention worker after `DATA_RETENTION_DAYS_PROXY` days (default: 7).
 
 ---
 
@@ -139,7 +237,7 @@ tenant (root)
 ### Threshold Decoupling in Code
 
 ```python
-# In ai.py — after policy resolution
+# In ai.py and proxy.py — after policy resolution
 block_threshold    = policy["thresholds"]["block"]
 sanitize_threshold = policy["thresholds"]["sanitize"]
 
@@ -172,18 +270,6 @@ application policy_override (null in V1, active V1.1)
 resolved_policy → split:
   detection thresholds → thresholds.block / thresholds.sanitize
   PII thresholds       → guardrails.pii.block_threshold / sanitize_threshold
-```
-
-### Deep Merge Semantics
-
-Recursive merge. Only non-null explicitly provided fields override parent.
-
-```
-Finance dept sets: thresholds.block = 0.5
-Result:
-  thresholds.block                = 0.5  ← overridden
-  thresholds.sanitize             = 0.4  ← inherited
-  guardrails.pii.block_threshold  = 0.7  ← unchanged (independent path)
 ```
 
 ---
@@ -223,21 +309,16 @@ CREATE TABLE departments (
 ### applications
 ```sql
 CREATE TABLE applications (
-    id                   UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
-    tenant_id            UUID NOT NULL REFERENCES tenants(id),
-    dept_id              UUID NOT NULL REFERENCES departments(id),
-    slug                 VARCHAR(50)  NOT NULL,
-    name                 VARCHAR(100) NOT NULL,
-    description          TEXT,
-    owner_name           VARCHAR(100),
-    owner_email          VARCHAR(100),
-    environment          VARCHAR(20)  DEFAULT 'production',
-    metadata             JSONB DEFAULT NULL,
-    policy_override      JSONB DEFAULT NULL,   -- V1: null, active V1.1
-    rate_limit_override  JSONB DEFAULT NULL,   -- {"per_minute": 120}
-    is_active            BOOLEAN DEFAULT true,
-    created_at           TIMESTAMP DEFAULT NOW(),
-    UNIQUE (dept_id, slug)
+    id                  UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+    tenant_id           UUID NOT NULL REFERENCES tenants(id),
+    dept_id             UUID NOT NULL REFERENCES departments(id),
+    slug                VARCHAR(50)  NOT NULL,
+    name                VARCHAR(100) NOT NULL,
+    environment         VARCHAR(20)  DEFAULT 'production',
+    policy_override     JSONB DEFAULT NULL,
+    rate_limit_override INTEGER DEFAULT NULL,
+    is_active           BOOLEAN DEFAULT true,
+    created_at          TIMESTAMP DEFAULT NOW()
 );
 ```
 
@@ -250,11 +331,11 @@ CREATE TABLE api_keys (
     dept_id      UUID REFERENCES departments(id),
     app_id       UUID REFERENCES applications(id),
     name         VARCHAR(100) NOT NULL,
-    key_hash     VARCHAR(100) NOT NULL UNIQUE,  -- SHA-256
+    key_hash     VARCHAR(100) UNIQUE NOT NULL,
     is_admin     BOOLEAN DEFAULT false,
     revoked      BOOLEAN DEFAULT false,
-    expires_at   TIMESTAMP DEFAULT NULL,
-    last_used_at TIMESTAMP DEFAULT NULL,
+    expires_at   TIMESTAMP,
+    last_used_at TIMESTAMP,
     created_at   TIMESTAMP DEFAULT NOW()
 );
 ```
@@ -262,28 +343,21 @@ CREATE TABLE api_keys (
 ### audit_logs
 ```sql
 CREATE TABLE audit_logs (
-    id             UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
-    trace_id       VARCHAR(100) UNIQUE NOT NULL,  -- "req_" + ULID
-    decision       VARCHAR(20)  NOT NULL,
-    risk_score     FLOAT        NOT NULL,
-    threats        JSON         NOT NULL,
-    input_hash     VARCHAR(100) NOT NULL,           -- SHA-256, raw input never stored
-    detection_mode VARCHAR(20)  NOT NULL,
-    execution_mode VARCHAR(20)  NOT NULL,
-    llm_invoked    BOOLEAN      NOT NULL DEFAULT false,
-    latency_ms     FLOAT        NOT NULL,
-    created_at     TIMESTAMP    DEFAULT NOW(),
-
-    -- Stored separately — architectural separation preserved in DB
-    detection_scores JSONB,     -- {"rule": 0.85, "ml": 0.30, "llm": 0.00}
-    guardrail_scores JSONB,     -- {"pii": 0.73}
-
-    -- Decision metadata
-    confidence       FLOAT,
-    confidence_band  VARCHAR(10),
-    primary_reason   VARCHAR(50),  -- 7 values including SYSTEM_ERROR
-    policy_source    VARCHAR(50),
-
+    id                   UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+    trace_id             VARCHAR(50)  UNIQUE NOT NULL,
+    decision             VARCHAR(20)  NOT NULL,
+    risk_score           FLOAT        NOT NULL,
+    threats              JSONB        DEFAULT '[]',
+    input_hash           VARCHAR(100) NOT NULL,
+    detection_mode       VARCHAR(20)  NOT NULL,
+    execution_mode       VARCHAR(20)  NOT NULL,  -- scan_only | proxy
+    llm_invoked          BOOLEAN      DEFAULT false,
+    latency_ms           FLOAT        NOT NULL,
+    detection_scores     JSONB,
+    guardrail_scores     JSONB,
+    primary_reason       VARCHAR(50),
+    confidence           FLOAT,
+    confidence_band      VARCHAR(10),
     -- Attribution
     tenant_id            VARCHAR(50),
     dept_id              VARCHAR(50),
@@ -293,7 +367,63 @@ CREATE TABLE audit_logs (
     user_id              VARCHAR(100),
     ip_address           VARCHAR(50),
     user_agent           VARCHAR(255),
-    attribution_verified BOOLEAN DEFAULT false
+    attribution_verified BOOLEAN DEFAULT false,
+    policy_source        VARCHAR(50),
+    input_length         INTEGER DEFAULT 0,
+    -- Proxy link
+    proxy_interaction_id UUID REFERENCES proxy_interactions(id),  -- NULL for scan_only
+    created_at           TIMESTAMP DEFAULT NOW()
+);
+```
+
+### proxy_provider_configs
+```sql
+CREATE TABLE proxy_provider_configs (
+    id                    UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+    key_id                VARCHAR(50) UNIQUE NOT NULL,
+    provider              VARCHAR(32) NOT NULL,  -- openai | ollama | custom
+    base_url              TEXT        NOT NULL,
+    provider_api_key_enc  TEXT,        -- AES-256-GCM encrypted, NULL for Ollama
+    default_model         VARCHAR(128) NOT NULL,
+    timeout_seconds       INTEGER     DEFAULT 60,
+    created_at            TIMESTAMP   DEFAULT NOW(),
+    updated_at            TIMESTAMP   DEFAULT NOW()
+);
+```
+
+### proxy_interactions
+```sql
+CREATE TABLE proxy_interactions (
+    id                    UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+    trace_id              VARCHAR(64)  UNIQUE NOT NULL,
+    key_id                VARCHAR(50),
+    user_id               VARCHAR(256),
+    -- Input (subject to DATA_STORAGE_MODE)
+    input_raw             TEXT,        -- NULL after retention period or mode=none
+    input_sanitized       TEXT,        -- PII-redacted version if SANITIZE applied
+    input_decision        VARCHAR(16)  NOT NULL,  -- ALLOW | BLOCK | SANITIZE
+    input_primary_reason  VARCHAR(64)  NOT NULL,
+    input_confidence      FLOAT        NOT NULL,
+    input_threats         JSONB,
+    input_attack_type     VARCHAR(64),
+    -- Provider
+    provider              VARCHAR(32),  -- NULL when BLOCKED
+    model                 VARCHAR(128),
+    provider_latency_ms   INTEGER,
+    execution_status      VARCHAR(32)  NOT NULL,
+    -- Output (subject to DATA_STORAGE_MODE)
+    output_raw            TEXT,        -- NULL after retention period or mode=none
+    output_sanitized      TEXT,        -- PII-redacted version if output SANITIZE
+    output_decision       VARCHAR(16),
+    output_primary_reason VARCHAR(64),
+    output_confidence     FLOAT,
+    output_threats        JSONB,
+    -- V2 evaluation hooks
+    behavior_flag         VARCHAR(32),  -- NORMAL | OVER_REFUSAL | UNDER_REFUSAL
+    output_flags          JSONB,        -- ["LOW_CONFIDENCE", "SUSPICIOUS_OUTPUT"]
+    -- Timing
+    total_latency_ms      INTEGER      NOT NULL,
+    created_at            TIMESTAMP    DEFAULT NOW()
 );
 ```
 
@@ -371,6 +501,7 @@ CREATE TABLE settings (
 | Max audit export rows | 10,000 | Param validation | |
 | Retention min | 7 days | Settings validation | |
 | Retention max | 3,650 days | Settings validation | 10 years |
+| Proxy text retention | 7 days | `DATA_RETENTION_DAYS_PROXY` | Configurable |
 
 ---
 
@@ -402,47 +533,33 @@ Only caches non-5xx responses
 | PII guardrail fails | BLOCK | LOW (0.0) | `SYSTEM_ERROR` | fail closed |
 | Gateway exception | BLOCK | LOW (0.0) | `SYSTEM_ERROR` | fail closed |
 | LLM timeout (detection) | continues | from rule+ML | RULE/ML | degraded |
-| LLM timeout (proxy) | per detection | per detection | per detection | "[LLM unavailable]" |
+| Provider timeout (proxy) | 504 | — | — | input decision preserved in headers |
+| Provider unreachable (proxy) | 502 | — | — | input decision preserved in headers |
 | Redis unavailable | allows | — | — | idempotency + rate limit disabled |
-
-**Consistency guarantee:** All failure scenarios produce `SYSTEM_ERROR`. `NO_THREAT_DETECTED` is only produced when detection succeeded and all scores were 0.0. These two values are produced by mutually exclusive code paths — they cannot be confused in audit records.
-
-**SYSTEM_ERROR monitoring:**
-
-`SYSTEM_ERROR` is an operational health signal, not a security event. It should be monitored separately from security decisions.
-
-| Signal | Threshold | Action |
-|---|---|---|
-| Single `SYSTEM_ERROR` | Any | Log and investigate |
-| Rate > 0.1% | Over 5 min | Page on-call |
-| Rate > 1% | Over 1 min | Immediate incident |
-
-Query via: `GET /v1/audit/logs?primary_reason=SYSTEM_ERROR`
-
-Alert via Prometheus: `/metrics` exposes request counters by decision and primary_reason.
-
-A low but non-zero rate (< 0.1%) is expected — transient LLM timeouts and occasional ML edge cases. A sustained or rising rate requires infrastructure investigation.
 
 ---
 
 ## API Endpoints
 
 ```
-Gateway (2):      POST /v1/ai/request · GET /v1/ai/requests/{trace_id}
-Audit (4):        GET  /v1/audit/logs · stats · attribution · export
-Settings (8):     GET/PUT /v1/settings/thresholds · layers · llm · retention
-API Keys (5):     POST/GET/PUT/DELETE /v1/keys · GET /v1/keys/{key_id}
-Tenant (2):       GET/PUT /v1/admin/tenant
-Departments (7):  CRUD + /policy + /stats
-Applications (6): CRUD + /policy
-Health (4):       GET /health · /health/ready · /health/live · /health/config
-Metrics (1):      GET /metrics
-Total: 39 endpoints
+Gateway (2):         POST /v1/ai/request · GET /v1/ai/requests/{trace_id}
+Proxy (1):           POST /v1/chat/completions
+Audit (4):           GET  /v1/audit/logs · stats · attribution · export
+Settings (9):        GET/PUT /v1/settings/thresholds · layers · llm · retention · storage
+                     GET/PUT/DELETE /v1/settings/proxy · GET /v1/settings/proxy/health
+API Keys (5):        POST/GET/PUT/DELETE /v1/keys · GET /v1/keys/{key_id}
+Tenant (2):          GET/PUT /v1/admin/tenant
+Departments (7):     CRUD + /policy + /stats
+Applications (6):    CRUD + /policy
+Health (4):          GET /health · /health/ready · /health/live · /health/config
+Metrics (1):         GET /metrics
+Proxy Internal (2):  GET /v1/proxy/interactions · /v1/proxy/interactions/{trace_id}
+Total: 43 endpoints
 ```
 
 ---
 
-## Implementation Status V1.0
+## Implementation Status V1.1
 
 ```
 ✅ Rule, ML, LLM detectors with per-detector try/catch
@@ -462,25 +579,37 @@ Total: 39 endpoints
 ✅ Rate limiting per API key, X-RateLimit-* headers
 ✅ Audit log retention configurable via Settings UI (DB)
 ✅ Policy resolution: system → tenant → department
-✅ 39 API endpoints
-✅ Next.js 14 dashboard (11 pages)
-✅ 85 unit + integration tests passing
+✅ Proxy mode — POST /v1/chat/completions (OpenAI-compatible)
+✅ Provider support — OpenAI, OpenAI-compatible, Ollama
+✅ Provider API keys encrypted AES-256-GCM at rest
+✅ Input + output PII enforcement in proxy mode
+✅ Dual write — proxy_interactions + audit_logs (FK linked)
+✅ Unified requests view — GET /v1/ai/requests/:trace_id joins both tables
+✅ Configurable storage modes — full | masked | none
+✅ Proxy text retention worker — scripts/cleanup_audit_logs.py
+✅ 43 API endpoints
+✅ Next.js 14 dashboard (12 pages)
+✅ 148 unit + integration tests passing
 ```
 
-### V1.1 — Planned
+### V1.2 — Planned
 
 ```
 → Per-model token counting with tiktoken (replaces heuristic)
 → Application-level policy overrides (placeholder active)
 → API key rotation with grace period
 → Toxicity guardrail (independent thresholds)
-→ ML model improvement (3000+ samples)
 → Cursor-based pagination
+→ Background retention worker (replaces manual script)
+→ Per-key storage mode override
 ```
 
 ### V2.0 — Future
 
 ```
+→ WildGuard over-refusal / under-refusal detection (behavior_flag)
+→ Output evaluation engine (output_flags)
+→ Security Events feed and alerting
 → JWT + SSO (attribution_verified=true)
 → Role-based policy overrides
 → Human review queue for LOW confidence
@@ -496,15 +625,17 @@ Total: 39 endpoints
 |---|---|---|
 | SYSTEM_ERROR vs NO_THREAT_DETECTED | Mutually exclusive code paths, strict priority | ✅ All paths correct |
 | Threshold coupling | Fully decoupled — separate policy paths + parameters | ✅ Implemented |
-| Token limit | Heuristic ceil(len/2) for V1, tiktoken in V1.1 | ✅ Implemented |
+| Token limit | Heuristic ceil(len/2) for V1.1, tiktoken in V1.2 | ✅ Implemented |
 | Idempotency conflict | 409 CONFLICT on same key + different body | ✅ Implemented |
 | Entity relationship validation | Assert key→app→dept→tenant | ✅ Auth middleware |
 | tenant_id in metadata | Removed — always from API key | ✅ Security fix |
-| rate_limit_override type | JSONB (was INTEGER) | ✅ Migrated |
 | Audit retention | DB-configurable, default 30 days | ✅ Implemented |
 | Guardrail failure | Fail closed (BLOCK + SYSTEM_ERROR) | ✅ Implemented |
 | LLM timeout | Graceful degradation per mode | ✅ Implemented |
+| Proxy text storage | Configurable mode (full/masked/none) + retention TTL | ✅ Implemented |
+| Provider API keys | AES-256-GCM encrypted at rest, never returned in API | ✅ Implemented |
+| audit_logs vs proxy_interactions | Separate tables, FK linked, unified via GET /v1/ai/requests | ✅ Implemented |
 
 ---
 
-*Version: 1.0 — Final · Review cycles: 7 · April 2026*
+*Version: 1.1 — Proxy Mode · Review cycles: 8 · April 2026*

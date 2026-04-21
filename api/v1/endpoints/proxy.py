@@ -208,6 +208,7 @@ def _error_response(
                 "message": message,
                 "type":    error_type,
                 "code":    error_code,
+                "trace_id": wrapsec_meta.get("trace_id"),
             },
             "wrapsec": wrapsec_meta,
         },

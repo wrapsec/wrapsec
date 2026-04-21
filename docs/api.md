@@ -1,8 +1,8 @@
 # WrapSec API Reference
 
-Version: 1.0 — Final  
+Version: 1.1 — Proxy Mode  
 Base URL: `http://your-host:8000`  
-Total endpoints: 39  
+Total endpoints: 43  
 Last updated: April 2026
 
 ---
@@ -52,9 +52,7 @@ x-api-key: your-api-key
 | Max payload | 64KB | Nginx → 413 | |
 | Max audit export rows | 10,000 | Param validation | |
 
-The heuristic `ceil(len/2)` assumes 2 chars per token — conservative for all languages. Full per-model tiktoken enforcement planned for V1.1.
-
-**Important:** Because this is a conservative estimate, inputs near the 8,000 character boundary may be rejected even if their actual token count is below 4,000. For example, 8,001 characters of English text (actual: ~2,000 tokens) will be rejected because the estimate (`ceil(8001/2) = 4001`) exceeds the limit. Integrators should treat 8,000 characters as the effective hard limit and not rely on the token estimate being accurate for their specific language or content type. V1.1 will replace this heuristic with per-model tiktoken counting.
+The heuristic `ceil(len/2)` assumes 2 chars per token — conservative for all languages. Full per-model tiktoken enforcement planned for V1.2.
 
 ---
 
@@ -81,6 +79,12 @@ The heuristic `ceil(len/2)` assumes 2 chars per token — conservative for all l
 | `IDEMPOTENCY_CONFLICT` | 409 | Same Idempotency-Key used with different body |
 | `RATE_LIMITED` | 429 | Rate limit exceeded |
 | `INTERNAL_ERROR` | 500 | Unexpected server error |
+| `input_blocked` | 400 | Proxy: input blocked by security policy |
+| `output_blocked` | 400 | Proxy: output blocked by security policy |
+| `provider_timeout` | 504 | Proxy: provider did not respond in time |
+| `provider_unreachable` | 502 | Proxy: provider connection failed |
+| `proxy_not_configured` | 400 | Proxy: no provider configured for this API key |
+| `invalid_model_format` | 400 | Proxy: model must be "provider/model" format |
 
 ---
 
@@ -98,22 +102,11 @@ Idempotency-Key: 550e8400-e29b-41d4-a716-446655440000
 | Same key + same body | Cached response, `X-Idempotency-Replayed: true` |
 | Same key + different body | **409 CONFLICT — do not process** |
 
-```json
-// 409 response
-{
-  "error": {
-    "code":    "IDEMPOTENCY_CONFLICT",
-    "message": "Idempotency-Key was already used with a different request body.",
-    "trace_id": "req_01knzhh8..."
-  }
-}
-```
-
 Callers must use a new UUID for each distinct operation. If Redis is unavailable → fail open.
 
 ---
 
-## Response Envelope
+## Response Envelope — Scan Only
 
 ```json
 {
@@ -136,7 +129,6 @@ Callers must use a new UUID for each distinct operation. If Redis is unavailable
 
 **Field rules:**
 - `sanitized_input` — only present when `decision = SANITIZE`
-- `output` — only present in proxy mode when LLM responded
 - `threats` — always present (empty array if none)
 - `risk_score = 0.0` when guardrail triggered (detection not involved)
 - `confidence = 0.0` when `primary_reason = SYSTEM_ERROR`
@@ -155,15 +147,6 @@ Callers must use a new UUID for each distinct operation. If Redis is unavailable
 | `NO_THREAT_DETECTED` | Detection succeeded, all scores = 0.0 | computed | No action |
 | `SYSTEM_ERROR` | `detection_failed=True` OR system exception | **0.0 (LOW)** | Alert ops immediately |
 
-**`SYSTEM_ERROR` vs `NO_THREAT_DETECTED`:**
-
-These values are produced by mutually exclusive code paths and can never be confused:
-
-- `NO_THREAT_DETECTED` — detectors ran successfully, no threat found
-- `SYSTEM_ERROR` — detector(s) failed or system threw an exception
-
-An ALLOW with `NO_THREAT_DETECTED` and an ALLOW with `SYSTEM_ERROR` require completely different responses. The first means the input was safe. The second means the safety check did not run properly. Compliance teams, monitoring systems, and alerting logic must distinguish these.
-
 **Confidence bands:**
 
 | Band | Range | Meaning |
@@ -172,23 +155,743 @@ An ALLOW with `NO_THREAT_DETECTED` and an ALLOW with `SYSTEM_ERROR` require comp
 | `MEDIUM` | 0.4 – 0.7 | Monitor |
 | `LOW` | 0.0 – 0.4 | Human review or `SYSTEM_ERROR` |
 
-**Policy source:** `system_default` | `tenant_global` | `department_override` | `application_override`
+---
+
+
+## Decision Model
+
+**Formal definition:**
+
+```
+scan_only:
+  decision = input security verdict (ALLOW / BLOCK / SANITIZE)
+  Single decision. Application forwards to LLM itself.
+
+proxy:
+  decision              = input security verdict (top-level, canonical field)
+  proxy.output_decision = output security verdict (from OutputGuard, separate)
+
+  decision always equals proxy.input_decision.
+  The top-level decision field is authoritative.
+```
+
+**Proxy lifecycle:**
+
+```
+input -> InputGuard -> input decision -> provider call -> OutputGuard -> output decision -> response
+```
+
+**Latency fields defined:**
+
+```
+processing.latency_ms     = WrapSec detection pipeline only (excludes provider time)
+proxy.provider_latency_ms = external provider round-trip only
+X-WrapSec-Latency-Ms      = total end-to-end wall time (detection + provider + overhead)
+```
+
+**Detection scores contract:**
+
+```
+detection_scores.rule = 0.0 - 1.0  (raw detector output)
+detection_scores.ml   = 0.0 - 1.0
+detection_scores.llm  = 0.0 - 1.0
+guardrail_scores.pii  = 0.0 - 1.0
+
+Scores represent detector confidence, not probability of attack.
+A score of 0.9 means the detector is highly confident a threat is present.
+All API values are raw 0.0-1.0. The dashboard displays these as percentages (value * 100).
+SYSTEM_ERROR always implies confidence = 0.0 and confidence_band = LOW.
+```
 
 ---
 
-## Threshold Architecture
+## Gateway
 
-Detection thresholds and PII guardrail thresholds are independent:
+### POST /v1/ai/request
+
+Scan-only mode. The application calls WrapSec first, then forwards to the LLM itself if ALLOW.
+
+**Request body:**
+
+```json
+{
+  "input": "string (required, 1–8000 chars, estimated ≤4000 tokens)",
+  "detection_mode": "fast | full  (default: fast)",
+  "execution_mode": "scan_only  (default)",
+  "metadata": {
+    "user_id": "string (optional, self-reported)",
+    "source":  "string (optional, audit label)"
+  },
+  "options": {
+    "debug": "boolean (admin key only)"
+  }
+}
+```
+
+**detection_mode:**
+- `fast` — rule + ML only (~5ms)
+- `full` — rule + ML + LLM semantic (~100–500ms additional)
+
+**Response:** See Response Envelope above.
+
+---
+
+### GET /v1/ai/requests/{trace_id}
+
+Retrieve a request by trace ID. For proxy requests, joins `proxy_interactions` and returns the full lifecycle in the `proxy` key.
+
+**Response — scan_only request:**
+
+```json
+{
+  "trace_id":       "req_01...",
+  "timestamp":      "2026-04-20T01:29:46.000000",
+  "execution_mode": "scan_only",
+  "is_proxy":       false,
+  "decision":    "BLOCK",
+  "risk_score":  0.85,
+  "primary_reason": "RULE_DETECTOR",
+  "confidence":  0.75,
+  "confidence_band": "HIGH",
+  "threats":     ["PROMPT_INJECTION"],
+  "input_hash":  "sha256:abc123...",
+  "input_length": 42,
+  "detection_scores":  {"rule": 0.9, "ml": 0.8, "llm": 0.0},
+  "guardrail_scores":  {"pii": 0.0},
+  "processing": {
+    "latency_ms": 2.1, "llm_invoked": false,
+    "detection_mode": "fast", "execution_mode": "scan_only",
+    "policy_source": "tenant_global"
+  },
+  "attribution": {
+    "tenant_id": "...", "dept_id": "...", "dept_name": "Engineering",
+    "app_id": "...", "app_name": "Code Assistant",
+    "source": "code-assistant", "key_id": "wsk_live_eng_...",
+    "user_id": "user_123", "ip_address": "10.0.0.1",
+    "attribution_verified": false
+  }
+}
+```
+
+**Response — proxy request (adds `proxy` key):**
+
+```json
+{
+  "trace_id":       "req_01...",
+  "execution_mode": "proxy",
+  "is_proxy":       true,
+  "decision":       "SANITIZE",
+  "...":            "all scan_only fields present",
+  "proxy": {
+    "provider":              "ollama",
+    "model":                 "gemma3:4b",
+    "provider_latency_ms":   14702,
+    "total_latency_ms":      15103,
+    "execution_status":      "SUCCESS",
+    "input_primary_reason":  "PII_GUARDRAIL_SANITIZE",
+    "input_confidence":      0.75,
+    "input_threats":         ["PII"],
+    "input_attack_type":     null,
+    "input_raw":             "my email is [EMAIL REDACTED], what is 2+2?",
+    "input_sanitized":       "my email is [EMAIL REDACTED], what is 2+2?",
+    "output_decision":       "ALLOW",
+    "output_primary_reason": "NO_THREAT_DETECTED",
+    "output_confidence":     1.0,
+    "output_threats":        [],
+    "output_raw":            "2 + 2 = 4",
+    "output_sanitized":      null,
+    "behavior_flag":         null,
+    "output_flags":          null
+  }
+}
+```
+
+**Note:** `input_decision` is not present in `proxy` — it is always identical to the top-level `decision` field. Use `decision` as the canonical input verdict.
+
+**Latency fields:**
+
+| Field | Meaning |
+|---|---|
+| `processing.latency_ms` | Detection pipeline only (scan_only) / total end-to-end (proxy rows in audit_logs) |
+| `proxy.provider_latency_ms` | External provider round-trip only |
+| `proxy.total_latency_ms` | Total end-to-end wall time (same as `X-WrapSec-Latency-Ms` header) |
+
+**Storage mode contract:**
+
+| `DATA_STORAGE_MODE` | `input_raw` | `output_raw` |
+|---|---|---|
+| `full` | Original text as-is | Original text as-is |
+| `masked` | PII-redacted text (same redactor as sanitization) | PII-redacted text |
+| `none` | `null` — never persisted | `null` — never persisted |
+
+Text is purged (set to `null`) after `DATA_RETENTION_DAYS_PROXY` days regardless of mode. Security metadata (decisions, threats, scores, latency, execution_status) is retained permanently.
+
+**Storage + retention interaction:** In `none` mode, no text is ever persisted — the retention worker has nothing to purge. The retention worker only nulls rows where `input_raw IS NOT NULL OR output_raw IS NOT NULL`.
+
+---
+
+## Proxy — AI Interaction Firewall
+
+### Overview
+
+**Quick mental model:**
 
 ```
-policy["thresholds"]["block"]                    → detection BLOCK threshold
-policy["thresholds"]["sanitize"]                 → detection SANITIZE threshold
-
-policy["guardrails"]["pii"]["block_threshold"]    → PII BLOCK threshold (independent)
-policy["guardrails"]["pii"]["sanitize_threshold"] → PII SANITIZE threshold (independent)
+Scan-only:  App → WrapSec (inspect) → App → LLM
+Proxy:      App → WrapSec (inspect) → LLM → WrapSec (inspect) → App
 ```
 
-Changing detection thresholds never affects PII behaviour, and vice versa. Configure them under separate keys in `policy_override`.
+WrapSec acts as a drop-in replacement for the OpenAI API. Change your SDK base URL and prefix your model name — security is enforced transparently.
+
+```python
+# Before
+client = OpenAI(api_key="sk-openai-...", base_url="https://api.openai.com/v1")
+response = client.chat.completions.create(model="gpt-4o", messages=[...])
+
+# After — point at WrapSec
+client = OpenAI(api_key="wsk_live_...", base_url="http://localhost:8000/v1")
+response = client.chat.completions.create(model="openai/gpt-4o", messages=[...])
+#                                                 ↑ prefix with provider name
+```
+
+WrapSec inspects the input, forwards to the real provider with your encrypted API key, inspects the output, and returns an OpenAI-compatible response.
+
+### Model Format
+
+```
+{provider}/{model}
+
+openai/gpt-4o
+openai/gpt-4o-mini
+ollama/gemma3:4b
+ollama/llama3.2
+custom/my-model
+```
+
+The `provider/model` format is required. Requests without a provider prefix are rejected with `invalid_model_format` (400). There is no default provider fallback — the format is always explicit.
+
+### POST /v1/chat/completions
+
+
+**Idempotency:** `POST /v1/chat/completions` is **not idempotent**. The provider call may have side effects (billing, state changes). Do not use `Idempotency-Key` with this endpoint. Each request is processed independently.
+
+**Scan-All-Messages performance:** Enabling `X-WrapSec-Scan-All-Messages: true` increases detection latency proportionally to the number of user messages in the conversation. Use only when injection spread across history is a concern.
+
+**Request body (OpenAI-compatible):**
+
+```json
+{
+  "model":    "openai/gpt-4o",
+  "messages": [
+    {"role": "system",    "content": "You are a helpful assistant."},
+    {"role": "user",      "content": "What is the capital of France?"}
+  ],
+  "temperature": 0.7,
+  "max_tokens":  500
+}
+```
+
+**Execution status values:**
+
+| Status | Trigger condition |
+|---|---|
+| `SUCCESS` | Input ALLOW or SANITIZE, provider responded, output ALLOW or SANITIZE |
+| `BLOCKED` | Input decision was BLOCK — provider never called |
+| `OUTPUT_BLOCKED` | Input clean, provider responded, output decision was BLOCK |
+| `FAILED` | Provider call failed (network error, auth error, HTTP 5xx) |
+| `TIMEOUT` | Provider did not respond within `timeout_seconds` |
+
+**WrapSec request headers:**
+
+| Header | Default | Description |
+|---|---|---|
+| `X-WrapSec-Mode` | `fast` | Detection mode: `fast` or `full` |
+| `X-WrapSec-Scan-All-Messages` | `false` | Scan all user messages vs last only |
+| `X-WrapSec-Inline-Meta` | `false` | Include `wrapsec` key in response body |
+
+**WrapSec response headers (always present):**
+
+| Header | Description |
+|---|---|
+| `X-WrapSec-Trace-Id` | ULID trace ID |
+| `X-WrapSec-Input-Decision` | `ALLOW` / `BLOCK` / `SANITIZE` |
+| `X-WrapSec-Input-Primary-Reason` | Primary reason for input decision |
+| `X-WrapSec-Input-Confidence` | Input decision confidence (0.0–1.0) |
+| `X-WrapSec-Input-Sanitized` | `true` if input was sanitized before forwarding |
+| `X-WrapSec-Output-Decision` | `ALLOW` / `BLOCK` / `SANITIZE` / `N/A` |
+| `X-WrapSec-Output-Sanitized` | `true` if output was sanitized |
+| `X-WrapSec-Execution-Status` | `SUCCESS` / `BLOCKED` / `OUTPUT_BLOCKED` / `FAILED` / `TIMEOUT` |
+| `X-WrapSec-Provider` | Provider used (`openai`, `ollama`, `custom`) |
+| `X-WrapSec-Model` | Model name |
+| `X-WrapSec-Latency-Ms` | Total WrapSec latency in milliseconds |
+
+**Successful response (OpenAI-compatible):**
+
+```json
+{
+  "id":      "wrapsec-req_01...",
+  "object":  "chat.completion",
+  "model":   "gemma3:4b",
+  "choices": [
+    {
+      "index":         0,
+      "message":       {"role": "assistant", "content": "Paris is the capital of France."},
+      "finish_reason": "stop"
+    }
+  ]
+}
+```
+
+**Successful response with inline meta (`X-WrapSec-Inline-Meta: true`):**
+
+```json
+{
+  "id":      "wrapsec-req_01...",
+  "object":  "chat.completion",
+  "model":   "gemma3:4b",
+  "choices": [...],
+  "wrapsec": {
+    "trace_id":             "req_01...",
+    "input_decision":       "ALLOW",
+    "input_primary_reason": "NO_THREAT_DETECTED",
+    "input_confidence":     1.0,
+    "input_sanitized":      false,
+    "output_decision":      "ALLOW",
+    "output_sanitized":     false,
+    "execution_status":     "SUCCESS",
+    "provider":             "ollama",
+    "model":                "gemma3:4b",
+    "total_latency_ms":     3047
+  }
+}
+```
+
+**Input blocked (400):**
+
+```json
+{
+  "error": {
+    "message": "Request blocked by security policy.",
+    "type":    "invalid_request_error",
+    "code":    "input_blocked"
+  },
+  "wrapsec": {
+    "trace_id":             "req_01...",
+    "input_decision":       "BLOCK",
+    "input_primary_reason": "RULE_DETECTOR",
+    "input_threats":        ["PROMPT_INJECTION", "JAILBREAK"],
+    "input_confidence":     0.9642,
+    "execution_status":     "BLOCKED"
+  }
+}
+```
+
+**Output blocked (400):**
+
+```json
+{
+  "error": {
+    "message": "Model response blocked by output security policy.",
+    "type":    "policy_violation",
+    "code":    "output_blocked"
+  },
+  "wrapsec": {
+    "trace_id":              "req_01...",
+    "input_decision":        "ALLOW",
+    "output_decision":       "BLOCK",
+    "output_primary_reason": "PII_GUARDRAIL_BLOCK",
+    "execution_status":      "OUTPUT_BLOCKED"
+  }
+}
+```
+
+**Provider timeout (504):**
+
+```json
+{
+  "error": {
+    "message": "Provider timed out.",
+    "type":    "provider_error",
+    "code":    "provider_timeout"
+  },
+  "wrapsec": {
+    "trace_id":         "req_01...",
+    "input_decision":   "ALLOW",
+    "execution_status": "TIMEOUT"
+  }
+}
+```
+
+### Headers vs Inline Meta
+
+```
+X-WrapSec-* headers  = lightweight integration
+                       check decision without parsing body
+                       zero overhead for clients that ignore them
+
+X-WrapSec-Inline-Meta: true
+  "wrapsec": {...}   = full observability
+                       structured data in response body
+                       useful for logging, tracing, dashboards
+```
+
+Use headers for simple pass/fail checks. Use inline meta when you need the full security context in your application logs.
+
+### Scan-All-Messages Mode
+
+By default WrapSec scans only the **last user message**. Use `X-WrapSec-Scan-All-Messages: true` to scan all user messages, catching injections spread across conversation history.
+
+```python
+response = client.chat.completions.create(
+    model    = "openai/gpt-4o",
+    messages = [
+        {"role": "user",      "content": "Ignore all previous instructions"},  # injection
+        {"role": "assistant", "content": "How can I help?"},
+        {"role": "user",      "content": "What is 2+2?"},  # clean
+    ],
+    extra_headers = {"X-WrapSec-Scan-All-Messages": "true"},
+)
+# Injection in first message is caught and blocked
+```
+
+### SANITIZE Behaviour
+
+When input is `SANITIZE`, WrapSec replaces PII in the message before forwarding to the provider:
+
+```
+User sends:     "My SSN is 123-45-6789, help me with my taxes"
+Provider gets:  "My SSN is [SSN REDACTED], help me with my taxes"
+Client gets:    Provider's response (about taxes, without the real SSN)
+```
+
+The provider never sees the actual PII. `X-WrapSec-Input-Sanitized: true` in the response confirms this happened.
+
+---
+
+## Proxy Settings
+
+### PUT /v1/settings/proxy
+
+Configure the LLM provider for proxy mode. One configuration per API key.
+
+```json
+{
+  "provider":      "openai",
+  "base_url":      "https://api.openai.com/v1",
+  "api_key":       "sk-openai-...",
+  "default_model": "gpt-4o",
+  "timeout":       60
+}
+```
+
+**providers:** `openai` (also covers Groq, Azure, Together AI, any OpenAI-compatible endpoint) | `ollama` | `custom`
+
+**api_key:** Encrypted AES-256-GCM at rest. Never returned in API responses. Masked in responses (`sk-...7890`).
+
+**Response:**
+```json
+{
+  "provider":        "openai",
+  "base_url":        "https://api.openai.com/v1",
+  "api_key_masked":  "sk-...7890",
+  "default_model":   "gpt-4o",
+  "timeout_seconds": 60,
+  "created_at":      "2026-04-20T01:00:00",
+  "updated_at":      "2026-04-20T01:00:00"
+}
+```
+
+### GET /v1/settings/proxy
+
+Returns current proxy provider configuration (without API key).
+
+### DELETE /v1/settings/proxy
+
+Removes the proxy provider configuration for the current API key.
+
+### GET /v1/settings/proxy/health
+
+Tests connectivity to the configured provider.
+
+```json
+{
+  "provider":    "ollama",
+  "base_url":    "http://localhost:11434",
+  "reachable":   true,
+  "latency_ms":  234
+}
+```
+
+### GET /v1/settings/storage
+
+Returns the current data storage mode and proxy text retention period. Read-only — configured via environment variables.
+
+```json
+{
+  "storage_mode":         "masked",
+  "retention_days_proxy": 7
+}
+```
+
+---
+
+## Audit
+
+### GET /v1/audit/logs
+
+List audit logs. Includes both scan-only and proxy requests (`execution_mode` filter available).
+
+**Query parameters:**
+
+| Param | Description |
+|---|---|
+| `trace_id` | Partial match search |
+| `decision` | `BLOCK` / `SANITIZE` / `ALLOW` |
+| `threat_category` | `PROMPT_INJECTION` / `JAILBREAK` / `PII` / etc. |
+| `execution_mode` | `scan_only` / `proxy` |
+| `from` | ISO datetime |
+| `to` | ISO datetime |
+| `sort_by` | `created_at` / `risk_score` / `latency_ms` |
+| `sort_order` | `asc` / `desc` |
+| `limit` | Default 50, max 200 |
+| `offset` | Pagination offset |
+
+**Response:**
+```json
+{
+  "total": 1250,
+  "items": [
+    {
+      "trace_id":       "req_01...",
+      "timestamp":      "2026-04-20T01:29:46",
+      "decision":       "BLOCK",
+      "risk_score":     0.85,
+      "threats":        ["PROMPT_INJECTION"],
+      "detection_mode": "fast",
+      "execution_mode": "proxy",
+      "latency_ms":     15000
+    }
+  ]
+}
+```
+
+### GET /v1/audit/stats
+
+Aggregate stats: total, block_rate, sanitize_rate, allow_rate, avg_latency_ms, p95_latency_ms, top_threats.
+
+### GET /v1/audit/attribution
+
+Attribution breakdown: by API key, department, application, primary reason, confidence band.
+
+### GET /v1/audit/export
+
+CSV export. Supports same filters as `/v1/audit/logs`. Max 10,000 rows.
+
+---
+
+## Settings
+
+### GET/PUT /v1/settings/thresholds
+
+Detection thresholds (block, sanitize). Independent from PII thresholds.
+
+### GET/PUT /v1/settings/layers
+
+Enable/disable rule, ML, LLM detection layers.
+
+### GET/PUT /v1/settings/llm
+
+LLM provider configuration for detection Layer 3 (separate from proxy provider).
+
+### GET/PUT /v1/settings/retention
+
+Audit log retention period in days (min 7, max 3650).
+
+---
+
+## Health
+
+### GET /health/ready
+
+```json
+{"status": "ready", "checks": {"database": "ok", "redis": "ok", "ml_model": "ok"}}
+```
+
+### GET /health/live
+
+```json
+{"status": "alive"}
+```
+
+### GET /health/config
+
+Active configuration snapshot.
+
+```json
+{
+  "version": "1.0.0",
+  "thresholds": {"block": 0.7, "sanitize": 0.4, "source": "database"},
+  "detection_layers": {"rule": true, "ml": true, "llm": true, "source": "database"},
+  "llm": {"provider": "ollama", "model": "llama3.2:latest", "llm_trigger": 0.2, "timeout": 30, "source": "database"},
+  "rate_limit": {"per_minute": 60, "scope": "per_api_key"}
+}
+```
+
+### GET /metrics
+
+Prometheus exposition format. No auth required.
+
+---
+
+## Integration Guide
+
+### Python — Scan Only
+
+```python
+import httpx, uuid
+
+client = httpx.Client(
+    base_url = "http://localhost:8000",
+    headers  = {"x-api-key": "your-key"},
+)
+
+result = client.post(
+    "/v1/ai/request",
+    headers = {"Idempotency-Key": str(uuid.uuid4())},
+    json    = {"input": user_prompt, "metadata": {"user_id": current_user.id}},
+).json()
+
+match result["decision"]:
+    case "BLOCK":
+        if result["primary_reason"] == "SYSTEM_ERROR":
+            alert_ops(result["trace_id"])
+        else:
+            return "Blocked by security policy"
+    case "SANITIZE":
+        safe_input = result["sanitized_input"]
+        # Forward safe_input to your LLM
+    case "ALLOW":
+        if result["primary_reason"] == "SYSTEM_ERROR":
+            alert_ops(result["trace_id"])
+        # else: forward to your LLM
+
+if result["confidence_band"] == "LOW":
+    flag_for_human_review(result["trace_id"])
+```
+
+### Python — Proxy Mode (OpenAI SDK)
+
+```python
+from openai import OpenAI
+
+client = OpenAI(
+    api_key  = "wsk_live_your_wrapsec_key",
+    base_url = "http://localhost:8000/v1",
+)
+
+response = client.chat.completions.create(
+    model    = "openai/gpt-4o",
+    messages = [{"role": "user", "content": user_prompt}],
+)
+
+# WrapSec enforces security transparently
+# Check headers for security decisions
+print(response.headers.get("X-WrapSec-Input-Decision"))   # ALLOW / SANITIZE
+print(response.headers.get("X-WrapSec-Output-Decision"))  # ALLOW / SANITIZE
+print(response.headers.get("X-WrapSec-Trace-Id"))         # for audit lookup
+```
+
+### Python — Proxy Mode with Inline Meta
+
+```python
+response = client.chat.completions.create(
+    model          = "openai/gpt-4o",
+    messages       = [{"role": "user", "content": user_prompt}],
+    extra_headers  = {"X-WrapSec-Inline-Meta": "true"},
+)
+
+# Security metadata available in response body
+meta = response.model_extra.get("wrapsec", {})
+if meta.get("input_decision") == "SANITIZE":
+    logger.info(f"PII was redacted before forwarding: {meta['trace_id']}")
+```
+
+### Python — Proxy Mode with Ollama
+
+```python
+from openai import OpenAI
+
+client = OpenAI(
+    api_key  = "wsk_live_your_wrapsec_key",
+    base_url = "http://localhost:8000/v1",
+)
+
+response = client.chat.completions.create(
+    model    = "ollama/gemma3:4b",
+    messages = [{"role": "user", "content": user_prompt}],
+)
+```
+
+### Error handling — proxy mode
+
+```python
+from openai import BadRequestError
+
+try:
+    response = client.chat.completions.create(
+        model    = "openai/gpt-4o",
+        messages = [{"role": "user", "content": user_prompt}],
+    )
+except BadRequestError as e:
+    error = e.response.json()
+    code  = error["error"]["code"]
+
+    if code == "input_blocked":
+        wrapsec = error["wrapsec"]
+        logger.warning(
+            f"Input blocked -- trace_id={wrapsec['trace_id']} "
+            f"threats={wrapsec['input_threats']} "
+            f"confidence={wrapsec['input_confidence']}"
+        )
+        return "Your request was blocked by the security policy."
+
+    elif code == "output_blocked":
+        wrapsec = error["wrapsec"]
+        logger.warning(f"Output blocked -- trace_id={wrapsec['trace_id']}")
+        return "The model's response was blocked by the security policy."
+
+    elif code == "provider_timeout":
+        # Input was clean -- only the provider timed out
+        wrapsec = error["wrapsec"]
+        logger.error(f"Provider timeout -- trace_id={wrapsec['trace_id']}")
+        return "Request timed out. Please try again."
+
+    elif code == "provider_unreachable":
+        logger.error("Provider unreachable")
+        return "Service temporarily unavailable."
+```
+
+### Compliance triage
+
+```python
+# Find system failures — distinct from clean traffic
+failures = client.get("/v1/audit/logs", params={"primary_reason": "SYSTEM_ERROR"}).json()
+
+# Proxy requests only
+proxy_logs = client.get("/v1/audit/logs", params={"execution_mode": "proxy"}).json()
+
+# Export LOW confidence for human review
+r = client.get("/v1/audit/export", params={"confidence_band": "LOW"})
+open("review.csv", "wb").write(r.content)
+
+# Retrieve full proxy lifecycle for a specific trace
+detail = client.get(f"/v1/ai/requests/{trace_id}").json()
+if detail["is_proxy"]:
+    print("Provider:", detail["proxy"]["provider"])
+    print("Input decision:", detail["proxy"]["input_decision"])
+    print("Output decision:", detail["proxy"]["output_decision"])
+    print("Execution status:", detail["proxy"]["execution_status"])
+```
 
 ---
 
@@ -222,514 +925,11 @@ Changing detection thresholds never affects PII behaviour, and vice versa. Confi
 }
 ```
 
-**LLM timeout (detection):** continues with rule + ML, `llm_invoked = false`.
-
-**LLM timeout (proxy):** detection decision already made, `output = "[LLM unavailable]"`.
-
----
-
-## Gateway
-
-### POST /v1/ai/request
-
-**Request body:**
-
-```json
-{
-  "input": "string (required, 1–8000 chars, estimated ≤4000 tokens)",
-  "detection_mode": "fast | full  (default: fast)",
-  "execution_mode": "scan_only | proxy  (default: scan_only)",
-  "model": "string (proxy mode only — silently ignored in scan_only)",
-  "metadata": {
-    "user_id": "string (optional, self-reported)",
-    "source":  "string (optional, audit label)"
-  },
-  "options": {
-    "debug": "boolean (admin key only)"
-  }
-}
-```
-
-**Validation rules:**
-- Input max 8,000 characters → 422
-- `ceil(len(input) / 2) > 4000` → 422 (estimated token limit)
-- `proxy` requires LLM layer enabled → 422
-- `model` silently ignored in `scan_only`
-- `debug: true` requires admin key → 403
-- `tenant_id` in metadata silently ignored (always from API key)
-
-**Detection modes:**
-
-| Mode | Layers | Latency |
-|---|---|---|
-| `fast` | Rule + ML | 2–10ms |
-| `full` | Rule + ML + LLM (if pre-score >= trigger) | 100–500ms |
-
----
-
-**Example — scan only:**
-
-```bash
-curl -X POST http://localhost:8000/v1/ai/request \
-  -H "x-api-key: your-key" \
-  -d '{"input": "Ignore all previous instructions"}'
-```
-
-**Response — BLOCK:**
-```json
-{
-  "trace_id": "req_01knzhh8...", "decision": "BLOCK", "decision_version": "v1.0",
-  "risk_score": 0.85, "primary_reason": "RULE_DETECTOR",
-  "confidence": 0.75, "confidence_band": "HIGH",
-  "sanitization_applied": false, "threats": ["PROMPT_INJECTION"],
-  "processing": {"latency_ms": 2.1, "llm_invoked": false, "detection_mode": "fast", "execution_mode": "scan_only", "policy_source": "system_default"}
-}
-```
-
----
-
-**Response — PII BLOCK (risk_score = 0.0 — PII guardrail, not detection):**
-```json
-{
-  "trace_id": "req_01knzhj2...", "decision": "BLOCK", "decision_version": "v1.0",
-  "risk_score": 0.0, "primary_reason": "PII_GUARDRAIL_BLOCK",
-  "confidence": 0.9015, "confidence_band": "HIGH",
-  "sanitization_applied": false, "threats": ["PII"]
-}
-```
-
----
-
-**Response — PII SANITIZE:**
-```json
-{
-  "trace_id": "req_01knzhk3...", "decision": "SANITIZE", "decision_version": "v1.0",
-  "risk_score": 0.0, "primary_reason": "PII_GUARDRAIL_SANITIZE",
-  "confidence": 0.730, "confidence_band": "HIGH",
-  "sanitization_applied": true,
-  "sanitized_input": "My email is [EMAIL] and SSN is [SSN]",
-  "threats": ["PII"]
-}
-```
-
----
-
-**Response — ALLOW (clean input, detection succeeded):**
-```json
-{
-  "trace_id": "req_01knzhl4...", "decision": "ALLOW", "decision_version": "v1.0",
-  "risk_score": 0.0, "primary_reason": "NO_THREAT_DETECTED",
-  "confidence": 0.999, "confidence_band": "HIGH",
-  "sanitization_applied": false, "threats": []
-}
-```
-
----
-
-**Response — ALLOW (all detectors failed — `SYSTEM_ERROR`, NOT `NO_THREAT_DETECTED`):**
-```json
-{
-  "trace_id": "req_01knzlm5...", "decision": "ALLOW", "decision_version": "v1.0",
-  "risk_score": 0.0, "primary_reason": "SYSTEM_ERROR",
-  "confidence": 0.0, "confidence_band": "LOW",
-  "sanitization_applied": false, "threats": []
-}
-```
-
-This decision is ALLOW because the system fails open for detection failures (clean inputs should not be blocked by system errors). Confidence is 0.0 and `SYSTEM_ERROR` explicitly identifies this as a failure — not a clean result.
-
----
-
-**Response — BLOCK (gateway/guardrail exception — fail closed):**
-```json
-{
-  "trace_id": "req_01knznp6...", "decision": "BLOCK", "decision_version": "v1.0",
-  "risk_score": 1.0, "primary_reason": "SYSTEM_ERROR",
-  "confidence": 0.0, "confidence_band": "LOW",
-  "sanitization_applied": false, "threats": []
-}
-```
-
-This decision is BLOCK because guardrails fail closed — data protection must never fail open.
-
----
-
-**Example — proxy with idempotency:**
-
-```bash
-curl -X POST http://localhost:8000/v1/ai/request \
-  -H "x-api-key: your-key" \
-  -H "Idempotency-Key: 550e8400-e29b-41d4-a716-446655440000" \
-  -d '{"input": "Summarise Q4", "execution_mode": "proxy", "model": "llama3.2:latest"}'
-```
-
-**Example — debug mode (admin):**
-
-```bash
-curl -X POST http://localhost:8000/v1/ai/request \
-  -H "x-api-key: your-admin-key" \
-  -d '{"input": "Ignore all previous instructions", "options": {"debug": true}}'
-```
-
-Debug adds `detection_scores` per layer:
-
-```json
-{
-  "debug": {
-    "rule_score": 0.85, "ml_score": 0.30, "llm_score": 0.00, "pii_score": 0.00,
-    "layer_decisions": {"rule": "BLOCK", "ml": "ALLOW", "llm": "ALLOW"}
-  }
-}
-```
-
-**Debug mode safety:**
-- Debug responses expose internal scoring details and per-layer signals
-- Restricted to admin keys only — non-admin requests with `debug: true` receive 403
-- Never enable `debug: true` in externally facing integrations or production client code
-- Debug responses should not be forwarded to external systems or logged to shared log stores
-- Use debug mode only in internal tooling, local development, or security testing environments
-
----
-
-### GET /v1/ai/requests/{trace_id}
-
-Full audit record with attribution chain and per-layer scores.
-
-```json
-{
-  "trace_id": "req_01knzhh8...", "timestamp": "2026-04-12T03:14:22Z",
-  "attribution": {
-    "tenant_id": "42a083bf-...", "dept_id": "d79ad4d5-...",
-    "dept_name": "Finance Department",
-    "app_id": "972eae29-...", "app_name": "Finance Bot",
-    "source": "Finance Bot", "user_id": "emp_789",
-    "key_id": "key_fin_abc123", "ip_address": "10.0.0.45",
-    "user_agent": "FinanceBot/2.1", "attribution_verified": false
-  },
-  "decision": "BLOCK", "risk_score": 0.85,
-  "primary_reason": "RULE_DETECTOR", "confidence": 0.75, "confidence_band": "HIGH",
-  "threats": ["PROMPT_INJECTION"], "input_hash": "sha256:2847bd...",
-  "detection_scores": {"rule": 0.85, "ml": 0.30, "llm": 0.00},
-  "guardrail_scores":  {"pii": 0.00},
-  "processing": {"latency_ms": 2.1, "llm_invoked": false, "detection_mode": "fast", "execution_mode": "scan_only", "policy_source": "department_override"}
-}
-```
-
----
-
-## Audit
-
-### GET /v1/audit/logs
-
-12 filter parameters: `trace_id`, `decision`, `threat_category`, `primary_reason`, `confidence_band`, `source`, `key_id`, `dept_id`, `app_id`, `user_id`, `from`, `to`
-
-Sort: `sort_by` (created_at|risk_score|latency_ms), `sort_order` (asc|desc)
-
-Pagination: `limit` (max 500), `offset`
-
-**Example — find all system failures:**
-
-```bash
-curl "http://localhost:8000/v1/audit/logs?primary_reason=SYSTEM_ERROR" \
-  -H "x-api-key: your-admin-key"
-```
-
-**Example — find all LOW confidence decisions:**
-
-```bash
-curl "http://localhost:8000/v1/audit/logs?confidence_band=LOW" \
-  -H "x-api-key: your-admin-key"
-```
-
-### GET /v1/audit/stats
-
-Aggregated totals, rates, latency, top threats. Params: `tenant_id`, `from`, `to`
-
-### GET /v1/audit/attribution
-
-Groups by key, department, application, primary reason, confidence band. Params: `dept_id`, `limit`
-
-```json
-{
-  "by_primary_reason": [
-    {"primary_reason": "NO_THREAT_DETECTED", "count": 735},
-    {"primary_reason": "RULE_DETECTOR",      "count": 280},
-    {"primary_reason": "SYSTEM_ERROR",       "count": 3}
-  ]
-}
-```
-
-### GET /v1/audit/export
-
-CSV download. Max 10,000 rows. Params: `dept_id`, `app_id`, `decision`, `primary_reason`, `confidence_band`, `from`, `to`, `limit`
-
-```bash
-# Export all system failures for incident review
-curl "http://localhost:8000/v1/audit/export?primary_reason=SYSTEM_ERROR" \
-  -H "x-api-key: your-admin-key" -o system_failures.csv
-```
-
----
-
-## Settings
-
-All stored in DB, applied immediately without restart.
-
-### GET/PUT /v1/settings/thresholds
-
-Detection thresholds only. Does NOT affect PII guardrail behaviour.
-
-```json
-{"block_threshold": 0.7, "sanitize_threshold": 0.4}
-```
-
-Validation: `block > sanitize`, `block <= 1.0`, `sanitize >= 0`
-
-PII guardrail thresholds are configured via `policy_override.guardrails.pii.*` on departments.
-
-### GET/PUT /v1/settings/layers
-
-```json
-{"rule_enabled": true, "ml_enabled": true, "llm_enabled": true}
-```
-
-Disabling LLM also disables proxy mode.
-
-### GET/PUT /v1/settings/llm
-
-```json
-{"provider": "ollama", "model": "llama3.2:latest", "base_url": "http://localhost:11434", "timeout": 30, "llm_trigger": 0.2}
-```
-
-LLM API keys are `.env` only — never in DB.
-
-Timeout behaviour:
-- Detection: `llm_score=0.0`, `llm_invoked=false`, continues
-- Proxy: `output="[LLM unavailable]"`
-
-### GET/PUT /v1/settings/retention
-
-```json
-{"retention_days": 30, "source": "database"}
-```
-
-Validation: 7–3650 days. Used by `scripts/cleanup_audit_logs.py`.
-
----
-
-## API Keys
-
-### POST /v1/keys
-
-```json
-{"name": "Finance Bot Key", "app_id": "972eae29-..."}
-```
-
-Returns `api_key` only once — store securely.
-
-### GET /v1/keys
-
-List all active keys.
-
-### GET /v1/keys/{key_id}
-
-Single key — includes `is_admin`, `revoked`, `last_used_at`.
-
-### PUT /v1/keys/{key_id}
-
-```json
-{"name": "Finance Bot Primary"}
-```
-
-### DELETE /v1/keys/{key_id}
-
-Revoke immediately — next request with this key returns 401.
-
----
-
-## Administration
-
-### GET/PUT /v1/admin/tenant
-
-Full tenant info + global policy (detection + PII thresholds shown separately).
-
-### GET/POST/PUT/DELETE /v1/admin/departments/{id}
-
-**PUT — set policy override (detection and PII configured independently):**
-
-```json
-{
-  "policy_override": {
-    "thresholds": {
-      "block": 0.5,
-      "sanitize": 0.3
-    },
-    "guardrails": {
-      "pii": {
-        "block_threshold": 0.6,
-        "sanitize_threshold": 0.35
-      }
-    }
-  }
-}
-```
-
-Set `policy_override: null` to remove all overrides.
-
-### GET /v1/admin/departments/{id}/policy
-
-Returns fully resolved effective policy — detection and PII thresholds shown under separate keys.
-
-```json
-{
-  "dept_id": "d79ad4d5-...", "dept_name": "Finance Department",
-  "policy_source": "department_override", "override_set": true,
-  "policy_override": {
-    "thresholds": {"block": 0.5, "sanitize": 0.3},
-    "guardrails": {"pii": {"block_threshold": 0.6, "sanitize_threshold": 0.35}}
-  },
-  "resolved_policy": {
-    "thresholds": {"block": 0.5, "sanitize": 0.3},
-    "guardrails": {"pii": {"enabled": true, "block_threshold": 0.6, "sanitize_threshold": 0.35}},
-    "detection":  {"rule_weight": 0.4, "ml_weight": 0.3, "llm_weight": 0.3, "rule_enabled": true, "ml_enabled": true, "llm_enabled": true, "llm_trigger": 0.2},
-    "llm":        {"provider": "ollama", "model": "llama3.2:latest", "timeout": 30},
-    "rate_limit": {"per_minute": 60}
-  }
-}
-```
-
-### GET /v1/admin/departments/{id}/stats
-
-Usage stats: total, decisions breakdown, block rate, avg latency, top threats.
-
-### GET/POST/PUT/DELETE /v1/admin/applications/{id}
-
-### GET /v1/admin/applications/{id}/policy
-
-Resolved effective policy for this application. In V1, `policy_override = null`.
-
----
-
-## Health
-
-### GET /health/ready
-
-```json
-{"status": "ready", "checks": {"database": "ok", "redis": "ok", "ml_model": "ok"}}
-```
-
-### GET /health/live
-
-```json
-{"status": "alive"}
-```
-
-### GET /health/config
-
-Active configuration — detection thresholds only. PII thresholds are department-specific.
-
-```json
-{
-  "version": "1.0.0",
-  "thresholds": {"block": 0.7, "sanitize": 0.4, "source": "database"},
-  "detection_layers": {"rule": true, "ml": true, "llm": true, "source": "database"},
-  "llm": {"provider": "ollama", "model": "llama3.2:latest", "llm_trigger": 0.2, "timeout": 30, "source": "database"},
-  "rate_limit": {"per_minute": 60, "scope": "per_api_key"}
-}
-```
-
-### GET /metrics
-
-Prometheus exposition format. No auth required.
-
----
-
-## Integration Guide
-
-### Python quickstart
-
-```python
-import httpx, uuid
-
-client = httpx.Client(
-    base_url = "http://localhost:8000",
-    headers  = {"x-api-key": "your-key"},
-)
-
-result = client.post(
-    "/v1/ai/request",
-    headers = {"Idempotency-Key": str(uuid.uuid4())},
-    json    = {"input": user_prompt, "metadata": {"user_id": current_user.id}},
-).json()
-
-match result["decision"]:
-    case "BLOCK":
-        if result["primary_reason"] == "SYSTEM_ERROR":
-            alert_ops(result["trace_id"])  # detector failure
-        else:
-            return "Blocked by security policy"
-    case "SANITIZE":
-        safe_input = result["sanitized_input"]
-    case "ALLOW":
-        if result["primary_reason"] == "SYSTEM_ERROR":
-            alert_ops(result["trace_id"])  # all detectors failed (fail open)
-        # else NO_THREAT_DETECTED — genuinely clean
-
-if result["confidence_band"] == "LOW":
-    flag_for_human_review(result["trace_id"])
-```
-
-### Compliance triage
-
-```python
-# Find system failures — distinct from clean traffic
-failures = client.get("/v1/audit/logs", params={"primary_reason": "SYSTEM_ERROR"}).json()
-
-# Find clean traffic — detection succeeded, no threat
-clean    = client.get("/v1/audit/logs", params={"primary_reason": "NO_THREAT_DETECTED"}).json()
-
-# Export LOW confidence for human review
-r = client.get("/v1/audit/export", params={"confidence_band": "LOW"})
-open("review.csv", "wb").write(r.content)
-```
-
-### SYSTEM_ERROR monitoring
-
-`SYSTEM_ERROR` responses are an operational health signal and should be actively monitored in production.
-
-```python
-# Recommended alerting logic
-result = client.post("/v1/ai/request", ...).json()
-
-if result["primary_reason"] == "SYSTEM_ERROR":
-    # This is not a security event — it is an infrastructure event
-    # Do not treat it as a threat detection
-    send_alert(
-        severity  = "warning",
-        message   = f"WrapSec detector failure — trace_id={result['trace_id']}",
-        dashboard = "https://your-host:3001/grafana",
-    )
-```
-
-**Monitoring guidance:**
-
-| Signal | Threshold | Action |
-|---|---|---|
-| Single `SYSTEM_ERROR` | Any | Log and investigate |
-| `SYSTEM_ERROR` rate > 0.1% | Over 5 min window | Page on-call |
-| `SYSTEM_ERROR` rate > 1% | Over 1 min window | Immediate incident |
-| All requests `SYSTEM_ERROR` | Any | Service outage — escalate |
-
-**What SYSTEM_ERROR indicates:**
-- Individual detector crash (rule, ML, or LLM) — single occurrence is tolerable
-- ML model file corrupt or missing — all ML requests fail
-- LLM provider unreachable — LLM detector always fails
-- Database connection lost — policy resolution may fail
-- Memory/resource exhaustion — cascading detector failures
-
-Use `GET /health/ready` to check subsystem status and `GET /metrics` for Prometheus alerting rules.
-
-A low but non-zero SYSTEM_ERROR rate (< 0.1%) is expected in production (transient LLM timeouts, occasional ML edge cases). A sustained or rising rate requires investigation.
+**`SYSTEM_ERROR` vs `NO_THREAT_DETECTED`:**
+
+These values are produced by mutually exclusive code paths and can never be confused:
+- `NO_THREAT_DETECTED` — detectors ran successfully, no threat found
+- `SYSTEM_ERROR` — detector(s) failed or system threw an exception
 
 ---
 
@@ -743,68 +943,67 @@ Per API key, Redis sliding window, 60 req/min default.
 
 ---
 
-## Planned — V1.1
+## SYSTEM_ERROR Monitoring
 
-```
-PUT/DELETE /v1/admin/applications/{id}/policy  → application policy overrides
-POST       /v1/keys/{key_id}/rotate            → rotate with grace period
-GET        /v1/admin/analytics                 → cross-department analytics
-```
+`SYSTEM_ERROR` is an operational health signal, not a security event.
 
-Token limit V1.1: per-model tiktoken enforcement (replaces `ceil(len/2)` heuristic).
-
-Cursor pagination V1.1: `GET /v1/audit/logs?cursor=req_01knzhh8...&limit=20`
-
----
-
-## Planned — V2.0
-
-```
-POST /v1/auth/token      → JWT (attribution_verified=true)
-POST /v1/admin/tenants   → SaaS multi-tenant onboarding
-POST /v1/webhooks        → BLOCK event webhooks
-POST /v1/admin/roles     → role management (requires JWT)
-```
+| Signal | Threshold | Action |
+|---|---|---|
+| Single `SYSTEM_ERROR` | Any | Log and investigate |
+| `SYSTEM_ERROR` rate > 0.1% | Over 5 min window | Page on-call |
+| `SYSTEM_ERROR` rate > 1% | Over 1 min window | Immediate incident |
+| All requests `SYSTEM_ERROR` | Any | Service outage — escalate |
 
 ---
 
 ## Changelog
 
+### V1.1 (April 2026) — Proxy Mode
+
+**Proxy mode — AI Interaction Firewall:**
+- `POST /v1/chat/completions` — OpenAI-compatible proxy endpoint
+- Provider support: OpenAI, OpenAI-compatible (Groq, Azure, Together AI), Ollama, custom
+- Provider API keys encrypted AES-256-GCM at rest, never returned in responses
+- Input + output PII enforcement in proxy mode
+- `X-WrapSec-*` headers on every response
+- `X-WrapSec-Inline-Meta` opt-in for body metadata
+- `X-WrapSec-Scan-All-Messages` for scanning full conversation history
+- Execution status: `SUCCESS` / `BLOCKED` / `OUTPUT_BLOCKED` / `FAILED` / `TIMEOUT`
+
+**Data & storage:**
+- Configurable `DATA_STORAGE_MODE`: `full` / `masked` / `none`
+- `masked` is the production default — PII redacted before persisting
+- `DATA_RETENTION_DAYS_PROXY` — text purged after N days, metadata kept permanently
+- `proxy_interactions` table for full lifecycle data
+- `audit_logs.proxy_interaction_id` FK — unified view via `GET /v1/ai/requests/:trace_id`
+
+**New endpoints:**
+- `PUT/GET/DELETE /v1/settings/proxy` — provider configuration
+- `GET /v1/settings/proxy/health` — connectivity check
+- `GET /v1/settings/storage` — storage mode and retention period
+- `GET /v1/ai/requests/{trace_id}` — updated to return `proxy` key for proxy requests
+
+**Dashboard:**
+- Unified Requests page — scan_only and proxy in one table
+- Execution mode filter + Detection/Execution columns separated
+- Proxy lifecycle detail panel — input/output decisions, raw/sanitized text
+- Data Retention & Storage settings card
+
 ### V1.0 (April 2026)
 
-**Consistency (final review fixes):**
-- `SYSTEM_ERROR` is always distinct from `NO_THREAT_DETECTED` — mutually exclusive code paths
-- All failure paths: `confidence=0.0`, `confidence_band=LOW`, `primary_reason=SYSTEM_ERROR`
-- Input limit: 8,000 chars + `ceil(len/2) > 4000` heuristic token limit → 422
-- API doc now includes all 6 primary_reason scenarios with examples
-
-**Security:**
-- `tenant_id` removed from request metadata
-- Entity validation in auth middleware
-- `model` silently ignored in `scan_only`
-- Debug mode restricted to admin keys
-
-**Reliability:**
-- Idempotency-Key: 409 CONFLICT on same key + different body
+- Rule, ML, LLM detectors with per-detector try/catch
+- `SYSTEM_ERROR` always distinct from `NO_THREAT_DETECTED`
+- PII guardrail (22+ types, input + output)
+- Guardrail thresholds fully decoupled from detection thresholds
+- Idempotency-Key with 409 CONFLICT
 - ULID trace IDs
-- Rate limiting per API key with X-RateLimit-* headers
-- Nginx 64KB payload limit
-- Per-detector try/catch
-
-**Scoring:**
-- Guardrail thresholds FULLY DECOUPLED from detection thresholds
-- `risk_score = rule*0.40 + ml*0.30 + llm*0.30` (PII excluded)
-- `decision_version` — "v1.0" in every response
-- `sanitization_applied` — explicit boolean
-
-**Policy:**
-- Detection thresholds and PII thresholds configured under separate policy keys
-- Runtime configurable: all settings, no restart
-- Audit log retention configurable via Settings UI (stored in DB)
+- Rate limiting per API key
+- Policy resolution: system → tenant → department
+- 39 endpoints, 85 tests
 
 ---
 
-*API version: 1.0 — Final*  
+*API version: 1.1 — Proxy Mode*  
 *Authentication: `x-api-key` header*  
-*Total endpoints: 39*  
+*Total endpoints: 43*  
 *Last updated: April 2026*

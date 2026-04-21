@@ -1,6 +1,6 @@
 # WrapSec CLI — Command Reference
 
-Version: 0.1.0  
+Version: 0.1.1  
 Last updated: April 2026
 
 ---
@@ -51,7 +51,7 @@ Exit codes apply to all commands and all output modes (`--quiet`, `--json`).
 ## Global Options
 
 ```bash
-wrapsec --version    # Show CLI version (0.1.0)
+wrapsec --version    # Show CLI version (0.1.1)
 wrapsec --help       # Show help
 ```
 
@@ -405,6 +405,7 @@ wrapsec audit list [OPTIONS]
 |---|---|
 | `--decision BLOCK\|SANITIZE\|ALLOW` | Filter by decision |
 | `--reason TEXT` | Filter by primary_reason (e.g. `RULE_DETECTOR`, `PII_GUARDRAIL_SANITIZE`) |
+| `--mode scan_only\|proxy` | Filter by execution mode |
 | `--from DATE` | From date (YYYY-MM-DD) |
 | `--to DATE` | To date (YYYY-MM-DD) |
 | `--limit INT` | Records to return (default 20, max 100) |
@@ -416,6 +417,9 @@ wrapsec audit list --decision BLOCK --limit 3
 wrapsec audit list --decision ALLOW --limit 3
 wrapsec audit list --decision SANITIZE --limit 3
 wrapsec audit list --reason RULE_DETECTOR --limit 3
+wrapsec audit list --mode proxy --limit 10        # proxy requests only
+wrapsec audit list --mode scan_only --limit 10    # scan-only requests only
+wrapsec audit list --mode proxy --decision BLOCK --limit 5  # blocked proxy requests
 wrapsec audit list --from 2026-04-01 --limit 10
 wrapsec audit list --from 2026-04-01 --to 2026-04-30 --limit 10
 wrapsec audit list --limit 2 --json
@@ -423,10 +427,10 @@ wrapsec audit list --limit 2 --json
 
 **Output:**
 ```
-TRACE ID                          DECISION    REASON                 CONF   BAND  SOURCE          CREATED
-req_01kpbzwmrqqaf448mkz548g6q0    BLOCK       RULE_DETECTOR          0.75   HIGH  wrapsec-python  2026-04-16T20:32:00
-req_01kpbzwjq7ytd0x0w9xz0h2znd    SANITIZE    PII_GUARDRAIL_SANITIZE 0.75   HIGH  wrapsec-python  2026-04-16T20:31:58
-req_01kpbzw1m8xp3xhwjb5s498z9c    ALLOW       NO_THREAT_DETECTED     1.00   HIGH  wrapsec-python  2026-04-16T20:31:40
+TRACE ID                          DECISION    REASON                 CONF   BAND  MODE       SOURCE          CREATED
+req_01kpbzwmrqqaf448mkz548g6q0    BLOCK       RULE_DETECTOR          0.75   HIGH  scan_only  wrapsec-python  2026-04-16T20:32:00
+req_01kpbzwjq7ytd0x0w9xz0h2znd    SANITIZE    PII_GUARDRAIL_SANITIZE 0.75   HIGH  proxy      wrapsec-python  2026-04-16T20:31:58
+req_01kpbzw1m8xp3xhwjb5s498z9c    ALLOW       NO_THREAT_DETECTED     1.00   HIGH  scan_only  wrapsec-python  2026-04-16T20:31:40
 ```
 
 ### `wrapsec audit get TRACE_ID`
@@ -651,4 +655,4 @@ batch on Windows (PowerShell)
 ---
 
 *WrapSec CLI Command Reference*  
-*Version 0.1.0 — April 2026*
+*Version 0.1.1 — April 2026*

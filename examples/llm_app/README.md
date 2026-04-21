@@ -24,9 +24,10 @@ Your application
       ▼
  WrapSec scan     ← scans for prompt injection, PII, malicious intent
       │
-      ├── BLOCK    → rejected, your LLM never called
-      ├── SANITIZE → PII redacted, clean input sent to your LLM
-      └── ALLOW    → original input sent to your LLM
+      ├── BLOCK        → rejected, your LLM never called
+      ├── SYSTEM_ERROR → rejected (fail closed), your LLM never called
+      ├── SANITIZE     → PII redacted, clean input sent to your LLM
+      └── ALLOW        → original input sent to your LLM
       │
       ▼
  Your LLM         ← Ollama / OpenAI / any provider (your existing model)
@@ -41,7 +42,7 @@ Your application
 
 This example does **not** configure or test WrapSec's internal LLM detection
 layer (Layer 3). That layer runs inside the WrapSec gateway automatically
-when `detection_mode=full` is used, and is configured via the dashboard
+when `WRAPSEC_DETECTION_MODE=full` is used, and is configured via the dashboard
 under Settings → LLM. Your application never touches it directly.
 
 ```
@@ -58,6 +59,27 @@ Your LLM (what this example protects):
 
 ---
 
+## This example vs proxy mode
+
+WrapSec offers two ways to integrate. This example uses **scan-only mode**.
+
+```
+Scan-only (this example):
+  App → WrapSec scan → App's LLM → response
+  Your app manages its own LLM API keys and connection.
+  Best for: teams who already have an LLM integration and want
+  to add security scanning in front of it.
+
+Proxy mode:
+  App → WrapSec → LLM → WrapSec → App
+  WrapSec manages the LLM API keys, connection, and output scanning.
+  Best for: teams who want WrapSec to handle the full LLM lifecycle,
+  or want a drop-in OpenAI SDK replacement.
+  See: examples/proxy/ or POST /v1/chat/completions in the API docs.
+```
+
+---
+
 ## Architecture
 
 ```
@@ -66,9 +88,10 @@ User input
     ▼
 WrapSec scan
     │
-    ├── BLOCK    → 400 response (LLM never called)
-    ├── SANITIZE → PII redacted → LLM → response
-    └── ALLOW    → LLM → response
+    ├── BLOCK        → 400 response (LLM never called)
+    ├── SYSTEM_ERROR → 503 response (LLM never called, fail closed)
+    ├── SANITIZE     → PII redacted → LLM → response
+    └── ALLOW        → LLM → response
 ```
 
 ---
@@ -76,6 +99,7 @@ WrapSec scan
 ## LLM Providers
 
 Switch between providers using the `LLM_PROVIDER` environment variable.
+No code changes required.
 
 ### Option A — Ollama (local, default)
 
@@ -112,7 +136,11 @@ pip install fastapi uvicorn httpx
 export WRAPSEC_API_KEY=wsk_live_...
 export WRAPSEC_BASE_URL=http://localhost:8000
 
-# LLM timeout (default 60s — increase for slower models)
+# Detection mode: fast (rule+ML, ~5ms) or full (rule+ML+LLM, ~100-500ms)
+# Use full for high-sensitivity endpoints
+export WRAPSEC_DETECTION_MODE=fast
+
+# LLM timeout in seconds (default 60 — increase for larger/slower models)
 export LLM_TIMEOUT=60
 
 # LLM configuration (see above)
@@ -189,6 +217,8 @@ curl -X POST http://localhost:8090/chat \
 ### `POST /chat/batch`
 
 Scan and process multiple messages in one call.
+Each message scanned independently. BLOCK and SYSTEM_ERROR messages
+are skipped — others are sent to LLM.
 
 ```bash
 curl -X POST http://localhost:8090/chat/batch \
@@ -210,9 +240,9 @@ curl -X POST http://localhost:8090/chat/batch \
   "blocked": 1,
   "allowed": 2,
   "results": [
-    { "index": 0, "decision": "ALLOW",  "reply": "Hello! ..." },
-    { "index": 1, "decision": "BLOCK",  "reply": null, "threats": ["PROMPT_INJECTION"] },
-    { "index": 2, "decision": "ALLOW",  "reply": "2+2 = 4" }
+    { "index": 0, "decision": "ALLOW", "reply": "Hello! ..." },
+    { "index": 1, "decision": "BLOCK", "reply": null, "threats": ["PROMPT_INJECTION"] },
+    { "index": 2, "decision": "ALLOW", "reply": "2+2 = 4" }
   ]
 }
 ```
@@ -227,10 +257,11 @@ curl http://localhost:8090/health
 
 ```json
 {
-  "status":       "ok",
-  "wrapsec":      "reachable",
-  "llm_provider": "ollama",
-  "llm":          "reachable"
+  "status":         "ok",
+  "wrapsec":        "reachable",
+  "llm_provider":   "ollama",
+  "llm":            "reachable",
+  "detection_mode": "fast"
 }
 ```
 
@@ -238,26 +269,43 @@ curl http://localhost:8090/health
 
 ## Security decisions
 
-### Fail closed on SYSTEM_ERROR
+### SYSTEM_ERROR — always fail closed
 
-When WrapSec's scanner encounters an infrastructure failure
-(`primary_reason == "SYSTEM_ERROR"`), this example rejects the
-request with HTTP 503. The LLM is never called with unscanned input.
+`SYSTEM_ERROR` is returned when WrapSec's detectors failed internally.
+The scan result is unreliable (`confidence = 0.0`, `band = LOW`).
+This is **not** a Python exception — it is a valid scan result.
 
-Adjust this based on your risk tolerance:
-- **Fail closed** (this example): higher security, lower availability
-- **Fail open**: higher availability, unscanned requests reach LLM during outage
+This example always fails closed on SYSTEM_ERROR:
+the request is rejected with HTTP 503 and the LLM is never called.
+
+```python
+# After client.scan()
+if scan_result.primary_reason == "SYSTEM_ERROR":
+    raise HTTPException(status_code=503, ...)
+```
+
+Adjust based on your risk tolerance:
+- **Fail closed** (this example): higher security, lower availability during WrapSec outage
+- **Fail open**: higher availability, unscanned requests may reach LLM
 
 ### PII handling
 
 When a request is SANITIZE, the redacted version is sent to the LLM.
-The original input is never forwarded. The `sanitized: true` flag in
-the response tells the caller that redaction occurred.
+The original input with real PII is never forwarded.
+The `sanitized: true` flag in the response tells the caller redaction occurred.
+
+### Detection mode
+
+`WRAPSEC_DETECTION_MODE=fast` runs rule + ML detection (~5ms).
+`WRAPSEC_DETECTION_MODE=full` adds LLM semantic analysis (~100-500ms).
+
+Use `full` for endpoints handling sensitive data or high-risk operations.
+Use `fast` for high-throughput endpoints where latency matters.
 
 ### Trace IDs
 
-Every response includes `trace_id`. Log this with your application
-logs to correlate WrapSec audit records with your own request logs.
+Every response includes `trace_id`. Log this alongside your own
+request logs to correlate with WrapSec audit records for investigation.
 
 ---
 
@@ -267,10 +315,11 @@ logs to correlate WrapSec audit records with your own request logs.
 ✅ WRAPSEC_BASE_URL set explicitly (never rely on localhost default)
 ✅ WRAPSEC_API_KEY set via environment variable (never hardcoded)
 ✅ LLM API keys set via environment variable (never hardcoded)
-✅ Fail closed on SYSTEM_ERROR — LLM never called with unscanned input
+✅ Fail closed on SYSTEM_ERROR — LLM never called with unreliable scan
 ✅ trace_id logged with every request for audit correlation
-✅ Use --mode full for high-sensitivity endpoints
-✅ Set appropriate timeout for LLM calls (default 60s)
+✅ WRAPSEC_DETECTION_MODE=full for high-sensitivity endpoints
+✅ LLM_TIMEOUT set appropriately for your model (default 60s)
+✅ LLM_PROVIDER validated at startup (fails fast on misconfiguration)
 ```
 
 ---
