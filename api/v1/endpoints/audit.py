@@ -1,5 +1,6 @@
 from datetime import datetime, timezone
 from fastapi import APIRouter, Query, Depends, Request
+from domain.value_objects.severity import compute_severity
 from fastapi.responses import JSONResponse
 from sqlalchemy import func, case, Integer
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -43,6 +44,11 @@ def _format_item(item) -> dict:
         "attribution_verified":  item.attribution_verified,
         "policy_source":         item.policy_source,
         "input_length":          item.input_length or 0,
+        "severity":              item.severity or compute_severity(
+            decision       = item.decision,
+            risk_score     = item.risk_score or 0.0,
+            primary_reason = item.primary_reason,
+        ),
     }
 
 

@@ -99,6 +99,11 @@ class AuditLogModel(Base):
     user_id        = Column(String(100), nullable=True)
     input_length   = Column(Integer,     nullable=True,  default=0)
     proxy_interaction_id = Column(UUID(as_uuid=True), nullable=True)
+    # Severity is computed at write time from decision + risk_score + primary_reason.
+    # See domain/value_objects/severity.py for the full model.
+    # Values: CRITICAL / HIGH / MEDIUM / LOW
+    # Never returned in scan responses — audit and SIEM use only.
+    severity       = Column(String(10),  nullable=True)
     created_at     = Column(DateTime,    nullable=False, default=datetime.utcnow)
 
     __table_args__ = (
@@ -239,6 +244,7 @@ class ProxyInteractionModel(Base):
     # -- Future evaluation hooks (always null in V1, populated in V2) --
     behavior_flag         = Column(String(32),  nullable=True)
     # V2 values: NORMAL / OVER_REFUSAL / UNDER_REFUSAL
+    # Populated by WildGuard response_refusal classification in V2
 
     output_flags          = Column(JSON,        nullable=True)
     # V2 values: e.g. ["LOW_CONFIDENCE", "SUSPICIOUS_OUTPUT"]

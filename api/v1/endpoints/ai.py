@@ -17,6 +17,7 @@ from domain.entities.request import (
     RequestContext, RequestOptions
 )
 from errors.exceptions import NotFoundError, DebugForbiddenError
+from domain.value_objects.severity import compute_severity
 from services.gateway.service import GatewayService
 
 router   = APIRouter()
@@ -203,6 +204,11 @@ async def ai_request(
         "confidence_band":       result.decision.confidence_band,
         "input_length":          len(body.input),
         "proxy_interaction_id":  None,
+        "severity":              compute_severity(
+            decision       = result.decision.decision.value,
+            risk_score     = result.decision.risk_score.value,
+            primary_reason = result.decision.primary_reason,
+        ),
     })
 
     from observability.metrics import record_request
@@ -276,6 +282,11 @@ async def get_request(
         "timestamp":      record.created_at.isoformat(),
         "execution_mode": record.execution_mode,
         "is_proxy":       record.execution_mode == "proxy",
+        "severity":       record.severity or compute_severity(
+            decision       = record.decision,
+            risk_score     = record.risk_score or 0.0,
+            primary_reason = record.primary_reason,
+        ),
         "attribution": {
             "tenant_id":            record.tenant_id,
             "dept_id":              record.dept_id,
