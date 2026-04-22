@@ -50,9 +50,13 @@ class IdempotencyMiddleware(BaseHTTPMiddleware):
         body      = await request.body()
         body_hash = hashlib.sha256(body).hexdigest()[:16]
 
-        # Two Redis keys — keyed by idempotency_key alone (not composite)
-        # This allows us to detect conflicts (same key, different body)
-        idem_hash    = hashlib.sha256(idempotency_key.encode()).hexdigest()
+        # Scope idempotency to the authenticated API key.
+        # Without this, two different keys using the same Idempotency-Key
+        # value would collide — dept A could receive dept B's cached response.
+        # key_id is always set by AuthMiddleware before this runs.
+        key_id    = getattr(request.state, "key_id", None) or "anon"
+        scope     = f"{key_id}:{idempotency_key}"
+        idem_hash    = hashlib.sha256(scope.encode()).hexdigest()
         hash_key     = f"idempotency:{idem_hash}:hash"
         response_key = f"idempotency:{idem_hash}:resp"
 
