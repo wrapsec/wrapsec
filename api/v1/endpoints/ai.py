@@ -232,10 +232,18 @@ async def ai_request(
 @router.get("/requests/{trace_id}")
 async def get_request(
     trace_id: str,
+    request:  Request,
     db:       AsyncSession = Depends(get_db),
 ):
-    repo   = AuditRepository(db)
-    record = await repo.get_by_trace_id(trace_id)
+    repo    = AuditRepository(db)
+    dept_id = getattr(request.state, "dept_id", None)
+
+    # Admin keys have no dept_id — use unscoped lookup.
+    # All other keys use dept-scoped lookup to prevent cross-dept leakage.
+    if dept_id:
+        record = await repo.get_by_trace_id_scoped(trace_id, dept_id)
+    else:
+        record = await repo.get_by_trace_id(trace_id)
 
     if not record:
         raise NotFoundError("request", trace_id)

@@ -19,6 +19,24 @@ class AuditRepository(BaseRepository):
         )
         return result.scalar_one_or_none()
 
+    async def get_by_trace_id_scoped(
+        self,
+        trace_id: str,
+        dept_id:  str,
+    ) -> AuditLogModel | None:
+        """
+        Dept-scoped trace_id lookup. Returns None if the record exists
+        but belongs to a different department — caller treats as 404.
+        Used by all non-admin key requests to prevent cross-dept leakage.
+        """
+        result = await self.session.execute(
+            select(AuditLogModel).where(
+                AuditLogModel.trace_id == trace_id,
+                AuditLogModel.dept_id  == dept_id,
+            )
+        )
+        return result.scalar_one_or_none()
+
     async def list(
         self,
         tenant_id:       str | None = None,
