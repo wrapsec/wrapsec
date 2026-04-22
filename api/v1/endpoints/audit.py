@@ -1,5 +1,5 @@
 from datetime import datetime, timezone
-from fastapi import APIRouter, Query, Depends
+from fastapi import APIRouter, Query, Depends, Request
 from fastapi.responses import JSONResponse
 from sqlalchemy import func, case, Integer
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -48,6 +48,7 @@ def _format_item(item) -> dict:
 
 @router.get("/logs")
 async def get_audit_logs(
+    request:         Request,
     tenant_id:       str | None = Query(None),
     dept_id:         str | None = Query(None),
     app_id:          str | None = Query(None),
@@ -68,6 +69,13 @@ async def get_audit_logs(
     offset:          int        = Query(0, ge=0),
     db:              AsyncSession = Depends(get_db),
 ):
+    is_admin = getattr(request.state, "is_admin", False)
+    # Non-admin keys are always scoped to their own dept.
+    # Ignore any dept_id query param from the caller — use identity from auth.
+    if not is_admin:
+        dept_id   = getattr(request.state, "dept_id",   None)
+        tenant_id = getattr(request.state, "tenant_id", None)
+
     repo = AuditRepository(db)
     total, items = await repo.list(
         tenant_id       = tenant_id,
@@ -98,11 +106,16 @@ async def get_audit_logs(
 
 @router.get("/stats")
 async def get_audit_stats(
+    request:   Request,
     tenant_id: str | None = Query(None),
     from_:     str | None = Query(None, alias="from"),
     to:        str | None = Query(None),
     db:        AsyncSession = Depends(get_db),
 ):
+    is_admin = getattr(request.state, "is_admin", False)
+    if not is_admin:
+        tenant_id = getattr(request.state, "tenant_id", None)
+
     repo  = AuditRepository(db)
     stats = await repo.get_stats(
         tenant_id = tenant_id,
@@ -153,6 +166,7 @@ async def get_audit_stats(
 
 @router.get("/attribution")
 async def get_attribution_report(
+    request:    Request,
     dept_id:    str | None = Query(None),
     limit:      int        = Query(10, ge=1, le=100),
     db:         AsyncSession = Depends(get_db),
@@ -163,6 +177,10 @@ async def get_attribution_report(
     Extensible: add group_by parameter in v1.1 for custom grouping.
     """
     from sqlalchemy import select as sa_select
+
+    is_admin = getattr(request.state, "is_admin", False)
+    if not is_admin:
+        dept_id = getattr(request.state, "dept_id", None)
 
     base_where = []
     if dept_id:
@@ -195,14 +213,14 @@ async def get_attribution_report(
         for row in key_result
     ]
 
-    # By department
+    # By department — scoped to same dept filter as rest of attribution
     dept_query = sa_select(
         AuditLogModel.dept_id,
         func.count().label("total"),
         func.sum(
             case((AuditLogModel.decision == "BLOCK", 1), else_=0)
         ).label("blocked"),
-    ).group_by(AuditLogModel.dept_id).order_by(
+    ).where(*base_where).group_by(AuditLogModel.dept_id).order_by(
         func.count().desc()
     ).limit(limit)
 
@@ -281,6 +299,7 @@ async def get_attribution_report(
 
 @router.get("/analytics")
 async def get_analytics(
+    request:    Request,
     from_date:  str | None = Query(None, alias="from"),
     to_date:    str | None = Query(None, alias="to"),
     group_by:   str        = Query("day", pattern="^(hour|day|week|month)$"),
@@ -295,6 +314,10 @@ async def get_analytics(
     from db.models import AuditLogModel
     from datetime import datetime, timezone
 
+    is_admin = getattr(request.state, "is_admin", False)
+    if not is_admin:
+        dept_id = getattr(request.state, "dept_id", None)
+
     # Build base query
     stmt = select(
         func.date_trunc(group_by, AuditLogModel.created_at).label("period"),
@@ -304,7 +327,7 @@ async def get_analytics(
         func.avg(AuditLogModel.latency_ms).label("avg_latency_ms"),
     )
 
-    # Apply filters
+    # Apply filters — always scoped for non-admin keys
     if dept_id:
         stmt = stmt.where(AuditLogModel.dept_id == dept_id)
     if from_date:
@@ -370,6 +393,7 @@ async def get_analytics(
 
 @router.get("/export")
 async def export_audit_logs(
+    request:         Request,
     dept_id:         str | None = Query(None),
     app_id:          str | None = Query(None),
     decision:        str | None = Query(None),
@@ -380,6 +404,9 @@ async def export_audit_logs(
     limit:           int        = Query(1000, ge=1, le=10000),
     db:              AsyncSession = Depends(get_db),
 ):
+    is_admin = getattr(request.state, "is_admin", False)
+    if not is_admin:
+        dept_id = getattr(request.state, "dept_id", None)
     """
     Export audit logs as CSV for compliance reporting.
     Extensible: additional filters and formats (JSON, PDF) in v1.1.
