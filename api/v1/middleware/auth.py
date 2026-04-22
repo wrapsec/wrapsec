@@ -77,10 +77,8 @@ class AuthMiddleware(BaseHTTPMiddleware):
                     },
                 )
 
-        # JWT — placeholder for future
-        if auth.startswith("Bearer "):
-            request.state.is_admin = False
-            return await call_next(request)
+        # JWT auth not yet implemented.
+        # Bearer tokens are rejected until JWT is live (Phase 2).
 
         # No valid credentials
         trace_id = getattr(request.state, "trace_id", "")
