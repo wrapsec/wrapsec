@@ -2,7 +2,8 @@ import uuid
 from datetime import datetime
 from sqlalchemy import (
     Column, String, Float, Boolean,
-    DateTime, Text, JSON, Integer, Index, ForeignKey
+    DateTime, Text, JSON, Integer, Index, ForeignKey,
+    CheckConstraint
 )
 from sqlalchemy.orm import DeclarativeBase, relationship
 from sqlalchemy.dialects.postgresql import UUID
@@ -103,6 +104,7 @@ class AuditLogModel(Base):
     __table_args__ = (
         Index("ix_audit_logs_decision_created", "decision",   "created_at"),
         Index("ix_audit_logs_tenant_created",   "tenant_id",  "created_at"),
+        Index("ix_audit_tenant_dept_time",      "tenant_id",  "dept_id", "created_at"),
         Index("ix_audit_key_created",           "key_id",     "created_at"),
         Index("ix_audit_app_created",           "app_id",     "created_at"),
         Index("ix_audit_dept_created",          "dept_id",    "created_at"),
@@ -127,6 +129,17 @@ class APIKeyModel(Base):
     expires_at   = Column(DateTime,    nullable=True)
     last_used_at = Column(DateTime,    nullable=True)
     created_at   = Column(DateTime,    nullable=False, default=datetime.utcnow)
+
+    __table_args__ = (
+        # PostgreSQL only — constraint already applied in the live DB via migration.
+        # SQLite (integration tests) does not support this constraint syntax,
+        # so we gate it by dialect at DDL time.
+        CheckConstraint(
+            "is_admin = true OR (tenant_id IS NOT NULL AND dept_id IS NOT NULL)",
+            name="ck_api_keys_non_admin_tenant",
+            _create_rule=lambda ctx: ctx.dialect.name == "postgresql",
+        ),
+    )
 
 
 class SettingsModel(Base):
@@ -226,7 +239,6 @@ class ProxyInteractionModel(Base):
     # -- Future evaluation hooks (always null in V1, populated in V2) --
     behavior_flag         = Column(String(32),  nullable=True)
     # V2 values: NORMAL / OVER_REFUSAL / UNDER_REFUSAL
-    # Populated by WildGuard response_refusal classification in V2
 
     output_flags          = Column(JSON,        nullable=True)
     # V2 values: e.g. ["LOW_CONFIDENCE", "SUSPICIOUS_OUTPUT"]
@@ -238,6 +250,7 @@ class ProxyInteractionModel(Base):
 
     __table_args__ = (
         Index("ix_proxy_int_key_id",      "key_id"),
+        Index("ix_proxy_key_time",        "key_id",  "created_at"),
         Index("ix_proxy_int_created",     "created_at"),
         Index("ix_proxy_int_exec_status", "execution_status"),
         Index("ix_proxy_int_attack_type", "input_attack_type"),
