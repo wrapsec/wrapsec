@@ -63,6 +63,13 @@ class Settings(BaseSettings):
     prometheus_enabled:      bool = True
     prometheus_port:         int  = 9090
 
+    # ── Background retention worker ───────────────────────────────────────────
+    # APScheduler runs cleanup daily at the configured time (UTC)
+    # Set RETENTION_WORKER_ENABLED=false to disable (use manual script instead)
+    retention_worker_enabled: bool = True
+    retention_worker_hour:    int  = 2   # 2 AM UTC
+    retention_worker_minute:  int  = 0
+
     # ── Trial key limits ──────────────────────────────────────────────────────
     # Applied only when api_keys.key_type = 'trial'
     # Production (live) keys are completely unaffected by these settings

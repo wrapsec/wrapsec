@@ -162,7 +162,8 @@ export function RetentionSettingsForm({
         </div>
         <p className="text-xs text-slate-400 mt-2">
           Configured via <code className="font-mono bg-slate-100 px-1 rounded">DATA_RETENTION_DAYS_PROXY</code> in your environment.
-          Run <code className="font-mono bg-slate-100 px-1 rounded">python scripts/cleanup_audit_logs.py</code> daily to enforce.
+          Retention is enforced automatically by the background worker (runs daily at 2 AM UTC).
+          To run manually: <code className="font-mono bg-slate-100 px-1 rounded">python scripts/cleanup_audit_logs.py</code>
         </p>
       </div>
 

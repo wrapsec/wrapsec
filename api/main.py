@@ -28,12 +28,15 @@ async def lifespan(app: FastAPI):
     if os.getenv("TESTING") != "true":
         from db.session import create_tables
         from cache.redis_client import ping, close
+        from workers.queue import start_scheduler, stop_scheduler
         await create_tables()
         redis_ok = await ping()
+        await start_scheduler()
         print(f"Starting {settings.app_name} v{settings.app_version}")
         print(f"Environment: {settings.environment}")
         print(f"Redis: {'connected' if redis_ok else 'unavailable'}")
         yield
+        await stop_scheduler()
         await close()
         print(f"Shutting down {settings.app_name}")
     else:
