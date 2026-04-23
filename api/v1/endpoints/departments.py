@@ -186,7 +186,9 @@ async def update_department(
     db:      AsyncSession = Depends(get_db),
 ):
     repo = DepartmentRepository(db)
-    data = {k: v for k, v in body.model_dump().items() if v is not None}
+    # Use exclude_unset=True so explicitly set null values (e.g. policy_override=null)
+    # are included — filtering "if v is not None" would silently drop them
+    data = body.model_dump(exclude_unset=True)
     record = await repo.update(uuid.UUID(dept_id), data)
     if not record:
         raise NotFoundError("department", dept_id)
