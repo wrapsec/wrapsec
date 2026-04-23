@@ -2,7 +2,7 @@
 
 > This document builds on [Core Concepts](core_concepts.md) as the canonical behavior definition.
 
-Version: 1.1 — Proxy Mode  
+Version: 1.2 — Security & Isolation  
 Status: Implemented  
 Last updated: April 2026
 
@@ -356,7 +356,10 @@ CREATE TABLE api_keys (
     revoked      BOOLEAN DEFAULT false,
     expires_at   TIMESTAMP,
     last_used_at TIMESTAMP,
-    created_at   TIMESTAMP DEFAULT NOW()
+    created_at   TIMESTAMP DEFAULT NOW(),
+    -- Non-admin keys must always have tenant and department
+    CONSTRAINT ck_api_keys_non_admin_tenant
+        CHECK (is_admin = true OR (tenant_id IS NOT NULL AND dept_id IS NOT NULL))
 );
 ```
 
@@ -390,6 +393,11 @@ CREATE TABLE audit_logs (
     attribution_verified BOOLEAN DEFAULT false,
     policy_source        VARCHAR(50),
     input_length         INTEGER DEFAULT 0,
+    -- Severity (SIEM/security tool integration)
+    severity             VARCHAR(10),  -- CRITICAL | HIGH | MEDIUM | LOW
+    -- Computed at write time from decision + risk_score + primary_reason
+    -- Logic: domain/value_objects/severity.py
+    -- Never returned in scan responses — audit and SIEM use only
     -- Proxy link
     proxy_interaction_id UUID REFERENCES proxy_interactions(id),  -- NULL for scan_only
     created_at           TIMESTAMP DEFAULT NOW()
@@ -485,7 +493,11 @@ CREATE TABLE settings (
    assert key.tenant_id == dept.tenant_id
    Failure → 401 + security log
 
-5. Policy resolution
+5. Bearer JWT auth
+   Not yet implemented — returns 401 UNAUTHORIZED
+   JWT support planned for Phase 2 (user table + login endpoint)
+
+6. Policy resolution
    resolve_policy(tenant_id, dept_id, app_id)
    Returns (policy_dict, policy_source)
 
@@ -614,7 +626,20 @@ Total: 43 endpoints
 ✅ 148 unit + integration tests passing
 ```
 
-### V1.2 — Planned
+### V1.2 — Completed
+
+```
+✅ Bearer JWT placeholder removed — returns 401
+✅ trace_id lookup dept-scoped — cross-dept returns 404
+✅ All audit endpoints dept-scoped
+✅ Idempotency scoped per API key
+✅ Severity classification — CRITICAL/HIGH/MEDIUM/LOW stored in DB
+✅ audit_logs.threats → JSONB
+✅ api_keys CHECK constraint — non-admin must have tenant+dept
+✅ Composite indexes — tenant+dept+time, severity+time, key+time
+```
+
+### V1.2 — Pending
 
 ```
 → Per-model token counting with tiktoken (replaces heuristic)
@@ -624,6 +649,8 @@ Total: 43 endpoints
 → Cursor-based pagination
 → Background retention worker (replaces manual script)
 → Per-key storage mode override
+→ Demo safety restrictions (rate limit, input size cap, proxy disable)
+→ DigitalOcean deployment (domain ready, plan: Groq instead of Ollama)
 ```
 
 ### V2.0 — Future
@@ -641,6 +668,67 @@ Total: 43 endpoints
 
 ---
 
+## Security & Isolation
+
+### Authentication
+
+| Auth method | Status | Notes |
+|---|---|---|
+| `x-api-key: wsk_live_...` | ✅ Active | Standard key — scoped to dept/app |
+| `x-api-key: <admin_key>` | ✅ Active | Admin key — full access, no dept scope |
+| `Authorization: Bearer` | ❌ Returns 401 | JWT not yet implemented (Phase 2) |
+
+### Request State Identity
+
+Auth middleware populates `request.state` after key validation:
+
+```python
+request.state.key_id    = key_record.key_id
+request.state.key_name  = key_record.name
+request.state.app_id    = str(key_record.app_id)    if key_record.app_id    else None
+request.state.dept_id   = str(key_record.dept_id)   if key_record.dept_id   else None
+request.state.tenant_id = str(key_record.tenant_id) if key_record.tenant_id else None
+request.state.is_admin  = False  # True for admin key only
+```
+
+Admin keys have `dept_id = None` — they access all data unscoped.
+
+### Dept Scoping Rules
+
+| Endpoint | Non-admin key | Admin key |
+|---|---|---|
+| `GET /v1/ai/requests/{trace_id}` | Own dept only — cross-dept returns 404 | Unrestricted |
+| `GET /v1/audit/logs` | Own dept only — caller `dept_id` param ignored | Any dept or all |
+| `GET /v1/audit/stats` | Own tenant only | Any tenant or all |
+| `GET /v1/audit/attribution` | Own dept only | Any dept or all |
+| `GET /v1/audit/analytics` | Own dept only | Any dept or all |
+| `GET /v1/audit/export` | Own dept only | Any dept or all |
+
+### Idempotency Scoping
+
+Idempotency keys are scoped per API key:
+
+```
+Redis key = SHA-256(key_id + ":" + Idempotency-Key)
+```
+
+Two different API keys using the same `Idempotency-Key` value never collide.
+
+### Severity Classification
+
+`audit_logs.severity` is computed at write time. Logic in `domain/value_objects/severity.py`.
+
+```
+CRITICAL — BLOCK + (risk_score >= 0.9 OR primary_reason ends with _GUARDRAIL_BLOCK)
+HIGH     — BLOCK + risk_score < 0.9 OR primary_reason = SYSTEM_ERROR
+MEDIUM   — SANITIZE (any reason)
+LOW      — ALLOW
+```
+
+The `_GUARDRAIL_BLOCK` suffix pattern covers all current and future guardrail types automatically. Severity is never returned in scan responses — audit and SIEM use only.
+
+---
+
 ## Known Issues & Decisions
 
 | Issue | Decision | Status |
@@ -649,6 +737,7 @@ Total: 43 endpoints
 | Threshold coupling | Fully decoupled — separate policy paths + parameters | ✅ Implemented |
 | Token limit | Heuristic ceil(len/2) for V1.1, tiktoken in V1.2 | ✅ Implemented |
 | Idempotency conflict | 409 CONFLICT on same key + different body | ✅ Implemented |
+| Idempotency scoping | Scoped per API key — no cross-key collisions | ✅ Implemented |
 | Entity relationship validation | Assert key→app→dept→tenant | ✅ Auth middleware |
 | tenant_id in metadata | Removed — always from API key | ✅ Security fix |
 | Audit retention | DB-configurable, default 30 days | ✅ Implemented |
@@ -657,7 +746,13 @@ Total: 43 endpoints
 | Proxy text storage | Configurable mode (full/masked/none) + retention TTL | ✅ Implemented |
 | Provider API keys | AES-256-GCM encrypted at rest, never returned in API | ✅ Implemented |
 | audit_logs vs proxy_interactions | Separate tables, FK linked, unified via GET /v1/ai/requests | ✅ Implemented |
+| Bearer JWT placeholder | Removed — returns 401 until Phase 2 JWT implemented | ✅ Fixed |
+| Cross-dept trace_id leak | Scoped by dept_id — cross-dept returns 404 | ✅ Fixed |
+| Audit endpoints unscoped | All audit endpoints enforce dept_id from request.state | ✅ Fixed |
+| Severity classification | CRITICAL/HIGH/MEDIUM/LOW — stored in DB, SIEM-ready | ✅ Implemented |
+| audit_logs.threats type | Migrated JSON → JSONB for GIN indexing | ✅ Migrated |
+| api_keys NULL dept/tenant | CHECK constraint — non-admin keys must have tenant+dept | ✅ Enforced |
 
 ---
 
-*Version: 1.1 — Proxy Mode · Review cycles: 8 · April 2026*
+*Version: 1.2 — Security & Isolation · April 2026*

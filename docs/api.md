@@ -2,7 +2,7 @@
 
 > See [Core Concepts](core_concepts.md) for canonical definitions of decision model, SYSTEM_ERROR, and scoring semantics.
 
-Version: 1.1 — Proxy Mode  
+Version: 1.2 — Security & Isolation  
 Base URL: `http://your-host:8000`  
 Total endpoints: 43  
 Last updated: April 2026
@@ -20,6 +20,8 @@ x-api-key: your-api-key
 **Admin key** — full access including debug mode and all admin routes.
 
 **Standard key** (`wsk_live_...`) — scoped to the department and application the key belongs to. `tenant_id` is never accepted from request metadata — always derived from the API key to prevent cross-tenant spoofing.
+
+**JWT / Bearer tokens** — not yet implemented. `Authorization: Bearer` requests return `401 UNAUTHORIZED`. JWT support is planned for Phase 2.
 
 ---
 
@@ -112,6 +114,8 @@ Idempotency-Key: 550e8400-e29b-41d4-a716-446655440000
 | Same key + different body | **409 CONFLICT — do not process** |
 
 Callers must use a new UUID for each distinct operation. If Redis is unavailable → fail open.
+
+**Scoping:** Idempotency is scoped per API key — two different keys using the same `Idempotency-Key` value do not collide. This prevents cross-department cache poisoning.
 
 ---
 
@@ -295,6 +299,8 @@ Scan-only mode. The application calls WrapSec first, then forwards to the LLM it
 
 Retrieve a request by trace ID. For proxy requests, joins `proxy_interactions` and returns the full lifecycle in the `proxy` key.
 
+**Scoping:** Non-admin keys can only retrieve records belonging to their own department. Cross-department trace_id lookups return `404 NOT_FOUND`. Admin keys have unrestricted access.
+
 **Response — scan_only request:**
 
 ```json
@@ -303,6 +309,7 @@ Retrieve a request by trace ID. For proxy requests, joins `proxy_interactions` a
   "timestamp":      "2026-04-20T01:29:46.000000",
   "execution_mode": "scan_only",
   "is_proxy":       false,
+  "severity":       "HIGH",
   "decision":    "BLOCK",
   "risk_score":  0.85,
   "primary_reason": "RULE_DETECTOR",
@@ -699,6 +706,8 @@ Returns the current data storage mode and proxy text retention period. Read-only
 
 List audit logs. Includes both scan-only and proxy requests (`execution_mode` filter available).
 
+**Scoping:** Non-admin keys always receive records scoped to their own department, regardless of any `dept_id` query parameter supplied. Admin keys can filter across departments. This applies to all audit endpoints: `/logs`, `/stats`, `/attribution`, `/analytics`, `/export`.
+
 **Query parameters:**
 
 | Param | Description |
@@ -727,7 +736,8 @@ List audit logs. Includes both scan-only and proxy requests (`execution_mode` fi
       "threats":        ["PROMPT_INJECTION"],
       "detection_mode": "fast",
       "execution_mode": "proxy",
-      "latency_ms":     15000
+      "latency_ms":     15000,
+      "severity":       "HIGH"
     }
   ]
 }
@@ -736,6 +746,19 @@ List audit logs. Includes both scan-only and proxy requests (`execution_mode` fi
 ### GET /v1/audit/stats
 
 Aggregate stats: total, block_rate, sanitize_rate, allow_rate, avg_latency_ms, p95_latency_ms, top_threats.
+
+**Severity field (`severity`):**
+
+Present on all audit log records and `GET /v1/ai/requests/{trace_id}` responses. Never returned in scan responses (`POST /v1/ai/request` or `POST /v1/chat/completions`).
+
+| Value | Condition |
+|---|---|
+| `CRITICAL` | `BLOCK` + (`risk_score >= 0.9` OR `primary_reason` ends with `_GUARDRAIL_BLOCK`) |
+| `HIGH` | `BLOCK` + `risk_score < 0.9` OR `primary_reason = SYSTEM_ERROR` |
+| `MEDIUM` | `SANITIZE` (any reason) |
+| `LOW` | `ALLOW` |
+
+The `_GUARDRAIL_BLOCK` suffix pattern covers all current and future guardrail types (PII, toxicity, etc.) automatically. Severity is computed at write time and stored in `audit_logs.severity`.
 
 ### GET /v1/audit/attribution
 
@@ -1016,6 +1039,31 @@ Per API key, Redis sliding window, 60 req/min default.
 
 ## Changelog
 
+### V1.2 (April 2026) — Security & Isolation
+
+**Authentication:**
+- Bearer JWT placeholder removed — `Authorization: Bearer` returns 401 until JWT is implemented
+- Only `wsk_live_` prefixed keys and the admin key are accepted
+
+**Isolation & scoping:**
+- `GET /v1/ai/requests/{trace_id}` — dept-scoped for non-admin keys; cross-dept returns 404
+- All audit endpoints (`/logs`, `/stats`, `/attribution`, `/analytics`, `/export`) — dept-scoped for non-admin keys
+- Idempotency scoped per API key — prevents cross-department cache collisions
+
+**Severity classification:**
+- `severity` field added to `audit_logs` — `CRITICAL` / `HIGH` / `MEDIUM` / `LOW`
+- Computed from `decision` + `risk_score` + `primary_reason` at write time
+- Returned in audit log responses and `GET /v1/ai/requests/{trace_id}`
+- Never returned in scan responses (evasion prevention)
+- Logic in `domain/value_objects/severity.py`
+
+**DB schema:**
+- `audit_logs.threats` migrated from `json` → `jsonb`
+- `api_keys` CHECK constraint: non-admin keys must have `tenant_id` and `dept_id`
+- New composite indexes: `audit_logs(tenant_id, dept_id, created_at)`, `audit_logs(severity, created_at)`, `proxy_interactions(key_id, created_at)`
+
+---
+
 ### V1.1 (April 2026) — Proxy Mode
 
 **Proxy mode — AI Interaction Firewall:**
@@ -1061,7 +1109,7 @@ Per API key, Redis sliding window, 60 req/min default.
 
 ---
 
-*API version: 1.1 — Proxy Mode*  
+*API version: 1.2 — Security & Isolation*  
 *Authentication: `x-api-key` header*  
 *Total endpoints: 43*  
 *Last updated: April 2026*
