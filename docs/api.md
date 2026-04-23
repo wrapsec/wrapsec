@@ -21,6 +21,12 @@ x-api-key: your-api-key
 
 **Standard key** (`wsk_live_...`) — scoped to the department and application the key belongs to. `tenant_id` is never accepted from request metadata — always derived from the API key to prevent cross-tenant spoofing.
 
+**Trial key** (`wsk_trial_...`) — restricted key type for demos and evaluation. Same DB validation as `wsk_live_` keys. Restrictions:
+- Input cap: 500 characters (`TRIAL_MAX_INPUT_CHARS`)
+- Rate limit: 10 req/min (`TRIAL_RATE_LIMIT_PER_MINUTE`) — enforced at endpoint level
+- Proxy mode: disabled — returns `403 trial_proxy_disabled`
+- Dept scoping: same as live keys — trial audit records are isolated per dept
+
 **JWT / Bearer tokens** — not yet implemented. `Authorization: Bearer` requests return `401 UNAUTHORIZED`. JWT support is planned for Phase 2.
 
 ---
@@ -89,6 +95,7 @@ The heuristic `ceil(len/2)` assumes 2 chars per token — conservative for all l
 | `provider_unreachable` | 502 | Proxy: provider connection failed |
 | `proxy_not_configured` | 400 | Proxy: no provider configured for this API key |
 | `invalid_model_format` | 400 | Proxy: model must be "provider/model" format |
+| `trial_proxy_disabled` | 403 | Proxy: proxy mode not available for trial keys |
 
 Proxy error responses include a `wrapsec` key alongside `error` for security context. The `type` field is not present in WrapSec errors — only `code`, `message`, and `trace_id`.
 
@@ -1016,7 +1023,15 @@ These values are produced by mutually exclusive code paths and can never be conf
 
 ## Rate Limiting
 
-Per API key, Redis sliding window, 60 req/min default.
+Per API key, Redis sliding window.
+
+| Key type | Limit | Enforcement |
+|---|---|---|
+| `live` | 60 req/min (configurable via `RATE_LIMIT_PER_MINUTE`) | Middleware (all endpoints) |
+| `trial` | 10 req/min (configurable via `TRIAL_RATE_LIMIT_PER_MINUTE`) | Endpoint level (after auth) |
+| `admin` | 60 req/min (same as live) | Middleware |
+
+Note: The global rate limit middleware runs before auth, so trial key limits are enforced at the endpoint level using a separate Redis key (`trial:key:{key_id}`).
 
 ```json
 {"error": {"code": "RATE_LIMITED", "message": "Rate limit exceeded.", "trace_id": "..."}}
@@ -1057,8 +1072,19 @@ Per API key, Redis sliding window, 60 req/min default.
 - Never returned in scan responses (evasion prevention)
 - Logic in `domain/value_objects/severity.py`
 
+**API key management:**
+- `key_type` column added to `api_keys` — `live` (default) | `trial`
+- Trial keys (`wsk_trial_...`) — 500 char input cap, 10 req/min, proxy disabled
+- `POST /v1/keys/{key_id}/rotate` — key rotation with configurable grace period
+- Key creation requires department selection — dept/app shown in key listing
+
+**Application-level policy overrides:**
+- `application.policy_override` wired into policy resolution chain
+- `policy_source: application_override` returned in scan responses when active
+
 **DB schema:**
 - `audit_logs.threats` migrated from `json` → `jsonb`
+- `api_keys.key_type` — `VARCHAR(20)` with `CHECK (key_type IN ('live', 'trial', 'admin'))`
 - `api_keys` CHECK constraint: non-admin keys must have `tenant_id` and `dept_id`
 - New composite indexes: `audit_logs(tenant_id, dept_id, created_at)`, `audit_logs(severity, created_at)`, `proxy_interactions(key_id, created_at)`
 

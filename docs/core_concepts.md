@@ -158,6 +158,25 @@ proxy     → latency = total end-to-end time (WrapSec + provider)
 
 ---
 
+## Severity Model
+
+`severity` is computed at write time and stored in `audit_logs`. It is never returned in scan responses — audit and SIEM use only.
+
+| Severity | Condition |
+|---|---|
+| `CRITICAL` | `BLOCK` + (`risk_score >= 0.9` OR `primary_reason` ends with `_GUARDRAIL_BLOCK`) |
+| `HIGH` | `BLOCK` + `risk_score < 0.9` OR `primary_reason = SYSTEM_ERROR` |
+| `MEDIUM` | `SANITIZE` (any reason) |
+| `LOW` | `ALLOW` |
+
+The `_GUARDRAIL_BLOCK` suffix covers all current and future guardrail types automatically (PII, toxicity, etc.).
+
+Severity is never returned in scan responses — this is intentional (evasion prevention). It is available in:
+- `GET /v1/audit/logs` response items
+- `GET /v1/ai/requests/{trace_id}` response
+
+---
+
 ## Batch Responses
 
 Each item contains either:

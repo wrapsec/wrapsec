@@ -285,7 +285,7 @@ DB settings (thresholds, layers, llm, retention)
   ↓ deep merge
 department policy_override  (null = inherit)
   ↓ deep merge
-application policy_override (null in V1, active V1.1)
+application policy_override (null in V1, active V1.2)
   ↓
 resolved_policy → split:
   detection thresholds → thresholds.block / thresholds.sanitize
@@ -352,6 +352,9 @@ CREATE TABLE api_keys (
     app_id       UUID REFERENCES applications(id),
     name         VARCHAR(100) NOT NULL,
     key_hash     VARCHAR(100) UNIQUE NOT NULL,
+    key_type     VARCHAR(20)  NOT NULL DEFAULT 'live',  -- live | trial | admin
+    -- trial: 500 char input cap, 10 req/min, proxy disabled
+    -- CHECK (key_type IN ('live', 'trial', 'admin'))
     is_admin     BOOLEAN DEFAULT false,
     revoked      BOOLEAN DEFAULT false,
     expires_at   TIMESTAMP,
@@ -469,6 +472,47 @@ CREATE TABLE settings (
 
 ---
 
+## Observability Stack
+
+### Prometheus
+- Scrapes `GET /metrics` every 15 seconds
+- Local dev target: `host.docker.internal:8000`
+- Production target: `api:8000` (Docker internal network)
+- Config: `infrastructure/prometheus/prometheus.yml`
+
+### Grafana
+- Datasource: Prometheus (provisioned via `infrastructure/grafana/datasources/prometheus.yml`)
+- Dashboards: Security Overview, Latency & Performance, Threat Intelligence
+- Dashboard JSONs: `infrastructure/grafana/dashboards/`
+- Note: Grafana 12 has file provisioning issues — pin to 10.4.0 for production
+
+### Metrics (`observability/metrics.py`)
+All metric labels are validated against allowlists (`_safe()`) before use — no unbounded cardinality, no user data in labels.
+
+| Metric | Type | Labels | Description |
+|---|---|---|---|
+| `wrapsec_requests_total` | Counter | decision, detection_mode, execution_mode, key_type | All requests |
+| `wrapsec_request_latency_ms` | Histogram | decision, execution_mode | Detection latency |
+| `wrapsec_system_errors_total` | Counter | execution_mode | SYSTEM_ERROR events |
+| `wrapsec_blocked_total` | Counter | primary_reason, execution_mode | BLOCK decisions |
+| `wrapsec_sanitized_total` | Counter | primary_reason, execution_mode | SANITIZE decisions |
+| `wrapsec_threats_detected_total` | Counter | category | Threat categories |
+| `wrapsec_proxy_execution_total` | Counter | execution_status | Proxy outcomes |
+| `wrapsec_proxy_latency_ms` | Histogram | execution_status | Proxy E2E latency |
+| `wrapsec_layer_score` | Histogram | layer | Rule/ML/LLM scores |
+| `wrapsec_cache_hits_total` | Counter | — | Semantic cache hits |
+| `wrapsec_cache_misses_total` | Counter | — | Semantic cache misses |
+| `wrapsec_rate_limited_total` | Counter | — | Rate limit rejections |
+
+### Background Retention Worker
+- `workers/tasks.py` — cleanup logic
+- `workers/queue.py` — APScheduler wiring
+- Schedule: daily at 02:00 UTC (configurable via `RETENTION_WORKER_HOUR`, `RETENTION_WORKER_MINUTE`)
+- Disable: `RETENTION_WORKER_ENABLED=false`
+- Manual fallback: `python scripts/cleanup_audit_logs.py`
+
+---
+
 ## Authentication & Request Flow
 
 ```
@@ -486,7 +530,9 @@ CREATE TABLE settings (
 
 3. Auth middleware
    SHA-256(api_key) → look up api_keys by hash → validate not revoked
-   Load key.app_id, key.dept_id, key.tenant_id
+   Load key.app_id, key.dept_id, key.tenant_id, key.key_type
+   Accepted prefixes: wsk_live_ (standard), wsk_trial_ (restricted), admin key
+   Sets request.state.key_type — used by endpoints for trial restrictions
 
 4. Entity validation
    assert key.dept_id   == app.dept_id
