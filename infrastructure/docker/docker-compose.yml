@@ -98,15 +98,15 @@ services:
       # IMPORTANT: Change GF_SECURITY_ADMIN_PASSWORD before deployment.
       - "127.0.0.1:3001:3000"
     environment:
-      - GF_SECURITY_ADMIN_PASSWORD=${GRAFANA_ADMIN_PASSWORD:-changeme_before_deploy}
+      - GF_SECURITY_ADMIN_PASSWORD=changeme_before_deploy  # CHANGE THIS before production deployment
       - GF_USERS_ALLOW_SIGN_UP=false
       - GF_AUTH_ANONYMOUS_ENABLED=false
       - GF_SECURITY_DISABLE_GRAVATAR=true
     volumes:
       - grafana_data:/var/lib/grafana
       - ../grafana/datasources/prometheus.yml:/etc/grafana/provisioning/datasources/prometheus.yml:ro
-      - ../grafana/dashboards.yml:/etc/grafana/provisioning/dashboards/dashboards.yml:ro
-      - ../grafana/dashboards:/etc/grafana/provisioning/dashboards:ro
+      - ../grafana/dashboards.yml:/etc/grafana/provisioning/dashboards.yml:ro
+      - ../grafana/dashboards:/var/lib/grafana/dashboards:ro
     depends_on:
       - prometheus
     restart: unless-stopped
