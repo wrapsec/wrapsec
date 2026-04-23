@@ -1,0 +1,209 @@
+{
+  "uid": "wrapsec-threats",
+  "title": "WrapSec — Threat Intelligence",
+  "description": "Threat detection patterns, attack categories, detection layer performance",
+  "tags": ["wrapsec", "threats", "security", "intelligence"],
+  "timezone": "browser",
+  "refresh": "30s",
+  "time": { "from": "now-6h", "to": "now" },
+  "panels": [
+    {
+      "id": 1,
+      "title": "Total Threats Detected (1h)",
+      "type": "stat",
+      "gridPos": { "x": 0, "y": 0, "w": 4, "h": 4 },
+      "targets": [{
+        "expr": "sum(increase(wrapsec_threats_detected_total[1h]))",
+        "legendFormat": "threats"
+      }],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "short",
+          "thresholds": { "steps": [{ "color": "green", "value": null }, { "color": "yellow", "value": 10 }, { "color": "red", "value": 50 }] }
+        }
+      },
+      "options": { "reduceOptions": { "calcs": ["lastNotNull"] }, "colorMode": "background" }
+    },
+    {
+      "id": 2,
+      "title": "Prompt Injections (1h)",
+      "type": "stat",
+      "gridPos": { "x": 4, "y": 0, "w": 4, "h": 4 },
+      "targets": [{
+        "expr": "sum(increase(wrapsec_threats_detected_total{category='PROMPT_INJECTION'}[1h]))",
+        "legendFormat": "prompt injection"
+      }],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "short",
+          "thresholds": { "steps": [{ "color": "green", "value": null }, { "color": "orange", "value": 5 }, { "color": "red", "value": 20 }] }
+        }
+      },
+      "options": { "reduceOptions": { "calcs": ["lastNotNull"] }, "colorMode": "background" }
+    },
+    {
+      "id": 3,
+      "title": "Jailbreak Attempts (1h)",
+      "type": "stat",
+      "gridPos": { "x": 8, "y": 0, "w": 4, "h": 4 },
+      "targets": [{
+        "expr": "sum(increase(wrapsec_threats_detected_total{category='JAILBREAK'}[1h]))",
+        "legendFormat": "jailbreak"
+      }],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "short",
+          "thresholds": { "steps": [{ "color": "green", "value": null }, { "color": "orange", "value": 3 }, { "color": "red", "value": 10 }] }
+        }
+      },
+      "options": { "reduceOptions": { "calcs": ["lastNotNull"] }, "colorMode": "background" }
+    },
+    {
+      "id": 4,
+      "title": "PII Incidents (1h)",
+      "type": "stat",
+      "gridPos": { "x": 12, "y": 0, "w": 4, "h": 4 },
+      "targets": [{
+        "expr": "sum(increase(wrapsec_threats_detected_total{category='PII'}[1h]))",
+        "legendFormat": "PII"
+      }],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "short",
+          "thresholds": { "steps": [{ "color": "green", "value": null }, { "color": "yellow", "value": 5 }, { "color": "red", "value": 25 }] }
+        }
+      },
+      "options": { "reduceOptions": { "calcs": ["lastNotNull"] }, "colorMode": "background" }
+    },
+    {
+      "id": 5,
+      "title": "Data Exfiltration Attempts (1h)",
+      "type": "stat",
+      "gridPos": { "x": 16, "y": 0, "w": 4, "h": 4 },
+      "targets": [{
+        "expr": "sum(increase(wrapsec_threats_detected_total{category='DATA_EXFILTRATION'}[1h]))",
+        "legendFormat": "exfiltration"
+      }],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "short",
+          "thresholds": { "steps": [{ "color": "green", "value": null }, { "color": "orange", "value": 2 }, { "color": "red", "value": 10 }] }
+        }
+      },
+      "options": { "reduceOptions": { "calcs": ["lastNotNull"] }, "colorMode": "background" }
+    },
+    {
+      "id": 6,
+      "title": "Malicious Intent (1h)",
+      "type": "stat",
+      "gridPos": { "x": 20, "y": 0, "w": 4, "h": 4 },
+      "targets": [{
+        "expr": "sum(increase(wrapsec_threats_detected_total{category='MALICIOUS_INTENT'}[1h]))",
+        "legendFormat": "malicious"
+      }],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "short",
+          "thresholds": { "steps": [{ "color": "green", "value": null }, { "color": "orange", "value": 2 }, { "color": "red", "value": 10 }] }
+        }
+      },
+      "options": { "reduceOptions": { "calcs": ["lastNotNull"] }, "colorMode": "background" }
+    },
+    {
+      "id": 7,
+      "title": "Threat Detection Rate Over Time",
+      "type": "timeseries",
+      "gridPos": { "x": 0, "y": 4, "w": 16, "h": 8 },
+      "targets": [
+        { "expr": "sum(rate(wrapsec_threats_detected_total{category='PROMPT_INJECTION'}[5m])) * 60", "legendFormat": "Prompt Injection" },
+        { "expr": "sum(rate(wrapsec_threats_detected_total{category='JAILBREAK'}[5m])) * 60", "legendFormat": "Jailbreak" },
+        { "expr": "sum(rate(wrapsec_threats_detected_total{category='PII'}[5m])) * 60", "legendFormat": "PII" },
+        { "expr": "sum(rate(wrapsec_threats_detected_total{category='DATA_EXFILTRATION'}[5m])) * 60", "legendFormat": "Data Exfiltration" },
+        { "expr": "sum(rate(wrapsec_threats_detected_total{category='MALICIOUS_INTENT'}[5m])) * 60", "legendFormat": "Malicious Intent" }
+      ],
+      "fieldConfig": { "defaults": { "unit": "reqpm", "custom": { "lineWidth": 2 } } }
+    },
+    {
+      "id": 8,
+      "title": "Threat Category Distribution",
+      "type": "piechart",
+      "gridPos": { "x": 16, "y": 4, "w": 8, "h": 8 },
+      "targets": [{
+        "expr": "sum by (category) (increase(wrapsec_threats_detected_total[6h]))",
+        "legendFormat": "{{category}}"
+      }],
+      "options": { "pieType": "donut", "displayLabels": ["name", "percent"] }
+    },
+    {
+      "id": 9,
+      "title": "BLOCK by Primary Reason",
+      "type": "timeseries",
+      "gridPos": { "x": 0, "y": 12, "w": 12, "h": 8 },
+      "targets": [
+        { "expr": "sum by (primary_reason) (rate(wrapsec_blocked_total[5m])) * 60", "legendFormat": "{{primary_reason}}" }
+      ],
+      "fieldConfig": { "defaults": { "unit": "reqpm", "custom": { "lineWidth": 2 } } }
+    },
+    {
+      "id": 10,
+      "title": "SANITIZE by Primary Reason",
+      "type": "timeseries",
+      "gridPos": { "x": 12, "y": 12, "w": 12, "h": 8 },
+      "targets": [
+        { "expr": "sum by (primary_reason) (rate(wrapsec_sanitized_total[5m])) * 60", "legendFormat": "{{primary_reason}}" }
+      ],
+      "fieldConfig": { "defaults": { "unit": "reqpm", "custom": { "lineWidth": 2 } } }
+    },
+    {
+      "id": 11,
+      "title": "Detection Layer Score Heatmap — Rule",
+      "type": "timeseries",
+      "gridPos": { "x": 0, "y": 20, "w": 8, "h": 6 },
+      "targets": [
+        { "expr": "histogram_quantile(0.50, sum(rate(wrapsec_layer_score_bucket{layer='rule'}[5m])) by (le))", "legendFormat": "p50" },
+        { "expr": "histogram_quantile(0.95, sum(rate(wrapsec_layer_score_bucket{layer='rule'}[5m])) by (le))", "legendFormat": "p95" }
+      ],
+      "fieldConfig": { "defaults": { "unit": "short", "min": 0, "max": 1 }, "overrides": [{ "matcher": { "id": "byName", "options": "p95" }, "properties": [{ "id": "color", "value": { "fixedColor": "red", "mode": "fixed" } }] }] }
+    },
+    {
+      "id": 12,
+      "title": "Detection Layer Score Heatmap — ML",
+      "type": "timeseries",
+      "gridPos": { "x": 8, "y": 20, "w": 8, "h": 6 },
+      "targets": [
+        { "expr": "histogram_quantile(0.50, sum(rate(wrapsec_layer_score_bucket{layer='ml'}[5m])) by (le))", "legendFormat": "p50" },
+        { "expr": "histogram_quantile(0.95, sum(rate(wrapsec_layer_score_bucket{layer='ml'}[5m])) by (le))", "legendFormat": "p95" }
+      ],
+      "fieldConfig": { "defaults": { "unit": "short", "min": 0, "max": 1 }, "overrides": [{ "matcher": { "id": "byName", "options": "p95" }, "properties": [{ "id": "color", "value": { "fixedColor": "orange", "mode": "fixed" } }] }] }
+    },
+    {
+      "id": 13,
+      "title": "Detection Layer Score Heatmap — LLM",
+      "type": "timeseries",
+      "gridPos": { "x": 16, "y": 20, "w": 8, "h": 6 },
+      "targets": [
+        { "expr": "histogram_quantile(0.50, sum(rate(wrapsec_layer_score_bucket{layer='llm'}[5m])) by (le))", "legendFormat": "p50" },
+        { "expr": "histogram_quantile(0.95, sum(rate(wrapsec_layer_score_bucket{layer='llm'}[5m])) by (le))", "legendFormat": "p95" }
+      ],
+      "fieldConfig": { "defaults": { "unit": "short", "min": 0, "max": 1 }, "overrides": [{ "matcher": { "id": "byName", "options": "p95" }, "properties": [{ "id": "color", "value": { "fixedColor": "purple", "mode": "fixed" } }] }] }
+    },
+    {
+      "id": 14,
+      "title": "SYSTEM_ERROR Rate (ops alert threshold: >0.1%)",
+      "type": "timeseries",
+      "gridPos": { "x": 0, "y": 26, "w": 24, "h": 6 },
+      "targets": [
+        { "expr": "sum(rate(wrapsec_system_errors_total[5m])) / sum(rate(wrapsec_requests_total[5m]))", "legendFormat": "SYSTEM_ERROR rate" }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "percentunit",
+          "custom": { "lineWidth": 2 },
+          "thresholds": { "steps": [{ "color": "green", "value": null }, { "color": "yellow", "value": 0.001 }, { "color": "red", "value": 0.01 }] }
+        }
+      },
+      "options": { "tooltip": { "mode": "single" } }
+    }
+  ],
+  "schemaVersion": 38
+}

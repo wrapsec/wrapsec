@@ -1,7 +1,7 @@
 import time
 from contextlib import asynccontextmanager
 from observability.logging import setup_logging
-from observability.metrics import get_metrics, ACTIVE_REQUESTS
+from observability.metrics import get_metrics
 from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse

@@ -1,0 +1,218 @@
+{
+  "uid": "wrapsec-overview",
+  "title": "WrapSec — Security Overview",
+  "description": "Executive security dashboard — request volume, decision rates, system health",
+  "tags": ["wrapsec", "security", "overview"],
+  "timezone": "browser",
+  "refresh": "30s",
+  "time": { "from": "now-1h", "to": "now" },
+  "panels": [
+    {
+      "id": 1,
+      "title": "Request Rate (req/min)",
+      "type": "stat",
+      "gridPos": { "x": 0, "y": 0, "w": 4, "h": 4 },
+      "targets": [{
+        "expr": "sum(rate(wrapsec_requests_total[5m])) * 60",
+        "legendFormat": "req/min"
+      }],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "reqps",
+          "thresholds": {
+            "steps": [
+              { "color": "green", "value": null },
+              { "color": "yellow", "value": 30 },
+              { "color": "red", "value": 55 }
+            ]
+          }
+        }
+      },
+      "options": { "reduceOptions": { "calcs": ["lastNotNull"] }, "orientation": "auto", "colorMode": "background" }
+    },
+    {
+      "id": 2,
+      "title": "Block Rate",
+      "type": "stat",
+      "gridPos": { "x": 4, "y": 0, "w": 4, "h": 4 },
+      "targets": [{
+        "expr": "sum(rate(wrapsec_requests_total{decision='BLOCK'}[5m])) / sum(rate(wrapsec_requests_total[5m]))",
+        "legendFormat": "block rate"
+      }],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "percentunit",
+          "thresholds": {
+            "steps": [
+              { "color": "green", "value": null },
+              { "color": "yellow", "value": 0.05 },
+              { "color": "red", "value": 0.15 }
+            ]
+          }
+        }
+      },
+      "options": { "reduceOptions": { "calcs": ["lastNotNull"] }, "colorMode": "background" }
+    },
+    {
+      "id": 3,
+      "title": "SYSTEM_ERROR Rate",
+      "type": "stat",
+      "gridPos": { "x": 8, "y": 0, "w": 4, "h": 4 },
+      "targets": [{
+        "expr": "sum(rate(wrapsec_system_errors_total[5m])) / sum(rate(wrapsec_requests_total[5m]))",
+        "legendFormat": "error rate"
+      }],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "percentunit",
+          "thresholds": {
+            "steps": [
+              { "color": "green", "value": null },
+              { "color": "yellow", "value": 0.001 },
+              { "color": "red", "value": 0.01 }
+            ]
+          }
+        }
+      },
+      "options": { "reduceOptions": { "calcs": ["lastNotNull"] }, "colorMode": "background" }
+    },
+    {
+      "id": 4,
+      "title": "P95 Latency (ms)",
+      "type": "stat",
+      "gridPos": { "x": 12, "y": 0, "w": 4, "h": 4 },
+      "targets": [{
+        "expr": "histogram_quantile(0.95, sum(rate(wrapsec_request_latency_ms_bucket[5m])) by (le))",
+        "legendFormat": "p95"
+      }],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "ms",
+          "thresholds": {
+            "steps": [
+              { "color": "green", "value": null },
+              { "color": "yellow", "value": 100 },
+              { "color": "red", "value": 500 }
+            ]
+          }
+        }
+      },
+      "options": { "reduceOptions": { "calcs": ["lastNotNull"] }, "colorMode": "background" }
+    },
+    {
+      "id": 5,
+      "title": "Cache Hit Rate",
+      "type": "stat",
+      "gridPos": { "x": 16, "y": 0, "w": 4, "h": 4 },
+      "targets": [{
+        "expr": "sum(rate(wrapsec_cache_hits_total[5m])) / (sum(rate(wrapsec_cache_hits_total[5m])) + sum(rate(wrapsec_cache_misses_total[5m])))",
+        "legendFormat": "hit rate"
+      }],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "percentunit",
+          "thresholds": {
+            "steps": [
+              { "color": "red", "value": null },
+              { "color": "yellow", "value": 0.2 },
+              { "color": "green", "value": 0.5 }
+            ]
+          }
+        }
+      },
+      "options": { "reduceOptions": { "calcs": ["lastNotNull"] }, "colorMode": "background" }
+    },
+    {
+      "id": 6,
+      "title": "Active Requests",
+      "type": "stat",
+      "gridPos": { "x": 20, "y": 0, "w": 4, "h": 4 },
+      "targets": [{
+        "expr": "wrapsec_active_requests",
+        "legendFormat": "active"
+      }],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "short",
+          "thresholds": {
+            "steps": [
+              { "color": "green", "value": null },
+              { "color": "yellow", "value": 50 },
+              { "color": "red", "value": 100 }
+            ]
+          }
+        }
+      },
+      "options": { "reduceOptions": { "calcs": ["lastNotNull"] }, "colorMode": "background" }
+    },
+    {
+      "id": 7,
+      "title": "Request Rate by Decision",
+      "type": "timeseries",
+      "gridPos": { "x": 0, "y": 4, "w": 12, "h": 8 },
+      "targets": [
+        { "expr": "sum(rate(wrapsec_requests_total{decision='ALLOW'}[5m])) * 60", "legendFormat": "ALLOW" },
+        { "expr": "sum(rate(wrapsec_requests_total{decision='BLOCK'}[5m])) * 60", "legendFormat": "BLOCK" },
+        { "expr": "sum(rate(wrapsec_requests_total{decision='SANITIZE'}[5m])) * 60", "legendFormat": "SANITIZE" }
+      ],
+      "fieldConfig": {
+        "defaults": { "unit": "reqpm", "custom": { "lineWidth": 2 } },
+        "overrides": [
+          { "matcher": { "id": "byName", "options": "BLOCK" }, "properties": [{ "id": "color", "value": { "fixedColor": "red", "mode": "fixed" } }] },
+          { "matcher": { "id": "byName", "options": "SANITIZE" }, "properties": [{ "id": "color", "value": { "fixedColor": "orange", "mode": "fixed" } }] },
+          { "matcher": { "id": "byName", "options": "ALLOW" }, "properties": [{ "id": "color", "value": { "fixedColor": "green", "mode": "fixed" } }] }
+        ]
+      }
+    },
+    {
+      "id": 8,
+      "title": "SYSTEM_ERROR & Rate Limit Events",
+      "type": "timeseries",
+      "gridPos": { "x": 12, "y": 4, "w": 12, "h": 8 },
+      "targets": [
+        { "expr": "sum(rate(wrapsec_system_errors_total[5m])) * 60", "legendFormat": "SYSTEM_ERROR/min" },
+        { "expr": "sum(rate(wrapsec_rate_limited_total[5m])) * 60", "legendFormat": "Rate Limited/min" }
+      ],
+      "fieldConfig": {
+        "defaults": { "unit": "reqpm", "custom": { "lineWidth": 2 } },
+        "overrides": [
+          { "matcher": { "id": "byName", "options": "SYSTEM_ERROR/min" }, "properties": [{ "id": "color", "value": { "fixedColor": "red", "mode": "fixed" } }] },
+          { "matcher": { "id": "byName", "options": "Rate Limited/min" }, "properties": [{ "id": "color", "value": { "fixedColor": "orange", "mode": "fixed" } }] }
+        ]
+      }
+    },
+    {
+      "id": 9,
+      "title": "Requests by Execution Mode",
+      "type": "piechart",
+      "gridPos": { "x": 0, "y": 12, "w": 8, "h": 8 },
+      "targets": [
+        { "expr": "sum(rate(wrapsec_requests_total{execution_mode='scan_only'}[1h])) * 3600", "legendFormat": "Scan Only" },
+        { "expr": "sum(rate(wrapsec_requests_total{execution_mode='proxy'}[1h])) * 3600", "legendFormat": "Proxy" }
+      ],
+      "options": { "pieType": "donut", "displayLabels": ["name", "percent"] }
+    },
+    {
+      "id": 10,
+      "title": "Requests by Key Type",
+      "type": "piechart",
+      "gridPos": { "x": 8, "y": 12, "w": 8, "h": 8 },
+      "targets": [
+        { "expr": "sum(rate(wrapsec_requests_total{key_type='live'}[1h])) * 3600", "legendFormat": "Live" },
+        { "expr": "sum(rate(wrapsec_requests_total{key_type='trial'}[1h])) * 3600", "legendFormat": "Trial" }
+      ],
+      "options": { "pieType": "donut", "displayLabels": ["name", "percent"] }
+    },
+    {
+      "id": 11,
+      "title": "Block Reasons Breakdown",
+      "type": "piechart",
+      "gridPos": { "x": 16, "y": 12, "w": 8, "h": 8 },
+      "targets": [
+        { "expr": "sum by (primary_reason) (increase(wrapsec_blocked_total[1h]))", "legendFormat": "{{primary_reason}}" }
+      ],
+      "options": { "pieType": "donut", "displayLabels": ["name", "percent"] }
+    }
+  ],
+  "schemaVersion": 38
+}

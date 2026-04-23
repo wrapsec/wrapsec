@@ -77,7 +77,9 @@ services:
     image: prom/prometheus:latest
     container_name: wrapsec_prometheus
     ports:
-      - "9090:9090"
+      # Bind to localhost only — Prometheus must never be public-facing.
+      # Access via SSH tunnel: ssh -L 9090:localhost:9090 user@host
+      - "127.0.0.1:9090:9090"
     volumes:
       - ../prometheus/prometheus.yml:/etc/prometheus/prometheus.yml:ro
       - prometheus_data:/prometheus
@@ -92,13 +94,19 @@ services:
     image: grafana/grafana:latest
     container_name: wrapsec_grafana
     ports:
-      - "3001:3000"
+      # Bind to localhost only — serve Grafana behind nginx with auth in production.
+      # IMPORTANT: Change GF_SECURITY_ADMIN_PASSWORD before deployment.
+      - "127.0.0.1:3001:3000"
     environment:
-      - GF_SECURITY_ADMIN_PASSWORD=wrapsec
+      - GF_SECURITY_ADMIN_PASSWORD=${GRAFANA_ADMIN_PASSWORD:-changeme_before_deploy}
       - GF_USERS_ALLOW_SIGN_UP=false
+      - GF_AUTH_ANONYMOUS_ENABLED=false
+      - GF_SECURITY_DISABLE_GRAVATAR=true
     volumes:
       - grafana_data:/var/lib/grafana
       - ../grafana/datasources/prometheus.yml:/etc/grafana/provisioning/datasources/prometheus.yml:ro
+      - ../grafana/dashboards.yml:/etc/grafana/provisioning/dashboards/dashboards.yml:ro
+      - ../grafana/dashboards:/etc/grafana/provisioning/dashboards:ro
     depends_on:
       - prometheus
     restart: unless-stopped

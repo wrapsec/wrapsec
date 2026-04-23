@@ -45,6 +45,13 @@ class RateLimitMiddleware(BaseHTTPMiddleware):
         is_limited, remaining, reset_at = await is_rate_limited(rate_limit_id)
 
         if is_limited:
+            # Record rate limit hit metric — no key_type label since auth hasn't run yet
+            try:
+                from observability.metrics import record_rate_limit
+                record_rate_limit()
+            except Exception:
+                pass
+
             response = JSONResponse(
                 status_code = 429,
                 content = {

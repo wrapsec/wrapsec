@@ -247,19 +247,24 @@ async def ai_request(
         ),
     })
 
-    from observability.metrics import record_request
-    record_request(
-        decision       = result.decision.decision.value,
-        detection_mode = det_mode_str,
-        execution_mode = exe_mode_str,
-        latency_ms     = result.decision.latency_ms,
-        threats        = [t.value for t in result.decision.threats],
-        layer_scores   = {
-            "rule": result.decision.layer_scores.rule_score,
-            "ml":   result.decision.layer_scores.ml_score,
-            "llm":  result.decision.layer_scores.llm_score,
-        } if result.decision.layer_scores else None,
-    )
+    try:
+        from observability.metrics import record_request
+        record_request(
+            decision       = result.decision.decision.value,
+            detection_mode = det_mode_str,
+            execution_mode = exe_mode_str,
+            latency_ms     = result.decision.latency_ms,
+            threats        = [t.value for t in result.decision.threats],
+            layer_scores   = {
+                "rule": result.decision.layer_scores.rule_score,
+                "ml":   result.decision.layer_scores.ml_score,
+                "llm":  result.decision.layer_scores.llm_score,
+            } if result.decision.layer_scores else None,
+            primary_reason = result.decision.primary_reason,
+            key_type       = getattr(request.state, "key_type", "live"),
+        )
+    except Exception:
+        pass  # Metrics must never break scan responses
 
     response = _build_response(
         result.decision,

@@ -656,7 +656,28 @@ async def proxy_chat_completions(
             input_length     = len(scan_input),
     )
 
-    # -- 12. Build OpenAI-compatible response --
+    # -- 12. Record proxy metrics --
+    try:
+        from observability.metrics import record_proxy_request, record_request
+        record_proxy_request(
+            execution_status = execution_status,
+            total_latency_ms = total_ms,
+            llm_invoked      = True,
+            provider         = provider_name or "unknown",
+        )
+        record_request(
+            decision       = input_decision,
+            detection_mode = "fast",
+            execution_mode = "proxy",
+            latency_ms     = float(total_ms),
+            threats        = input_threats or [],
+            primary_reason = input_reason,
+            key_type       = getattr(request.state, "key_type", "live"),
+        )
+    except Exception:
+        pass  # Never let metrics break the response
+
+    # -- 13. Build OpenAI-compatible response --
     headers = _build_wrapsec_headers(
         trace_id, input_decision, input_reason, input_conf,
         input_decision == "SANITIZE",
