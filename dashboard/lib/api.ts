@@ -1,0 +1,506 @@
+import { logout } from "@/lib/auth"
+import {
+  AIRequest,
+  GatewayResponse,
+  AuditLogsResponse,
+  AuditStatsResponse,
+  Thresholds,
+  Layers,
+  LLMSettings,
+  ApiKeysResponse,
+  ApiKeyCreated,
+  HealthReadyResponse,
+  RequestDetail,
+  RequestFilters,
+  Department,
+  Application,
+  ProxyProviderConfig,
+  ProxyHealthResult,
+  ProxyInteractionsResponse,
+  ProxyInteractionDetail,
+} from "./types"
+
+async function request<T>(
+  path: string,
+  options: RequestInit = {}
+): Promise<T> {
+  // All requests go through Next.js proxy
+  // Cookie is read server-side — no API key in browser
+  const proxyPath = `/api/proxy${path}`
+
+  const response = await fetch(proxyPath, {
+    ...options,
+    headers: {
+      "Content-Type": "application/json",
+      ...(options.headers || {}),
+    },
+  })
+
+  if (!response.ok) {
+    if (response.status === 401 && typeof window !== "undefined") {
+      await logout()
+      window.location.href = "/login"
+      throw new Error("Unauthorized")
+    }
+    const error = await response.json().catch(() => ({}))
+    throw new Error(
+      error?.error?.message || `HTTP ${response.status}`
+    )
+  }
+
+  return response.json()
+}
+
+// ── Gateway ───────────────────────────────────────────────────
+export async function scanRequest(
+  body: AIRequest
+): Promise<GatewayResponse> {
+  return request<GatewayResponse>("/v1/ai/request", {
+    method: "POST",
+    body:   JSON.stringify(body),
+  })
+}
+
+export async function getRequest(
+  traceId: string
+): Promise<RequestDetail> {
+  return request<RequestDetail>(`/v1/ai/requests/${traceId}`)
+}
+
+// ── Audit ─────────────────────────────────────────────────────
+export async function getAuditLogs(
+  filters: Partial<RequestFilters> = {}
+): Promise<AuditLogsResponse> {
+  const params = new URLSearchParams()
+  if (filters.trace_id)        params.set("trace_id",        filters.trace_id)
+  if (filters.decision)        params.set("decision",        filters.decision)
+  if (filters.threat_category) params.set("threat_category", filters.threat_category)
+  if (filters.from)            params.set("from",            filters.from)
+  if (filters.to)              params.set("to",              filters.to)
+  if (filters.limit)       params.set("limit",      String(filters.limit))
+  if (filters.offset)      params.set("offset",     String(filters.offset))
+  if (filters.sort_by)     params.set("sort_by",    filters.sort_by)
+  if (filters.sort_order)  params.set("sort_order", filters.sort_order)
+  if (filters.execution_mode) params.set("execution_mode", filters.execution_mode)
+
+  const qs = params.toString()
+  return request<AuditLogsResponse>(`/v1/audit/logs${qs ? `?${qs}` : ""}`)
+}
+
+export async function getAuditStats(): Promise<AuditStatsResponse> {
+  return request<AuditStatsResponse>("/v1/audit/stats")
+}
+
+// ── Settings ──────────────────────────────────────────────────
+export async function getThresholds(): Promise<Thresholds> {
+  return request<Thresholds>("/v1/settings/thresholds")
+}
+
+export async function updateThresholds(
+  data: Partial<Thresholds>
+): Promise<Thresholds> {
+  return request<Thresholds>("/v1/settings/thresholds", {
+    method: "PUT",
+    body:   JSON.stringify(data),
+  })
+}
+
+export async function getLayers(): Promise<Layers> {
+  return request<Layers>("/v1/settings/layers")
+}
+
+export async function updateLayers(
+  data: Partial<Layers>
+): Promise<Layers> {
+  return request<Layers>("/v1/settings/layers", {
+    method: "PUT",
+    body:   JSON.stringify(data),
+  })
+}
+
+// ── API Keys ──────────────────────────────────────────────────
+export async function getApiKeys(): Promise<ApiKeysResponse> {
+  return request<ApiKeysResponse>("/v1/keys")
+}
+
+export async function createApiKey(
+  name:     string,
+  appId?:   string,
+  deptId?:  string,
+  keyType:  "live" | "trial" = "live",
+): Promise<ApiKeyCreated> {
+  return request<ApiKeyCreated>("/v1/keys", {
+    method: "POST",
+    body:   JSON.stringify({
+      name,
+      key_type: keyType,
+      ...(appId  ? { app_id:  appId  } : {}),
+      ...(deptId ? { dept_id: deptId } : {}),
+    }),
+  })
+}
+
+export async function revokeApiKey(keyId: string): Promise<void> {
+  return request<void>(`/v1/keys/${keyId}`, { method: "DELETE" })
+}
+
+// ── Health — direct call, no auth needed ──────────────────────
+export async function getHealth(): Promise<HealthReadyResponse> {
+  const response = await fetch(
+    `${process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000"}/health/ready`
+  )
+  return response.json()
+}
+
+// ── LLM Settings ──────────────────────────────────────────────
+export async function getLLMSettings(): Promise<LLMSettings> {
+  return request<LLMSettings>("/v1/settings/llm")
+}
+
+export async function updateLLMSettings(
+  data: Partial<LLMSettings>
+): Promise<LLMSettings> {
+  return request<LLMSettings>("/v1/settings/llm", {
+    method: "PUT",
+    body:   JSON.stringify(data),
+  })
+}
+
+// ── Departments ───────────────────────────────────────────────
+export async function getDepartments() {
+  return request<{ departments: Department[] }>("/v1/admin/departments")
+}
+
+export async function getDepartment(id: string) {
+  return request<Department>(`/v1/admin/departments/${id}`)
+}
+
+export async function createDepartment(data: {
+  name:          string
+  slug:          string
+  description?:  string
+  contact_email?: string
+}) {
+  return request<Department>("/v1/admin/departments", {
+    method: "POST",
+    body:   JSON.stringify(data),
+  })
+}
+
+export async function updateDepartment(id: string, data: Partial<Department>) {
+  return request<Department>(`/v1/admin/departments/${id}`, {
+    method: "PUT",
+    body:   JSON.stringify(data),
+  })
+}
+
+export async function deleteDepartment(id: string) {
+  return request<{ dept_id: string; deactivated: boolean }>(
+    `/v1/admin/departments/${id}`,
+    { method: "DELETE" }
+  )
+}
+
+// ── Applications ──────────────────────────────────────────────
+export async function getApplications() {
+  return request<{ applications: Application[] }>("/v1/admin/applications")
+}
+
+export async function getApplicationsByDept(deptId: string) {
+  return request<{ applications: Application[] }>(
+    `/v1/admin/applications?dept_id=${deptId}`
+  )
+}
+
+export async function getApplication(id: string) {
+  return request<Application>(`/v1/admin/applications/${id}`)
+}
+
+export async function createApplication(data: {
+  dept_id:      string
+  name:         string
+  slug:         string
+  description?: string
+  owner_name?:  string
+  owner_email?: string
+  environment?: string
+}) {
+  return request<Application>("/v1/admin/applications", {
+    method: "POST",
+    body:   JSON.stringify(data),
+  })
+}
+
+export async function updateApplication(id: string, data: Partial<Application>) {
+  return request<Application>(`/v1/admin/applications/${id}`, {
+    method: "PUT",
+    body:   JSON.stringify(data),
+  })
+}
+
+export async function deleteApplication(id: string) {
+  return request<{ app_id: string; deactivated: boolean }>(
+    `/v1/admin/applications/${id}`,
+    { method: "DELETE" }
+  )
+}
+
+// ── Tenant ────────────────────────────────────────────────────
+export async function getTenant() {
+  return request<{
+    id:            string
+    slug:          string
+    name:          string
+    description:   string | null
+    global_policy: Record<string, any>
+    contact_email: string | null
+    is_active:     boolean
+    created_at:    string
+  }>("/v1/admin/tenant")
+}
+
+export async function updateTenant(data: {
+  name?:          string
+  description?:   string
+  contact_email?: string
+  global_policy?: Record<string, any>
+}) {
+  return request<{
+    id:            string
+    name:          string
+    description:   string | null
+    global_policy: Record<string, any>
+    contact_email: string | null
+  }>("/v1/admin/tenant", {
+    method: "PUT",
+    body:   JSON.stringify(data),
+  })
+}
+
+// ── Retention Settings ────────────────────────────────────────
+export async function getRetentionSettings(): Promise<{
+  retention_days: number
+  source: string
+}> {
+  return request("/v1/settings/retention")
+}
+
+export async function updateRetentionSettings(
+  retention_days: number
+): Promise<{ retention_days: number; updated_at: string }> {
+  return request("/v1/settings/retention", {
+    method: "PUT",
+    body:   JSON.stringify({ retention_days }),
+  })
+}
+
+export async function getAttribution(): Promise<{
+  by_key:             { key_id: string; source: string; total: number; blocked: number; block_rate: number; avg_latency_ms: number }[]
+  by_department:      { dept_id: string; total: number; blocked: number; block_rate: number }[]
+  by_application:     { app_id: string; total: number; blocked: number; block_rate: number; avg_latency_ms: number }[]
+  by_primary_reason:  { primary_reason: string; count: number }[]
+  by_confidence_band: { band: string; count: number }[]
+}> {
+  return request("/v1/audit/attribution")
+}
+
+export async function getDepartmentStats(id: string) {
+  return request<{
+    dept_id:        string
+    total:          number
+    decisions:      Record<string, number>
+    block_rate:     number
+    avg_latency_ms: number
+    top_threats:    { category: string; count: number }[]
+  }>(`/v1/admin/departments/${id}/stats`)
+}
+
+export async function getKeysByApp(appId: string) {
+  return request<{ keys: {
+    key_id:       string
+    name:         string
+    app_id:       string | null
+    dept_id:      string | null
+    created_at:   string
+    expires_at:   string | null
+    last_used_at: string | null
+  }[] }>("/v1/keys")
+}
+
+export async function exportAuditLogs(params: {
+  decision?:        string
+  threat_category?: string
+  from?:            string
+  to?:              string
+  limit?:           number
+}): Promise<Blob> {
+  const p = new URLSearchParams()
+  if (params.decision)        p.set("decision",        params.decision)
+  if (params.threat_category) p.set("threat_category", params.threat_category)
+  if (params.from)            p.set("from",            params.from)
+  if (params.to)              p.set("to",              params.to)
+  p.set("limit", String(params.limit ?? 10000))
+
+  const response = await fetch(`/api/proxy/v1/audit/export?${p.toString()}`)
+  if (!response.ok) throw new Error(`Export failed: ${response.status}`)
+  return response.blob()
+}
+
+export async function getHealthConfig() {
+  return request<{
+    version:          string
+    thresholds:       { block: number; sanitize: number; source: string }
+    detection_layers: { rule: boolean; ml: boolean; llm: boolean; source: string }
+    llm:              { provider: string; model: string; llm_trigger: number; timeout: number; source: string }
+    rate_limit:       { per_minute: number; scope: string }
+  }>("/health/config")
+}
+
+export async function setApplicationPolicy(id: string, policy_override: Record<string, any> | null) {
+  return request<{
+    app_id:          string
+    policy_override: Record<string, any> | null
+    policy_source:   string
+    resolved_policy: Record<string, any>
+    updated:         boolean
+  }>(`/v1/admin/applications/${id}/policy`, {
+    method: "PUT",
+    body:   JSON.stringify({ policy_override }),
+  })
+}
+
+export async function resetApplicationPolicy(id: string) {
+  return request<{
+    app_id:  string
+    reset:   boolean
+    message: string
+  }>(`/v1/admin/applications/${id}/policy`, {
+    method: "DELETE",
+  })
+}
+
+export async function getApplicationPolicy(id: string) {
+  return request<{
+    app_id:          string
+    app_name:        string
+    dept_id:         string
+    policy_source:   string
+    override_set:    boolean
+    policy_override: Record<string, any> | null
+    resolved_policy: Record<string, any>
+  }>(`/v1/admin/applications/${id}/policy`)
+}
+
+export async function rotateApiKey(keyId: string, gracePeriodMinutes: number = 60) {
+  return request<{
+    new_key_id:            string
+    new_api_key:           string
+    old_key_id:            string
+    old_expires_at:        string
+    grace_period_minutes:  number
+    name:                  string
+    created_at:            string
+  }>(`/v1/keys/${keyId}/rotate`, {
+    method: "POST",
+    body:   JSON.stringify({ grace_period_minutes: gracePeriodMinutes }),
+  })
+}
+
+export async function getAnalytics(params: {
+  group_by?: "hour" | "day" | "week" | "month"
+  from?:     string
+  to?:       string
+  dept_id?:  string
+} = {}) {
+  const p = new URLSearchParams()
+  if (params.group_by) p.set("group_by", params.group_by)
+  if (params.from)     p.set("from",     params.from)
+  if (params.to)       p.set("to",       params.to)
+  if (params.dept_id)  p.set("dept_id",  params.dept_id)
+  return request<{
+    group_by:   string
+    total:      number
+    block_rate: number
+    trend: {
+      period:         string
+      total:          number
+      blocked:        number
+      sanitized:      number
+      allowed:        number
+      block_rate:     number
+      avg_risk_score: number
+      avg_latency_ms: number
+    }[]
+  }>(`/v1/audit/analytics?${p.toString()}`)
+}
+
+// ── Proxy Settings ────────────────────────────────────────────
+export async function getProxySettings(): Promise<ProxyProviderConfig> {
+  return request<ProxyProviderConfig>("/v1/settings/proxy")
+}
+
+export async function updateProxySettings(data: {
+  provider:      string
+  base_url:      string
+  api_key?:      string
+  default_model: string
+  timeout:       number
+}): Promise<ProxyProviderConfig> {
+  return request<ProxyProviderConfig>("/v1/settings/proxy", {
+    method: "PUT",
+    body:   JSON.stringify(data),
+  })
+}
+
+export async function deleteProxySettings(): Promise<void> {
+  return request<void>("/v1/settings/proxy", { method: "DELETE" })
+}
+
+export async function getProxyHealth(): Promise<ProxyHealthResult> {
+  return request<ProxyHealthResult>("/v1/settings/proxy/health")
+}
+
+// ── Proxy Interactions ────────────────────────────────────────
+export async function getProxyInteractions(params: {
+  limit?:            number
+  offset?:           number
+  execution_status?: string
+} = {}): Promise<ProxyInteractionsResponse> {
+  const p = new URLSearchParams()
+  if (params.limit)            p.set("limit",            String(params.limit))
+  if (params.offset)           p.set("offset",           String(params.offset))
+  if (params.execution_status) p.set("execution_status", params.execution_status)
+  return request<ProxyInteractionsResponse>(
+    `/v1/proxy/interactions${p.toString() ? `?${p}` : ""}`
+  )
+}
+
+export async function getProxyInteraction(
+  traceId: string
+): Promise<ProxyInteractionDetail> {
+  return request<ProxyInteractionDetail>(`/v1/proxy/interactions/${traceId}`)
+}
+
+export async function getRateLimitSettings(): Promise<{ per_minute: number; source: string }> {
+  return request<{ per_minute: number; source: string }>("/v1/settings/rate_limit")
+}
+
+export async function updateRateLimitSettings(
+  perMinute: number,
+): Promise<{ per_minute: number; source: string; updated_at: string }> {
+  return request<{ per_minute: number; source: string; updated_at: string }>(
+    "/v1/settings/rate_limit",
+    {
+      method: "PUT",
+      body:   JSON.stringify({ per_minute: perMinute }),
+    }
+  )
+}
+
+export async function getStorageSettings(): Promise<{
+  storage_mode:         string
+  retention_days_proxy: number
+}> {
+  return request("/v1/settings/storage")
+}
+
