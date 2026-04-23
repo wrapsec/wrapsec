@@ -15,7 +15,7 @@ class LoggingMiddleware(BaseHTTPMiddleware):
     Skips /health endpoints to reduce noise.
     """
 
-    SKIP_PATHS = {"/health", "/health/ready", "/health/live"}
+    SKIP_PATHS = {"/health", "/health/ready", "/health/live", "/metrics"}
 
     async def dispatch(self, request: Request, call_next) -> Response:
         if request.url.path in self.SKIP_PATHS:
