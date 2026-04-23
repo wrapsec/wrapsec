@@ -31,7 +31,8 @@ def generate_key_id() -> str:
 
 class CreateKeySchema(BaseModel):
     name:       str
-    app_id:     str | None = None
+    dept_id:    str | None = None  # dept-scoped key (no app required)
+    app_id:     str | None = None  # app-scoped key (dept+tenant derived from app)
     expires_at: str | None = None
 
 
@@ -49,6 +50,7 @@ async def create_key(
     tenant_id = None
 
     if body.app_id:
+        # App-scoped key: derive dept + tenant from app
         app_repo = ApplicationRepository(db)
         app      = await app_repo.get_by_id(uuid.UUID(body.app_id))
         if not app:
@@ -56,8 +58,16 @@ async def create_key(
         app_id    = app.id
         dept_id   = app.dept_id
         tenant_id = app.tenant_id
+    elif body.dept_id:
+        # Dept-scoped key: derive tenant from dept
+        dept_repo = DepartmentRepository(db)
+        dept      = await dept_repo.get_by_id(uuid.UUID(body.dept_id))
+        if not dept:
+            raise NotFoundError("department", body.dept_id)
+        dept_id   = dept.id
+        tenant_id = dept.tenant_id
     else:
-        # No app specified — link to default tenant + department
+        # No scope specified — link to default tenant + department
         tenant_repo = TenantRepository(db)
         dept_repo   = DepartmentRepository(db)
         tenant      = await tenant_repo.get_default()
@@ -99,6 +109,25 @@ async def list_keys(db: AsyncSession = Depends(get_db)):
     now  = datetime.utcnow()
     keys = [k for k in keys if k.expires_at is None or k.expires_at > now]
 
+    # Enrich with department and application names
+    dept_repo  = DepartmentRepository(db)
+    app_repo   = ApplicationRepository(db)
+    dept_names: dict = {}
+    app_names:  dict = {}
+    for k in keys:
+        if k.dept_id and str(k.dept_id) not in dept_names:
+            try:
+                dept = await dept_repo.get_by_id(k.dept_id)
+                dept_names[str(k.dept_id)] = dept.name if dept else None
+            except Exception:
+                dept_names[str(k.dept_id)] = None
+        if k.app_id and str(k.app_id) not in app_names:
+            try:
+                app = await app_repo.get_by_id(k.app_id)
+                app_names[str(k.app_id)] = app.name if app else None
+            except Exception:
+                app_names[str(k.app_id)] = None
+
     return JSONResponse(content={
         "keys": [
             {
@@ -106,6 +135,8 @@ async def list_keys(db: AsyncSession = Depends(get_db)):
                 "name":         k.name,
                 "app_id":       str(k.app_id)  if k.app_id  else None,
                 "dept_id":      str(k.dept_id) if k.dept_id else None,
+                "dept_name":    dept_names.get(str(k.dept_id)) if k.dept_id else None,
+                "app_name":     app_names.get(str(k.app_id))   if k.app_id  else None,
                 "created_at":   k.created_at.isoformat(),
                 "expires_at":   k.expires_at.isoformat() if k.expires_at else None,
                 "last_used_at": k.last_used_at.isoformat() if k.last_used_at else None,

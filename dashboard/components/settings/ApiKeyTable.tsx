@@ -65,7 +65,7 @@ export function ApiKeyTable({ keys, onRevoke, onRotate, revoking }: ApiKeyTableP
       <table className="w-full text-sm">
         <thead>
           <tr className="border-b border-slate-100">
-            {["Name", "Key ID", "Created", "Last Used", ""].map((h) => (
+            {["Name", "Key ID", "Department", "Application", "Created", "Last Used", ""].map((h) => (
               <th key={h} className="text-left pb-2.5 text-xs font-medium text-slate-500 uppercase tracking-wide">
                 {h}
               </th>
@@ -96,6 +96,20 @@ export function ApiKeyTable({ keys, onRevoke, onRotate, revoking }: ApiKeyTableP
 
                   <td className="py-3 font-mono text-xs text-slate-500">
                     {key.key_id}
+                  </td>
+
+                  <td className="py-3 text-xs text-slate-500">
+                    {key.dept_name || (key.dept_id ? (
+                      <span className="font-mono">{key.dept_id.slice(0, 8)}...</span>
+                    ) : (
+                      <span className="text-slate-300">—</span>
+                    ))}
+                  </td>
+
+                  <td className="py-3 text-xs text-slate-500">
+                    {key.app_name || (
+                      <span className="text-slate-300">Dept-scoped</span>
+                    )}
                   </td>
 
                   <td className="py-3 text-xs text-slate-500">
@@ -142,7 +156,7 @@ export function ApiKeyTable({ keys, onRevoke, onRotate, revoking }: ApiKeyTableP
                 {/* Grace period selector row */}
                 {graceInput === key.key_id && (
                   <tr className="bg-blue-50">
-                    <td colSpan={5} className="px-3 py-3">
+                    <td colSpan={7} className="px-3 py-3">
                       <div className="flex items-center gap-3 flex-wrap">
                         <p className="text-xs text-slate-600 whitespace-nowrap">
                           How long should the old key remain valid?

@@ -1,10 +1,11 @@
 "use client"
 
 import { useState } from "react"
+import useSWR from "swr"
 import { Button } from "@/components/ui/Button"
 import { Input } from "@/components/ui/Input"
 import { ApiKeyCreated } from "@/lib/types"
-import { createApiKey } from "@/lib/api"
+import { createApiKey, getDepartments, getApplicationsByDept } from "@/lib/api"
 
 interface CreateKeyModalProps {
   onCreated: (key: ApiKeyCreated) => void
@@ -13,16 +14,38 @@ interface CreateKeyModalProps {
 
 export function CreateKeyModal({ onCreated, onClose }: CreateKeyModalProps) {
   const [name,    setName]    = useState("")
+  const [deptId,  setDeptId]  = useState("")
+  const [appId,   setAppId]   = useState("")
   const [loading, setLoading] = useState(false)
   const [created, setCreated] = useState<ApiKeyCreated | null>(null)
   const [error,   setError]   = useState<string | null>(null)
+
+  // Load departments for selector
+  const { data: deptsData } = useSWR("departments", getDepartments)
+  const departments = deptsData?.departments ?? []
+
+  // Load applications when dept is selected
+  const { data: appsData } = useSWR(
+    deptId ? `apps-dept-${deptId}` : null,
+    () => getApplicationsByDept(deptId)
+  )
+  const applications = appsData?.applications ?? []
+
+  const handleDeptChange = (id: string) => {
+    setDeptId(id)
+    setAppId("") // reset app when dept changes
+  }
 
   const handleCreate = async () => {
     if (!name.trim()) return
     setLoading(true)
     setError(null)
     try {
-      const key = await createApiKey(name.trim())
+      const key = await createApiKey(
+        name.trim(),
+        appId  || undefined,
+        deptId || undefined,
+      )
       setCreated(key)
       onCreated(key)
     } catch (e: any) {
@@ -31,6 +54,8 @@ export function CreateKeyModal({ onCreated, onClose }: CreateKeyModalProps) {
       setLoading(false)
     }
   }
+
+  const selectClass = "h-9 w-full px-3 text-sm rounded-md border border-slate-200 bg-white text-slate-900 focus:outline-none focus:ring-2 focus:ring-blue-800"
 
   return (
     <div className="fixed inset-0 bg-black/40 flex items-center justify-center z-50">
@@ -41,12 +66,56 @@ export function CreateKeyModal({ onCreated, onClose }: CreateKeyModalProps) {
 
         {!created ? (
           <div className="space-y-4">
+            {/* Name */}
             <Input
               label="Key name"
-              placeholder="e.g. erp-system"
+              placeholder="e.g. finance-bot"
               value={name}
               onChange={(e) => setName(e.target.value)}
             />
+
+            {/* Department */}
+            <div className="flex flex-col gap-1">
+              <label className="text-xs font-medium text-slate-700">
+                Department <span className="text-slate-400">(required)</span>
+              </label>
+              <select
+                value={deptId}
+                onChange={(e) => handleDeptChange(e.target.value)}
+                className={selectClass}
+              >
+                <option value="">Select department...</option>
+                {departments.map(d => (
+                  <option key={d.id} value={d.id}>{d.name}</option>
+                ))}
+              </select>
+              <p className="text-xs text-slate-400">
+                Key will be scoped to this department
+              </p>
+            </div>
+
+            {/* Application — optional, only shown when dept is selected */}
+            {deptId && (
+              <div className="flex flex-col gap-1">
+                <label className="text-xs font-medium text-slate-700">
+                  Application <span className="text-slate-400">(optional)</span>
+                </label>
+                <select
+                  value={appId}
+                  onChange={(e) => setAppId(e.target.value)}
+                  className={selectClass}
+                >
+                  <option value="">No application — dept-scoped only</option>
+                  {applications.map(a => (
+                    <option key={a.id} value={a.id}>{a.name}</option>
+                  ))}
+                </select>
+                <p className="text-xs text-slate-400">
+                  Optionally scope to a specific application within the department
+                </p>
+              </div>
+            )}
+
             {error && (
               <p className="text-xs text-red-600">{error}</p>
             )}
@@ -56,7 +125,7 @@ export function CreateKeyModal({ onCreated, onClose }: CreateKeyModalProps) {
               </Button>
               <Button
                 loading={loading}
-                disabled={!name.trim()}
+                disabled={!name.trim() || !deptId}
                 onClick={handleCreate}
               >
                 Create
@@ -72,6 +141,21 @@ export function CreateKeyModal({ onCreated, onClose }: CreateKeyModalProps) {
               <p className="font-mono text-xs text-amber-900 break-all">
                 {created.api_key}
               </p>
+            </div>
+            {/* Show scoping info */}
+            <div className="grid grid-cols-2 gap-2 text-xs text-slate-500">
+              {created.dept_id && (
+                <div>
+                  <span className="text-slate-400">Department:</span>{" "}
+                  <span className="font-mono">{created.dept_id.slice(0, 8)}...</span>
+                </div>
+              )}
+              {created.app_id && (
+                <div>
+                  <span className="text-slate-400">Application:</span>{" "}
+                  <span className="font-mono">{created.app_id.slice(0, 8)}...</span>
+                </div>
+              )}
             </div>
             <div className="flex justify-end">
               <Button onClick={onClose}>Done</Button>
