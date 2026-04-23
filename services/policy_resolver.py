@@ -71,19 +71,17 @@ def deep_merge(parent: dict, child: dict | None) -> dict:
 
 # ── Policy source ──────────────────────────────────────────────
 def determine_policy_source(
-    tenant_override: dict | None,
-    dept_override:   dict | None,
-    app_override:    dict | None,
+    dept_override: dict | None,
+    app_override:  dict | None,
 ) -> str:
     """
     Returns the highest priority level that changed any field.
+    tenant global_policy is no longer used — DB settings table is authoritative.
     """
     if app_override:
         return "application_override"
     if dept_override:
         return "department_override"
-    if tenant_override and tenant_override != {}:
-        return "tenant_global"
     return "system_default"
 
 
@@ -108,7 +106,6 @@ async def resolve_policy(
 
     policy = system_defaults()
 
-    tenant_override = None
     dept_override   = None
     app_override    = None
 
@@ -119,6 +116,7 @@ async def resolve_policy(
         stored_thresholds = await settings_repo.get("policy_thresholds") or {}
         stored_layers     = await settings_repo.get("detection_layers")  or {}
         stored_llm        = await settings_repo.get("llm_settings")      or {}
+        stored_rate_limit = await settings_repo.get("rate_limit")        or {}
 
         # Apply global DB settings as tenant-level defaults
         if stored_thresholds:
@@ -139,16 +137,15 @@ async def resolve_policy(
             policy["llm"]["timeout"]  = stored_llm.get("timeout",  policy["llm"]["timeout"])
             policy["detection"]["llm_trigger"] = stored_llm.get("llm_trigger", policy["detection"]["llm_trigger"])
 
-        # Tenant global_policy
-        if tenant_id:
-            try:
-                tenant_repo = TenantRepository(db)
-                tenant      = await tenant_repo.get_by_id(uuid.UUID(str(tenant_id)))
-                if tenant and tenant.global_policy:
-                    tenant_override = tenant.global_policy
-                    policy          = deep_merge(policy, tenant_override)
-            except Exception as e:
-                logger.warning(f"Failed to load tenant policy: {e}")
+        if stored_rate_limit:
+            policy["rate_limit"]["per_minute"] = stored_rate_limit.get("per_minute", policy["rate_limit"]["per_minute"])
+
+        # Tenant global_policy — intentionally skipped.
+        # global_policy on the tenant is kept in the DB for future use
+        # but is NOT applied in policy resolution. DB settings table
+        # (policy_thresholds, detection_layers, llm_settings, rate_limit)
+        # is the authoritative source for global settings.
+        # Per-dept and per-app overrides use dept/app policy_override instead.
 
         # Department policy_override
         if dept_id:
@@ -176,7 +173,7 @@ async def resolve_policy(
         logger.error(f"Policy resolution failed: {e} — using system defaults")
 
     policy_source = determine_policy_source(
-        tenant_override, dept_override, app_override
+        dept_override, app_override
     )
 
     return policy, policy_source

@@ -76,32 +76,31 @@ def test_system_defaults_returns_complete_policy():
 
 
 def test_policy_source_no_overrides():
-    source = determine_policy_source(None, None, None)
+    source = determine_policy_source(None, None)
     assert source == "system_default"
 
 
 def test_policy_source_dept_override():
     source = determine_policy_source(
-        tenant_override = {"thresholds": {"block": 0.7}},
-        dept_override   = {"thresholds": {"block": 0.5}},
-        app_override    = None,
+        dept_override = {"thresholds": {"block": 0.5}},
+        app_override  = None,
     )
     assert source == "department_override"
 
 
 def test_policy_source_app_override():
     source = determine_policy_source(
-        tenant_override = {"thresholds": {"block": 0.7}},
-        dept_override   = {"thresholds": {"block": 0.5}},
-        app_override    = {"thresholds": {"block": 0.6}},
+        dept_override = {"thresholds": {"block": 0.5}},
+        app_override  = {"thresholds": {"block": 0.6}},
     )
     assert source == "application_override"
 
 
 def test_policy_source_tenant_only():
+    # tenant_override no longer used in policy resolution — global_policy removed from chain.
+    # With no dept or app override, result is always system_default.
     source = determine_policy_source(
-        tenant_override = {"thresholds": {"block": 0.7}},
-        dept_override   = None,
-        app_override    = None,
+        dept_override = None,
+        app_override  = None,
     )
-    assert source == "tenant_global"
+    assert source == "system_default"

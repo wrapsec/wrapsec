@@ -9,6 +9,7 @@ import { LayerToggles } from "@/components/settings/LayerToggles"
 import { LLMSettingsForm } from "@/components/settings/LLMSettings"
 import { TenantSettingsForm } from "@/components/settings/TenantSettings"
 import { RetentionSettingsForm } from "@/components/settings/RetentionSettings"
+import { RateLimitSettingsForm } from "@/components/settings/RateLimitSettings"
 import { ProxySettingsForm } from "@/components/settings/ProxySettings"
 import { PageSpinner } from "@/components/ui/Spinner"
 import {
@@ -17,6 +18,7 @@ import {
   getLLMSettings,
   getTenant,
   getRetentionSettings,
+  getRateLimitSettings,
   getProxySettings,
   getStorageSettings,
 } from "@/lib/api"
@@ -37,6 +39,7 @@ export default function SettingsPage() {
   const { data: retention,  isLoading: retentionLoading,  mutate: mutateR } =
     useSWR("retention",    getRetentionSettings)
 
+  const { data: rateLimit, mutate: mutateRL } = useSWR("rate-limit-settings", getRateLimitSettings)
   const { data: storage } = useSWR("storage-settings", getStorageSettings)
 
   // Proxy config -- 404 is expected when not configured, treat as null
@@ -66,6 +69,13 @@ export default function SettingsPage() {
             <TenantSettingsForm
               tenant={tenant}
               onUpdated={(t) => mutateN(t, false)}
+              blockThreshold={thresholds?.block_threshold}
+              sanitizeThreshold={thresholds?.sanitize_threshold}
+              ruleEnabled={layers?.rule_enabled}
+              mlEnabled={layers?.ml_enabled}
+              llmEnabled={layers?.llm_enabled}
+              rateLimitPerMinute={rateLimit?.per_minute}
+              rateLimitSource={rateLimit?.source}
             />
           )}
         </Card>
@@ -96,6 +106,20 @@ export default function SettingsPage() {
               onUpdated={(l) => mutateL(l, false)}
             />
           )}
+        </Card>
+
+        {/* Rate Limits */}
+        <Card>
+          <CardHeader
+            title="Rate Limits"
+            subtitle="Configure request rate limits for live and trial keys"
+          />
+          <RateLimitSettingsForm
+            perMinute={rateLimit?.per_minute ?? 60}
+            source={rateLimit?.source ?? "environment"}
+            trialLimit={10}
+            onUpdated={(perMinute, source) => mutateRL({ per_minute: perMinute, source }, false)}
+          />
         </Card>
 
         {/* LLM Configuration */}

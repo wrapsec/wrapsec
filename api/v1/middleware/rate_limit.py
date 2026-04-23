@@ -9,6 +9,47 @@ settings = get_settings()
 PUBLIC_PATHS = {"/health", "/health/ready", "/health/live", "/metrics"}
 
 
+async def _get_live_rate_limit() -> int:
+    """
+    Resolve the effective rate limit for live keys.
+    Priority: Redis cache → DB settings → .env default.
+    Cache TTL: 5 minutes — changes take effect within 5 minutes.
+    In test mode — always returns .env default to avoid DB/Redis dependency.
+    """
+    import os
+    _settings = get_settings()
+
+    # Skip cache/DB in test mode — avoids Redis/DB dependency in tests
+    if os.getenv("TESTING") == "true":
+        return _settings.rate_limit_per_minute
+
+    try:
+        from cache.redis_client import get_redis
+        redis     = get_redis()
+        cache_key = "wrapsec:settings:rate_limit"
+        cached    = await redis.get(cache_key)
+        if cached:
+            import json
+            return int(json.loads(cached).get("per_minute", _settings.rate_limit_per_minute))
+
+        # Cache miss — read from DB
+        from db.session import AsyncSessionFactory
+        from db.repositories.settings import SettingsRepository
+        async with AsyncSessionFactory() as session:
+            repo   = SettingsRepository(session)
+            stored = await repo.get("rate_limit")
+            if stored and "per_minute" in stored:
+                limit = int(stored["per_minute"])
+                # Cache for 5 minutes
+                import json
+                await redis.setex(cache_key, 300, json.dumps(stored))
+                return limit
+    except Exception:
+        pass  # Fail open — use .env default
+
+    return _settings.rate_limit_per_minute
+
+
 class RateLimitMiddleware(BaseHTTPMiddleware):
     """
     Per-API-key sliding window rate limiting using Redis.
@@ -42,7 +83,11 @@ class RateLimitMiddleware(BaseHTTPMiddleware):
         trace_id = getattr(request.state, "trace_id", "")
 
         from cache.rate_limit_store import is_rate_limited
-        is_limited, remaining, reset_at = await is_rate_limited(rate_limit_id)
+        effective_limit = await _get_live_rate_limit()
+        is_limited, remaining, reset_at = await is_rate_limited(
+            rate_limit_id,
+            limit=effective_limit,
+        )
 
         if is_limited:
             # Record rate limit hit metric — no key_type label since auth hasn't run yet
@@ -65,7 +110,7 @@ class RateLimitMiddleware(BaseHTTPMiddleware):
         else:
             response = await call_next(request)
 
-        response.headers["X-RateLimit-Limit"]     = str(settings.rate_limit_per_minute)
+        response.headers["X-RateLimit-Limit"]     = str(effective_limit)
         response.headers["X-RateLimit-Remaining"] = str(max(0, remaining))
         response.headers["X-RateLimit-Reset"]     = str(reset_at)
 

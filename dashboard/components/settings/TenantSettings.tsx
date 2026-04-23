@@ -12,10 +12,29 @@ interface TenantSettingsFormProps {
     contact_email: string | null
     global_policy: Record<string, any>
   }
-  onUpdated: (t: any) => void
+  onUpdated:      (t: any) => void
+  // Actual enforced values — from DB settings, not global_policy
+  // Passed from parent page which already fetches these via SWR
+  blockThreshold?:    number
+  sanitizeThreshold?: number
+  ruleEnabled?:       boolean
+  mlEnabled?:         boolean
+  llmEnabled?:        boolean
+  rateLimitPerMinute?: number
+  rateLimitSource?:   string
 }
 
-export function TenantSettingsForm({ tenant, onUpdated }: TenantSettingsFormProps) {
+export function TenantSettingsForm({
+  tenant,
+  onUpdated,
+  blockThreshold,
+  sanitizeThreshold,
+  ruleEnabled,
+  mlEnabled,
+  llmEnabled,
+  rateLimitPerMinute,
+  rateLimitSource,
+}: TenantSettingsFormProps) {
   const [name,        setName]        = useState(tenant.name)
   const [description, setDescription] = useState(tenant.description || "")
   const [contact,     setContact]     = useState(tenant.contact_email || "")
@@ -83,22 +102,26 @@ export function TenantSettingsForm({ tenant, onUpdated }: TenantSettingsFormProp
         </div>
       </div>
 
-      {/* Global policy read-only view */}
+      {/* Enforced runtime values — from DB settings, not global_policy */}
       <div>
-        <p className="text-xs font-medium text-slate-700 mb-2">
-          Global policy
+        <p className="text-xs font-medium text-slate-700 mb-1">
+          Enforced runtime settings
           <span className="ml-2 text-xs text-slate-400 font-normal">
-            — inherited by all departments unless overridden
+            — actual values applied to all requests. Departments may override these below.
           </span>
+        </p>
+        <p className="text-xs text-amber-600 mb-3">
+          These are the currently enforced values. If a card below has been configured,
+          it overrides the environment default shown here.
         </p>
         <div className="grid grid-cols-3 gap-3">
           {[
-            { label: "Block threshold",    value: tenant.global_policy?.thresholds?.block    ?? "—" },
-            { label: "Sanitize threshold", value: tenant.global_policy?.thresholds?.sanitize ?? "—" },
-            { label: "Rate limit/min",     value: tenant.global_policy?.rate_limit?.per_minute ?? "—" },
-            { label: "Rule detector",      value: tenant.global_policy?.detection?.rule_enabled !== false ? "Enabled" : "Disabled" },
-            { label: "ML detector",        value: tenant.global_policy?.detection?.ml_enabled   !== false ? "Enabled" : "Disabled" },
-            { label: "LLM detector",       value: tenant.global_policy?.detection?.llm_enabled  !== false ? "Enabled" : "Disabled" },
+            { label: "Block threshold",    value: blockThreshold    ?? "—" },
+            { label: "Sanitize threshold", value: sanitizeThreshold ?? "—" },
+            { label: "Rate limit/min",     value: rateLimitPerMinute != null ? `${rateLimitPerMinute} (${rateLimitSource ?? "env"})` : "—" },
+            { label: "Rule detector",      value: ruleEnabled != null ? (ruleEnabled ? "Enabled" : "Disabled") : "—" },
+            { label: "ML detector",        value: mlEnabled   != null ? (mlEnabled   ? "Enabled" : "Disabled") : "—" },
+            { label: "LLM detector",       value: llmEnabled  != null ? (llmEnabled  ? "Enabled" : "Disabled") : "—" },
           ].map(({ label, value }) => (
             <div key={label} className="bg-slate-50 rounded-lg px-3 py-2.5">
               <p className="text-xs text-slate-400 mb-0.5">{label}</p>
@@ -107,7 +130,7 @@ export function TenantSettingsForm({ tenant, onUpdated }: TenantSettingsFormProp
           ))}
         </div>
         <p className="text-xs text-slate-400 mt-2">
-          Global policy thresholds are managed in the Policy Thresholds card below.
+          Manage these values in the cards below. Changes take effect immediately (rate limit within 5 minutes).
         </p>
       </div>
 

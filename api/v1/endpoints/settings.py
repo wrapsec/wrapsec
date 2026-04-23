@@ -213,6 +213,90 @@ async def update_retention_settings(
         "updated_at":     datetime.now(timezone.utc).isoformat(),
     })
 
+
+RATE_LIMIT_KEY = "rate_limit"
+
+DEFAULT_RATE_LIMIT = {
+    "per_minute": settings.rate_limit_per_minute,
+}
+
+
+class RateLimitUpdateSchema(BaseModel):
+    per_minute: int | None = None
+
+    @model_validator(mode="after")
+    def validate_rate_limit(self) -> "RateLimitUpdateSchema":
+        if self.per_minute is not None:
+            if self.per_minute < 1:
+                raise ValueError("per_minute must be at least 1")
+            if self.per_minute > 10000:
+                raise ValueError("per_minute cannot exceed 10000")
+            # Live key limit must always be >= trial limit
+            # Otherwise trial keys would be LESS restricted than live keys
+            trial_limit = settings.trial_rate_limit_per_minute
+            if self.per_minute < trial_limit:
+                raise ValueError(
+                    f"Global rate limit ({self.per_minute}/min) cannot be less than "
+                    f"the trial key limit ({trial_limit}/min). "
+                    f"Live keys must always have equal or higher limits than trial keys."
+                )
+        return self
+
+
+@router.get("/rate_limit")
+async def get_rate_limit_settings(db: AsyncSession = Depends(get_db)):
+    """
+    Returns the current global rate limit.
+    Source is 'database' if explicitly set, 'environment' if using default.
+    This is the actual enforced value — not the global_policy default.
+    """
+    repo   = SettingsRepository(db)
+    stored = await repo.get(RATE_LIMIT_KEY)
+    if stored:
+        return JSONResponse(content={
+            **stored,
+            "source": "database",
+        })
+    return JSONResponse(content={
+        **DEFAULT_RATE_LIMIT,
+        "source": "environment",
+    })
+
+
+@router.put("/rate_limit")
+async def update_rate_limit_settings(
+    body: RateLimitUpdateSchema,
+    db:   AsyncSession = Depends(get_db),
+):
+    """
+    Update the global rate limit for live keys.
+    Takes effect within 5 minutes (Redis cache TTL).
+    Does not require server restart.
+    Trial key limit is configured via TRIAL_RATE_LIMIT_PER_MINUTE in .env.
+    """
+    repo    = SettingsRepository(db)
+    current = await repo.get(RATE_LIMIT_KEY) or DEFAULT_RATE_LIMIT.copy()
+
+    if body.per_minute is not None:
+        current["per_minute"] = body.per_minute
+
+    await repo.set(RATE_LIMIT_KEY, current)
+
+    # Invalidate Redis cache so new value is picked up on next request
+    try:
+        from cache.redis_client import get_redis
+        redis = get_redis()
+        await redis.delete("wrapsec:settings:rate_limit")
+    except Exception:
+        pass  # Cache invalidation is best-effort
+
+    return JSONResponse(content={
+        **current,
+        "source":     "database",
+        "updated_at": datetime.now(timezone.utc).isoformat(),
+    })
+
+
 @router.get("/storage")
 async def get_storage_settings():
     """
