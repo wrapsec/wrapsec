@@ -36,6 +36,7 @@ class AuthMiddleware(BaseHTTPMiddleware):
         request.state.user_agent = request.headers.get("user-agent", "")
         request.state.key_id     = None
         request.state.key_name   = None
+        request.state.key_type   = "live"  # default — overridden below per key
         request.state.app_id     = None
         request.state.dept_id    = None
         request.state.tenant_id  = None
@@ -46,6 +47,7 @@ class AuthMiddleware(BaseHTTPMiddleware):
         # Admin API key
         if api_key == settings.admin_api_key:
             request.state.is_admin  = True
+            request.state.key_type  = "live"  # admin key is always live
             request.state.key_id    = "admin"
             request.state.key_name  = "Admin Key"
             request.state.app_id    = None
@@ -54,10 +56,13 @@ class AuthMiddleware(BaseHTTPMiddleware):
             return await call_next(request)
 
         # Standard API key — validate against DB
-        if api_key.startswith("wsk_live_"):
+        # Both wsk_live_ and wsk_trial_ go through the same DB validation.
+        # key_type is read from the DB record — the prefix is display-only.
+        if api_key.startswith("wsk_live_") or api_key.startswith("wsk_trial_"):
             key_record = await self._get_standard_key(api_key)
             if key_record:
                 request.state.is_admin  = False
+                request.state.key_type  = getattr(key_record, "key_type", "live") or "live"
                 request.state.key_id    = key_record.key_id
                 request.state.key_name  = key_record.name
                 request.state.app_id    = str(key_record.app_id)    if key_record.app_id    else None

@@ -8,10 +8,14 @@ settings = get_settings()
 WINDOW_SECS = 60
 
 
-async def is_rate_limited(client_ip: str) -> tuple[bool, int, int]:
+async def is_rate_limited(client_ip: str, limit: int | None = None) -> tuple[bool, int, int]:
     """
     Sliding window rate limit using Redis.
     Returns (is_limited, remaining, reset_at).
+
+    limit: override the default rate limit per minute.
+           Used for trial keys which have a stricter limit.
+           Defaults to settings.rate_limit_per_minute.
     """
     try:
         import time
@@ -19,7 +23,7 @@ async def is_rate_limited(client_ip: str) -> tuple[bool, int, int]:
         key       = f"rate_limit:{client_ip}"
         now       = time.time()
         window    = WINDOW_SECS
-        limit     = settings.rate_limit_per_minute
+        limit     = limit if limit is not None else settings.rate_limit_per_minute
         reset_at  = int(now + window)
 
         # Remove old entries outside the window

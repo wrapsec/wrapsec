@@ -16,6 +16,7 @@ export function CreateKeyModal({ onCreated, onClose }: CreateKeyModalProps) {
   const [name,    setName]    = useState("")
   const [deptId,  setDeptId]  = useState("")
   const [appId,   setAppId]   = useState("")
+  const [keyType, setKeyType] = useState<"live" | "trial">("live")
   const [loading, setLoading] = useState(false)
   const [created, setCreated] = useState<ApiKeyCreated | null>(null)
   const [error,   setError]   = useState<string | null>(null)
@@ -43,8 +44,9 @@ export function CreateKeyModal({ onCreated, onClose }: CreateKeyModalProps) {
     try {
       const key = await createApiKey(
         name.trim(),
-        appId  || undefined,
-        deptId || undefined,
+        appId   || undefined,
+        deptId  || undefined,
+        keyType,
       )
       setCreated(key)
       onCreated(key)
@@ -92,6 +94,24 @@ export function CreateKeyModal({ onCreated, onClose }: CreateKeyModalProps) {
               <p className="text-xs text-slate-400">
                 Key will be scoped to this department
               </p>
+            </div>
+
+            {/* Key type */}
+            <div className="flex flex-col gap-1">
+              <label className="text-xs font-medium text-slate-700">Key type</label>
+              <select
+                value={keyType}
+                onChange={(e) => setKeyType(e.target.value as "live" | "trial")}
+                className={selectClass}
+              >
+                <option value="live">Live — full limits, proxy enabled</option>
+                <option value="trial">Trial — restricted limits, no proxy</option>
+              </select>
+              {keyType === "trial" && (
+                <p className="text-xs text-amber-600">
+                  Trial keys: 10 req/min, 500 char input limit, proxy disabled.
+                </p>
+              )}
             </div>
 
             {/* Application — optional, only shown when dept is selected */}
@@ -144,6 +164,12 @@ export function CreateKeyModal({ onCreated, onClose }: CreateKeyModalProps) {
             </div>
             {/* Show scoping info */}
             <div className="grid grid-cols-2 gap-2 text-xs text-slate-500">
+              <div>
+                <span className="text-slate-400">Type:</span>{" "}
+                <span className={`font-medium ${created.key_type === "trial" ? "text-amber-600" : "text-emerald-600"}`}>
+                  {created.key_type === "trial" ? "Trial" : "Live"}
+                </span>
+              </div>
               {created.dept_id && (
                 <div>
                   <span className="text-slate-400">Department:</span>{" "}

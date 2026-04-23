@@ -287,6 +287,20 @@ async def proxy_chat_completions(
     trace_id   = str(TraceId.generate())
     key_id     = getattr(request.state, "key_id", None)
 
+    # -- 0. Trial key check — proxy mode not available for trial keys --
+    key_type = getattr(request.state, "key_type", "live")
+    if key_type == "trial":
+        return JSONResponse(
+            status_code=403,
+            content={
+                "error": {
+                    "message": "Proxy mode is not available for trial keys. Upgrade to a live key.",
+                    "type":    "forbidden",
+                    "code":    "trial_proxy_disabled",
+                }
+            },
+        )
+
     # -- 1. Parse model string --
     try:
         provider_name, model_name = parse_model_string(body.model)

@@ -129,6 +129,11 @@ class APIKeyModel(Base):
     app_id       = Column(UUID(as_uuid=True), ForeignKey("applications.id"), nullable=True)
     name         = Column(String(100), nullable=False)
     key_hash     = Column(String(100), nullable=False, unique=True)
+    # key_type: 'live' (default) | 'trial' | 'admin'
+    # 'live'  — standard production key, full limits
+    # 'trial' — restricted key for demos (lower rate limit, input cap, no proxy)
+    # 'admin' — reserved for future use (currently is_admin flag used instead)
+    key_type     = Column(String(20),  nullable=False, default="live")
     is_admin     = Column(Boolean,     nullable=False, default=False)
     revoked      = Column(Boolean,     nullable=False, default=False)
     expires_at   = Column(DateTime,    nullable=True)

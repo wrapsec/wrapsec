@@ -87,6 +87,42 @@ async def ai_request(
     if body.options.debug and not getattr(request.state, "is_admin", False):
         raise DebugForbiddenError()
 
+    # Trial key restrictions — enforced after auth, key_type is available here
+    key_type = getattr(request.state, "key_type", "live")
+    if key_type == "trial":
+        # Input size cap — stricter than the global 8000 char limit
+        if len(body.input) > settings.trial_max_input_chars:
+            from errors.exceptions import ValidationError
+            raise ValidationError(
+                f"Trial keys are limited to {settings.trial_max_input_chars} characters. "
+                f"Upgrade to a live key for full input limits."
+            )
+        # Proxy mode not available for trial keys
+        from domain.enums import ExecutionMode as _ExecMode
+        if _mode_str(body.execution_mode) == "proxy" or body.execution_mode == _ExecMode.PROXY:
+            from errors.exceptions import ForbiddenError
+            raise ForbiddenError("Proxy mode is not available for trial keys.")
+
+        # Trial rate limit — enforced here since rate_limit middleware runs before auth
+        # Global rate limit (60/min) is already enforced by middleware
+        # We enforce the stricter trial limit (10/min) here using the same Redis store
+        try:
+            from cache.rate_limit_store import is_rate_limited
+            key_id = getattr(request.state, "key_id", None)
+            if key_id:
+                trial_id = f"trial:key:{key_id}"
+                is_limited, remaining, reset_at = await is_rate_limited(
+                    trial_id,
+                    limit=settings.trial_rate_limit_per_minute,
+                )
+                if is_limited:
+                    from errors.exceptions import RateLimitError
+                    raise RateLimitError()
+        except RateLimitError:
+            raise
+        except Exception:
+            pass  # Fail open if Redis unavailable
+
     det_mode_str = _mode_str(body.detection_mode)
     exe_mode_str = _mode_str(body.execution_mode)
 

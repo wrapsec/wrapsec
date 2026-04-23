@@ -21,8 +21,9 @@ def _hash_key(api_key: str) -> str:
     return hashlib.sha256(api_key.encode()).hexdigest()
 
 
-def generate_api_key() -> str:
-    return "wsk_live_" + secrets.token_urlsafe(32)
+def generate_api_key(key_type: str = "live") -> str:
+    prefix = "wsk_trial_" if key_type == "trial" else "wsk_live_"
+    return prefix + secrets.token_urlsafe(32)
 
 
 def generate_key_id() -> str:
@@ -33,7 +34,12 @@ class CreateKeySchema(BaseModel):
     name:       str
     dept_id:    str | None = None  # dept-scoped key (no app required)
     app_id:     str | None = None  # app-scoped key (dept+tenant derived from app)
+    key_type:   str        = "live"  # 'live' (default) | 'trial'
     expires_at: str | None = None
+
+    def validate_key_type(self) -> None:
+        if self.key_type not in ("live", "trial"):
+            raise ValueError(f"key_type must be 'live' or 'trial', got '{self.key_type}'")
 
 
 @router.post("")
@@ -41,7 +47,16 @@ async def create_key(
     body: CreateKeySchema,
     db:   AsyncSession = Depends(get_db),
 ):
-    api_key = generate_api_key()
+    # Validate key_type
+    if body.key_type not in ("live", "trial"):
+        from errors.exceptions import WrapSecError
+        raise WrapSecError(
+            code        = "VALIDATION_ERROR",
+            message     = "key_type must be 'live' or 'trial'",
+            status_code = 422,
+        )
+
+    api_key = generate_api_key(body.key_type)
     key_id  = generate_key_id()
 
     # Resolve app → dept → tenant chain
@@ -82,6 +97,7 @@ async def create_key(
         "key_id":    key_id,
         "name":      body.name,
         "key_hash":  _hash_key(api_key),
+        "key_type":  body.key_type,
         "is_admin":  False,
         "revoked":   False,
         "app_id":    app_id,
@@ -93,6 +109,7 @@ async def create_key(
         "key_id":     key_id,
         "name":       body.name,
         "api_key":    api_key,
+        "key_type":   body.key_type,
         "app_id":     str(app_id)    if app_id    else None,
         "dept_id":    str(dept_id)   if dept_id   else None,
         "tenant_id":  str(tenant_id) if tenant_id else None,
@@ -137,6 +154,7 @@ async def list_keys(db: AsyncSession = Depends(get_db)):
                 "dept_id":      str(k.dept_id) if k.dept_id else None,
                 "dept_name":    dept_names.get(str(k.dept_id)) if k.dept_id else None,
                 "app_name":     app_names.get(str(k.app_id))   if k.app_id  else None,
+                "key_type":     getattr(k, "key_type", "live") or "live",
                 "created_at":   k.created_at.isoformat(),
                 "expires_at":   k.expires_at.isoformat() if k.expires_at else None,
                 "last_used_at": k.last_used_at.isoformat() if k.last_used_at else None,
@@ -161,6 +179,7 @@ async def get_key(
         "app_id":       str(record.app_id)    if record.app_id    else None,
         "dept_id":      str(record.dept_id)   if record.dept_id   else None,
         "tenant_id":    str(record.tenant_id) if record.tenant_id else None,
+        "key_type":     getattr(record, "key_type", "live") or "live",
         "is_admin":     record.is_admin,
         "revoked":      record.revoked,
         "created_at":   record.created_at.isoformat(),
@@ -274,17 +293,24 @@ async def rotate_key(
     # Strip timezone — DB column is TIMESTAMP WITHOUT TIME ZONE
     grace_expires = (datetime.now(timezone.utc) + timedelta(minutes=body.grace_period_minutes)).replace(tzinfo=None)
 
-    # Create new key with same metadata
+    # Create new key with same metadata — key_type is preserved on rotation
     new_record = await repo.create({
         "key_id":    new_key_id,
         "name":      record.name,
         "key_hash":  new_hash,
+        "key_type":  getattr(record, "key_type", "live") or "live",
         "is_admin":  record.is_admin,
         "revoked":   False,
         "app_id":    record.app_id,
         "dept_id":   record.dept_id,
         "tenant_id": record.tenant_id,
     })
+
+    # Update new_api_key prefix to match key_type
+    new_api_key = generate_api_key(getattr(record, "key_type", "live") or "live")
+    new_hash    = _hash_key(new_api_key)
+    new_record.key_hash = new_hash
+    await db.commit()
 
     # Set old key to expire at end of grace period
     record.expires_at = grace_expires

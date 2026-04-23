@@ -63,6 +63,13 @@ class Settings(BaseSettings):
     prometheus_enabled:      bool = True
     prometheus_port:         int  = 9090
 
+    # ── Trial key limits ──────────────────────────────────────────────────────
+    # Applied only when api_keys.key_type = 'trial'
+    # Production (live) keys are completely unaffected by these settings
+    trial_rate_limit_per_minute: int   = 10     # vs 60 for live keys
+    trial_max_input_chars:       int   = 500    # vs 8000 for live keys
+    trial_proxy_enabled:         bool  = False  # proxy disabled for trial keys
+
     # -- Data storage ----------------------------------------------------------
     data_storage_mode:        str = Field(default="masked")
     # full   -- store input_raw and output_raw as-is (development)
