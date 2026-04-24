@@ -1082,6 +1082,19 @@ Note: The global rate limit middleware runs before auth, so trial key limits are
 - `application.policy_override` wired into policy resolution chain
 - `policy_source: application_override` returned in scan responses when active
 
+**Rate limit settings (DB-backed):**
+- `GET/PUT /v1/settings/rate_limit` — live key rate limit, DB-backed with Redis cache (5 min TTL)
+- Live key limit validated against trial limit — live cannot go below trial key limit
+- `global_policy` removed from policy resolution chain — DB settings table is now authoritative
+- `TenantSettings` dashboard shows actual enforced values from DB settings, not `global_policy`
+
+**Toxicity guardrail:**
+- Reads ML toxicity confidence (label 6) directly — independent of detection risk_score
+- `primary_reason`: `TOXICITY_GUARDRAIL_BLOCK` / `TOXICITY_GUARDRAIL_SANITIZE`
+- Guardrail priority: PII → Toxicity → Detection pipeline
+- Configurable per dept/app via `guardrails.toxicity.block_threshold` / `sanitize_threshold` in policy_override
+- Training data: Jigsaw (Wikipedia CC0), UC Berkeley Hate Speech (ACL 2022), ToxiGen (Microsoft, ACL 2022)
+
 **DB schema:**
 - `audit_logs.threats` migrated from `json` → `jsonb`
 - `api_keys.key_type` — `VARCHAR(20)` with `CHECK (key_type IN ('live', 'trial', 'admin'))`

@@ -276,20 +276,31 @@ gateway.process(
 
 ### Policy Resolution Order
 
+**Updated in V1.2** — `global_policy` on the tenant table is no longer applied in policy resolution. It is kept in the DB for future use but not read. DB settings table is now the authoritative source for all global settings.
+
+**Guardrail pipeline (V1.2):**
 ```
-system defaults (.env)
-  ↓ deep merge
-tenant global_policy
-  ↓ deep merge
-DB settings (thresholds, layers, llm, retention)
-  ↓ deep merge
-department policy_override  (null = inherit)
-  ↓ deep merge
-application policy_override (null in V1, active V1.2)
+Input → PII guardrail (regex, ~<1ms)
+      → RuleDetector / MLDetector / LLMDetector
+      → Toxicity guardrail (reads ML label 6, ~0ms additional)
+      → RiskScorer (detection scores only — guardrails excluded)
+      → PolicyEngine: PII score → Toxicity score → Detection risk_score
+```
+Each guardrail has independent thresholds configurable per dept/app via `policy_override`.
+
+```
+system_defaults() (.env)
+  ↓
+DB settings table (thresholds, layers, llm, rate_limit)  ← authoritative global values
+  ↓
+dept.policy_override  ← per-dept overrides (null = inherit)
+  ↓
+app.policy_override   ← per-app overrides (null = inherit)
   ↓
 resolved_policy → split:
   detection thresholds → thresholds.block / thresholds.sanitize
   PII thresholds       → guardrails.pii.block_threshold / sanitize_threshold
+  rate_limit           → rate_limit.per_minute
 ```
 
 ---

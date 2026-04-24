@@ -171,6 +171,20 @@ proxy     → latency = total end-to-end time (WrapSec + provider)
 
 The `_GUARDRAIL_BLOCK` suffix covers all current and future guardrail types automatically (PII, toxicity, etc.).
 
+## Toxicity Guardrail
+
+The toxicity guardrail reads the ML detector's toxicity confidence (label 6) directly — bypassing the detection risk_score weighting (0.30). This ensures high-confidence toxicity detections are enforced regardless of other detector scores.
+
+**Guardrail priority:** PII → Toxicity → Detection pipeline
+
+**primary_reason values:**
+- `TOXICITY_GUARDRAIL_BLOCK` — toxicity score >= block_threshold
+- `TOXICITY_GUARDRAIL_SANITIZE` — toxicity score >= sanitize_threshold
+
+**Training data:** Jigsaw (Wikipedia CC0, WWW 2017), UC Berkeley Measuring Hate Speech (ACL 2022), ToxiGen — Microsoft Research (ACL 2022)
+
+**Configurable per dept/app** via `guardrails.toxicity.block_threshold` / `sanitize_threshold` in `policy_override`.
+
 Severity is never returned in scan responses — this is intentional (evasion prevention). It is available in:
 - `GET /v1/audit/logs` response items
 - `GET /v1/ai/requests/{trace_id}` response
