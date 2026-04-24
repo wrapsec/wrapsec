@@ -15,6 +15,9 @@ class SettingsRepository(BaseRepository):
         record = result.scalar_one_or_none()
         if not record:
             return None
+        # Guard against non-string values (e.g. MagicMock in tests)
+        if not isinstance(record.value, (str, bytes, bytearray)):
+            return None
         return json.loads(record.value)
 
     async def set(self, key: str, value: dict) -> SettingsModel:

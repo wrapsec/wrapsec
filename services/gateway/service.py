@@ -91,15 +91,17 @@ class GatewayService:
 
     def process(
         self,
-        request:               IncomingRequest,
-        block_threshold:       float | None = None,
-        sanitize_threshold:    float | None = None,
-        pii_block_threshold:   float | None = None,
-        pii_sanitize_threshold: float | None = None,
-        rule_enabled:          bool = True,
-        ml_enabled:            bool = True,
-        llm_enabled:           bool = True,
-        llm_settings:          dict | None = None,
+        request:                        IncomingRequest,
+        block_threshold:                float | None = None,
+        sanitize_threshold:             float | None = None,
+        pii_block_threshold:            float | None = None,
+        pii_sanitize_threshold:         float | None = None,
+        toxicity_block_threshold:       float | None = None,
+        toxicity_sanitize_threshold:    float | None = None,
+        rule_enabled:                   bool = True,
+        ml_enabled:                     bool = True,
+        llm_enabled:                    bool = True,
+        llm_settings:                   dict | None = None,
     ) -> GatewayResult:
         start = time.perf_counter()
 
@@ -130,6 +132,10 @@ class GatewayService:
                 ml_result        = DetectionResult.clean("ml_detector")
                 detection_failed = True
 
+            # ── Step 3.5: Toxicity guardrail (after ML) ─────────
+            # Toxicity signal is extracted from ML result — no new inference
+            input_result = self._input_guard.inspect_toxicity(input_result, ml_result)
+
             # ── Step 4: LLM detection (conditional) ───────────
             # Only invoke LLM detector if:
             # - detection_mode is FULL
@@ -159,21 +165,25 @@ class GatewayService:
 
             # ── Step 5: Risk scoring ──────────────────────────
             scoring = self._risk_scorer.score(
-                rule_result = rule_result,
-                ml_result   = ml_result,
-                llm_result  = llm_result,
-                pii_result  = input_result.pii_result,
+                rule_result     = rule_result,
+                ml_result       = ml_result,
+                llm_result      = llm_result,
+                pii_result      = input_result.pii_result,
+                toxicity_result = input_result.toxicity_result,
             )
 
             # ── Step 6: Policy decision ───────────────────────
             policy = self._policy_engine.decide(
-                risk_score             = scoring.final_score,
-                threats                = scoring.threats,
-                block_threshold        = block_threshold,
-                sanitize_threshold     = sanitize_threshold,
-                pii_score              = scoring.pii_score,
-                pii_block_threshold    = pii_block_threshold,
-                pii_sanitize_threshold = pii_sanitize_threshold,
+                risk_score                  = scoring.final_score,
+                threats                     = scoring.threats,
+                block_threshold             = block_threshold,
+                sanitize_threshold          = sanitize_threshold,
+                pii_score                   = scoring.pii_score,
+                pii_block_threshold         = pii_block_threshold,
+                pii_sanitize_threshold      = pii_sanitize_threshold,
+                toxicity_score              = scoring.toxicity_score,
+                toxicity_block_threshold    = toxicity_block_threshold,
+                toxicity_sanitize_threshold = toxicity_sanitize_threshold,
             )
 
             # ── Step 7: Sanitized input ───────────────────────
@@ -215,20 +225,34 @@ class GatewayService:
             from engine.scoring.primary_reason import compute_primary_reason
             _pii_bt = pii_block_threshold    if pii_block_threshold    is not None else block_threshold
             _pii_st = pii_sanitize_threshold if pii_sanitize_threshold is not None else sanitize_threshold
-            guardrail_triggered = (
+            _tox_bt = toxicity_block_threshold    if toxicity_block_threshold    is not None else block_threshold
+            _tox_st = toxicity_sanitize_threshold if toxicity_sanitize_threshold is not None else sanitize_threshold
+
+            pii_guardrail_triggered = (
                 scoring.pii_score >= _pii_bt or
                 scoring.pii_score >= _pii_st
             )
+            toxicity_guardrail_triggered = (
+                not pii_guardrail_triggered and (
+                    scoring.toxicity_score >= _tox_bt or
+                    scoring.toxicity_score >= _tox_st
+                )
+            )
+            guardrail_triggered = pii_guardrail_triggered or toxicity_guardrail_triggered
+
             primary_reason = compute_primary_reason(
-                guardrail_triggered = guardrail_triggered,
-                guardrail_decision  = policy.decision.value,
-                rule_score          = scoring.rule_score,
-                ml_score            = scoring.ml_score,
-                llm_score           = scoring.llm_score,
-                pii_score           = scoring.pii_score,
-                block_threshold     = _pii_bt,
-                sanitize_threshold  = _pii_st,
-                detection_failed    = detection_failed,
+                guardrail_triggered          = pii_guardrail_triggered,
+                guardrail_decision           = policy.decision.value,
+                rule_score                   = scoring.rule_score,
+                ml_score                     = scoring.ml_score,
+                llm_score                    = scoring.llm_score,
+                pii_score                    = scoring.pii_score,
+                block_threshold              = _pii_bt,
+                sanitize_threshold           = _pii_st,
+                detection_failed             = detection_failed,
+                toxicity_score               = scoring.toxicity_score,
+                toxicity_guardrail_triggered = toxicity_guardrail_triggered,
+                toxicity_block_threshold     = _tox_bt,
             )
 
             # Compute confidence score

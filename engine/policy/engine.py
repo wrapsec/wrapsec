@@ -35,25 +35,26 @@ class PolicyEngine:
 
     def decide(
         self,
-        risk_score:              RiskScore,
-        threats:                 list[ThreatCategory],
-        block_threshold:         float | None = None,
-        sanitize_threshold:      float | None = None,
-        pii_score:               float = 0.0,
-        pii_block_threshold:     float | None = None,
-        pii_sanitize_threshold:  float | None = None,
+        risk_score:                    RiskScore,
+        threats:                       list[ThreatCategory],
+        block_threshold:               float | None = None,
+        sanitize_threshold:            float | None = None,
+        pii_score:                     float = 0.0,
+        pii_block_threshold:           float | None = None,
+        pii_sanitize_threshold:        float | None = None,
+        toxicity_score:                float = 0.0,
+        toxicity_block_threshold:      float | None = None,
+        toxicity_sanitize_threshold:   float | None = None,
     ) -> PolicyDecision:
         """
         Evaluate guardrail-first, then detection-based decision.
 
-        Detection thresholds (block_threshold, sanitize_threshold):
-          Applied to risk_score from detection layers.
+        Guardrail priority order:
+          1. PII guardrail   (pii_score vs pii_block/sanitize_threshold)
+          2. Toxicity guardrail (toxicity_score vs toxicity_block/sanitize_threshold)
+          3. Detection-based (risk_score vs block/sanitize_threshold)
 
-        Guardrail thresholds (pii_block_threshold, pii_sanitize_threshold):
-          Applied to pii_score from guardrail layer.
-          Independent from detection thresholds.
-          Defaults to detection thresholds if not explicitly set,
-          but must be configured separately for proper separation of concerns.
+        All guardrail thresholds are independent from detection thresholds.
         """
         try:
             score = risk_score.value
@@ -62,39 +63,33 @@ class PolicyEngine:
             bt = block_threshold    or self.rules.block_threshold
             st = sanitize_threshold or self.rules.sanitize_threshold
 
-            # Guardrail thresholds — independent from detection
-            # Default to detection thresholds only if not explicitly configured
+            # PII guardrail thresholds
             pii_bt = pii_block_threshold    if pii_block_threshold    is not None else bt
             pii_st = pii_sanitize_threshold if pii_sanitize_threshold is not None else st
 
-            # ── Guardrail-first enforcement ──────────────────
+            # Toxicity guardrail thresholds — default to same as detection
+            tox_bt = toxicity_block_threshold    if toxicity_block_threshold    is not None else bt
+            tox_st = toxicity_sanitize_threshold if toxicity_sanitize_threshold is not None else st
+
+            # ── 1. PII guardrail (highest priority) ──────────
             if pii_score >= pii_bt:
-                decision = DecisionType.BLOCK
-                logger.debug(
-                    f"PolicyEngine guardrail override: BLOCK "
-                    f"pii_score={pii_score} threshold={pii_bt}"
-                )
-                return PolicyDecision(
-                    decision   = decision,
-                    risk_score = risk_score,
-                    threats    = threats,
-                    rules      = self.rules,
-                )
+                logger.debug(f"PolicyEngine PII guardrail BLOCK pii_score={pii_score} threshold={pii_bt}")
+                return PolicyDecision(decision=DecisionType.BLOCK,   risk_score=risk_score, threats=threats, rules=self.rules)
 
             if pii_score >= pii_st:
-                decision = DecisionType.SANITIZE
-                logger.debug(
-                    f"PolicyEngine guardrail override: SANITIZE "
-                    f"pii_score={pii_score} threshold={pii_st}"
-                )
-                return PolicyDecision(
-                    decision   = decision,
-                    risk_score = risk_score,
-                    threats    = threats,
-                    rules      = self.rules,
-                )
+                logger.debug(f"PolicyEngine PII guardrail SANITIZE pii_score={pii_score} threshold={pii_st}")
+                return PolicyDecision(decision=DecisionType.SANITIZE, risk_score=risk_score, threats=threats, rules=self.rules)
 
-            # ── Detection-based decision ──────────────────────
+            # ── 2. Toxicity guardrail ─────────────────────────
+            if toxicity_score >= tox_bt:
+                logger.debug(f"PolicyEngine toxicity guardrail BLOCK toxicity_score={toxicity_score} threshold={tox_bt}")
+                return PolicyDecision(decision=DecisionType.BLOCK,   risk_score=risk_score, threats=threats, rules=self.rules)
+
+            if toxicity_score >= tox_st:
+                logger.debug(f"PolicyEngine toxicity guardrail SANITIZE toxicity_score={toxicity_score} threshold={tox_st}")
+                return PolicyDecision(decision=DecisionType.SANITIZE, risk_score=risk_score, threats=threats, rules=self.rules)
+
+            # ── 3. Detection-based decision ───────────────────
             if score >= bt:
                 decision = DecisionType.BLOCK
             elif score >= st:

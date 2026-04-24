@@ -181,6 +181,10 @@ async def ai_request(
     pii_block_threshold    = pii_policy.get("block_threshold",    None)
     pii_sanitize_threshold = pii_policy.get("sanitize_threshold", None)
 
+    toxicity_policy             = policy.get("guardrails", {}).get("toxicity", {})
+    toxicity_block_threshold    = toxicity_policy.get("block_threshold",    None)
+    toxicity_sanitize_threshold = toxicity_policy.get("sanitize_threshold", None)
+
     result = await run_in_threadpool(
         _gateway.process,
         incoming,
@@ -188,6 +192,8 @@ async def ai_request(
         sanitize_threshold,
         pii_block_threshold,
         pii_sanitize_threshold,
+        toxicity_block_threshold,
+        toxicity_sanitize_threshold,
         rule_enabled,
         ml_enabled,
         llm_enabled,

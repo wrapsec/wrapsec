@@ -383,7 +383,8 @@ async def proxy_chat_completions(
     # Override trace_id so it matches what we log
     incoming.trace_id = trace_id  # type: ignore[assignment]
 
-    pii_policy             = policy.get("guardrails", {}).get("pii", {})
+    pii_policy      = policy.get("guardrails", {}).get("pii", {})
+    toxicity_policy = policy.get("guardrails", {}).get("toxicity", {})
     gateway_result = await run_in_threadpool(
         _gateway.process,
         incoming,
@@ -391,6 +392,8 @@ async def proxy_chat_completions(
         policy["thresholds"]["sanitize"],
         pii_policy.get("block_threshold"),
         pii_policy.get("sanitize_threshold"),
+        toxicity_policy.get("block_threshold"),
+        toxicity_policy.get("sanitize_threshold"),
         policy["detection"]["rule_enabled"],
         policy["detection"]["ml_enabled"],
         policy["detection"]["llm_enabled"] if mode == "full" else False,

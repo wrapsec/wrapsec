@@ -9,13 +9,14 @@ logger = logging.getLogger("wrapsec.engine")
 
 @dataclass
 class ScoringResult:
-    final_score:  RiskScore
-    rule_score:   float
-    ml_score:     float
-    llm_score:    float
-    pii_score:    float
-    threats:      list[ThreatCategory]
-    boosted:      bool = False
+    final_score:    RiskScore
+    rule_score:     float
+    ml_score:       float
+    llm_score:      float
+    pii_score:      float
+    toxicity_score: float
+    threats:        list[ThreatCategory]
+    boosted:        bool = False
 
 
 class RiskScorer:
@@ -51,16 +52,18 @@ class RiskScorer:
 
     def score(
         self,
-        rule_result: DetectionResult,
-        ml_result:   DetectionResult,
-        llm_result:  DetectionResult,
-        pii_result:  DetectionResult,
+        rule_result:     DetectionResult,
+        ml_result:       DetectionResult,
+        llm_result:      DetectionResult,
+        pii_result:      DetectionResult,
+        toxicity_result: DetectionResult | None = None,
     ) -> ScoringResult:
         try:
-            rule_score = rule_result.score
-            ml_score   = ml_result.score
-            llm_score  = llm_result.score
-            pii_score  = pii_result.score
+            rule_score     = rule_result.score
+            ml_score       = ml_result.score
+            llm_score      = llm_result.score
+            pii_score      = pii_result.score
+            toxicity_score = toxicity_result.score if toxicity_result else 0.0
 
             # Detection risk score — detectors only, no PII
             weighted = (
@@ -92,24 +95,33 @@ class RiskScorer:
                         threats.append(threat)
                         seen.add(threat)
 
+            # Add toxicity threats if present (not already in list)
+            if toxicity_result and toxicity_result.triggered:
+                for threat in toxicity_result.threats:
+                    if threat not in seen and threat != ThreatCategory.BENIGN:
+                        threats.append(threat)
+                        seen.add(threat)
+
             return ScoringResult(
-                final_score = RiskScore(final),
-                rule_score  = rule_score,
-                ml_score    = ml_score,
-                llm_score   = llm_score,
-                pii_score   = pii_score,
-                threats     = threats,
-                boosted     = boosted,
+                final_score    = RiskScore(final),
+                rule_score     = rule_score,
+                ml_score       = ml_score,
+                llm_score      = llm_score,
+                pii_score      = pii_score,
+                toxicity_score = toxicity_score,
+                threats        = threats,
+                boosted        = boosted,
             )
 
         except Exception as e:
             logger.error(f"RiskScorer failed: {e}")
             return ScoringResult(
-                final_score = RiskScore(0.0),
-                rule_score  = 0.0,
-                ml_score    = 0.0,
-                llm_score   = 0.0,
-                pii_score   = 0.0,
-                threats     = [],
-                boosted     = False,
+                final_score    = RiskScore(0.0),
+                rule_score     = 0.0,
+                ml_score       = 0.0,
+                llm_score      = 0.0,
+                pii_score      = 0.0,
+                toxicity_score = 0.0,
+                threats        = [],
+                boosted        = False,
             )

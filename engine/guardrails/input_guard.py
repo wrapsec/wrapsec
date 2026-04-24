@@ -9,52 +9,90 @@ logger = logging.getLogger("wrapsec.engine")
 
 @dataclass
 class InputGuardResult:
-    text:            str
-    sanitized_text:  str | None
-    pii_result:      DetectionResult
-    redacted_types:  list[str]
-    was_sanitized:   bool
+    text:             str
+    sanitized_text:   str | None
+    pii_result:       DetectionResult
+    toxicity_result:  DetectionResult
+    redacted_types:   list[str]
+    was_sanitized:    bool
 
 
 class InputGuard:
     """
-    Orchestrates PII detection and redaction on input text.
-    Returns the original or sanitised text depending on PII findings.
+    Orchestrates guardrail checks on input text.
+
+    Guardrails (in evaluation order):
+      1. PII — detects + redacts sensitive personal data
+      2. Toxicity — extracts toxicity signal from ML result
+
+    Note: Toxicity detector is called AFTER ML detection in service.py.
+    InputGuard.inspect_toxicity() is called separately with the ML result.
     """
 
     def __init__(self):
-        self._detector = PIIDetector()
-        self._redactor = PIIRedactor()
+        self._pii_detector = PIIDetector()
+        self._pii_redactor = PIIRedactor()
 
     def inspect(self, text: str) -> InputGuardResult:
+        """Run PII guardrail. Toxicity is added later via inspect_toxicity()."""
         try:
-            pii_result = self._detector.detect(text)
+            pii_result = self._pii_detector.detect(text)
 
             if not pii_result.triggered:
                 return InputGuardResult(
-                    text           = text,
-                    sanitized_text = None,
-                    pii_result     = pii_result,
-                    redacted_types = [],
-                    was_sanitized  = False,
+                    text            = text,
+                    sanitized_text  = None,
+                    pii_result      = pii_result,
+                    toxicity_result = DetectionResult.clean("toxicity_detector"),
+                    redacted_types  = [],
+                    was_sanitized   = False,
                 )
 
-            sanitized, redacted_types = self._redactor.redact(text)
+            sanitized, redacted_types = self._pii_redactor.redact(text)
 
             return InputGuardResult(
-                text           = text,
-                sanitized_text = sanitized,
-                pii_result     = pii_result,
-                redacted_types = redacted_types,
-                was_sanitized  = True,
+                text            = text,
+                sanitized_text  = sanitized,
+                pii_result      = pii_result,
+                toxicity_result = DetectionResult.clean("toxicity_detector"),
+                redacted_types  = redacted_types,
+                was_sanitized   = True,
             )
 
         except Exception as e:
-            logger.error(f"InputGuard failed: {e}")
+            logger.error(f"InputGuard PII failed: {e}")
             return InputGuardResult(
-                text           = text,
-                sanitized_text = None,
-                pii_result     = DetectionResult.clean("input_guard"),
-                redacted_types = [],
-                was_sanitized  = False,
+                text            = text,
+                sanitized_text  = None,
+                pii_result      = DetectionResult.clean("input_guard"),
+                toxicity_result = DetectionResult.clean("toxicity_detector"),
+                redacted_types  = [],
+                was_sanitized   = False,
             )
+
+    def inspect_toxicity(
+        self,
+        guard_result: "InputGuardResult",
+        ml_result:    DetectionResult,
+    ) -> "InputGuardResult":
+        """
+        Extract toxicity signal from the ML result and attach to guard_result.
+        Called after ML detection completes in service.py.
+        Returns updated InputGuardResult with toxicity_result populated.
+        """
+        try:
+            from engine.guardrails.toxicity.detector import ToxicityDetector
+            tox_detector    = ToxicityDetector()
+            toxicity_result = tox_detector.detect_from_ml(ml_result)
+
+            return InputGuardResult(
+                text            = guard_result.text,
+                sanitized_text  = guard_result.sanitized_text,
+                pii_result      = guard_result.pii_result,
+                toxicity_result = toxicity_result,
+                redacted_types  = guard_result.redacted_types,
+                was_sanitized   = guard_result.was_sanitized,
+            )
+        except Exception as e:
+            logger.error(f"InputGuard toxicity failed: {e}")
+            return guard_result  # Return unchanged — fail open
