@@ -91,8 +91,18 @@ async def login(
     from config.settings import get_settings
     _settings = get_settings()
 
+    ip_address = (
+        request.headers.get("x-forwarded-for", "").split(",")[0].strip()
+        or (request.client.host if request.client else None)
+    )
+    user_agent = request.headers.get("user-agent")
+
     try:
-        result = await auth_service.login(str(body.email), body.password, db)
+        result = await auth_service.login(
+            str(body.email), body.password, db,
+            ip_address = ip_address or None,
+            user_agent = user_agent or None,
+        )
     except AccountLockedException as e:
         return JSONResponse(
             status_code=429,
