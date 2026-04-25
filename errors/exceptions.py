@@ -55,6 +55,70 @@ class DebugForbiddenError(ForbiddenError):
         super().__init__("debug mode requires admin credentials")
 
 
+# ── Auth — JWT/session (new for JWT+RBAC) ─────────────────────
+class AuthenticationError(WrapSecError):
+    """
+    Wrong email or wrong password — identical message for both.
+    Never reveal which was wrong — prevents user enumeration.
+    """
+    code        = "INVALID_CREDENTIALS"
+    status_code = 401
+    def __init__(self, message: str = "Invalid email or password"):
+        super().__init__(message)
+
+
+class AccountLockedException(WrapSecError):
+    """
+    Account temporarily locked after too many failed login attempts.
+    retry_after: seconds until lockout expires (from Redis TTL).
+    """
+    code        = "ACCOUNT_LOCKED"
+    status_code = 429
+    def __init__(self, retry_after: int = 0):
+        self.retry_after = retry_after
+        super().__init__("Too many failed attempts. Account temporarily locked.")
+
+
+class AccountDisabledException(WrapSecError):
+    """Account exists but is_active = False."""
+    code        = "ACCOUNT_DISABLED"
+    status_code = 401
+    def __init__(self):
+        super().__init__("Account is disabled. Contact your administrator.")
+
+
+class InvalidTokenException(WrapSecError):
+    """Refresh token not found, already revoked, or expired."""
+    code        = "INVALID_TOKEN"
+    status_code = 401
+    def __init__(self, message: str = "Invalid or expired token"):
+        super().__init__(message)
+
+
+class SessionInvalidatedException(WrapSecError):
+    """
+    token_version mismatch — session was invalidated after this token was issued.
+    Triggered by: password change, role change, account deactivation, admin reset.
+    Client must re-authenticate — redirect to login.
+    """
+    code        = "SESSION_INVALIDATED"
+    status_code = 401
+    def __init__(self):
+        super().__init__("Session has been invalidated. Please log in again.")
+
+
+class PasswordChangedException(WrapSecError):
+    """
+    force_password_change = True — user must change password before proceeding.
+    Returned on all endpoints except /v1/auth/change-password, /v1/auth/logout,
+    /v1/auth/me when this flag is set.
+    """
+    code        = "PASSWORD_CHANGE_REQUIRED"
+    status_code = 403
+    def __init__(self):
+        super().__init__("You must change your password before accessing this resource.")
+
+
 # ── Not Found ─────────────────────────────────────────────────
 class NotFoundError(WrapSecError):
     code = "NOT_FOUND"

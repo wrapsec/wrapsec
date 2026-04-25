@@ -19,8 +19,27 @@ class Settings(BaseSettings):
     # ── Security ──────────────────────────────────────────────
     secret_key:      str = Field(..., min_length=32)
     jwt_algorithm:   str = "HS256"
-    jwt_expiry_mins: int = 60
+    jwt_expiry_mins: int = 60          # legacy — kept for any existing references
     admin_api_key:   str = Field(...)
+
+    # ── JWT (dashboard auth) ──────────────────────────────────
+    jwt_access_token_expire_minutes: int = 30
+    jwt_refresh_token_expire_days:   int = 30
+
+    # ── Bootstrap first admin ─────────────────────────────────
+    # Used once on first startup when the users table is empty.
+    # force_password_change=True is set automatically — enforced at middleware level.
+    # In production: change ADMIN_PASSWORD in .env before first startup.
+    # bootstrap_admin() will warn loudly (stderr + ERROR log) if default is detected.
+    admin_email:    str = Field(default="admin@localhost")
+    admin_password: str = Field(default="ChangeMe!OnFirstLogin")
+
+    # ── Account lockout (Redis TTL) ───────────────────────────
+    # After AUTH_MAX_FAILED_ATTEMPTS consecutive failures the account is locked
+    # for AUTH_LOCKOUT_DURATION_SECONDS seconds (default 15 min).
+    # Each failed attempt during lockout resets the TTL (extends lockout).
+    auth_max_failed_attempts:    int = 5
+    auth_lockout_duration_seconds: int = 900
 
     # ── Database ──────────────────────────────────────────────
     database_url:    str = Field(...)

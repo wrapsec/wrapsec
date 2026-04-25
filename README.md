@@ -19,9 +19,9 @@ WrapSec is a self-hosted AI security gateway that sits between your application 
 
 **Scan-only:** Every prompt passes through a four-layer detection pipeline. Threats are blocked or sanitised in real time. Your application forwards clean prompts to the LLM itself.
 
-**Proxy mode (AI Interaction Firewall):** WrapSec acts as a drop-in replacement for the OpenAI API. Change your SDK's `base_url` and prefix your model name. WrapSec scans the input, forwards it to the real provider using your encrypted API key, scans the output, and returns an OpenAI-compatible response. Security is enforced on both directions transparently.
+**Proxy mode (AI Interaction Firewall):** WrapSec acts as a drop-in replacement for the OpenAI API. Change your SDK's `base_url` and prefix your model name. WrapSec scans the input, forwards it to the real provider using your encrypted API key, scans the output, and returns an OpenAI-compatible response. Security is enforced on both input and output.
 
-Every decision is logged with full attribution, a confidence score, and a primary reason — giving security teams and compliance officers a complete, explainable audit trail.
+Every decision is logged with full security attribution, a confidence score, and a primary reason — giving security teams and compliance officers a complete, explainable audit trail. Text storage depends on the configured storage mode (`full` / `masked` / `none`).
 
 ---
 
@@ -46,19 +46,19 @@ Every decision is logged with full attribution, a confidence score, and a primar
 ## Key Features
 
 **Detection pipeline:**
-- Rule-based detector: regex and heuristic patterns, ~0ms
+- Rule-based detector: regex and heuristic patterns, ~<1ms
 - ML classifier: TF-IDF + LogisticRegression trained on 6,700+ samples from peer-reviewed security datasets, ~5ms
-- LLM semantic detector: conditional invocation in full mode, ~100-500ms
+- LLM semantic detector: conditional invocation in full mode, ~100–500ms depending on provider and model
 - PII guardrail: 22+ entity types, scans both input and LLM output
 
 **ML model:**
 - 6,742 training samples across 7 threat classes
 - 97.7% test accuracy, 97.0% cross-validation accuracy
 - Datasets: HackAPrompt (NeurIPS 2023), JailbreakBench (NeurIPS 2024), Measuring Hate Speech (UC Berkeley, ACL 2022), Jigsaw Toxic Comments (Google/Wikipedia CC0, WWW 2017), Stanford Alpaca, deepset Prompt Injections, ai4privacy PII Masking 300k
-- All F1 scores above 0.93 per class
+- All classes achieve F1 > 0.93 on evaluation datasets
 
 **Proxy mode — AI Interaction Firewall:**
-- Drop-in OpenAI SDK replacement — change `base_url` and prefix model name, nothing else
+- Drop-in OpenAI SDK replacement — change `base_url`, prefix the model name, configure the provider once via `PUT /v1/settings/proxy`, and use a WrapSec API key. No changes to request structure.
 - Provider support: OpenAI, Groq, Azure OpenAI, Together AI, Ollama, any OpenAI-compatible endpoint
 - Provider API keys encrypted AES-256-GCM at rest, never returned in API responses
 - Input PII enforcement — real data never reaches the provider when SANITIZE applies
@@ -71,7 +71,7 @@ Every decision is logged with full attribution, a confidence score, and a primar
 - Guardrail-first: PII evaluated independently, always overrides detection
 - Guardrail thresholds (guardrails.pii.*) fully decoupled from detection thresholds
 - risk_score = rule x 0.40 + ml x 0.30 + llm x 0.30 (PII excluded)
-- primary_reason: 7 values, SYSTEM_ERROR always distinct from NO_THREAT_DETECTED
+- primary_reason: 7 values, SYSTEM_ERROR indicates a detection failure — never confused with NO_THREAT_DETECTED which requires successful clean detection
 - confidence: variance-based with HIGH/MEDIUM/LOW band, 0.0 on system failure
 - decision_version: algorithm version in every response
 
@@ -80,7 +80,7 @@ Every decision is logged with full attribution, a confidence score, and a primar
 - ULID trace IDs: time-sortable
 - Input limit: 8,000 chars / 4,000 estimated tokens (heuristic, safe for CJK)
 - Per-detector try/catch: individual failures do not crash the pipeline
-- SYSTEM_ERROR on detector failure: never confused with NO_THREAT_DETECTED
+- SYSTEM_ERROR on detector failure: never confused with NO_THREAT_DETECTED — only returned for successful clean evaluations
 
 **Policy hierarchy:**
 - System defaults → tenant global → department overrides
@@ -104,7 +104,7 @@ Calling Application
     |                                                  |
     |  Gateway Service                                 |
     |  +-- InputGuard    PII detection + redaction     |
-    |  +-- RuleDetector  try/catch (~0ms)              |
+    |  +-- RuleDetector  try/catch (~<1ms)              |
     |  +-- MLDetector    try/catch (~5ms)              |
     |  +-- LLMDetector   try/catch (full mode only)    |
     |  +-- RiskScorer    rule+ml+llm weighted          |
@@ -218,12 +218,17 @@ X-WrapSec-Latency-Ms:        3047
 
 ### Proxy Mode — Input Blocked
 
+Proxy error responses may include `input_*` and `output_*` fields to distinguish input and output lifecycle stages.
+
 ```json
 {
-  "error": {"message": "Request blocked by security policy.", "code": "input_blocked"},
+  "error": {
+    "code":     "input_blocked",
+    "message":  "Request blocked by security policy.",
+    "trace_id": "req_01..."
+  },
   "wrapsec": {
-    "trace_id":         "req_01...",
-    "decision":   "BLOCK",
+    "decision":         "BLOCK",
     "input_threats":    ["PROMPT_INJECTION", "JAILBREAK"],
     "input_confidence": 0.9642,
     "execution_status": "BLOCKED"
@@ -329,7 +334,7 @@ response = client.chat.completions.create(
     messages = [{"role": "user", "content": user_prompt}],
 )
 
-# WrapSec enforces security transparently
+# WrapSec enforces security on input and output
 print(response.headers.get("X-WrapSec-Input-Decision"))   # ALLOW / SANITIZE
 print(response.headers.get("X-WrapSec-Output-Decision"))  # ALLOW / SANITIZE
 print(response.headers.get("X-WrapSec-Trace-Id"))         # for audit lookup
@@ -433,16 +438,17 @@ python scripts/cleanup_audit_logs.py --proxy-only --proxy-days 0  # purge all pr
 
 | Failure | Decision | Confidence | Primary Reason |
 |---|---|---|---|
-| One detector fails | continues | from remaining | per remaining |
+| One detector fails | based on remaining detectors | from remaining | per remaining |
 | All detectors fail | ALLOW | LOW (0.0) | SYSTEM_ERROR |
-| Guardrail (PII) fails | BLOCK | LOW (0.0) | SYSTEM_ERROR |
+| PII threshold triggered | BLOCK/SANITIZE | HIGH | PII_GUARDRAIL_BLOCK/SANITIZE |
+| PII detection failure | ALLOW | LOW (0.0) | SYSTEM_ERROR |
 | Gateway exception | BLOCK | LOW (0.0) | SYSTEM_ERROR |
 | LLM timeout (detection) | continues | from rule+ML | RULE/ML |
 | Provider timeout (proxy) | 504 | -- | -- |
 | Provider unreachable (proxy) | 502 | -- | -- |
 | Redis unavailable | allows | -- | rate limit + idempotency disabled |
 
-All failure paths return SYSTEM_ERROR. NO_THREAT_DETECTED is reserved exclusively for successful detection with clean results. Monitor SYSTEM_ERROR separately from security decisions.
+Detection and gateway failures return SYSTEM_ERROR. Provider and network failures return HTTP errors (502, 504) and are not SYSTEM_ERROR. SYSTEM_ERROR indicates a failure in the detection pipeline, not a clean result. NO_THREAT_DETECTED is returned only for successful clean evaluations. Monitor SYSTEM_ERROR separately from security decisions.
 
 ---
 

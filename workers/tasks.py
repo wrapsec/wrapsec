@@ -29,7 +29,8 @@ logger = logging.getLogger("wrapsec.retention_worker")
 async def run_retention_cleanup() -> None:
     """
     Main retention task — runs on schedule.
-    Cleans audit_logs and proxy_interactions per configured retention periods.
+    Cleans audit_logs, proxy_interactions, and refresh_tokens
+    per configured retention periods.
     Never raises — all exceptions are caught and logged.
     """
     logger.info("Retention worker: starting scheduled cleanup run")
@@ -47,19 +48,29 @@ async def run_retention_cleanup() -> None:
         logger.error(f"Retention worker: proxy_interactions cleanup failed: {e}")
         proxy_purged = -1
 
+    try:
+        tokens_deleted = await _cleanup_refresh_tokens()
+    except Exception as e:
+        logger.error(f"Retention worker: refresh_tokens cleanup failed: {e}")
+        tokens_deleted = -1
+
     elapsed_ms = int((datetime.utcnow() - start).total_seconds() * 1000)
 
-    if audit_deleted >= 0 and proxy_purged >= 0:
+    all_ok = audit_deleted >= 0 and proxy_purged >= 0 and tokens_deleted >= 0
+
+    if all_ok:
         logger.info(
             f"Retention worker: cleanup complete in {elapsed_ms}ms — "
             f"audit_logs deleted: {audit_deleted} | "
-            f"proxy_interactions text purged: {proxy_purged}"
+            f"proxy_interactions text purged: {proxy_purged} | "
+            f"refresh_tokens deleted: {tokens_deleted}"
         )
     else:
         logger.warning(
             f"Retention worker: cleanup completed with errors in {elapsed_ms}ms — "
             f"audit_logs: {'OK' if audit_deleted >= 0 else 'FAILED'} | "
-            f"proxy_interactions: {'OK' if proxy_purged >= 0 else 'FAILED'}"
+            f"proxy_interactions: {'OK' if proxy_purged >= 0 else 'FAILED'} | "
+            f"refresh_tokens: {'OK' if tokens_deleted >= 0 else 'FAILED'}"
         )
 
 
@@ -87,7 +98,10 @@ async def _resolve_audit_retention() -> int:
     except Exception as e:
         from config.settings import get_settings
         cfg = get_settings()
-        logger.warning(f"Retention worker: could not read audit retention from DB: {e} — using config default ({cfg.audit_retention_days} days)")
+        logger.warning(
+            f"Retention worker: could not read audit retention from DB: {e} "
+            f"— using config default ({cfg.audit_retention_days} days)"
+        )
         return cfg.audit_retention_days
 
 
@@ -110,7 +124,10 @@ async def _cleanup_audit_logs() -> int:
         count  = result.scalar() or 0
 
         if count == 0:
-            logger.info(f"Retention worker: audit_logs — nothing to delete (retention: {retention_days} days)")
+            logger.info(
+                f"Retention worker: audit_logs — nothing to delete "
+                f"(retention: {retention_days} days)"
+            )
             return 0
 
         await session.execute(delete_query)
@@ -159,7 +176,10 @@ async def _cleanup_proxy_interactions() -> int:
         count  = result.scalar() or 0
 
         if count == 0:
-            logger.info(f"Retention worker: proxy_interactions — nothing to purge (retention: {retention_days} days)")
+            logger.info(
+                f"Retention worker: proxy_interactions — nothing to purge "
+                f"(retention: {retention_days} days)"
+            )
             return 0
 
         await session.execute(purge_query)
@@ -170,3 +190,34 @@ async def _cleanup_proxy_interactions() -> int:
             f"from {count} rows older than {retention_days} days (metadata retained)"
         )
         return count
+
+
+async def _cleanup_refresh_tokens() -> int:
+    """
+    Deletes expired refresh tokens using two clauses.
+
+    Clause 1 (primary — preserves recent audit trail):
+        DELETE WHERE expires_at < NOW() AND revoked_at IS NOT NULL
+        Keeps: expired-but-active (failed naturally, audit value remains)
+        Keeps: revoked-but-not-expired (recent termination, investigation value)
+        Deletes: BOTH expired AND explicitly revoked — audit value exhausted.
+
+    Clause 2 (secondary — prevents unbounded table growth):
+        DELETE WHERE expires_at < NOW() - 90 days
+        Deletes ALL tokens older than 3x the refresh token lifetime (30 days).
+        Covers users who abandoned sessions without ever logging out.
+        At 90 days, audit value is exhausted regardless of revocation state.
+
+    Combined: no token older than 90 days survives.
+    Returns total deleted rows from both clauses combined.
+    """
+    from db.session import AsyncSessionFactory
+    from db.repositories.refresh_token import RefreshTokenRepository
+
+    async with AsyncSessionFactory() as session:
+        repo    = RefreshTokenRepository(session)
+        deleted = await repo.cleanup_expired()
+        await session.commit()
+
+    logger.info(f"Retention worker: refresh_tokens — deleted {deleted} expired rows")
+    return deleted

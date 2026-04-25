@@ -104,6 +104,10 @@ class AuditLogModel(Base):
     # Values: CRITICAL / HIGH / MEDIUM / LOW
     # Never returned in scan responses — audit and SIEM use only.
     severity       = Column(String(10),  nullable=True)
+    # principal_type: written on every request for audit attribution.
+    # Values: 'api_key' (default, existing rows) | 'user' (JWT dashboard auth)
+    # Added via migration add_users.sql — existing rows default to 'api_key'.
+    principal_type = Column(String(20),  nullable=True,  default="api_key")
     created_at     = Column(DateTime,    nullable=False, default=datetime.utcnow)
 
     __table_args__ = (
@@ -116,6 +120,7 @@ class AuditLogModel(Base):
         Index("ix_audit_user_created",          "user_id",    "created_at"),
         Index("ix_audit_logs_exec_mode",        "execution_mode"),
         Index("ix_audit_logs_created_desc",     "created_at"),
+        Index("ix_audit_principal_type",        "principal_type"),
     )
 
 
@@ -265,4 +270,139 @@ class ProxyInteractionModel(Base):
         Index("ix_proxy_int_created",     "created_at"),
         Index("ix_proxy_int_exec_status", "execution_status"),
         Index("ix_proxy_int_attack_type", "input_attack_type"),
+    )
+
+
+class UserModel(Base):
+    """
+    Dashboard users — human operators authenticating via JWT.
+    API key users (applications/services) are in APIKeyModel and do not have rows here.
+
+    Tenant boundary: tenant_id NOT NULL — enforced at DB level (Layer 1).
+    dept_id NULL is valid ONLY for ADMIN role — enforced by ck_users_dept_required.
+    dept_id must belong to the same tenant — validated in UserRepository.create/update().
+
+    Email uniqueness: case-insensitive, enforced by ux_users_email_lower index
+    (CREATE UNIQUE INDEX ON users (LOWER(email))) created in add_users.sql.
+    Always stored lowercase — normalize_email() must be called before every write.
+    Column has no unique=True — uniqueness is entirely index-driven.
+
+    token_version: increment to immediately invalidate ALL active sessions.
+    JWT middleware checks payload["ver"] == user.token_version on every request.
+    Incremented exclusively by UserRepository.increment_token_version(), which is
+    called only by AuthService.logout_all_sessions().
+    """
+    __tablename__ = "users"
+
+    id                    = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    tenant_id             = Column(UUID(as_uuid=True), ForeignKey("tenants.id"),
+                                   nullable=False)
+    dept_id               = Column(UUID(as_uuid=True), ForeignKey("departments.id"),
+                                   nullable=True)
+    # NULL valid for ADMIN only — ck_users_dept_required enforces this.
+    # dept_id must belong to same tenant — validated at application level.
+    # DB-level composite FK (dept_id, tenant_id) → departments(id, tenant_id)
+    # created in add_users.sql prevents cross-tenant linkage even via direct DB writes.
+
+    email                 = Column(String(255), nullable=False)
+    # No unique=True — uniqueness via ux_users_email_lower (LOWER(email)) index.
+    # Always stored lowercase. normalize_email() MUST be called before every write.
+
+    password_hash         = Column(String(255), nullable=False)
+    # bcrypt via passlib. NEVER store plaintext, MD5, SHA-1, or any fast hash.
+
+    role                  = Column(String(50),  nullable=False, default="DEVELOPER")
+    # Valid values: ADMIN | DEVELOPER | VIEWER
+    # Enforced by ck_users_role CHECK constraint in add_users.sql.
+
+    is_active             = Column(Boolean,     nullable=False, default=True)
+
+    force_password_change = Column(Boolean,     nullable=False, default=False)
+    # Set True on: bootstrap admin creation, admin-initiated password reset.
+    # Enforced at middleware level — NOT just frontend.
+    # JWT middleware rejects all requests except /v1/auth/change-password,
+    # /v1/auth/logout, and /v1/auth/me when this flag is True.
+    # Set False when user successfully changes their own password via change_password().
+
+    token_version         = Column(Integer,     nullable=False, default=1)
+    # Incremented by logout_all_sessions() to immediately invalidate all JWTs.
+    # JWT middleware checks: payload["ver"] == user.token_version.
+    # Mismatch → SESSION_INVALIDATED 401, even if token is not yet expired.
+    # Triggered by: password change, role change, account deactivation, admin reset.
+
+    created_at            = Column(DateTime,    nullable=False, default=datetime.utcnow)
+    last_login_at         = Column(DateTime,    nullable=True)
+
+    __table_args__ = (
+        Index("ix_users_tenant",      "tenant_id"),
+        Index("ix_users_dept",        "dept_id"),
+        Index("ix_users_role",        "role"),
+        # Composite index covers count_active_admins() → WHERE role='ADMIN' AND is_active=TRUE
+        # Prevents full table scan on last-admin protection check (called on every role change).
+        Index("ix_users_role_active", "role", "is_active"),
+        # ux_users_email_lower (UNIQUE on LOWER(email)) created in add_users.sql —
+        # cannot be expressed as a SQLAlchemy Index() — applied via raw SQL migration only.
+        CheckConstraint(
+            "role IN ('ADMIN', 'DEVELOPER', 'VIEWER')",
+            name="ck_users_role",
+        ),
+        CheckConstraint(
+            "role = 'ADMIN' OR dept_id IS NOT NULL",
+            name="ck_users_dept_required",
+        ),
+    )
+
+
+class RefreshTokenModel(Base):
+    """
+    Opaque refresh tokens for JWT session management.
+    Raw token is NEVER stored — only SHA-256(raw) is persisted.
+    If DB is compromised, raw tokens cannot be reconstructed from hashes.
+
+    Rotation: every use revokes the old token and creates a new one.
+    Race condition prevention: get_by_hash() uses SELECT FOR UPDATE.
+
+    token_version: stores user.token_version at issuance time.
+    On refresh: if token_rec.token_version != user.token_version
+                → session was invalidated after this token was issued → 401.
+    This allows logout_all_sessions() to work without a DB scan —
+    incrementing user.token_version is sufficient.
+
+    Cleanup (two clauses, both run daily by retention worker):
+    Clause 1: DELETE WHERE expires_at < NOW() AND revoked_at IS NOT NULL
+    Clause 2: DELETE WHERE expires_at < NOW() - 90 days (prevents unbounded growth)
+    """
+    __tablename__ = "refresh_tokens"
+
+    id            = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    user_id       = Column(UUID(as_uuid=True),
+                           ForeignKey("users.id", ondelete="CASCADE"),
+                           nullable=False)
+    token_hash    = Column(String(64),  nullable=False, unique=True)
+    # SHA-256 of the raw token. Raw token NEVER stored server-side.
+
+    token_version = Column(Integer,     nullable=False, default=1)
+    # user.token_version at time of issuance.
+    # Checked on every refresh — mismatch means session was invalidated.
+
+    expires_at    = Column(DateTime,    nullable=False)
+    revoked_at    = Column(DateTime,    nullable=True)
+    # NULL = active token. Set to NOW() on logout, rotation, revoke_all_for_user().
+
+    created_at    = Column(DateTime,    nullable=False, default=datetime.utcnow)
+
+    __table_args__ = (
+        Index("ix_refresh_tokens_user",    "user_id"),
+        Index("ix_refresh_tokens_hash",    "token_hash"),
+        Index("ix_refresh_tokens_expires", "expires_at"),
+        # Partial index — active tokens only (revoked_at IS NULL).
+        # Reduces index size and speeds up SELECT FOR UPDATE in get_by_hash().
+        # PostgreSQL only — created via raw SQL in add_users.sql, not here.
+        # (SQLAlchemy Index with postgresql_where is fine for PostgreSQL but
+        #  silently ignored on SQLite used in integration tests.)
+        Index(
+            "ix_refresh_active",
+            "user_id",
+            postgresql_where="revoked_at IS NULL",
+        ),
     )

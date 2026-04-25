@@ -40,6 +40,19 @@ class LLMProvider(str, Enum):
     GROQ   = "groq"
 
 
+class PrincipalType(str, Enum):
+    USER       = "user"
+    API_KEY    = "api_key"
+    AGENT      = "agent"       # Phase 3 stub — not implemented in v1
+    MCP_CLIENT = "mcp_client"  # Phase 3 stub — not implemented in v1
+
+
+class UserRole(str, Enum):
+    ADMIN     = "ADMIN"
+    DEVELOPER = "DEVELOPER"
+    VIEWER    = "VIEWER"
+
+
 def get_risk_level(score: float) -> RiskLevel:
     if score >= 0.9:
         return RiskLevel.CRITICAL
