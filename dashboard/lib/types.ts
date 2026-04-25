@@ -33,10 +33,11 @@ export interface AIRequest {
 
 // ── API response ──────────────────────────────────────────────
 export interface Processing {
-  latency_ms: number
-  llm_invoked: boolean
-  detection_mode: DetectionMode
-  execution_mode: ExecutionMode
+  latency_ms:      number
+  llm_invoked:     boolean
+  detection_mode:  DetectionMode
+  execution_mode:  ExecutionMode
+  policy_source?:  string   // present only in GET /v1/ai/requests/{trace_id}
 }
 
 export interface LayerScores {
@@ -52,31 +53,45 @@ export interface LayerScores {
 }
 
 export interface GatewayResponse {
-  trace_id:        string
-  decision:        Decision
-  risk_score:      number
-  primary_reason:  string | null
-  confidence:      number | null
-  confidence_band: string | null
-  threats:         ThreatCategory[]
-  sanitized_input: string | null
-  output:          string | null
-  processing:      Processing
-  debug?:          LayerScores
+  trace_id:             string
+  decision:             Decision
+  decision_version:     string
+  risk_score:           number
+  primary_reason:       string | null
+  confidence:           number | null
+  confidence_band:      string | null
+  threats:              ThreatCategory[]
+  sanitization_applied: boolean
+  sanitized_input?:     string        // present only when decision = SANITIZE
+  processing:           Processing
+  debug?:               LayerScores
 }
 
 // ── Audit log ─────────────────────────────────────────────────
 export interface AuditLogItem {
-  trace_id: string
-  timestamp: string
-  tenant_id: string | null
-  decision: Decision
-  risk_score: number
-  threats: ThreatCategory[]
-  input_hash: string
-  detection_mode: DetectionMode
-  execution_mode: ExecutionMode
-  latency_ms: number
+  trace_id:             string
+  timestamp:            string
+  tenant_id:            string | null
+  decision:             Decision
+  primary_reason:       string | null
+  risk_score:           number
+  confidence:           number | null
+  confidence_band:      string | null
+  threats:              ThreatCategory[]
+  input_hash:           string
+  input_length:         number
+  detection_mode:       DetectionMode
+  execution_mode:       ExecutionMode
+  latency_ms:           number
+  severity:             "CRITICAL" | "HIGH" | "MEDIUM" | "LOW"
+  key_id:               string | null
+  dept_id:              string | null
+  app_id:               string | null
+  user_id:              string | null
+  source:               string | null
+  ip_address:           string | null
+  attribution_verified: boolean
+  policy_source:        string | null
 }
 
 export interface AuditLogsResponse {
@@ -86,32 +101,41 @@ export interface AuditLogsResponse {
 
 export interface ThreatCount {
   category: ThreatCategory
-  count: number
+  count:    number
 }
 
 export interface AuditStatsResponse {
-  period_from: string
-  period_to: string
+  period_from:    string
+  period_to:      string
   total_requests: number
-  block_rate: number
-  sanitize_rate: number
-  allow_rate: number
+  block_rate:     number
+  sanitize_rate:  number
+  allow_rate:     number
   avg_latency_ms: number
   p95_latency_ms: number
-  top_threats: ThreatCount[]
+  top_threats:    ThreatCount[]
 }
 
 // ── Settings ──────────────────────────────────────────────────
 export interface Thresholds {
-  block_threshold: number
+  block_threshold:    number
   sanitize_threshold: number
-  updated_at?: string
+  updated_at?:        string
 }
 
 export interface Layers {
   rule_enabled: boolean
-  ml_enabled: boolean
-  llm_enabled: boolean
+  ml_enabled:   boolean
+  llm_enabled:  boolean
+  updated_at?:  string
+}
+
+export interface LLMSettings {
+  provider:    "ollama" | "openai" | "groq"
+  model:       string
+  base_url:    string
+  timeout:     number
+  llm_trigger: number
   updated_at?: string
 }
 
@@ -149,7 +173,7 @@ export interface ApiKeysResponse {
 
 // ── Health ────────────────────────────────────────────────────
 export interface HealthResponse {
-  status: string
+  status:  string
   version: string
 }
 
@@ -157,15 +181,36 @@ export interface HealthReadyResponse {
   status: string
   checks: {
     database: string
-    redis: string
+    redis:    string
     ml_model: string
   }
 }
 
 // ── Retrieve request ──────────────────────────────────────────
 export interface RequestDetail {
-  trace_id:     string
-  timestamp:    string
+  trace_id:        string
+  timestamp:       string
+  execution_mode:  string
+  is_proxy:        boolean
+  severity:        "CRITICAL" | "HIGH" | "MEDIUM" | "LOW"
+  decision:        Decision
+  risk_score:      number
+  primary_reason:  string | null
+  confidence:      number | null
+  confidence_band: string | null
+  threats:         ThreatCategory[]
+  input_hash:      string
+  input_length:    number | null
+  detection_scores: {
+    rule: number
+    ml:   number
+    llm:  number
+  }
+  guardrail_scores: {
+    pii:          number
+    [key: string]: number
+  }
+  processing: Processing
   attribution: {
     tenant_id:            string | null
     dept_id:              string | null
@@ -179,36 +224,16 @@ export interface RequestDetail {
     user_agent:           string | null
     attribution_verified: boolean
   }
-  decision:        Decision
-  risk_score:      number
-  primary_reason:  string | null
-  confidence:      number | null
-  confidence_band: string | null
-  threats:         ThreatCategory[]
-  input_hash: string
-  input_length: number | null
-  detection_scores: {
-    rule: number
-    ml:   number
-    llm:  number
-  }
-  guardrail_scores: {
-    pii:         number
-    [key: string]: number
-  }
-  processing: Processing
-  is_proxy: boolean
-  execution_mode: string
   proxy?: {
     provider:              string | null
     model:                 string | null
     provider_latency_ms:   number | null
     total_latency_ms:      number | null
     execution_status:      string
-    input_raw:             string
+    input_raw:             string | null
     input_sanitized:       string | null
-    input_primary_reason:  string
-    input_confidence:      number
+    input_primary_reason:  string | null
+    input_confidence:      number | null
     input_threats:         string[]
     input_attack_type:     string | null
     output_raw:            string | null
@@ -233,18 +258,10 @@ export interface RequestFilters {
   sort_order?:      "asc" | "desc"
   limit:            number
   offset:           number
-  execution_mode?: ExecutionMode | ""
+  execution_mode?:  ExecutionMode | ""
 }
 
-export interface LLMSettings {
-  provider:    "ollama" | "openai" | "groq"
-  model:       string
-  base_url:    string
-  timeout:     number
-  llm_trigger: number
-  updated_at?: string
-}
-
+// ── Departments ───────────────────────────────────────────────
 export interface Department {
   id:              string
   tenant_id:       string
@@ -252,16 +269,14 @@ export interface Department {
   name:            string
   description:     string | null
   policy_override: {
-    thresholds?: {
-      block?:    number
-      sanitize?: number
-    }
+    thresholds?: { block?: number; sanitize?: number }
   } | null
   contact_email:   string | null
   is_active:       boolean
   created_at:      string
 }
 
+// ── Applications ──────────────────────────────────────────────
 export interface Application {
   id:                  string
   tenant_id:           string
@@ -278,7 +293,6 @@ export interface Application {
   is_active:           boolean
   created_at:          string
 }
-
 
 // ── Proxy Settings ────────────────────────────────────────────
 export interface ProxyProviderConfig {
@@ -311,6 +325,8 @@ export interface ProxyInteraction {
   id:                    string
   trace_id:              string
   created_at:            string
+  key_id:                string | null
+  user_id:               string | null
   input_decision:        Decision
   input_primary_reason:  string
   input_confidence:      number
@@ -323,18 +339,40 @@ export interface ProxyInteraction {
   output_decision:       Decision | null
   output_primary_reason: string | null
   output_confidence:     number | null
+  output_threats:        string[]
+  behavior_flag:         string | null
+  output_flags:          string[] | null
   total_latency_ms:      number
 }
 
 export interface ProxyInteractionDetail extends ProxyInteraction {
-  input_raw:        string
+  input_raw:        string | null
   input_sanitized:  string | null
   output_raw:       string | null
   output_sanitized: string | null
-  output_threats:   string[] | null
 }
 
 export interface ProxyInteractionsResponse {
+  total:  number
+  limit:  number
+  offset: number
+  items:  ProxyInteraction[]
+}
+
+// ── Dashboard Users (JWT auth) ────────────────────────────────
+export interface DashboardUser {
+  id:                    string
+  email:                 string
+  role:                  "ADMIN" | "DEVELOPER" | "VIEWER"
+  dept_id:               string | null
+  tenant_id:             string
+  is_active:             boolean
+  force_password_change: boolean
+  created_at:            string
+  last_login_at:         string | null
+}
+
+export interface DashboardUsersResponse {
   total: number
-  items: ProxyInteraction[]
+  users: DashboardUser[]
 }
