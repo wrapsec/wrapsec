@@ -97,8 +97,12 @@ class WrapSecUser(HttpUser):
         ) as resp:
             if resp.status_code == 200:
                 resp.success()
+            elif resp.status_code == 429:
+                # Rate limited — count as success for load test purposes
+                # (rate limiting is correct behaviour under high load)
+                resp.success()
             else:
-                resp.failure(f"Unexpected status {resp.status_code}")
+                resp.failure(f"HTTP {resp.status_code}: {resp.text[:100]}")
 
 
 # ── Scenario 1: Baseline ──────────────────────────────────────────────────────

@@ -21,7 +21,7 @@ tests/load/
 locust --version
 
 # API running
-curl http://localhost:8000/health/live
+curl http://127.0.0.1:8000/health/live
 
 # Both departments have valid keys (verified in session)
 # Purchase: wsk_live_siudfvbDrPkGPry-XYn_kXo167GLXE6Bf3WsDWqV3AM
@@ -73,7 +73,7 @@ Tests cover:
 ```powershell
 locust -f tests/load/locustfile.py BaselineUser `
   --headless -u 1 -r 1 -t 30s `
-  --host http://localhost:8000
+  --host http://127.0.0.1:8000
 ```
 
 Pass: all requests 200, p95 < 50ms, 0 failures.
@@ -85,7 +85,7 @@ Pass: all requests 200, p95 < 50ms, 0 failures.
 **With web UI (recommended — watch live):**
 ```powershell
 locust -f tests/load/locustfile.py SustainedUser `
-  --host http://localhost:8000
+  --host http://127.0.0.1:8000
 ```
 Open http://localhost:8089, set Users=33, Spawn rate=5, click Start.
 
@@ -94,7 +94,7 @@ Open http://localhost:8089, set Users=33, Spawn rate=5, click Start.
 mkdir tests\load\results -ErrorAction SilentlyContinue
 locust -f tests/load/locustfile.py SustainedUser `
   --headless -u 33 -r 5 -t 10m `
-  --host http://localhost:8000 `
+  --host http://127.0.0.1:8000 `
   --csv=tests/load/results/sustained
 ```
 
@@ -110,7 +110,7 @@ Pass criteria:
 ```powershell
 locust -f tests/load/locustfile.py BurstUser `
   --headless -u 100 -r 100 -t 2m `
-  --host http://localhost:8000 `
+  --host http://127.0.0.1:8000 `
   --csv=tests/load/results/burst
 ```
 
@@ -125,7 +125,7 @@ Pass criteria:
 ```powershell
 locust -f tests/load/locustfile.py SoakUser `
   --headless -u 30 -r 5 -t 60m `
-  --host http://localhost:8000 `
+  --host http://127.0.0.1:8000 `
   --csv=tests/load/results/soak
 ```
 
@@ -151,7 +151,7 @@ Pass criteria:
 ```powershell
 locust -f tests/load/locustfile.py StressUser `
   --headless -u 200 -r 10 -t 5m `
-  --host http://localhost:8000 `
+  --host http://127.0.0.1:8000 `
   --csv=tests/load/results/stress
 ```
 

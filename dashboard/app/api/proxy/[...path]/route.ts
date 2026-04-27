@@ -25,10 +25,12 @@ async function handler(request: NextRequest) {
     )
   }
 
-  // Build auth header — API key wins if both present (matches backend precedence)
-  const authHeaders: Record<string, string> = apiKey
-    ? { "x-api-key": apiKey }
-    : { "Authorization": `Bearer ${jwtToken}` }
+  // Build auth header — JWT wins if both present (required for admin write endpoints)
+  // JWT users need Authorization: Bearer to satisfy require_admin() on PUT /v1/settings/*
+  // API key used only when no JWT session exists (legacy API key dashboard sessions)
+  const authHeaders: Record<string, string> = jwtToken
+    ? { "Authorization": `Bearer ${jwtToken}` }
+    : { "x-api-key": apiKey! }
 
   // Extract path after /api/proxy
   const url    = new URL(request.url)

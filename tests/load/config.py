@@ -6,7 +6,7 @@ Edit this file before running any test.
 """
 
 # ── API ────────────────────────────────────────────────────────────────────────
-BASE_URL = "http://localhost:8000"
+BASE_URL = "http://127.0.0.1:8000"
 
 # ── Keys ──────────────────────────────────────────────────────────────────────
 ADMIN_KEY    = "wrapsec_admin_key"

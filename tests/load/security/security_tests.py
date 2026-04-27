@@ -21,7 +21,7 @@ import sys
 import time
 import requests
 
-BASE_URL         = "http://localhost:8000"
+BASE_URL         = "http://127.0.0.1:8000"
 ADMIN_KEY        = "wrapsec_admin_key"
 PURCHASE_KEY     = "wsk_live_siudfvbDrPkGPry-XYn_kXo167GLXE6Bf3WsDWqV3AM"
 FINANCE_KEY      = "wsk_live_VKyMV0WBPUFGFkU21bin_b_9DGOd0in2Xah4WH5fCso"
