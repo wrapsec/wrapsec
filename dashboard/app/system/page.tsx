@@ -54,7 +54,7 @@ export default function SystemPage() {
                   { label: "Block threshold",    value: config.thresholds?.block    },
                   { label: "Sanitize threshold", value: config.thresholds?.sanitize },
                   { label: "Rate limit",         value: `${config.rate_limit?.per_minute} req/min` },
-                  { label: "Rate limit scope",   value: config.rate_limit?.scope    },
+                  { label: "Rate limit source",  value: config.rate_limit?.source   },
                 ].map(({ label, value }) => (
                   <div key={label} className="bg-slate-50 rounded-lg px-3 py-2.5">
                     <p className="text-xs text-slate-400 mb-0.5">{label}</p>

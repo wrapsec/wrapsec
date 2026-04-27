@@ -51,6 +51,7 @@ async def health_config(db: AsyncSession = Depends(get_db)):
     stored_thresholds = await repo.get("policy_thresholds") or {}
     stored_layers     = await repo.get("detection_layers")  or {}
     stored_llm        = await repo.get("llm_settings")      or {}
+    stored_rate_limit = await repo.get("rate_limit")        or {}
 
     return {
         "version": settings.app_version,
@@ -73,7 +74,7 @@ async def health_config(db: AsyncSession = Depends(get_db)):
             "source":      "database" if stored_llm else "environment",
         },
         "rate_limit": {
-            "per_minute": 60,
-            "scope":      "per_api_key",
+            "per_minute": stored_rate_limit.get("per_minute", settings.rate_limit_per_minute),
+            "source":     "database" if stored_rate_limit else "environment",
         },
     }
