@@ -1,9 +1,10 @@
 from datetime import datetime, timezone
-from fastapi import APIRouter, Depends
+from fastapi import APIRouter, Depends, Request
 from fastapi.responses import JSONResponse
 from pydantic import BaseModel, model_validator
 from sqlalchemy.ext.asyncio import AsyncSession
 from api.v1.dependencies.db import get_db
+from api.v1.dependencies.auth import get_current_principal, require_admin
 from db.repositories.settings import SettingsRepository
 from config.settings import get_settings
 from errors.exceptions import ValidationError
@@ -59,7 +60,10 @@ class LayersUpdateSchema(BaseModel):
 
 
 @router.get("/thresholds")
-async def get_thresholds(db: AsyncSession = Depends(get_db)):
+async def get_thresholds(
+    db:        AsyncSession = Depends(get_db),
+    _principal = Depends(get_current_principal),
+):
     repo   = SettingsRepository(db)
     stored = await repo.get(THRESHOLD_KEY)
     return JSONResponse(content=stored or DEFAULT_THRESHOLDS)
@@ -67,8 +71,9 @@ async def get_thresholds(db: AsyncSession = Depends(get_db)):
 
 @router.put("/thresholds")
 async def update_thresholds(
-    body: ThresholdsUpdateSchema,
-    db:   AsyncSession = Depends(get_db),
+    body:      ThresholdsUpdateSchema,
+    db:        AsyncSession = Depends(get_db),
+    _principal = Depends(require_admin()),
 ):
     repo    = SettingsRepository(db)
     current = await repo.get(THRESHOLD_KEY) or DEFAULT_THRESHOLDS.copy()
@@ -87,7 +92,10 @@ async def update_thresholds(
 
 
 @router.get("/layers")
-async def get_layers(db: AsyncSession = Depends(get_db)):
+async def get_layers(
+    db:        AsyncSession = Depends(get_db),
+    _principal = Depends(get_current_principal),
+):
     repo   = SettingsRepository(db)
     stored = await repo.get(LAYERS_KEY)
     return JSONResponse(content=stored or DEFAULT_LAYERS)
@@ -95,8 +103,9 @@ async def get_layers(db: AsyncSession = Depends(get_db)):
 
 @router.put("/layers")
 async def update_layers(
-    body: LayersUpdateSchema,
-    db:   AsyncSession = Depends(get_db),
+    body:      LayersUpdateSchema,
+    db:        AsyncSession = Depends(get_db),
+    _principal = Depends(require_admin()),
 ):
     repo    = SettingsRepository(db)
     current = await repo.get(LAYERS_KEY) or DEFAULT_LAYERS.copy()
@@ -148,7 +157,10 @@ class LLMSettingsSchema(BaseModel):
 
 
 @router.get("/llm")
-async def get_llm_settings(db: AsyncSession = Depends(get_db)):
+async def get_llm_settings(
+    db:        AsyncSession = Depends(get_db),
+    _principal = Depends(get_current_principal),
+):
     repo   = SettingsRepository(db)
     stored = await repo.get(LLM_KEY)
     return JSONResponse(content=stored or DEFAULT_LLM)
@@ -156,8 +168,9 @@ async def get_llm_settings(db: AsyncSession = Depends(get_db)):
 
 @router.put("/llm")
 async def update_llm_settings(
-    body: LLMSettingsSchema,
-    db:   AsyncSession = Depends(get_db),
+    body:      LLMSettingsSchema,
+    db:        AsyncSession = Depends(get_db),
+    _principal = Depends(require_admin()),
 ):
     repo    = SettingsRepository(db)
     current = await repo.get(LLM_KEY) or DEFAULT_LLM.copy()
@@ -191,7 +204,10 @@ class RetentionSettingsSchema(BaseModel):
 
 
 @router.get("/retention")
-async def get_retention_settings(db: AsyncSession = Depends(get_db)):
+async def get_retention_settings(
+    db:        AsyncSession = Depends(get_db),
+    _principal = Depends(get_current_principal),
+):
     repo    = SettingsRepository(db)
     stored  = await repo.get(RETENTION_KEY)
     days    = stored.get("retention_days", settings.audit_retention_days) if stored else settings.audit_retention_days
@@ -203,8 +219,9 @@ async def get_retention_settings(db: AsyncSession = Depends(get_db)):
 
 @router.put("/retention")
 async def update_retention_settings(
-    body: RetentionSettingsSchema,
-    db:   AsyncSession = Depends(get_db),
+    body:      RetentionSettingsSchema,
+    db:        AsyncSession = Depends(get_db),
+    _principal = Depends(require_admin()),
 ):
     repo = SettingsRepository(db)
     await repo.set(RETENTION_KEY, {"retention_days": body.retention_days})
@@ -244,7 +261,10 @@ class RateLimitUpdateSchema(BaseModel):
 
 
 @router.get("/rate_limit")
-async def get_rate_limit_settings(db: AsyncSession = Depends(get_db)):
+async def get_rate_limit_settings(
+    db:        AsyncSession = Depends(get_db),
+    _principal = Depends(get_current_principal),
+):
     """
     Returns the current global rate limit.
     Source is 'database' if explicitly set, 'environment' if using default.
@@ -265,8 +285,9 @@ async def get_rate_limit_settings(db: AsyncSession = Depends(get_db)):
 
 @router.put("/rate_limit")
 async def update_rate_limit_settings(
-    body: RateLimitUpdateSchema,
-    db:   AsyncSession = Depends(get_db),
+    body:      RateLimitUpdateSchema,
+    db:        AsyncSession = Depends(get_db),
+    _principal = Depends(require_admin()),
 ):
     """
     Update the global rate limit for live keys.
@@ -298,7 +319,9 @@ async def update_rate_limit_settings(
 
 
 @router.get("/storage")
-async def get_storage_settings():
+async def get_storage_settings(
+    _principal = Depends(get_current_principal),
+):
     """
     Returns the current data storage mode and proxy retention period.
     Read-only in V1 -- configured via environment variables.
