@@ -167,6 +167,7 @@ class TestProxySettingsEndpoints:
         )
         mock_db.commit  = AsyncMock()
         mock_db.refresh = AsyncMock()
+        mock_db.add     = MagicMock()  # synchronous in SQLAlchemy
 
         async def fake_get_db():
             yield mock_db
@@ -209,6 +210,7 @@ class TestProxySettingsEndpoints:
         )
         mock_db.commit  = AsyncMock()
         mock_db.refresh = AsyncMock()
+        mock_db.add     = MagicMock()  # synchronous in SQLAlchemy
 
         plaintext_key = "sk-openai-supersecretlongkey12345"
 
