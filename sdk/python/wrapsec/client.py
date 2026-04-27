@@ -268,13 +268,15 @@ class Client:
 
         Spec: Section 13.2 (wrapsec settings get)
         """
-        thresholds = self._request("GET", "/settings/thresholds", self._resolve_timeout(timeout))
-        layers     = self._request("GET", "/settings/layers",     self._resolve_timeout(timeout))
-        llm        = self._request("GET", "/settings/llm",        self._resolve_timeout(timeout))
+        thresholds  = self._request("GET", "/settings/thresholds",  self._resolve_timeout(timeout))
+        layers      = self._request("GET", "/settings/layers",      self._resolve_timeout(timeout))
+        llm         = self._request("GET", "/settings/llm",         self._resolve_timeout(timeout))
+        rate_limit  = self._request("GET", "/settings/rate_limit",  self._resolve_timeout(timeout))
         return {
-            "thresholds": thresholds,
-            "layers":     layers,
-            "llm":        llm,
+            "thresholds":  thresholds,
+            "layers":      layers,
+            "llm":         llm,
+            "rate_limit":  rate_limit,
         }
 
     def keys_list(self, timeout: int | None = None) -> list[dict[str, Any]]:

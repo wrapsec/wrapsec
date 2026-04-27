@@ -67,9 +67,10 @@ def settings_get(json_output: bool) -> None:
         print_json(data)
         return
 
-    thresholds = data.get("thresholds", {})
-    layers     = data.get("layers", {})
-    llm        = data.get("llm", {})
+    thresholds  = data.get("thresholds", {})
+    layers      = data.get("layers", {})
+    llm         = data.get("llm", {})
+    rate_limit  = data.get("rate_limit", {})
 
     click.echo("Gateway Configuration (read-only — change via dashboard)")
     click.echo("=" * 55)
@@ -97,3 +98,7 @@ def settings_get(json_output: bool) -> None:
     click.echo(f"  Model:       {llm.get('model', '—')}")
     click.echo(f"  Timeout:     {llm.get('timeout', '—')}s")
     click.echo(f"  LLM trigger: {llm.get('llm_trigger', '—')}")
+
+    # Rate limit
+    click.echo("\nRate Limit:")
+    click.echo(f"  Live keys:   {rate_limit.get('per_minute', '—')} req/min ({rate_limit.get('source', '—')})")

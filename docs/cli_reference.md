@@ -50,6 +50,9 @@ wrapsec scan "hello world"
 
 Network and server errors (5xx, timeout, connection failure) are retried up to 3 times with exponential backoff before exit 1 is returned. A CLI exit 1 on infrastructure errors means retries have already been exhausted.
 
+**SYSTEM_ERROR and exit codes:**
+When the API returns `primary_reason = SYSTEM_ERROR`, the API decision is `ALLOW` — the detection pipeline failed and the system defaults to allowing the request. The CLI treats this as exit code `1` (failure) regardless of the ALLOW decision. This is intentional — a failed detection is not a safe detection. Applications must not forward input to an LLM when `SYSTEM_ERROR` is returned. See `wrapsec scan` output for how SYSTEM_ERROR is surfaced.
+
 Exit codes apply to all commands and all output modes (`--quiet`, `--json`).
 
 ---
@@ -195,7 +198,7 @@ WrapSec Doctor
 6. Version Compatibility
    CLI version:   0.1.0
    Expected API:  v1
-   API version:   1.0.0
+   API version:   1.0.0    # major compatibility version (v1) — not the feature version shown in docs
    ✔ Compatible (1.0.0)
 
 ✔ All checks passed — WrapSec CLI is ready.
@@ -222,7 +225,7 @@ wrapsec scan [TEXT] [OPTIONS]
 | `--mode fast\|full` | `fast` | Detection mode. `full` enables LLM semantic analysis for deeper inspection of ambiguous inputs. Results may differ from fast mode. Latency increases by ~100–2300ms depending on LLM model. |
 | `--timeout INT` | `30` | Request timeout in seconds (min 1) |
 | `--json` | off | Pure JSON output to stdout |
-| `--user TEXT` | `cli` | User ID for audit attribution |
+| `--user TEXT` | `cli` | User ID for audit attribution — maps to `metadata.user_id` in the API request body |
 | `--quiet` | off | No stdout output — exit code only |
 
 ### Examples
@@ -290,7 +293,7 @@ Threats:    PROMPT_INJECTION
 ```
 
 `sanitized_input` matches the `sanitized_input` field in the API response — present and non-null only when `decision = SANITIZE`. `sanitization_applied` is the corresponding boolean indicator in the full API response.
-Confidence is shown to 4 decimal places in JSON output.
+Confidence is shown at full precision in JSON output (no forced rounding).
 
 ### Validation errors
 
@@ -661,12 +664,17 @@ Not available in v1 — use the dashboard for user management.
 
 ```
 latency_ms in scan output
-  Real gateway processing time — sourced from the API response.
-  Values typically 1–10ms for fast mode, 100–2300ms for full mode.
+  Real gateway processing time — sourced directly from the API response.
+  Mapping by execution mode:
+    scan_only → processing.latency_ms (detection pipeline time only)
+    proxy     → total_latency_ms (end-to-end: detection + provider + output scan)
+  Values typically 1–10ms for scan_only fast mode, 100–2300ms with full mode or proxy.
+  For a full proxy latency breakdown, use: wrapsec audit get <trace_id>
 
 confidence in human vs JSON output
-  Both show the same value rounded to 2 decimal places.
-  Example: 0.75 in both human and JSON output.
+  Human output: rounded to 2 decimal places (e.g. 0.75).
+  JSON output: full precision as returned by the API (no forced rounding).
+  Example: human shows 0.75, JSON may show 0.75 or 0.7500 depending on API response.
 
 batch on Windows (PowerShell)
   PowerShell Out-File -Encoding utf8 adds a BOM character.
@@ -676,6 +684,11 @@ batch on Windows (PowerShell)
   Sends detection_mode=full to the API which invokes LLM analysis.
   Output fields are identical to fast mode.
   Latency increases by ~100–2300ms depending on the configured LLM.
+
+"Reason" in human output
+  The human-readable output label "Reason:" corresponds to the API field `primary_reason`.
+  JSON output uses `primary_reason` directly — no label difference.
+  Example: human shows "Reason: RULE_DETECTOR", JSON shows "primary_reason": "RULE_DETECTOR"
 ```
 
 ---

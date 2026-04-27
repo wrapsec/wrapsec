@@ -164,7 +164,7 @@ def audit_get(trace_id: str, json_output: bool) -> None:
     color = {"BLOCK": "red", "SANITIZE": "yellow", "ALLOW": "green"}.get(log.decision)
     click.secho(f"Decision:       {log.decision}", fg=color, bold=True)
     click.echo(f"Reason:         {log.primary_reason}")
-    click.echo(f"Confidence:     {round(log.confidence, 1)} ({log.confidence_band})")
+    click.echo(f"Confidence:     {round(log.confidence, 2)} ({log.confidence_band})")
     click.echo(f"Trace ID:       {log.trace_id}")
     click.echo(f"Latency:        {log.latency_ms:.1f}ms")
     click.echo(f"Input length:   {log.input_length} chars")

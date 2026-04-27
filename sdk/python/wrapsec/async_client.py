@@ -205,11 +205,12 @@ class AsyncClient:
         return AuditStats.from_dict(data)
 
     async def settings_get(self, timeout: int | None = None) -> dict[str, Any]:
-        t          = self._resolve_timeout(timeout)
-        thresholds = await self._request("GET", "/settings/thresholds", t)
-        layers     = await self._request("GET", "/settings/layers",     t)
-        llm        = await self._request("GET", "/settings/llm",        t)
-        return {"thresholds": thresholds, "layers": layers, "llm": llm}
+        t           = self._resolve_timeout(timeout)
+        thresholds  = await self._request("GET", "/settings/thresholds",  t)
+        layers      = await self._request("GET", "/settings/layers",      t)
+        llm         = await self._request("GET", "/settings/llm",         t)
+        rate_limit  = await self._request("GET", "/settings/rate_limit",  t)
+        return {"thresholds": thresholds, "layers": layers, "llm": llm, "rate_limit": rate_limit}
 
     async def keys_list(self, timeout: int | None = None) -> list[dict[str, Any]]:
         data = await self._request("GET", "/keys", self._resolve_timeout(timeout))
