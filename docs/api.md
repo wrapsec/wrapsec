@@ -60,6 +60,21 @@ Used by dashboard users. Issued via `POST /v1/auth/login`.
 
 ---
 
+
+## HTTP Method Conventions
+
+| Method | Usage | Example |
+|---|---|---|
+| `GET` | Read resource | `GET /v1/admin/users` |
+| `POST` | Create resource or action | `POST /v1/admin/users` |
+| `PATCH` | Partial update — only provided fields are changed | `PATCH /v1/admin/users/{id}` |
+| `PUT` | Full replacement — replaces the entire resource | `PUT /v1/settings/thresholds` |
+| `DELETE` | Remove or deactivate resource | `DELETE /v1/keys/{id}` |
+
+WrapSec uses `PATCH` for user updates and `PUT` for settings and configuration. These are not interchangeable — `PATCH` validates the final combined state of all provided fields, while `PUT` replaces the full resource.
+
+---
+
 ## Standard Headers
 
 **Request:**
@@ -120,8 +135,7 @@ Security and proxy errors additionally include a `wrapsec` key:
 |---|---|---|
 | `UNAUTHORIZED` | 401 | Missing or invalid credentials |
 | `INVALID_CREDENTIALS` | 401 | Wrong email or password (same message for both — no enumeration) |
-| `ACCOUNT_DISABLED` | 401 | User `is_active = false` (administrative disable) |
-| `ACCOUNT_INACTIVE` | 401 | User `is_active = false` (operational state — same HTTP code, distinct reason for audit) |
+| `ACCOUNT_DISABLED` | 401 | User `is_active = false` — always returned to the client when login is rejected due to a deactivated account |
 | `SESSION_INVALIDATED` | 401 | Token version mismatch — re-login required |
 | `FORBIDDEN` | 403 | Valid credentials, insufficient role |
 | `PASSWORD_CHANGE_REQUIRED` | 403 | Must change password before accessing this resource |
@@ -199,8 +213,7 @@ Sets cookie: `refresh_token=<raw>; HttpOnly; Secure; SameSite=Strict; Path=/v1/a
 | Code | HTTP | Condition |
 |---|---|---|
 | `INVALID_CREDENTIALS` | 401 | Wrong email or wrong password — same message for both |
-| `ACCOUNT_DISABLED` | 401 | User `is_active = false` (administrative disable) |
-| `ACCOUNT_INACTIVE` | 401 | User `is_active = false` (operational state — same HTTP code, distinct reason for audit) |
+| `ACCOUNT_DISABLED` | 401 | User `is_active = false` — always returned to the client when login is rejected due to a deactivated account |
 | `ACCOUNT_LOCKED` | 429 | 5 failed attempts. Body includes `retry_after` seconds. |
 
 ---
@@ -1621,7 +1634,9 @@ SYSTEM_ERROR = detectors failed (exception, timeout, internal error)
 **New error codes:**
 - `ACCOUNT_INACTIVE` — login failure when `is_active = false`
 
-**auth_events failure reasons:** `invalid_password`, `user_not_found`, `account_disabled`, `account_inactive`, `token_expired`
+**auth_events failure reasons:** `invalid_password`, `user_not_found`, `account_inactive`, `token_expired`
+
+Note: `account_inactive` is the `auth_events.failure_reason` value when `is_active = false`. The API error code returned to the client is always `ACCOUNT_DISABLED` — `ACCOUNT_INACTIVE` never appears in API responses.
 
 **DB schema:**
 - `admin_events` table — tenant_id, dept_id (nullable), actor_user_id, target_user_id, action, metadata (JSONB), ip_address, user_agent
