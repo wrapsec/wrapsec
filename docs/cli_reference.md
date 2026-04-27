@@ -5,6 +5,8 @@
 Version: 0.1.1  
 Last updated: April 2026
 
+> **Status:** SDK v0.1.1 — installation from source only. PyPI publication (`pip install wrapsec-python`) is pending.
+
 ---
 
 ## Installation
@@ -631,12 +633,27 @@ wrapsec config clear --force
 ✗ Create, rotate, or revoke API keys
 ✗ Change security thresholds or detection policy
 ✗ Manage departments or applications
+✗ Manage users, roles, or passwords (use the dashboard)
+✗ JWT-based login or session management (CLI uses API keys only)
 ✗ Expose internal scoring details or layer weights
 ✗ Collect telemetry or transmit data externally
 ```
 
-These actions belong exclusively in the dashboard,  
-where every change is authenticated, audited, and attributable.
+These actions belong in the dashboard, where every change is authenticated, audited, and attributable. The CLI authenticates exclusively with API keys — JWT auth is not supported.
+
+## Planned CLI Additions (v2)
+
+When JWT authentication is added to the CLI, the following command group is planned:
+
+```
+wrapsec users list                              List all users for the tenant
+wrapsec users create --email --role --dept      Create a new user
+wrapsec users deactivate USER_ID                Deactivate a user account
+wrapsec users reset-password USER_ID            Reset a user's password
+```
+
+These commands require ADMIN role and will use JWT auth (`wrapsec login`).
+Not available in v1 — use the dashboard for user management.
 
 ---
 
