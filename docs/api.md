@@ -2,7 +2,7 @@
 
 > See [Core Concepts](core_concepts.md) for canonical definitions of decision model, SYSTEM_ERROR, and scoring semantics.
 
-Version: 1.3 — JWT + RBAC  
+Version: 1.4 — User Management  
 Base URL: `http://your-host:8000`  
 Total endpoints: 63  
 Last updated: April 2026
@@ -120,7 +120,8 @@ Security and proxy errors additionally include a `wrapsec` key:
 |---|---|---|
 | `UNAUTHORIZED` | 401 | Missing or invalid credentials |
 | `INVALID_CREDENTIALS` | 401 | Wrong email or password (same message for both — no enumeration) |
-| `ACCOUNT_DISABLED` | 401 | User `is_active = false` |
+| `ACCOUNT_DISABLED` | 401 | User `is_active = false` (administrative disable) |
+| `ACCOUNT_INACTIVE` | 401 | User `is_active = false` (operational state — same HTTP code, distinct reason for audit) |
 | `SESSION_INVALIDATED` | 401 | Token version mismatch — re-login required |
 | `FORBIDDEN` | 403 | Valid credentials, insufficient role |
 | `PASSWORD_CHANGE_REQUIRED` | 403 | Must change password before accessing this resource |
@@ -198,7 +199,8 @@ Sets cookie: `refresh_token=<raw>; HttpOnly; Secure; SameSite=Strict; Path=/v1/a
 | Code | HTTP | Condition |
 |---|---|---|
 | `INVALID_CREDENTIALS` | 401 | Wrong email or wrong password — same message for both |
-| `ACCOUNT_DISABLED` | 401 | User `is_active = false` |
+| `ACCOUNT_DISABLED` | 401 | User `is_active = false` (administrative disable) |
+| `ACCOUNT_INACTIVE` | 401 | User `is_active = false` (operational state — same HTTP code, distinct reason for audit) |
 | `ACCOUNT_LOCKED` | 429 | 5 failed attempts. Body includes `retry_after` seconds. |
 
 ---
@@ -370,18 +372,32 @@ Returns a single user. Returns `404` if user belongs to a different tenant.
 
 ---
 
-### PUT /v1/admin/users/{user_id}
+### PATCH /v1/admin/users/{user_id}
 
-Updates `role`, `dept_id`, or `is_active`. If role is changed or account deactivated, all active sessions are immediately invalidated.
+Partially updates `role`, `dept_id`, or `is_active`. All fields optional — only provided fields are updated. Validation is performed on the **final state** (combined role + dept_id), not individual fields independently.
 
 **Request:**
 ```json
-{"role": "VIEWER", "is_active": true}
+{"role": "VIEWER", "dept_id": "4111d663-...", "is_active": true}
 ```
 
-All fields optional — only provided fields are updated.
+**Validation rules:**
+- `role = ADMIN` → `dept_id` must be absent or null
+- `role != ADMIN` → `dept_id` must not be null
+- `dept_id` must belong to the same tenant as the user
 
-**Last-admin protection:** Cannot demote or deactivate the last active ADMIN. Returns `400 INVALID_REQUEST`.
+**Side effects by field:**
+
+| Field | token_version | Session invalidated |
+|---|---|---|
+| `role` changed | ++ | Yes |
+| `dept_id` changed | ++ | Yes |
+| `is_active = false` (deactivate) | ++ | Yes |
+| `is_active = true` (reactivate) | unchanged | No |
+
+**Guards:**
+- **Self-deactivation:** Admin cannot set `is_active = false` on their own account. Returns `400 INVALID_REQUEST`.
+- **Last-admin protection:** Cannot demote or deactivate the last active ADMIN. Returns `400 INVALID_REQUEST`.
 
 **Response 200:** Updated user object (same shape as GET).
 
@@ -1586,6 +1602,34 @@ SYSTEM_ERROR = detectors failed (exception, timeout, internal error)
 
 ## Changelog
 
+### V1.4 (April 2026) — User Management
+
+**Breaking change:**
+- `PUT /v1/admin/users/{id}` → `PATCH /v1/admin/users/{id}` (partial update semantics)
+
+**User management additions:**
+- Self-deactivation guard — admin cannot deactivate their own account
+- Final state validation on PATCH — role + dept_id consistency validated on combined result
+- `dept_id` must belong to same tenant — validated on every create/update
+- `role = ADMIN` → `dept_id` forced null; `role != ADMIN` → `dept_id` required (both directions)
+- `token_version` incremented on role change, dept change, deactivation — NOT on reactivation
+
+**New DB tables:**
+- `admin_events` — logs all user management actions (user_created, role_changed, dept_changed, user_deactivated, user_reactivated, password_reset). Synchronous, post-commit, best-effort.
+- `auth_events` — logs login success and failure. Non-blocking, separate DB session, best-effort. `tenant_id` nullable (null when user not found).
+
+**New error codes:**
+- `ACCOUNT_INACTIVE` — login failure when `is_active = false`
+
+**auth_events failure reasons:** `invalid_password`, `user_not_found`, `account_disabled`, `account_inactive`, `token_expired`
+
+**DB schema:**
+- `admin_events` table — tenant_id, dept_id (nullable), actor_user_id, target_user_id, action, metadata (JSONB), ip_address, user_agent
+- `auth_events` table — tenant_id (nullable), user_id (nullable), action, success, failure_reason, ip_address, user_agent
+- `users.ck_users_dept_required` → `ck_users_dept_required_v2` (both directions enforced)
+
+---
+
 ### V1.3 (April 2026) — JWT + RBAC
 
 **New endpoints (+10):**
@@ -1597,7 +1641,7 @@ SYSTEM_ERROR = detectors failed (exception, timeout, internal error)
 - `POST /v1/admin/users` — create dashboard user (ADMIN only)
 - `GET  /v1/admin/users` — list users
 - `GET  /v1/admin/users/{id}` — get user
-- `PUT  /v1/admin/users/{id}` — update user
+- `PATCH /v1/admin/users/{id}` — update user (partial, see V1.4 for breaking change note)
 - `POST /v1/admin/users/{id}/reset-password` — admin password reset
 
 **Authentication changes:**
@@ -1661,7 +1705,7 @@ SYSTEM_ERROR = detectors failed (exception, timeout, internal error)
 
 ---
 
-*API version: 1.3 — JWT + RBAC*  
+*API version: 1.4 — User Management*  
 *Total endpoints: 63*  
 *Authentication: `x-api-key` OR `Authorization: Bearer {jwt}`*  
 *Last updated: April 2026*
