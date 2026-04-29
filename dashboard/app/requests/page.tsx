@@ -1,6 +1,7 @@
 "use client"
 
 import { useState, useEffect } from "react"
+import { useSearchParams } from "next/navigation"
 import useSWR from "swr"
 import { Shell } from "@/components/layout/Shell"
 import { RequestFilters } from "@/components/requests/RequestFilters"
@@ -9,16 +10,26 @@ import { Pagination } from "@/components/requests/Pagination"
 import { PageSpinner } from "@/components/ui/Spinner"
 import { RequestDetailModal } from "@/components/requests/RequestDetail"
 import { PAGE_SIZE } from "@/lib/constants"
+import { VALID_DECISIONS, VALID_THREATS, VALID_EXEC_MODES } from "@/lib/constants"
 import { getAuditLogs, exportAuditLogs } from "@/lib/api"
 
 export default function RequestsPage() {
+  const searchParams = useSearchParams()
+
+  // URL param sanitisation — validated against constants derived from types.ts.
+  // If decision/threat/mode types change, update VALID_* in lib/constants.ts.
+  const sanitise     = (val: string | null, allowlist: string[]) =>
+    val && allowlist.includes(val) ? val : ""
+  const sanitiseDate = (val: string | null) =>
+    val && /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}$/.test(val) ? val : ""
+
   const [traceId,          setTraceId]          = useState("")
   const [traceIdDebounced, setTraceIdDebounced] = useState("")
-  const [decision,         setDecision]         = useState("")
-  const [threatCategory,   setThreatCategory]   = useState("")
-  const [executionMode,    setExecutionMode]     = useState("")
-  const [from,             setFrom]             = useState("")
-  const [to,               setTo]               = useState("")
+  const [decision,         setDecision]         = useState(() => sanitise(searchParams.get("decision"), VALID_DECISIONS))
+  const [threatCategory,   setThreatCategory]   = useState(() => sanitise(searchParams.get("threat"),   VALID_THREATS))
+  const [executionMode,    setExecutionMode]     = useState(() => sanitise(searchParams.get("mode"),     VALID_EXEC_MODES))
+  const [from,             setFrom]             = useState(() => sanitiseDate(searchParams.get("from")))
+  const [to,               setTo]               = useState(() => sanitiseDate(searchParams.get("to")))
   const [sortBy,           setSortBy]           = useState("created_at")
   const [sortOrder,        setSortOrder]        = useState<"asc" | "desc">("desc")
   const [offset,           setOffset]           = useState(0)
@@ -39,8 +50,12 @@ export default function RequestsPage() {
       decision:        (decision as any) || undefined,
       threat_category: (threatCategory as any) || undefined,
       execution_mode:  (executionMode as any) || undefined,
-      from:            from && isValidDateRange ? `${from}T00:00:00` : undefined,
-      to:              to   && isValidDateRange ? `${to}T23:59:59`   : undefined,
+      from: from && isValidDateRange
+        ? (from.includes("T") ? from : `${from}T00:00:00`)
+        : undefined,
+      to: to && isValidDateRange
+        ? (to.includes("T") ? to : `${to}T23:59:59`)
+        : undefined,
       sort_by:         sortBy,
       sort_order:      sortOrder,
       limit:           PAGE_SIZE,
@@ -55,8 +70,12 @@ export default function RequestsPage() {
       const blob = await exportAuditLogs({
         decision:        decision       || undefined,
         threat_category: threatCategory || undefined,
-        from:            from && isValidDateRange ? `${from}T00:00:00` : undefined,
-        to:              to   && isValidDateRange ? `${to}T23:59:59`   : undefined,
+        from: from && isValidDateRange
+          ? (from.includes("T") ? from : `${from}T00:00:00`)
+          : undefined,
+        to: to && isValidDateRange
+          ? (to.includes("T") ? to : `${to}T23:59:59`)
+          : undefined,
       })
       const url  = URL.createObjectURL(blob)
       const a    = document.createElement("a")

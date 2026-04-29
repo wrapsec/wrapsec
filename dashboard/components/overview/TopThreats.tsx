@@ -16,41 +16,48 @@ export function TopThreats({ threats }: { threats: ThreatCount[] }) {
   return (
     <div style={{
       background: "#fff", border: "1px solid #e5e7eb",
-      borderRadius: "8px", padding: "18px 20px",
+      borderRadius: "8px", padding: "20px",
+      display: "flex", flexDirection: "column",
     }}>
-      <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: "16px" }}>
+      <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: "16px", flexShrink: 0 }}>
         <h3 style={{ fontSize: "13px", fontWeight: 600, color: "#111827", margin: 0 }}>Top threats</h3>
         <span style={{ fontSize: "11px", color: "#9ca3af" }}>{threats.length} categories</span>
       </div>
 
       {threats.length === 0 ? (
-        <div style={{ padding: "24px 0", textAlign: "center" }}>
-          <p style={{ fontSize: "13px", color: "#9ca3af", margin: 0 }}>No threats detected</p>
-        </div>
+        <p style={{ fontSize: "13px", color: "#9ca3af" }}>No threats detected</p>
       ) : (
-        <div style={{ display: "flex", flexDirection: "column", gap: "10px" }}>
-          {threats.map(t => {
+        <div style={{ overflowY: "auto", flex: 1, maxHeight: "220px" }}>
+          <div style={{ display: "flex", flexDirection: "column", gap: "12px" }}>
+            {threats.map(t => {
             const color = THREAT_COLORS[t.category] ?? "#6b7280"
             const pct   = Math.round((t.count / max) * 100)
             return (
               <div key={t.category}>
-                <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: "4px" }}>
+                <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: "5px" }}>
                   <div style={{ display: "flex", alignItems: "center", gap: "7px" }}>
                     <div style={{ width: 8, height: 8, borderRadius: "50%", background: color, flexShrink: 0 }} />
                     <span style={{ fontSize: "12px", fontWeight: 500, color: "#374151" }}>
                       {formatThreat(t.category)}
                     </span>
                   </div>
-                  <span style={{ fontSize: "12px", fontFamily: "monospace", color: "#6b7280" }}>
+                  <span style={{ fontSize: "12px", fontFamily: "monospace", color: "#6b7280", flexShrink: 0, marginLeft: "12px" }}>
                     {t.count.toLocaleString()}
                   </span>
                 </div>
+                {/* Bar constrained to 60% max width so it doesn't look like a loading bar */}
                 <div style={{ height: "5px", background: "#f3f4f6", borderRadius: "3px", overflow: "hidden" }}>
-                  <div style={{ height: "100%", width: `${pct}%`, background: color, borderRadius: "3px" }} />
+                  <div style={{
+                    height: "100%",
+                    width: `${Math.round(pct * 0.6)}%`,
+                    background: color,
+                    borderRadius: "3px",
+                  }} />
                 </div>
               </div>
             )
           })}
+          </div>
         </div>
       )}
     </div>

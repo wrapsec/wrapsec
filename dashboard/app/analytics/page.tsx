@@ -1,7 +1,8 @@
 "use client"
 
 import useSWR from "swr"
-import { useState, useMemo } from "react"
+import { useState } from "react"
+import { useTimeRange } from "@/hooks/useTimeRange"
 import { Shell } from "@/components/layout/Shell"
 import { PageSpinner } from "@/components/ui/Spinner"
 import { POLL_INTERVAL, THREAT_LABELS } from "@/lib/constants"
@@ -47,9 +48,9 @@ function SecuritySummary({ stats, attribution }: { stats: AuditStatsResponse; at
   const piiCount   = byReason
     .filter((r: any) => r.primary_reason === "PII_GUARDRAIL_BLOCK" || r.primary_reason === "PII_GUARDRAIL_SANITIZE")
     .reduce((s: number, r: any) => s + r.count, 0)
-  const exfilCount = stats.top_threats.find(t => t.category === "DATA_EXFILTRATION")?.count ?? 0
-  const toxCount   = stats.top_threats.find(t => t.category === "TOXICITY")?.count ?? 0
-  const totalThreats = stats.top_threats.reduce((s, t) => s + t.count, 0)
+  const exfilCount   = stats.top_threats?.find(t => t.category === "DATA_EXFILTRATION")?.count ?? 0
+  const toxCount     = stats.top_threats?.find(t => t.category === "TOXICITY")?.count ?? 0
+  const totalThreats = stats.top_threats?.reduce((s, t) => s + t.count, 0) ?? 0
 
   const KPIS = [
     { label: "PII Exposure Attempts",      value: num(piiCount),   sub: "Guardrail blocks + sanitizations", accent: "#670FEF",
@@ -91,17 +92,33 @@ function TrendChart({ data, groupBy, onGroupByChange }: {
   groupBy: "hour" | "day" | "week" | "month"
   onGroupByChange: (v: "hour" | "day" | "week" | "month") => void
 }) {
-  const CHART_H  = 160
+  const CHART_H  = 220
+  const CHART_PAD_TOP = 16  // padding so tallest bar doesn't touch top edge
   const maxTotal = Math.max(...data.map(d => d.total), 1)
   const [hovered, setHovered] = useState<string | null>(null)
   const hoveredData = data.find(d => d.period === hovered)
 
+  // Y-axis grid lines at 25%, 50%, 75%, 100%
+  const gridLines = [0.25, 0.5, 0.75, 1.0]
+
   const fmt = (p: string) => {
     const d = new Date(p)
-    if (groupBy === "hour")  return d.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })
+    if (groupBy === "hour")  return d.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit", hour12: false })
     if (groupBy === "month") return d.toLocaleDateString([], { month: "short", year: "numeric" })
     return d.toLocaleDateString([], { month: "short", day: "numeric" })
   }
+
+  // Show label every N bars depending on count
+  const showLabel = (i: number, total: number) => {
+    if (total <= 7)  return true
+    if (total <= 14) return i % 2 === 0
+    if (total <= 31) return i % 4 === 0 || i === total - 1
+    if (total <= 72) return i % 6 === 0 || i === total - 1
+    return i % 12 === 0 || i === total - 1
+  }
+
+  // Effective chart height for bars (leave padding at top)
+  const effectiveH = CHART_H - CHART_PAD_TOP
 
   return (
     <div style={CARD}>
@@ -123,7 +140,7 @@ function TrendChart({ data, groupBy, onGroupByChange }: {
         </div>
       </div>
 
-      <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: "12px" }}>
+      <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: "16px" }}>
         <div style={{ display: "flex", gap: "16px" }}>
           {[["Blocked", "#f87171"], ["Sanitized", "#fbbf24"], ["Allowed", "#10b981"]].map(([label, color]) => (
             <div key={label} style={{ display: "flex", alignItems: "center", gap: "5px" }}>
@@ -145,39 +162,76 @@ function TrendChart({ data, groupBy, onGroupByChange }: {
         )}
       </div>
 
-      <div style={{ display: "flex", alignItems: "flex-end", gap: "3px", height: `${CHART_H}px` }}>
-        {data.map(d => {
-          const totalH    = Math.max(Math.round((d.total / maxTotal) * CHART_H), 4)
-          const blockH    = d.total > 0 ? Math.round((d.blocked   / d.total) * totalH) : 0
-          const sanitizeH = d.total > 0 ? Math.round((d.sanitized / d.total) * totalH) : 0
-          const allowH    = totalH - blockH - sanitizeH
-          const isHovered = hovered === d.period
-          return (
-            <div key={d.period}
-              style={{ flexShrink: 0, display: "flex", flexDirection: "column", justifyContent: "flex-end",
-                width: "28px", height: `${CHART_H}px`, opacity: hovered && !isHovered ? 0.3 : 1, transition: "opacity 0.1s" }}
-              onMouseEnter={() => setHovered(d.period)}
-              onMouseLeave={() => setHovered(null)}
-            >
-              <div style={{ display: "flex", flexDirection: "column", width: "100%", height: `${totalH}px`,
-                borderRadius: "3px", overflow: "hidden",
-                outline: isHovered ? "2px solid #670FEF" : "none", outlineOffset: "1px" }}>
-                {blockH    > 0 && <div style={{ height: `${blockH}px`,    background: "#f87171" }} />}
-                {sanitizeH > 0 && <div style={{ height: `${sanitizeH}px`, background: "#fbbf24" }} />}
-                {allowH    > 0 && <div style={{ height: `${allowH}px`,    background: "#10b981" }} />}
-              </div>
-            </div>
-          )
-        })}
-      </div>
-      <div style={{ display: "flex", gap: "3px", marginTop: "4px" }}>
-        {data.map((d, i) => (
-          <div key={d.period} style={{ flexShrink: 0, width: "28px", textAlign: "center" }}>
-            {(i === 0 || i === data.length - 1 || i === Math.floor(data.length / 2)) && (
-              <span style={{ fontSize: "9px", color: "#9ca3af" }}>{fmt(d.period)}</span>
-            )}
+      {/* Chart area with Y-axis */}
+      <div style={{ display: "flex", gap: "8px" }}>
+        {/* Y-axis labels */}
+        <div style={{ display: "flex", flexDirection: "column", justifyContent: "space-between",
+          height: `${CHART_H}px`, paddingTop: `${CHART_PAD_TOP}px`, paddingBottom: "2px", flexShrink: 0 }}>
+          {[...gridLines].reverse().map(pct => (
+            <span key={pct} style={{ fontSize: "9px", color: "#d1d5db", textAlign: "right", lineHeight: 1 }}>
+              {Math.round(maxTotal * pct)}
+            </span>
+          ))}
+        </div>
+
+        {/* Bars + grid */}
+        <div style={{ flex: 1, position: "relative" }}>
+          {/* Grid lines */}
+          <div style={{ position: "absolute", inset: 0, pointerEvents: "none" }}>
+            {gridLines.map(pct => (
+              <div key={pct} style={{
+                position: "absolute", left: 0, right: 0,
+                bottom: `${pct * 100}%`,
+                borderTop: pct === 1.0 ? "1px solid #e5e7eb" : "1px dashed #f3f4f6",
+              }} />
+            ))}
           </div>
-        ))}
+
+          {/* Bars */}
+          <div style={{ display: "flex", alignItems: "flex-end", gap: "2px",
+            height: `${CHART_H}px`, position: "relative", paddingTop: `${CHART_PAD_TOP}px` }}>
+            {data.map(d => {
+              const totalH    = Math.max(Math.round((d.total / maxTotal) * effectiveH), 2)
+              const blockH    = d.total > 0 ? Math.round((d.blocked   / d.total) * totalH) : 0
+              const sanitizeH = d.total > 0 ? Math.round((d.sanitized / d.total) * totalH) : 0
+              const allowH    = totalH - blockH - sanitizeH
+              const isHovered = hovered === d.period
+              return (
+                <div key={d.period}
+                  style={{
+                    flex: 1, maxWidth: "80px",  // cap width — prevents month single-bar filling screen
+                    display: "flex", flexDirection: "column", justifyContent: "flex-end",
+                    height: "100%", cursor: "pointer",
+                    opacity: hovered && !isHovered ? 0.35 : 1, transition: "opacity 0.1s",
+                  }}
+                  onMouseEnter={() => setHovered(d.period)}
+                  onMouseLeave={() => setHovered(null)}
+                >
+                  <div style={{ display: "flex", flexDirection: "column", width: "100%", height: `${totalH}px`,
+                    borderRadius: "3px 3px 0 0", overflow: "hidden",
+                    outline: isHovered ? "2px solid #670FEF" : "none", outlineOffset: "1px" }}>
+                    {blockH    > 0 && <div style={{ height: `${blockH}px`,    background: "#f87171" }} />}
+                    {sanitizeH > 0 && <div style={{ height: `${sanitizeH}px`, background: "#fbbf24" }} />}
+                    {allowH    > 0 && <div style={{ height: `${allowH}px`,    background: "#10b981" }} />}
+                  </div>
+                </div>
+              )
+            })}
+          </div>
+
+          {/* X-axis labels */}
+          <div style={{ display: "flex", gap: "2px", marginTop: "6px" }}>
+            {data.map((d, i) => (
+              <div key={d.period} style={{ flex: 1, textAlign: "center", overflow: "hidden" }}>
+                {showLabel(i, data.length) && (
+                  <span style={{ fontSize: "9px", color: "#9ca3af", whiteSpace: "nowrap" }}>
+                    {fmt(d.period)}
+                  </span>
+                )}
+              </div>
+            ))}
+          </div>
+        </div>
       </div>
     </div>
   )
@@ -427,22 +481,11 @@ function AttributionTable({ title, rows, emptyText }: {
 
 export default function AnalyticsPage() {
   const [groupBy,   setGroupBy]   = useState<"hour" | "day" | "week" | "month">("day")
-  const [timeRange, setTimeRange] = useState<"24h" | "7d" | "30d" | "90d">("7d")
 
-  // Stable from/to — recomputed only when timeRange changes, not on every render.
-  // Using useMemo prevents SWR from seeing a new key on every render and refetching constantly.
-  const { from, to } = useMemo(() => {
-    const now  = new Date()
-    const from = new Date(now)
-    if (timeRange === "24h") from.setHours(now.getHours()  - 24)
-    if (timeRange === "7d")  from.setDate(now.getDate()    - 7)
-    if (timeRange === "30d") from.setDate(now.getDate()    - 30)
-    if (timeRange === "90d") from.setDate(now.getDate()    - 90)
-    return {
-      from: from.toISOString().slice(0, 19),
-      to:   now.toISOString().slice(0, 19),
-    }
-  }, [timeRange])
+  const { range: timeRange, setRange: setTimeRange, options: timeRangeOptions, from, to } = useTimeRange({
+    defaultRange: "7d",
+    options:      ["24h", "7d", "30d", "90d"],
+  })
 
   const ANALYTICS_REFRESH = 5 * 60 * 1000 // 5 minutes — historical data doesn't need live polling
 
@@ -489,7 +532,7 @@ export default function AnalyticsPage() {
             )}
           </div>
           <div style={{ display: "flex", gap: "2px", background: "#f3f4f6", borderRadius: "7px", padding: "3px" }}>
-            {(["24h", "7d", "30d", "90d"] as const).map(r => (
+            {timeRangeOptions.map(r => (
               <button key={r} onClick={() => setTimeRange(r)} style={{
                 fontSize: "12px", fontWeight: timeRange === r ? 600 : 400,
                 padding: "5px 12px", borderRadius: "5px", border: "none", cursor: "pointer",
@@ -504,14 +547,14 @@ export default function AnalyticsPage() {
           </div>
         </div>
 
-        <SecuritySummary stats={stats} attribution={attribution} />
+        {stats && attribution && <SecuritySummary stats={stats} attribution={attribution} />}
 
         {analytics?.trend?.length > 0 && (
           <TrendChart data={analytics.trend} groupBy={groupBy} onGroupByChange={setGroupBy} />
         )}
 
         <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "16px" }}>
-          <ThreatIntelligence stats={stats} />
+          {stats && <ThreatIntelligence stats={stats} />}
           {byReason.length > 0 && <DetectionBreakdown byReason={byReason} />}
         </div>
 

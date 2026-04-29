@@ -28,3 +28,9 @@ export const CHART_COLORS = {
 export const POLL_INTERVAL = 10000 // 10 seconds
 
 export const PAGE_SIZE = 20
+// ── Valid URL param values — derived from existing constants ─────────────────
+// Single source of truth: if DECISION_COLORS or THREAT_LABELS change,
+// these update automatically. No separate maintenance needed.
+export const VALID_DECISIONS  = Object.keys(DECISION_COLORS)  // ["BLOCK", "SANITIZE", "ALLOW"]
+export const VALID_THREATS    = Object.keys(THREAT_LABELS)     // ["PROMPT_INJECTION", ...]
+export const VALID_EXEC_MODES = ["scan_only", "proxy"] as const // ExecutionMode from types.ts
