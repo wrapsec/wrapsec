@@ -3,50 +3,39 @@
 import { useEffect, useState } from "react"
 import { useRouter } from "next/navigation"
 import Link from "next/link"
-import { StatusDot } from "@/components/ui/StatusDot"
 import { getHealth } from "@/lib/api"
 import { logout } from "@/lib/auth"
 
 export function TopBar({ title }: { title: string }) {
-  const [status,      setStatus]      = useState<"ok" | "degraded" | "down">("ok")
-  const [userEmail,   setUserEmail]   = useState<string | null>(null)
-  const [userRole,    setUserRole]    = useState<string | null>(null)
-  const [menuOpen,    setMenuOpen]    = useState(false)
+  const [status,    setStatus]    = useState<"ok" | "degraded" | "down">("ok")
+  const [userEmail, setUserEmail] = useState<string | null>(null)
+  const [userRole,  setUserRole]  = useState<string | null>(null)
+  const [menuOpen,  setMenuOpen]  = useState(false)
   const router = useRouter()
 
   useEffect(() => {
-    const loadUser = async () => {
-      try {
-        const res = await fetch("/api/proxy/v1/auth/me")
-        if (res.ok) {
-          const data = await res.json()
-          setUserEmail(data.email ?? null)
-          setUserRole(data.role ?? null)
-        } else if (res.status === 403) {
-          // API key session — /me requires JWT
-          setUserEmail("Admin Key")
-          setUserRole("API KEY")
-        }
-      } catch {
-        setUserEmail(null)
+    fetch("/api/proxy/v1/auth/me").then(async res => {
+      if (res.ok) {
+        const d = await res.json()
+        setUserEmail(d.email ?? null)
+        setUserRole(d.role ?? null)
+      } else if (res.status === 403) {
+        setUserEmail("Admin Key")
+        setUserRole("API KEY")
       }
-    }
-    loadUser()
+    }).catch(() => {})
   }, [])
 
   useEffect(() => {
     const check = async () => {
       try {
         const health = await getHealth()
-        const allOk  = Object.values(health.checks).every(v => v === "ok")
-        setStatus(allOk ? "ok" : "degraded")
-      } catch {
-        setStatus("down")
-      }
+        setStatus(Object.values(health.checks).every(v => v === "ok") ? "ok" : "degraded")
+      } catch { setStatus("down") }
     }
     check()
-    const interval = setInterval(check, 30000)
-    return () => clearInterval(interval)
+    const t = setInterval(check, 30000)
+    return () => clearInterval(t)
   }, [])
 
   const handleLogout = async () => {
@@ -59,68 +48,135 @@ export function TopBar({ title }: { title: string }) {
     ? userEmail.slice(0, 2).toUpperCase()
     : "AK"
 
+  const statusColor = status === "ok" ? "#00E1FF" : status === "degraded" ? "#d97706" : "#dc2626"
+  const statusLabel = status === "ok" ? "All systems operational" : status === "degraded" ? "Degraded" : "API unavailable"
+
   return (
-    <header className="h-14 bg-white border-b border-slate-200 flex items-center justify-between px-6 flex-shrink-0">
-      <h1 className="text-base font-semibold text-slate-900">{title}</h1>
+    <header style={{
+      height:       "56px",
+      background:   "var(--topbar-bg)",
+      borderBottom: "1px solid var(--topbar-border)",
+      display:      "flex",
+      alignItems:   "center",
+      justifyContent: "space-between",
+      padding:      "0 24px",
+      flexShrink:   0,
+      position:     "relative",
+    }}>
+      {/* Purple accent line at bottom */}
+      <div style={{
+        position:   "absolute",
+        bottom:     0,
+        left:       0,
+        right:      0,
+        height:     "4px",
+        background: "linear-gradient(90deg, #670FEF 0%, #CD00FF 40%, #00E1FF 80%, #00B1FF 100%)",
+      }} />
 
-      <div className="flex items-center gap-5">
-        <StatusDot
-          status={status}
-          label={
-            status === "ok"       ? "All systems operational" :
-            status === "degraded" ? "Degraded" :
-                                    "API unavailable"
-          }
-        />
+      <h1 style={{ fontSize: "15px", fontWeight: 600, color: "var(--text-primary)", margin: 0 }}>
+        {title}
+      </h1>
 
-        {/* User avatar + dropdown */}
-        <div className="relative">
+      <div style={{ display: "flex", alignItems: "center", gap: "20px" }}>
+        {/* Health status */}
+        <div style={{ display: "flex", alignItems: "center", gap: "6px" }}>
+          <span style={{
+            width: "7px", height: "7px", borderRadius: "50%",
+            background: statusColor,
+            display: "inline-block",
+            boxShadow: status === "ok" ? `0 0 0 2px rgba(0,225,255,0.20)` : "none",
+          }} />
+          <span style={{ fontSize: "12px", color: "var(--text-secondary)", whiteSpace: "nowrap" }}>
+            {statusLabel}
+          </span>
+        </div>
+
+        {/* User menu */}
+        <div style={{ position: "relative" }}>
           <button
-            onClick={() => setMenuOpen(prev => !prev)}
-            className="flex items-center gap-2.5 hover:opacity-80 transition-opacity"
+            onClick={() => setMenuOpen(v => !v)}
+            style={{
+              display:    "flex",
+              alignItems: "center",
+              gap:        "8px",
+              background: "none",
+              border:     "none",
+              cursor:     "pointer",
+              padding:    "4px",
+              borderRadius: "6px",
+            }}
           >
-            <div className="h-7 w-7 rounded-full bg-blue-800 flex items-center justify-center flex-shrink-0">
-              <span className="text-xs font-semibold text-white">{initials}</span>
+            <div style={{
+              height: "30px", width: "30px", borderRadius: "50%",
+              background: "linear-gradient(135deg, #670FEF, #CD00FF)",
+              display: "flex", alignItems: "center", justifyContent: "center",
+              flexShrink: 0,
+            }}>
+              <span style={{ fontSize: "11px", fontWeight: 600, color: "#fff" }}>{initials}</span>
             </div>
             {userEmail && (
-              <div className="hidden sm:block text-left">
-                <p className="text-xs font-medium text-slate-900 leading-none">{userEmail}</p>
+              <div style={{ textAlign: "left" }}>
+                <p style={{ fontSize: "12px", fontWeight: 500, color: "var(--text-primary)", lineHeight: 1, margin: 0 }}>
+                  {userEmail}
+                </p>
                 {userRole && (
-                  <p className="text-xs text-slate-400 leading-none mt-0.5">{userRole}</p>
+                  <p style={{ fontSize: "11px", color: "var(--text-tertiary)", lineHeight: 1, marginTop: "2px" }}>
+                    {userRole}
+                  </p>
                 )}
               </div>
             )}
-            <svg className="h-3.5 w-3.5 text-slate-400" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" d="M19 9l-7 7-7-7" />
+            <svg style={{ width: "12px", height: "12px", color: "var(--text-tertiary)" }} fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" d="M19 9l-7 7-7-7"/>
             </svg>
           </button>
 
           {menuOpen && (
             <>
-              {/* Backdrop */}
-              <div
-                className="fixed inset-0 z-10"
-                onClick={() => setMenuOpen(false)}
-              />
-              {/* Menu — fixed to viewport so it renders above all layout */}
-              <div className="fixed right-4 top-14 w-48 bg-white border border-slate-200 rounded-lg shadow-lg z-50 py-1">
+              <div style={{ position: "fixed", inset: 0, zIndex: 10 }} onClick={() => setMenuOpen(false)} />
+              <div style={{
+                position:   "fixed",
+                right:      "16px",
+                top:        "50px",
+                width:      "180px",
+                background: "#ffffff",
+                border:     "1px solid var(--card-border)",
+                borderRadius: "8px",
+                boxShadow:  "0 4px 16px rgba(0,0,0,0.10)",
+                zIndex:     50,
+                padding:    "0px",
+              }}>
                 <Link
                   href="/profile"
                   onClick={() => setMenuOpen(false)}
-                  className="flex items-center gap-2 px-4 py-2 text-xs text-slate-700 hover:bg-slate-50"
+                  style={{
+                    display: "flex", alignItems: "center", gap: "8px",
+                    padding: "8px 10px", borderRadius: "6px",
+                    fontSize: "13px", color: "var(--text-primary)",
+                    textDecoration: "none",
+                  }}
+                  onMouseEnter={e => (e.currentTarget as HTMLElement).style.background = "#f4f5f7"}
+                  onMouseLeave={e => (e.currentTarget as HTMLElement).style.background = "none"}
                 >
-                  <svg className="h-3.5 w-3.5 text-slate-400" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z" />
+                  <svg style={{ width: "14px", height: "14px", color: "var(--text-tertiary)" }} fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z"/>
                   </svg>
                   Profile
                 </Link>
-                <div className="border-t border-slate-100 my-1" />
+                <div style={{ height: "1px", background: "var(--card-border)", margin: "0" }} />
                 <button
                   onClick={handleLogout}
-                  className="flex items-center gap-2 w-full px-4 py-2 text-xs text-red-600 hover:bg-red-50"
+                  style={{
+                    display: "flex", alignItems: "center", gap: "8px",
+                    padding: "8px 10px", borderRadius: "6px", width: "100%",
+                    fontSize: "13px", color: "#dc2626",
+                    background: "none", border: "none", cursor: "pointer",
+                  }}
+                  onMouseEnter={e => (e.currentTarget as HTMLElement).style.background = "#fef2f2"}
+                  onMouseLeave={e => (e.currentTarget as HTMLElement).style.background = "none"}
                 >
-                  <svg className="h-3.5 w-3.5" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" d="M17 16l4-4m0 0l-4-4m4 4H7m6 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h4a3 3 0 013 3v1" />
+                  <svg style={{ width: "14px", height: "14px" }} fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" d="M17 16l4-4m0 0l-4-4m4 4H7m6 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h4a3 3 0 013 3v1"/>
                   </svg>
                   Sign out
                 </button>

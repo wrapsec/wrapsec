@@ -1,68 +1,97 @@
+@import url("https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap");
 @import "tailwindcss";
 
-@theme {
-  --color-blue-50: #eff6ff;
-  --color-blue-100: #dbeafe;
-  --color-blue-200: #bfdbfe;
-  --color-blue-300: #93c5fd;
-  --color-blue-400: #60a5fa;
-  --color-blue-500: #3b82f6;
-  --color-blue-600: #2563eb;
-  --color-blue-700: #1d4ed8;
-  --color-blue-800: #1e40af;
-  --color-blue-900: #1e3a8a;
+/* ── WrapSec Brand Tokens ──────────────────────────────────────────────── */
+:root {
+  /* Brand — extracted from logo */
+  --ws-violet:      #670FEF;
+  --ws-violet-dark: #5209c7;
+  --ws-violet-soft: rgba(103, 15, 239, 0.08);
+  --ws-violet-mid:  rgba(103, 15, 239, 0.15);
+  --ws-purple:      #CD00FF;
+  --ws-cyan:        #00E1FF;
+  --ws-sky:         #00B1FF;
 
-  --color-slate-50: #f8fafc;
-  --color-slate-100: #f1f5f9;
-  --color-slate-200: #e2e8f0;
-  --color-slate-300: #cbd5e1;
-  --color-slate-400: #94a3b8;
-  --color-slate-500: #64748b;
-  --color-slate-600: #475569;
-  --color-slate-700: #334155;
-  --color-slate-800: #1e293b;
-  --color-slate-900: #0f172a;
+  /* Semantic */
+  --ws-red:         #dc2626;
+  --ws-red-soft:    #fef2f2;
+  --ws-red-border:  #fecaca;
+  --ws-amber:       #d97706;
+  --ws-amber-soft:  #fffbeb;
+  --ws-amber-border:#fde68a;
+  --ws-green:       #16a34a;
+  --ws-green-soft:  #f0fdf4;
+  --ws-green-border:#bbf7d0;
 
-  --color-red-50: #fef2f2;
-  --color-red-100: #fee2e2;
-  --color-red-400: #f87171;
-  --color-red-600: #dc2626;
-  --color-red-700: #b91c1c;
+  /* Layout */
+  --sidebar-bg:     #0d1117;
+  --sidebar-border: rgba(255,255,255,0.06);
+  --sidebar-text:   rgba(255,255,255,0.55);
+  --sidebar-hover:  rgba(255,255,255,0.06);
+  --sidebar-active-bg: rgba(103,15,239,0.15);
+  --sidebar-active-text: #a78bfa;
 
-  --color-orange-50: #fff7ed;
-  --color-orange-600: #ea580c;
+  /* Content */
+  --page-bg:        #f4f5f7;
+  --card-bg:        #ffffff;
+  --card-border:    #e5e7eb;
+  --topbar-bg:      #ffffff;
+  --topbar-border:  #e5e7eb;
 
-  --color-green-50: #f0fdf4;
-  --color-green-600: #16a34a;
-  --color-green-700: #15803d;
+  /* Text */
+  --text-primary:   #111827;
+  --text-secondary: #6b7280;
+  --text-tertiary:  #9ca3af;
 
-  --color-yellow-50: #fefce8;
-  --color-yellow-400: #facc15;
+  /* Inputs */
+  --input-bg:       #ffffff;
+  --input-border:   #d1d5db;
+  --input-text:     #111827;
+  --input-focus:    rgba(103,15,239,0.20);
 }
 
-* {
-  box-sizing: border-box;
-}
+* { box-sizing: border-box; }
 
-body {
-  font-family: Inter, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+html, body {
+  font-family: "Inter", -apple-system, BlinkMacSystemFont, sans-serif;
   -webkit-font-smoothing: antialiased;
+  background: var(--page-bg);
+  color: var(--text-primary);
+  font-size: 14px;
 }
 
-::-webkit-scrollbar {
-  width: 6px;
-  height: 6px;
+/* Shared input style */
+.ws-input {
+  height: 34px;
+  padding: 0 10px;
+  font-size: 13px;
+  font-family: inherit;
+  border-radius: 6px;
+  border: 1px solid var(--input-border);
+  background: var(--input-bg);
+  color: var(--input-text);
+  width: 100%;
+  outline: none;
+  transition: border-color 0.15s, box-shadow 0.15s;
+}
+.ws-input::placeholder { color: var(--text-tertiary); }
+.ws-input:focus {
+  border-color: var(--ws-violet);
+  box-shadow: 0 0 0 3px var(--input-focus);
+}
+.ws-input:disabled { opacity: 0.5; cursor: not-allowed; }
+textarea.ws-input { height: auto; padding: 8px 10px; resize: none; }
+select.ws-input {
+  appearance: none;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' fill='none' viewBox='0 0 24 24' stroke='%236b7280' stroke-width='2'%3E%3Cpath stroke-linecap='round' stroke-linejoin='round' d='M19 9l-7 7-7-7'/%3E%3C/svg%3E");
+  background-repeat: no-repeat;
+  background-position: right 8px center;
+  background-size: 14px;
+  padding-right: 28px;
 }
 
-::-webkit-scrollbar-track {
-  background: transparent;
-}
-
-::-webkit-scrollbar-thumb {
-  background: #e2e8f0;
-  border-radius: 3px;
-}
-
-::-webkit-scrollbar-thumb:hover {
-  background: #cbd5e1;
-}
+/* Scrollbar */
+::-webkit-scrollbar { width: 5px; height: 5px; }
+::-webkit-scrollbar-track { background: transparent; }
+::-webkit-scrollbar-thumb { background: #d1d5db; border-radius: 3px; }
+::-webkit-scrollbar-thumb:hover { background: #9ca3af; }
