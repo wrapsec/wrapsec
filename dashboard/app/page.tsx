@@ -1,103 +1,97 @@
 "use client"
 
 import useSWR from "swr"
+import { useState } from "react"
 import { Shell } from "@/components/layout/Shell"
+import { SeverityCard } from "@/components/overview/SeverityCard"
 import { MetricCard } from "@/components/overview/MetricCard"
-import { DecisionChart } from "@/components/overview/DecisionChart"
+import { OperationalMetrics } from "@/components/overview/OperationalMetrics"
 import { TopThreats } from "@/components/overview/TopThreats"
 import { RecentRequests } from "@/components/overview/RecentRequests"
 import { PageSpinner } from "@/components/ui/Spinner"
-import { getAuditStats, getAuditLogs } from "@/lib/api"
-import { formatRate, formatLatency } from "@/lib/utils"
-import { POLL_INTERVAL } from "@/lib/constants"
-import { useState } from "react"
 import { RequestDetailModal } from "@/components/requests/RequestDetail"
+import { getAuditStats, getAuditLogs } from "@/lib/api"
+import { POLL_INTERVAL } from "@/lib/constants"
 
 export default function OverviewPage() {
   const [selectedId, setSelectedId] = useState<string | null>(null)
+
   const { data: stats, isLoading: statsLoading } = useSWR(
     "audit-stats",
-    getAuditStats,
+    () => getAuditStats(),
     { refreshInterval: POLL_INTERVAL }
   )
-
   const { data: logs, isLoading: logsLoading } = useSWR(
     "recent-requests",
     () => getAuditLogs({ limit: 10, offset: 0 }),
     { refreshInterval: POLL_INTERVAL }
   )
 
-  const loading = statsLoading || logsLoading
+  if ((statsLoading || logsLoading) && !stats) {
+    return <Shell title="Overview"><PageSpinner /></Shell>
+  }
+
+  const sev = stats?.severity_counts ?? { CRITICAL: 0, HIGH: 0, MEDIUM: 0, LOW: 0 }
 
   return (
     <Shell title="Overview">
-      {loading && !stats ? (
-        <PageSpinner />
-      ) : (
-        <div className="space-y-5">
-          {/* Metric cards */}
-          <div className="grid grid-cols-4 gap-4">
-            <MetricCard
-              label="Total Requests"
-              value={stats?.total_requests.toLocaleString() ?? "—"}
-              sub="All time"
-            />
-            <MetricCard
-              label="Blocked"
-              value={stats ? formatRate(stats.block_rate) : "—"}
-              sub={`${Math.round((stats?.block_rate ?? 0) * (stats?.total_requests ?? 0))} requests`}
-              color="red"
-            />
-            <MetricCard
-              label="Sanitized"
-              value={stats ? formatRate(stats.sanitize_rate) : "—"}
-              sub={`${Math.round((stats?.sanitize_rate ?? 0) * (stats?.total_requests ?? 0))} requests`}
-              color="orange"
-            />
-            <MetricCard
-              label="Allowed"
-              value={stats ? formatRate(stats.allow_rate) : "—"}
-              sub={`${Math.round((stats?.allow_rate ?? 0) * (stats?.total_requests ?? 0))} requests`}
-              color="green"
-            />
-          </div>
+      <div style={{ display: "flex", flexDirection: "column", gap: "18px" }}>
 
-          {/* Latency cards */}
-          <div className="grid grid-cols-2 gap-4">
-            <MetricCard
-              label="Avg Latency"
-              value={stats ? formatLatency(stats.avg_latency_ms) : "—"}
-              sub="Mean processing time"
-            />
-            <MetricCard
-              label="P95 Latency"
-              value={stats ? formatLatency(stats.p95_latency_ms) : "—"}
-              sub="95th percentile"
-            />
-          </div>
+        {/* Row 1 — Severity triage (most actionable — leads the page) */}
+        <div style={{ display: "grid", gridTemplateColumns: "repeat(4, 1fr)", gap: "14px" }}>
+          <SeverityCard level="CRITICAL" count={sev.CRITICAL} description="Guardrail overrides" />
+          <SeverityCard level="HIGH"     count={sev.HIGH}     description="High-risk blocks" />
+          <SeverityCard level="MEDIUM"   count={sev.MEDIUM}   description="Sanitized requests" />
+          <SeverityCard level="LOW"      count={sev.LOW}      description="Allowed clean requests" />
+        </div>
 
-          {/* Charts row */}
-          <div className="grid grid-cols-2 gap-4">
-            {stats && (
-              <DecisionChart
-                blockRate={stats.block_rate}
-                sanitizeRate={stats.sanitize_rate}
-                allowRate={stats.allow_rate}
-                total={stats.total_requests}
-              />
-            )}
-            {stats && (
-              <TopThreats threats={stats.top_threats} />
-            )}
-          </div>
-
-          {/* Recent requests */}
-          <RecentRequests
-            items={logs?.items ?? []}
-            onSelect={(id) => setSelectedId(id)}
+        {/* Row 2 — Volume breakdown */}
+        <div style={{ display: "grid", gridTemplateColumns: "repeat(4, 1fr)", gap: "14px" }}>
+          <MetricCard
+            accent="violet"
+            label="Total Requests"
+            value={stats?.total_requests.toLocaleString() ?? "—"}
+            sub="All time"
+          />
+          <MetricCard
+            accent="none"
+            label="Blocked"
+            value={stats ? Math.round(stats.block_rate * stats.total_requests).toLocaleString() : "—"}
+            sub={stats ? `${(stats.block_rate * 100).toFixed(1)}% of total` : "—"}
+            color="red"
+          />
+          <MetricCard
+            accent="none"
+            label="Sanitized"
+            value={stats ? Math.round(stats.sanitize_rate * stats.total_requests).toLocaleString() : "—"}
+            sub={stats ? `${(stats.sanitize_rate * 100).toFixed(1)}% of total` : "—"}
+            color="orange"
+          />
+          <MetricCard
+            accent="none"
+            label="Allowed"
+            value={stats ? Math.round(stats.allow_rate * stats.total_requests).toLocaleString() : "—"}
+            sub={stats ? `${(stats.allow_rate * 100).toFixed(1)}% of total` : "—"}
+            color="green"
           />
         </div>
-      )}
+
+        {/* Row 3 — Operational metrics (rates + latency in one compact card) */}
+        {stats && <OperationalMetrics stats={stats} />}
+
+        {/* Row 4 — Threat breakdown */}
+        {stats && stats.top_threats.length > 0 && (
+          <TopThreats threats={stats.top_threats} />
+        )}
+
+        {/* Row 5 — Recent requests with severity column */}
+        <RecentRequests
+          items={logs?.items ?? []}
+          onSelect={id => setSelectedId(id)}
+        />
+
+      </div>
+
       {selectedId && (
         <RequestDetailModal
           traceId={selectedId}

@@ -1,39 +1,58 @@
-import { Card, CardHeader } from "@/components/ui/Card"
 import { ThreatCount } from "@/lib/types"
 import { formatThreat } from "@/lib/utils"
 
-interface TopThreatsProps {
-  threats: ThreatCount[]
+const THREAT_COLORS: Record<string, string> = {
+  PROMPT_INJECTION:  "#dc2626",
+  JAILBREAK:         "#7c3aed",
+  DATA_EXFILTRATION: "#b91c1c",
+  MALICIOUS_INTENT:  "#ea580c",
+  PII:               "#9333ea",
+  TOXICITY:          "#d97706",
 }
 
-export function TopThreats({ threats }: TopThreatsProps) {
+export function TopThreats({ threats }: { threats: ThreatCount[] }) {
   const max = threats[0]?.count || 1
 
   return (
-    <Card>
-      <CardHeader title="Top Threats" />
+    <div style={{
+      background: "#fff", border: "1px solid #e5e7eb",
+      borderRadius: "8px", padding: "18px 20px",
+    }}>
+      <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: "16px" }}>
+        <h3 style={{ fontSize: "13px", fontWeight: 600, color: "#111827", margin: 0 }}>Top threats</h3>
+        <span style={{ fontSize: "11px", color: "#9ca3af" }}>{threats.length} categories</span>
+      </div>
+
       {threats.length === 0 ? (
-        <p className="text-sm text-slate-400">No threats detected</p>
+        <div style={{ padding: "24px 0", textAlign: "center" }}>
+          <p style={{ fontSize: "13px", color: "#9ca3af", margin: 0 }}>No threats detected</p>
+        </div>
       ) : (
-        <div className="space-y-3">
-          {threats.map((t) => (
-            <div key={t.category}>
-              <div className="flex items-center justify-between mb-1">
-                <span className="text-xs font-medium text-slate-700">
-                  {formatThreat(t.category)}
-                </span>
-                <span className="text-xs text-slate-500">{t.count}</span>
+        <div style={{ display: "flex", flexDirection: "column", gap: "10px" }}>
+          {threats.map(t => {
+            const color = THREAT_COLORS[t.category] ?? "#6b7280"
+            const pct   = Math.round((t.count / max) * 100)
+            return (
+              <div key={t.category}>
+                <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: "4px" }}>
+                  <div style={{ display: "flex", alignItems: "center", gap: "7px" }}>
+                    <div style={{ width: 8, height: 8, borderRadius: "50%", background: color, flexShrink: 0 }} />
+                    <span style={{ fontSize: "12px", fontWeight: 500, color: "#374151" }}>
+                      {formatThreat(t.category)}
+                    </span>
+                  </div>
+                  <span style={{ fontSize: "12px", fontFamily: "monospace", color: "#6b7280" }}>
+                    {t.count.toLocaleString()}
+                  </span>
+                </div>
+                <div style={{ height: "5px", background: "#f3f4f6", borderRadius: "3px", overflow: "hidden" }}>
+                  <div style={{ height: "100%", width: `${pct}%`, background: color, borderRadius: "3px" }} />
+                </div>
               </div>
-              <div className="h-1.5 bg-slate-100 rounded-full overflow-hidden">
-                <div
-                  className="h-full bg-blue-800 rounded-full"
-                  style={{ width: `${(t.count / max) * 100}%` }}
-                />
-              </div>
-            </div>
-          ))}
+            )
+          })}
         </div>
       )}
-    </Card>
+    </div>
   )
 }

@@ -1,46 +1,66 @@
 import { cn } from "@/lib/utils"
 
+// Shared icon — import this wherever you need a + in a button
+export function PlusIcon() {
+  return (
+    <svg style={{ width: 13, height: 13 }} fill="none" stroke="currentColor" strokeWidth={2.5} viewBox="0 0 24 24">
+      <path strokeLinecap="round" strokeLinejoin="round" d="M12 4v16m8-8H4"/>
+    </svg>
+  )
+}
+
 interface ButtonProps extends React.ButtonHTMLAttributes<HTMLButtonElement> {
   variant?: "primary" | "secondary" | "danger" | "ghost"
-  size?: "sm" | "md" | "lg"
+  size?:    "sm" | "md" | "lg"
   loading?: boolean
   children: React.ReactNode
 }
 
-export function Button({
-  variant = "primary",
-  size = "md",
-  loading = false,
-  children,
-  className,
-  disabled,
-  ...props
-}: ButtonProps) {
-  const base = "inline-flex items-center justify-center font-medium rounded-md transition-colors focus:outline-none focus:ring-2 focus:ring-offset-1 disabled:opacity-50 disabled:cursor-not-allowed"
+const V: Record<string, React.CSSProperties> = {
+  primary:   { background: "var(--ws-violet)", color: "#fff",                        border: "1px solid var(--ws-violet)" },
+  secondary: { background: "#fff",             color: "var(--text-primary)",          border: "1px solid var(--card-border)" },
+  danger:    { background: "#dc2626",           color: "#fff",                        border: "1px solid #dc2626" },
+  ghost:     { background: "transparent",       color: "var(--text-secondary)",       border: "1px solid transparent" },
+}
 
-  const variants = {
-    primary:   "bg-blue-800 text-white hover:bg-blue-900 focus:ring-blue-800",
-    secondary: "bg-white text-slate-700 border border-slate-200 hover:bg-slate-50 focus:ring-slate-300",
-    danger:    "bg-red-600 text-white hover:bg-red-700 focus:ring-red-600",
-    ghost:     "text-slate-600 hover:bg-slate-100 focus:ring-slate-300",
-  }
+const S: Record<string, React.CSSProperties> = {
+  sm: { padding: "5px 10px",  fontSize: "12px", gap: "5px" },
+  md: { padding: "7px 14px",  fontSize: "13px", gap: "6px" },
+  lg: { padding: "9px 18px",  fontSize: "13px", gap: "6px" },
+}
 
-  const sizes = {
-    sm: "px-3 py-1.5 text-xs gap-1.5",
-    md: "px-4 py-2 text-sm gap-2",
-    lg: "px-5 py-2.5 text-sm gap-2",
-  }
-
+export function Button({ variant = "primary", size = "md", loading = false, children, disabled, className, style, ...props }: ButtonProps) {
   return (
     <button
-      className={cn(base, variants[variant], sizes[size], className)}
       disabled={disabled || loading}
+      className={className}
+      style={{
+        display:        "inline-flex",
+        alignItems:     "center",
+        justifyContent: "center",
+        fontWeight:     500,
+        borderRadius:   "6px",
+        cursor:         "pointer",
+        transition:     "opacity 0.15s, background 0.15s",
+        fontFamily:     "inherit",
+        opacity:        (disabled || loading) ? 0.5 : 1,
+        ...V[variant],
+        ...S[size],
+        ...style,
+      }}
+      onMouseEnter={e => {
+        if (!disabled && !loading) (e.currentTarget as HTMLElement).style.opacity = "0.85"
+      }}
+      onMouseLeave={e => {
+        if (!disabled && !loading) (e.currentTarget as HTMLElement).style.opacity = "1"
+      }}
       {...props}
     >
       {loading && (
-        <svg className="animate-spin h-3.5 w-3.5" fill="none" viewBox="0 0 24 24">
-          <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
-          <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" />
+        <svg style={{ width: "13px", height: "13px", animation: "spin 1s linear infinite" }} fill="none" viewBox="0 0 24 24">
+          <style>{`@keyframes spin{to{transform:rotate(360deg)}}`}</style>
+          <circle style={{ opacity: 0.25 }} cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"/>
+          <path style={{ opacity: 0.75 }} fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z"/>
         </svg>
       )}
       {children}

@@ -4,7 +4,7 @@ import { useState } from "react"
 import useSWR from "swr"
 import { Shell } from "@/components/layout/Shell"
 import { Card, CardHeader } from "@/components/ui/Card"
-import { Button } from "@/components/ui/Button"
+import { Button, PlusIcon } from "@/components/ui/Button"
 import { ApiKeyTable } from "@/components/settings/ApiKeyTable"
 import { CreateKeyModal } from "@/components/settings/CreateKeyModal"
 import { PageSpinner } from "@/components/ui/Spinner"
@@ -47,8 +47,8 @@ export default function ApiKeysPage() {
               title="API Keys"
               subtitle="Manage access credentials for WrapSec API"
             />
-            <Button onClick={() => setShowModal(true)} size="sm">
-              Create key
+            <Button size="sm" onClick={() => setShowModal(true)}>
+              <PlusIcon /> Create key
             </Button>
           </div>
 

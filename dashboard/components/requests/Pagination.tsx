@@ -8,17 +8,39 @@ interface PaginationProps {
 }
 
 export function Pagination({ total, offset, limit, onChange }: PaginationProps) {
-  const page      = Math.floor(offset / limit) + 1
+  const page       = Math.floor(offset / limit) + 1
   const totalPages = Math.ceil(total / limit)
 
   if (totalPages <= 1) return null
 
   return (
-    <div className="flex items-center justify-between px-5 py-3 border-t border-slate-100">
-      <p className="text-xs text-slate-500">
-        Showing {offset + 1}–{Math.min(offset + limit, total)} of {total}
+    <div style={{
+      display:        "flex",
+      alignItems:     "center",
+      justifyContent: "space-between",
+      padding:        "10px 16px",
+      borderTop:      "1px solid #f3f4f6",
+    }}>
+      <p style={{ fontSize: "12px", color: "#9ca3af", margin: 0 }}>
+        Showing{" "}
+        <span style={{ fontWeight: 600, color: "#374151" }}>
+          {(offset + 1).toLocaleString()}–{Math.min(offset + limit, total).toLocaleString()}
+        </span>
+        {" "}of{" "}
+        <span style={{ fontWeight: 600, color: "#374151" }}>
+          {total.toLocaleString()}
+        </span>
       </p>
-      <div className="flex items-center gap-2">
+
+      <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
+        <Button
+          variant="secondary"
+          size="sm"
+          disabled={offset === 0}
+          onClick={() => onChange(0)}
+        >
+          First
+        </Button>
         <Button
           variant="secondary"
           size="sm"
@@ -27,8 +49,8 @@ export function Pagination({ total, offset, limit, onChange }: PaginationProps) 
         >
           Previous
         </Button>
-        <span className="text-xs text-slate-600">
-          Page {page} of {totalPages}
+        <span style={{ fontSize: "12px", color: "#6b7280", padding: "0 4px" }}>
+          {page} / {totalPages}
         </span>
         <Button
           variant="secondary"
@@ -37,6 +59,14 @@ export function Pagination({ total, offset, limit, onChange }: PaginationProps) 
           onClick={() => onChange(offset + limit)}
         >
           Next
+        </Button>
+        <Button
+          variant="secondary"
+          size="sm"
+          disabled={offset + limit >= total}
+          onClick={() => onChange((totalPages - 1) * limit)}
+        >
+          Last
         </Button>
       </div>
     </div>

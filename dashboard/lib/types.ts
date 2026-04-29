@@ -105,15 +105,21 @@ export interface ThreatCount {
 }
 
 export interface AuditStatsResponse {
-  period_from:    string
-  period_to:      string
-  total_requests: number
-  block_rate:     number
-  sanitize_rate:  number
-  allow_rate:     number
-  avg_latency_ms: number
-  p95_latency_ms: number
-  top_threats:    ThreatCount[]
+  period_from:     string
+  period_to:       string
+  total_requests:  number
+  block_rate:      number
+  sanitize_rate:   number
+  allow_rate:      number
+  avg_latency_ms:  number
+  p95_latency_ms:  number
+  top_threats:     ThreatCount[]
+  severity_counts: {
+    CRITICAL: number
+    HIGH:     number
+    MEDIUM:   number
+    LOW:      number
+  }
 }
 
 // ── Settings ──────────────────────────────────────────────────

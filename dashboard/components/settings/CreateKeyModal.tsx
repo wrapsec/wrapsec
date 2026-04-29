@@ -140,15 +140,14 @@ export function CreateKeyModal({ onCreated, onClose }: CreateKeyModalProps) {
               <p className="text-xs text-red-600">{error}</p>
             )}
             <div className="flex justify-end gap-3">
-              <Button variant="secondary" onClick={onClose}>
-                Cancel
-              </Button>
+              <Button size="sm" variant="secondary" onClick={onClose}>Cancel</Button>
               <Button
+                size="sm"
                 loading={loading}
                 disabled={!name.trim() || !deptId}
                 onClick={handleCreate}
               >
-                Create
+                Create key
               </Button>
             </div>
           </div>
@@ -184,7 +183,7 @@ export function CreateKeyModal({ onCreated, onClose }: CreateKeyModalProps) {
               )}
             </div>
             <div className="flex justify-end">
-              <Button onClick={onClose}>Done</Button>
+              <Button size="sm" onClick={onClose}>Done</Button>
             </div>
           </div>
         )}

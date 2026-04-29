@@ -55,20 +55,26 @@ def _unauthorized(request: Request, reason: str) -> JSONResponse:
     )
 
 
+# Test DB URL — must match conftest.py TEST_DATABASE_URL exactly.
+# The middleware uses this in test mode so JWT lookups hit the same
+# SQLite DB that the test fixtures populate, not the production PostgreSQL DB.
+_TEST_DATABASE_URL = settings.database_url  # PostgreSQL — same as production
+
+
 async def _get_db_session():
     """
-    Returns an async session appropriate for the current environment.
+    Returns an async session for JWT user lookup.
 
     Production: uses AsyncSessionFactory (pooled, efficient)
-    Testing: uses NullPool engine (no cross-loop pool poisoning)
-
-    NullPool opens/closes a fresh connection each time — slightly slower
-    but completely safe when each pytest test function gets its own event loop.
+    Testing:    uses NullPool against the real PostgreSQL database.
+                Must NOT use app.dependency_overrides[get_db] — that override
+                points at SQLite for non-JWT tests and would cause user_not_found
+                for JWT tests where users are in PostgreSQL.
     """
     if _TESTING:
         from sqlalchemy.ext.asyncio import create_async_engine, async_sessionmaker, AsyncSession
         from sqlalchemy.pool import NullPool
-        engine = create_async_engine(settings.database_url, poolclass=NullPool)
+        engine = create_async_engine(_TEST_DATABASE_URL, poolclass=NullPool)
         sf     = async_sessionmaker(bind=engine, class_=AsyncSession,
                                      expire_on_commit=False)
         return engine, sf()

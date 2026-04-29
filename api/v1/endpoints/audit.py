@@ -2,7 +2,7 @@ from datetime import datetime, timezone
 from fastapi import APIRouter, Query, Depends, Request
 from domain.value_objects.severity import compute_severity
 from fastapi.responses import JSONResponse
-from sqlalchemy import func, case, Integer
+from sqlalchemy import func, case, Integer, select
 from sqlalchemy.ext.asyncio import AsyncSession
 from api.v1.dependencies.db import get_db
 from db.repositories.audit import AuditRepository
@@ -129,6 +129,22 @@ async def get_audit_stats(
         to_dt     = _parse_dt(to),
     )
 
+    # Fetch severity counts — direct query for SIEM-compatible dashboard metrics
+    sev_where = []
+    if not is_admin and tenant_id:
+        sev_where.append(AuditLogModel.tenant_id == tenant_id)
+    from_dt_parsed = _parse_dt(from_)
+    to_dt_parsed   = _parse_dt(to)
+    if from_dt_parsed:
+        sev_where.append(AuditLogModel.created_at >= from_dt_parsed.replace(tzinfo=None))
+    if to_dt_parsed:
+        sev_where.append(AuditLogModel.created_at <= to_dt_parsed.replace(tzinfo=None))
+
+    sev_query  = select(AuditLogModel.severity, func.count().label("count")).where(*sev_where).group_by(AuditLogModel.severity)
+    sev_result = await db.execute(sev_query)
+    sev_rows   = sev_result.fetchall()
+    stats["severities_map"] = {row[0]: row[1] for row in sev_rows if row[0]}
+
     total = stats["total"]
     if total == 0:
         return JSONResponse(content={
@@ -156,7 +172,16 @@ async def get_audit_stats(
         [{"category": k, "count": v} for k, v in threat_counts.items()],
         key=lambda x: x["count"],
         reverse=True,
-    )[:5]
+    )
+
+    # Severity breakdown — for SIEM compatibility and dashboard triage
+    sev_map        = stats.get("severities_map", {})
+    severity_counts = {
+        "CRITICAL": sev_map.get("CRITICAL", 0),
+        "HIGH":     sev_map.get("HIGH",     0),
+        "MEDIUM":   sev_map.get("MEDIUM",   0),
+        "LOW":      sev_map.get("LOW",      0),
+    }
 
     return JSONResponse(content={
         "period_from":    from_ or datetime.now(timezone.utc).isoformat(),
@@ -168,6 +193,7 @@ async def get_audit_stats(
         "avg_latency_ms": round(avg_lat, 2),
         "p95_latency_ms": round(p95_lat, 2),
         "top_threats":    top_threats,
+        "severity_counts": severity_counts,
     })
 
 @router.get("/attribution")
@@ -175,12 +201,14 @@ async def get_attribution_report(
     request:    Request,
     dept_id:    str | None = Query(None),
     limit:      int        = Query(10, ge=1, le=100),
+    from_:      str | None = Query(None, alias="from"),
+    to:         str | None = Query(None),
     db:         AsyncSession = Depends(get_db),
 ):
     """
     Returns attribution summary — requests grouped by key, department,
     and application. Useful for security review and capacity planning.
-    Extensible: add group_by parameter in v1.1 for custom grouping.
+    Supports from/to date filtering (ISO format) for time-scoped reports.
     """
     from sqlalchemy import select as sa_select
 
@@ -191,6 +219,20 @@ async def get_attribution_report(
     base_where = []
     if dept_id:
         base_where.append(AuditLogModel.dept_id == dept_id)
+    if from_:
+        try:
+            from_dt = datetime.fromisoformat(from_).replace(tzinfo=None)
+            base_where.append(AuditLogModel.created_at >= from_dt)
+        except ValueError:
+            pass
+    if to:
+        try:
+            # Use end of day if only date portion provided, otherwise use as-is
+            to_str  = to if "T" in to else to + "T23:59:59"
+            to_dt   = datetime.fromisoformat(to_str).replace(tzinfo=None)
+            base_where.append(AuditLogModel.created_at <= to_dt)
+        except ValueError:
+            pass
 
     # By API key
     key_query = sa_select(

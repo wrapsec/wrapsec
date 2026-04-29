@@ -4,7 +4,7 @@ import { useState } from "react"
 import useSWR from "swr"
 import { Shell } from "@/components/layout/Shell"
 import { Card } from "@/components/ui/Card"
-import { Button } from "@/components/ui/Button"
+import { Button, PlusIcon } from "@/components/ui/Button"
 import { PageSpinner } from "@/components/ui/Spinner"
 import {
   getUsers, createUser, updateUser, resetUserPassword,
@@ -149,7 +149,7 @@ function CreateUserModal({
           User will be required to change password on first login.
         </p>
         <div className="flex gap-3 mt-4">
-          <Button onClick={handleCreate} loading={saving}>Create user</Button>
+          <Button size="sm" onClick={handleCreate} loading={saving}>Create user</Button>
           <button
             onClick={onClose}
             className="text-sm text-slate-500 hover:text-slate-700"
@@ -273,30 +273,16 @@ function EditUserModal({
         {error && <p className="text-xs text-red-600 mt-3">{error}</p>}
 
         <div className="flex gap-2 mt-4">
-          <button
-            onClick={handleSave}
-            disabled={saving}
-            className="inline-flex items-center px-3 py-1.5 text-xs font-medium text-white bg-blue-800 rounded-md hover:bg-blue-900 disabled:opacity-50 transition-colors"
-          >
-            {saving ? "Saving…" : "Save"}
-          </button>
-          <button
-            onClick={onClose}
-            className="inline-flex items-center px-3 py-1.5 text-xs font-medium text-slate-600 bg-slate-50 border border-slate-200 rounded-md hover:bg-slate-100 transition-colors"
-          >
-            Cancel
-          </button>
+          <Button size="sm" onClick={handleSave} loading={saving}>Save</Button>
+          <Button size="sm" variant="secondary" onClick={onClose}>Cancel</Button>
         </div>
 
         {/* Reset password section */}
         <div className="mt-3 pt-3 border-t border-slate-100">
           {!showReset && !resetDone && (
-            <button
-              onClick={() => { setShowReset(true); setConfirmToggle(false) }}
-              className="inline-flex items-center px-3 py-1.5 text-xs font-medium text-slate-600 bg-slate-50 border border-slate-200 rounded-md hover:bg-slate-100 transition-colors"
-            >
+            <Button size="sm" variant="secondary" onClick={() => { setShowReset(true); setConfirmToggle(false) }}>
               Reset password
-            </button>
+            </Button>
           )}
           {resetDone && (
             <p className="text-xs text-green-600">Password reset. User will be prompted to change it.</p>
@@ -317,13 +303,8 @@ function EditUserModal({
             </Field>
             {resetError && <p className="text-xs text-red-600">{resetError}</p>}
             <div className="flex gap-2">
-              <Button onClick={handleResetPassword} loading={resetting}>Reset</Button>
-              <button
-                onClick={() => { setShowReset(false); setResetError(null) }}
-                className="inline-flex items-center px-3 py-1.5 text-xs font-medium text-slate-600 bg-slate-50 border border-slate-200 rounded-md hover:bg-slate-100 transition-colors"
-              >
-                Cancel
-              </button>
+              <Button size="sm" onClick={handleResetPassword} loading={resetting}>Reset</Button>
+              <Button size="sm" variant="secondary" onClick={() => { setShowReset(false); setResetError(null) }}>Cancel</Button>
             </div>
           </div>
         )}
@@ -331,37 +312,20 @@ function EditUserModal({
         {/* Deactivate / reactivate section */}
         <div className="pt-3 border-t border-slate-100">
           {!confirmToggle ? (
-            <button
+            <Button
+              size="sm"
+              variant={user.is_active ? "danger" : "secondary"}
               onClick={() => { setConfirmToggle(true); setShowReset(false); setResetError(null) }}
-              className={`inline-flex items-center px-3 py-1.5 text-xs font-medium rounded-md border transition-colors ${
-                user.is_active
-                  ? "text-red-600 bg-red-50 border-red-200 hover:bg-red-100"
-                  : "text-green-700 bg-green-50 border-green-200 hover:bg-green-100"
-              }`}
             >
               {user.is_active ? "Deactivate user" : "Reactivate user"}
-            </button>
+            </Button>
           ) : (
             <div className="flex items-center gap-2">
               <span className="text-xs text-slate-600">
                 {user.is_active ? "Deactivate" : "Reactivate"} this user?
               </span>
-              <button
-                onClick={handleToggleActive}
-                className={`inline-flex items-center px-3 py-1.5 text-xs font-medium rounded-md border transition-colors ${
-                  user.is_active
-                    ? "text-red-600 bg-red-50 border-red-200 hover:bg-red-100"
-                    : "text-green-700 bg-green-50 border-green-200 hover:bg-green-100"
-                }`}
-              >
-                Confirm
-              </button>
-              <button
-                onClick={() => setConfirmToggle(false)}
-                className="inline-flex items-center px-3 py-1.5 text-xs font-medium text-slate-600 bg-slate-50 border border-slate-200 rounded-md hover:bg-slate-100 transition-colors"
-              >
-                Cancel
-              </button>
+              <Button size="sm" variant="danger" onClick={handleToggleActive}>Confirm</Button>
+              <Button size="sm" variant="secondary" onClick={() => setConfirmToggle(false)}>Cancel</Button>
             </div>
           )}
         </div>
@@ -399,8 +363,8 @@ export default function UsersPage() {
           <p className="text-sm text-slate-500">
             Manage dashboard users and their access.
           </p>
-          <Button onClick={() => setShowCreate(true)}>
-            Add user
+          <Button size="sm" onClick={() => setShowCreate(true)}>
+            <PlusIcon /> Add user
           </Button>
         </div>
 

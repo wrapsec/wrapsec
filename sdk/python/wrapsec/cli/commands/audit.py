@@ -205,14 +205,15 @@ def audit_stats(from_date: str | None, to_date: str | None, json_output: bool) -
 
     if json_output:
         print_json({
-            "total_requests": stats.total_requests,
-            "block_count":    stats.block_count,
-            "sanitize_count": stats.sanitize_count,
-            "allow_count":    stats.allow_count,
-            "block_rate":     stats.block_rate,
-            "avg_latency_ms": stats.avg_latency_ms,
-            "p95_latency_ms": stats.p95_latency_ms,
-            "top_threats":    stats.top_threats,
+            "total_requests":  stats.total_requests,
+            "block_count":     stats.block_count,
+            "sanitize_count":  stats.sanitize_count,
+            "allow_count":     stats.allow_count,
+            "block_rate":      stats.block_rate,
+            "avg_latency_ms":  stats.avg_latency_ms,
+            "p95_latency_ms":  stats.p95_latency_ms,
+            "top_threats":     stats.top_threats,
+            "severity_counts": stats.severity_counts,
         })
         return
 
@@ -223,7 +224,14 @@ def audit_stats(from_date: str | None, to_date: str | None, json_output: bool) -
     click.secho(f"Allowed:         {stats.allow_count:,}",    fg="green"  if stats.allow_count    else None)
     click.echo(f"Avg latency:     {stats.avg_latency_ms:.1f}ms")
     click.echo(f"P95 latency:     {stats.p95_latency_ms:.1f}ms")
+    sev = stats.severity_counts
+    if any(sev.values()):
+        click.echo("Severity:")
+        click.secho(f"  {'CRITICAL':<12} {sev.get('CRITICAL', 0):>6}", fg="red"    if sev.get("CRITICAL") else None)
+        click.secho(f"  {'HIGH':<12} {sev.get('HIGH', 0):>6}",     fg="yellow" if sev.get("HIGH")     else None)
+        click.secho(f"  {'MEDIUM':<12} {sev.get('MEDIUM', 0):>6}", fg="cyan"   if sev.get("MEDIUM")   else None)
+        click.echo( f"  {'LOW':<12} {sev.get('LOW', 0):>6}")
     if stats.top_threats:
         click.echo("Top threats:")
-        for t in stats.top_threats[:5]:
+        for t in stats.top_threats:
             click.echo(f"  {t.get('category', '?'):<35} {t.get('count', 0):>6}")

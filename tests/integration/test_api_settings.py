@@ -12,11 +12,11 @@ async def test_get_thresholds_returns_defaults(client, admin_headers):
 
 
 @pytest.mark.asyncio
-async def test_update_thresholds(client, admin_headers):
+async def test_update_thresholds(client, admin_jwt_headers):
     response = await client.put(
         "/v1/settings/thresholds",
         json={"block_threshold": 0.75, "sanitize_threshold": 0.45},
-        headers=admin_headers,
+        headers=admin_jwt_headers,
     )
     assert response.status_code == 200
     data = response.json()
@@ -26,11 +26,11 @@ async def test_update_thresholds(client, admin_headers):
 
 
 @pytest.mark.asyncio
-async def test_invalid_thresholds_rejected(client, admin_headers):
+async def test_invalid_thresholds_rejected(client, admin_jwt_headers):
     response = await client.put(
         "/v1/settings/thresholds",
         json={"block_threshold": 0.3, "sanitize_threshold": 0.5},
-        headers=admin_headers,
+        headers=admin_jwt_headers,
     )
     assert response.status_code in (400, 422)
 
@@ -46,11 +46,11 @@ async def test_get_layers_returns_defaults(client, admin_headers):
 
 
 @pytest.mark.asyncio
-async def test_update_layers(client, admin_headers):
+async def test_update_layers(client, admin_jwt_headers):
     response = await client.put(
         "/v1/settings/layers",
         json={"llm_enabled": False},
-        headers=admin_headers,
+        headers=admin_jwt_headers,
     )
     assert response.status_code == 200
     data = response.json()

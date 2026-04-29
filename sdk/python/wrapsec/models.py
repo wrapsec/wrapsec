@@ -119,6 +119,15 @@ class AuditLog:
 class AuditStats:
     """
     Aggregated statistics returned from GET /v1/audit/stats.
+
+    severity_counts breaks down requests by SIEM severity level:
+        CRITICAL — guardrail blocks (PII, toxicity) or risk_score >= 0.9
+        HIGH     — other blocks or SYSTEM_ERROR
+        MEDIUM   — sanitized requests
+        LOW      — allowed requests
+
+    Defaults to all-zero dict for backward compatibility with API versions
+    that do not return severity_counts.
     """
 
     total_requests:  int
@@ -129,6 +138,9 @@ class AuditStats:
     avg_latency_ms:  float
     p95_latency_ms:  float
     top_threats:     list[dict[str, Any]]
+    severity_counts: dict[str, int] = field(default_factory=lambda: {
+        "CRITICAL": 0, "HIGH": 0, "MEDIUM": 0, "LOW": 0
+    })
 
     @classmethod
     def from_dict(cls, data: dict[str, Any]) -> "AuditStats":
@@ -137,14 +149,17 @@ class AuditStats:
         san_rate   = float(data.get("sanitize_rate", 0.0))
         allow_rate = float(data.get("allow_rate", 0.0))
         return cls(
-            total_requests = total,
-            block_count    = int(data.get("block_count",    round(total * block_rate))),
-            sanitize_count = int(data.get("sanitize_count", round(total * san_rate))),
-            allow_count    = int(data.get("allow_count",    round(total * allow_rate))),
-            block_rate     = block_rate,
-            avg_latency_ms = float(data.get("avg_latency_ms", 0.0)),
-            p95_latency_ms = float(data.get("p95_latency_ms", 0.0)),
-            top_threats    = data.get("top_threats") or [],
+            total_requests  = total,
+            block_count     = int(data.get("block_count",    round(total * block_rate))),
+            sanitize_count  = int(data.get("sanitize_count", round(total * san_rate))),
+            allow_count     = int(data.get("allow_count",    round(total * allow_rate))),
+            block_rate      = block_rate,
+            avg_latency_ms  = float(data.get("avg_latency_ms", 0.0)),
+            p95_latency_ms  = float(data.get("p95_latency_ms", 0.0)),
+            top_threats     = data.get("top_threats") or [],
+            severity_counts = data.get("severity_counts") or {
+                "CRITICAL": 0, "HIGH": 0, "MEDIUM": 0, "LOW": 0
+            },
         )
 
 

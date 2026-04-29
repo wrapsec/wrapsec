@@ -4,7 +4,7 @@ import { useState } from "react"
 import useSWR from "swr"
 import { Shell } from "@/components/layout/Shell"
 import { Card } from "@/components/ui/Card"
-import { Button } from "@/components/ui/Button"
+import { Button, PlusIcon } from "@/components/ui/Button"
 import { PageSpinner } from "@/components/ui/Spinner"
 import { getDepartments, createDepartment, deleteDepartment } from "@/lib/api"
 import Link from "next/link"
@@ -53,8 +53,8 @@ export default function DepartmentsPage() {
           <p className="text-sm text-slate-500">
             Manage organisational departments and their policy overrides.
           </p>
-          <Button onClick={() => setShowCreate(true)}>
-            Add department
+          <Button size="sm" onClick={() => setShowCreate(true)}>
+            <PlusIcon /> Add department
           </Button>
         </div>
 
@@ -106,13 +106,8 @@ export default function DepartmentsPage() {
             </div>
             {error && <p className="text-xs text-red-600 mt-3">{error}</p>}
             <div className="flex gap-3 mt-4">
-              <Button onClick={handleCreate} loading={saving}>Create</Button>
-              <button
-                onClick={() => { setShowCreate(false); setError(null) }}
-                className="text-sm text-slate-500 hover:text-slate-700"
-              >
-                Cancel
-              </button>
+              <Button size="sm" onClick={handleCreate} loading={saving}>Create</Button>
+              <Button size="sm" variant="secondary" onClick={() => { setShowCreate(false); setError(null) }}>Cancel</Button>
             </div>
           </Card>
         )}
