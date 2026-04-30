@@ -1,3 +1,7 @@
+# SPDX-License-Identifier: MIT
+# Copyright (c) 2026 WrapSec. All rights reserved.
+# WrapSec v1.0 | AI Security Gateway - https://wrapsec.com
+
 from fastapi import APIRouter
 from api.v1.endpoints import (
     health, ai, audit, settings, keys,

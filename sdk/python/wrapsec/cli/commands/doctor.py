@@ -1,3 +1,7 @@
+# SPDX-License-Identifier: MIT
+# Copyright (c) 2026 WrapSec. All rights reserved.
+# WrapSec v1.0 | AI Security Gateway - https://wrapsec.com
+
 """
 wrapsec ping — network connectivity check (no auth).
 wrapsec doctor — full health, auth, and version check.

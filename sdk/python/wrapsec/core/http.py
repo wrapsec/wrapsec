@@ -1,3 +1,7 @@
+# SPDX-License-Identifier: MIT
+# Copyright (c) 2026 WrapSec. All rights reserved.
+# WrapSec v1.0 | AI Security Gateway - https://wrapsec.com
+
 """
 Base HTTP layer — request construction, header building, timeout resolution,
 error mapping from HTTP status to typed exceptions.

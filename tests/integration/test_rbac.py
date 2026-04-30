@@ -1,3 +1,7 @@
+# SPDX-License-Identifier: MIT
+# Copyright (c) 2026 WrapSec. All rights reserved.
+# WrapSec v1.0 | AI Security Gateway - https://wrapsec.com
+
 """
 Integration tests for RBAC and auth boundary enforcement.
 Fixtures (auth_client, auth_setup) auto-injected from conftest.py.

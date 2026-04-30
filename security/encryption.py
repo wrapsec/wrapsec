@@ -1,3 +1,7 @@
+# SPDX-License-Identifier: MIT
+# Copyright (c) 2026 WrapSec. All rights reserved.
+# WrapSec v1.0 | AI Security Gateway - https://wrapsec.com
+
 """
 AES-256-GCM encryption for sensitive values stored in the database.
 Used to encrypt provider API keys in proxy_provider_configs.
