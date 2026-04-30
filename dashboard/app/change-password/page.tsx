@@ -198,7 +198,7 @@ export default function ChangePasswordPage() {
             </div>
 
             <div style={{ display: "flex", gap: "10px", paddingTop: "4px" }}>
-              <button type="button" onClick={logout} disabled={loading} style={{
+              <button type="button" onClick={() => logout("manual")} disabled={loading} style={{
                 flex: 1, height: "42px", fontSize: "13px", fontWeight: 500,
                 background: "transparent", border: "1px solid rgba(255,255,255,0.12)",
                 color: "rgba(255,255,255,0.55)", borderRadius: "8px", cursor: "pointer",
@@ -231,3 +231,4 @@ export default function ChangePasswordPage() {
     </div>
   )
 }
+

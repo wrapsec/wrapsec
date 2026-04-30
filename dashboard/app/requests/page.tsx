@@ -1,6 +1,6 @@
 "use client"
 
-import { useState, useEffect } from "react"
+import { useState, useEffect, Suspense } from "react"
 import { useSearchParams } from "next/navigation"
 import useSWR from "swr"
 import { Shell } from "@/components/layout/Shell"
@@ -13,7 +13,7 @@ import { PAGE_SIZE } from "@/lib/constants"
 import { VALID_DECISIONS, VALID_THREATS, VALID_EXEC_MODES } from "@/lib/constants"
 import { getAuditLogs, exportAuditLogs } from "@/lib/api"
 
-export default function RequestsPage() {
+function RequestsPageInner() {
   const searchParams = useSearchParams()
 
   // URL param sanitisation — validated against constants derived from types.ts.
@@ -27,7 +27,7 @@ export default function RequestsPage() {
   const [traceIdDebounced, setTraceIdDebounced] = useState("")
   const [decision,         setDecision]         = useState(() => sanitise(searchParams.get("decision"), VALID_DECISIONS))
   const [threatCategory,   setThreatCategory]   = useState(() => sanitise(searchParams.get("threat"),   VALID_THREATS))
-  const [executionMode,    setExecutionMode]     = useState(() => sanitise(searchParams.get("mode"),     VALID_EXEC_MODES))
+  const [executionMode,    setExecutionMode]     = useState(() => sanitise(searchParams.get("mode"),     [...VALID_EXEC_MODES]))
   const [from,             setFrom]             = useState(() => sanitiseDate(searchParams.get("from")))
   const [to,               setTo]               = useState(() => sanitiseDate(searchParams.get("to")))
   const [sortBy,           setSortBy]           = useState("created_at")
@@ -230,3 +230,9 @@ export default function RequestsPage() {
     </Shell>
   )
 }
+
+
+export default function RequestsPage() {
+  return <Suspense><RequestsPageInner /></Suspense>
+}
+

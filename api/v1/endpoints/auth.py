@@ -62,6 +62,10 @@ class LoginRequest(BaseModel):
     password: str
 
 
+class LogoutRequest(BaseModel):
+    reason: str = "manual"
+
+
 class ChangePasswordRequest(BaseModel):
     current_password: str
     new_password:     str
@@ -210,18 +214,30 @@ async def refresh(
 @router.post("/logout")
 async def logout(
     request:   Request,
-    db:        AsyncSession = Depends(get_db),
-    principal: Principal    = Depends(require_jwt),
+    body:      LogoutRequest = LogoutRequest(),
+    db:        AsyncSession  = Depends(get_db),
+    principal: Principal     = Depends(require_jwt),
 ) -> JSONResponse:
     """
     Revokes refresh token. Access token expires naturally (≤30 min).
     Clears httpOnly cookie. Idempotent — safe to call multiple times.
 
+    Optional body: { "reason": "manual" | "inactivity" | "expired" }
+    Invalid reason values are normalized to "manual" — never returns 400.
+
     Auth: JWT Bearer required.
     """
+    from domain.enums import LogoutReason
+
+    # Validate and normalize reason — never raise 400 for invalid value
+    try:
+        logout_reason = LogoutReason(body.reason).value
+    except ValueError:
+        logout_reason = LogoutReason.MANUAL.value
+
     raw_token = request.cookies.get(REFRESH_COOKIE_NAME)
     if raw_token:
-        await auth_service.logout(raw_token, db)
+        await auth_service.logout(raw_token, db, reason=logout_reason)
 
     response = JSONResponse(
         status_code=200,

@@ -1,4 +1,4 @@
-import { logout } from "@/lib/auth"
+import { logout, isLoggingOut } from "@/lib/auth"
 import {
   AIRequest,
   GatewayResponse,
@@ -22,9 +22,14 @@ import {
   DashboardUsersResponse,
 } from "./types"
 
+// Internal type for retry tracking
+interface RequestOptions extends RequestInit {
+  _retried?: boolean
+}
+
 async function request<T>(
   path: string,
-  options: RequestInit = {}
+  options: RequestOptions = {}
 ): Promise<T> {
   // All requests go through Next.js proxy at /api/proxy
   // The proxy route reads wrapsec_api_key or wrapsec_jwt cookie server-side
@@ -41,15 +46,54 @@ async function request<T>(
   })
 
   if (!response.ok) {
+    // ── 401 handling — attempt silent refresh, then redirect ──────────────
     if (response.status === 401 && typeof window !== "undefined") {
-      await logout()
-      window.location.href = "/login"
-      throw new Error("Unauthorized")
+
+      // Guard 1: never retry the refresh request itself
+      if (path.includes("/api/auth/refresh") || proxyPath.includes("/api/auth/refresh")) {
+        await logout("expired")
+        window.location.href = "/login"
+        throw new Error("Session expired")
+      }
+
+      // Guard 2: never retry twice
+      if (options._retried) {
+        await logout("expired")
+        window.location.href = "/login"
+        throw new Error("Session expired")
+      }
+
+      // Guard 3: logout already in progress — skip refresh
+      if (isLoggingOut) {
+        window.location.href = "/login"
+        throw new Error("Logging out")
+      }
+
+      // Attempt silent refresh
+      const refreshed = await fetch("/api/auth/refresh", { method: "POST" })
+      if (!refreshed.ok) {
+        await logout("expired")
+        window.location.href = "/login"
+        throw new Error("Session expired")
+      }
+
+      // Retry original request once
+      return request<T>(path, { ...options, _retried: true })
     }
-    const error = await response.json().catch(() => ({}))
-    throw new Error(
-      error?.error?.message || `HTTP ${response.status}`
-    )
+
+    // ── Non-401 errors — parse safely, show error (do NOT redirect) ───────
+    let errMessage = `HTTP ${response.status}`
+    const contentType = response.headers.get("content-type") || ""
+    if (contentType.includes("application/json")) {
+      try {
+        const error = await response.json()
+        errMessage = error?.error?.message || errMessage
+      } catch {
+        // not valid JSON — use status code message
+      }
+    }
+    // 500/502/503 are server errors — user sees error, not login redirect
+    throw new Error(errMessage)
   }
 
   return response.json()
@@ -547,7 +591,7 @@ export async function updateUser(
   }
 ): Promise<DashboardUser> {
   return request<DashboardUser>(`/v1/admin/users/${userId}`, {
-    method: "PATCH",
+    method: "PUT",
     body:   JSON.stringify(data),
   })
 }

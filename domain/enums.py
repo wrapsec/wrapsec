@@ -71,9 +71,15 @@ class AdminEventAction(str, Enum):
 class AuthEventAction(str, Enum):
     """
     Enum-controlled action values for auth_events table.
+    Each value is owned by exactly one logging location — never duplicated.
+    See session_management.md §Logging Ownership for the full ownership map.
     """
-    LOGIN_SUCCESS = "login_success"
-    LOGIN_FAILED  = "login_failed"
+    LOGIN_SUCCESS         = "login_success"
+    LOGIN_FAILED          = "login_failed"
+    LOGOUT                = "logout"
+    TOKEN_REFRESH_SUCCESS = "token_refresh_success"
+    TOKEN_REFRESH_FAILED  = "token_refresh_failed"
+    SESSION_EXPIRED       = "session_expired"
 
 
 class AuthFailureReason(str, Enum):
@@ -81,12 +87,30 @@ class AuthFailureReason(str, Enum):
     Enum-controlled failure_reason values for auth_events.
     account_disabled — is_active=False set administratively
     account_inactive — user exists but is_active=False (operational state)
+    token_invalid    — malformed or tampered JWT (distinct from token_expired)
     """
-    INVALID_PASSWORD = "invalid_password"
-    USER_NOT_FOUND   = "user_not_found"
-    ACCOUNT_DISABLED = "account_disabled"
-    ACCOUNT_INACTIVE = "account_inactive"
-    TOKEN_EXPIRED    = "token_expired"
+    INVALID_PASSWORD    = "invalid_password"
+    USER_NOT_FOUND      = "user_not_found"
+    ACCOUNT_DISABLED    = "account_disabled"
+    ACCOUNT_INACTIVE    = "account_inactive"
+    TOKEN_EXPIRED       = "token_expired"
+    TOKEN_INVALID       = "token_invalid"
+    INACTIVITY          = "inactivity"
+    MANUAL              = "manual"
+    EXPIRED             = "expired"
+    REFRESH_FAILED      = "refresh_failed"
+    SESSION_INVALIDATED = "session_invalidated"
+
+
+class LogoutReason(str, Enum):
+    """
+    Valid reason values accepted by POST /v1/auth/logout.
+    Frontend input is validated against this enum — invalid values
+    are normalized to MANUAL silently (never raise 400).
+    """
+    MANUAL     = "manual"
+    INACTIVITY = "inactivity"
+    EXPIRED    = "expired"
 
 
 def get_risk_level(score: float) -> RiskLevel:

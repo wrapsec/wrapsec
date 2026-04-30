@@ -17,9 +17,17 @@
  * All tokens live in httpOnly cookies — never in JS memory or localStorage.
  */
 
-// ── Mode A: API key login (existing — unchanged) ──────────────────────────
+// ── isLoggingOut flag ────────────────────────────────────────────────────
+// Set to true before logout() fetch — prevents concurrent silent refresh
+// from succeeding after logout decision is made.
+// Checked in api.ts request() before any refresh attempt.
+// See session_management.md Convention 42.
+export let isLoggingOut = false
 
-export async function login(apiKey: string): Promise<boolean> {
+// ── Mode A: API key login ───────────────────────────────────────────────────
+// Use loginWithApiKey() for API key auth from login page.
+
+export async function loginWithApiKey(apiKey: string): Promise<boolean> {
   const response = await fetch("/api/auth/login", {
     method:  "POST",
     headers: { "Content-Type": "application/json" },
@@ -32,13 +40,7 @@ export async function login(apiKey: string): Promise<boolean> {
 
 export interface JWTLoginResult {
   force_password_change: boolean
-  user: {
-    id:        string
-    email:     string
-    role:      "ADMIN" | "DEVELOPER" | "VIEWER"
-    dept_id:   string | null
-    tenant_id: string
-  }
+  user: AuthUser
 }
 
 export async function loginWithCredentials(
@@ -115,8 +117,15 @@ export async function changePassword(
 
 // ── Logout (shared by both modes) ─────────────────────────────────────────
 
-export async function logout(): Promise<void> {
-  await fetch("/api/auth/logout", { method: "POST" })
+export async function logout(
+  reason: "manual" | "inactivity" | "expired" = "manual"
+): Promise<void> {
+  isLoggingOut = true   // set BEFORE fetch — prevents concurrent refresh
+  await fetch("/api/auth/logout", {
+    method:  "POST",
+    headers: { "Content-Type": "application/json" },
+    body:    JSON.stringify({ reason }),
+  })
 }
 
 // ── AuthError ─────────────────────────────────────────────────────────────
@@ -129,4 +138,71 @@ export class AuthError extends Error {
     super(message)
     this.name = "AuthError"
   }
+}
+
+// ── login(email, password) — used by AuthProvider ────────────────────────
+// AuthProvider imports this as authLogin(email, password) → LoginResponse
+// Wraps loginWithCredentials to match AuthProvider's expected signature.
+
+export async function login(
+  email:    string,
+  password: string
+): Promise<LoginResponse> {
+  const result = await loginWithCredentials(email, password)
+  return {
+    force_password_change: result.force_password_change,
+    user:                  result.user,
+  }
+}
+
+// ── Types ─────────────────────────────────────────────────────────────────
+
+export interface AuthUser {
+  id:                    string
+  email:                 string
+  role:                  "ADMIN" | "DEVELOPER" | "VIEWER"
+  dept_id:               string | null
+  tenant_id:             string
+  is_active:             boolean
+  force_password_change: boolean
+  last_login_at:         string | null
+}
+
+export interface LoginResponse {
+  force_password_change: boolean
+  user: AuthUser
+}
+
+// ── initAuth — silent session restore on page load ────────────────────────
+// Called by AuthProvider on mount to restore session from httpOnly cookie.
+// Attempts refresh via /api/auth/refresh, then fetches current user.
+// Returns AuthUser on success, throws on failure.
+
+export async function initAuth(): Promise<AuthUser> {
+  const refreshed = await fetch("/api/auth/refresh", { method: "POST" })
+  if (!refreshed.ok) {
+    throw new Error("No active session")
+  }
+  return getMe()
+}
+
+// ── getMe — fetch current user profile ────────────────────────────────────
+
+export async function getMe(): Promise<AuthUser> {
+  const response = await fetch("/api/proxy/v1/auth/me", {
+    headers: { "Content-Type": "application/json" },
+  })
+  if (!response.ok) {
+    throw new Error("Failed to fetch user")
+  }
+  const data = await response.json()
+  return data as AuthUser
+}
+
+// ── getToken — not used (tokens in httpOnly cookies) ─────────────────────
+// Kept for backward compatibility with AuthProvider import.
+// Always returns null — tokens are never accessible to JS.
+
+export function getToken(): null {
+  return null
 }

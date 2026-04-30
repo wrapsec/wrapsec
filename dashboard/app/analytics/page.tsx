@@ -549,8 +549,8 @@ export default function AnalyticsPage() {
 
         {stats && attribution && <SecuritySummary stats={stats} attribution={attribution} />}
 
-        {analytics?.trend?.length > 0 && (
-          <TrendChart data={analytics.trend} groupBy={groupBy} onGroupByChange={setGroupBy} />
+        {(analytics?.trend?.length ?? 0) > 0 && (
+          <TrendChart data={analytics!.trend} groupBy={groupBy} onGroupByChange={setGroupBy} />
         )}
 
         <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "16px" }}>
@@ -559,8 +559,8 @@ export default function AnalyticsPage() {
         </div>
 
         <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "16px" }}>
-          {attribution?.by_confidence_band?.length > 0 && (
-            <ConfidenceDistribution data={attribution.by_confidence_band} />
+          {(attribution?.by_confidence_band?.length ?? 0) > 0 && (
+            <ConfidenceDistribution data={attribution!.by_confidence_band} />
           )}
           {byReason.length > 0 && <PrimaryReasonBreakdown byReason={byReason} />}
         </div>
@@ -592,11 +592,11 @@ export default function AnalyticsPage() {
           />
         </div>
 
-        {attribution?.by_key?.length > 0 && (
+        {(attribution?.by_key?.length ?? 0) > 0 && (
           <AttributionTable
             title="API key activity"
             emptyText="No key data"
-            rows={(attribution.by_key as any[])
+            rows={(attribution!.by_key as any[])
               .sort((a, b) => b.total - a.total)
               .slice(0, 10)
               .map(r => ({
@@ -611,3 +611,5 @@ export default function AnalyticsPage() {
     </Shell>
   )
 }
+
+

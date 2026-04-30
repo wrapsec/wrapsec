@@ -5,19 +5,24 @@ import type { NextRequest } from "next/server"
  * dashboard/middleware.ts
  *
  * Route guard. Checks for any valid session cookie before allowing access.
+ *
+ * CRITICAL: /api/* paths must NEVER be intercepted by this middleware.
+ * API routes handle their own auth and return JSON 401 — not HTML redirects.
+ * Intercepting /api/* causes HTML to be returned instead of JSON, breaking
+ * all error handling in the frontend (JSON.parse crash).
+ *
  * Two valid session states:
  *   wrapsec_api_key — API key auth (existing flow)
- *   wrapsec_session — JWT auth indicator (set on JWT login, non-httpOnly)
+ *   wrapsec_session — JWT auth indicator (httpOnly, set on JWT login)
  *
- * Note: wrapsec_jwt is httpOnly so cannot be read here, but
- * wrapsec_session (non-httpOnly) is set alongside it as an indicator.
- * The actual token validation happens server-side in the proxy route.
+ * wrapsec_jwt is httpOnly and cannot be read here.
+ * wrapsec_session is httpOnly and used only by server-side routes.
+ * Both are checked via request.cookies (server-side readable in middleware).
  */
 
 const PUBLIC_PATHS = [
   "/login",
   "/change-password",
-  "/api/auth",
   "/_next",
   "/favicon.ico",
 ]
@@ -25,12 +30,17 @@ const PUBLIC_PATHS = [
 export function middleware(request: NextRequest) {
   const { pathname } = request.nextUrl
 
-  // Allow public paths
+  // MUST skip all /api/* routes — they handle own auth, return JSON
+  if (pathname.startsWith("/api/")) {
+    return NextResponse.next()
+  }
+
+  // Allow public UI paths
   if (PUBLIC_PATHS.some((p) => pathname.startsWith(p))) {
     return NextResponse.next()
   }
 
-  // Check for any valid session
+  // Check for any valid session cookie (both readable server-side)
   const hasApiKey  = !!request.cookies.get("wrapsec_api_key")?.value
   const hasSession = !!request.cookies.get("wrapsec_session")?.value
 

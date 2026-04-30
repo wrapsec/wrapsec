@@ -472,7 +472,7 @@ export default function OverviewPage() {
           ? <RequestCards stats={stats} from={from} to={to} />
           : <div style={{ display: "grid", gridTemplateColumns: "repeat(4, 1fr)", gap: "14px" }}>
               {[0,1,2,3].map(i => (
-                <div key={i} style={{ background: "#fff", border: "1px solid #e5e7eb",
+                <div key={i} style={{ border: "1px solid #e5e7eb",
                   borderRadius: "8px", padding: "16px 20px", height: "88px",
                   background: "linear-gradient(90deg, #f3f4f6 25%, #e5e7eb 50%, #f3f4f6 75%)",
                   backgroundSize: "200% 100%",
@@ -519,3 +519,5 @@ export default function OverviewPage() {
     </Shell>
   )
 }
+
+

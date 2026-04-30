@@ -28,42 +28,47 @@ async def _log_auth_event(
     """
     Inserts an auth_event row using a separate NullPool DB session.
 
-    Non-blocking by design: uses an independent session — never touches the
-    request session and cannot delay the login response.
-    Best-effort: any exception is logged internally and suppressed.
+    Non-blocking: independent session, never touches the request session.
+    Best-effort: exceptions are logged and suppressed — never affect auth flow.
+    Session is always closed in finally block — NullPool does not pool connections.
 
     tenant_id / user_id:
         Known user   → set from user record
         Unknown user → both None (user not found, cannot resolve tenant)
     """
+    session = None
+    engine  = None
     try:
         from sqlalchemy.ext.asyncio import create_async_engine, async_sessionmaker
         from sqlalchemy.pool import NullPool
         from config.settings import get_settings
-        from db.models import AuthEventModel
+        from db.repositories.auth_event import AuthEventRepository
 
         _settings = get_settings()
         engine    = create_async_engine(_settings.database_url, poolclass=NullPool)
         sf        = async_sessionmaker(bind=engine, class_=AsyncSession,
                                         expire_on_commit=False)
-
-        async with sf() as session:
-            event = AuthEventModel(
-                tenant_id      = tenant_id,
-                user_id        = user_id,
-                action         = action,
-                success        = success,
-                failure_reason = failure_reason,
-                ip_address     = ip_address,
-                user_agent     = user_agent,
-            )
-            session.add(event)
-            await session.commit()
-
-        await engine.dispose()
+        session   = sf()
+        from domain.enums import AuthEventAction as _Action, AuthFailureReason as _Reason
+        repo      = AuthEventRepository(session)
+        await repo.insert(
+            action         = _Action(action),
+            success        = success,
+            tenant_id      = tenant_id,
+            user_id        = user_id,
+            failure_reason = _Reason(failure_reason) if failure_reason else None,
+            ip_address     = ip_address,
+            user_agent     = user_agent,
+        )
+        await session.commit()
 
     except Exception as e:
         logger.error("auth_event DB logging failed action=%s error=%s", action, e)
+    finally:
+        if session:
+            await session.close()
+        if engine:
+            await engine.dispose()
 
 
 @dataclass
@@ -229,6 +234,12 @@ class AuthService:
         token_rec  = await rt_repo.get_by_hash(token_hash)
 
         if not token_rec:
+            logger.warning("auth_event TOKEN_REFRESH_FAILED reason=refresh_failed")
+            await _log_auth_event(
+                action         = "token_refresh_failed",
+                success        = False,
+                failure_reason = "refresh_failed",
+            )
             raise InvalidTokenException()
 
         user_repo = UserRepository(db)
@@ -237,14 +248,30 @@ class AuthService:
         if not user or not user.is_active:
             await rt_repo.revoke(token_hash)
             await db.commit()
+            logger.warning("auth_event TOKEN_REFRESH_FAILED reason=refresh_failed user_id=%s",
+                           token_rec.user_id)
+            await _log_auth_event(
+                action         = "token_refresh_failed",
+                success        = False,
+                user_id        = token_rec.user_id,
+                failure_reason = "refresh_failed",
+            )
             raise InvalidTokenException("User not found or disabled")
 
         if token_rec.token_version != user.token_version:
             await rt_repo.revoke(token_hash)
             await db.commit()
             logger.warning(
-                "auth_event SESSION_INVALIDATED user_id=%s token_ver=%d user_ver=%d",
+                "auth_event TOKEN_REFRESH_FAILED user_id=%s reason=session_invalidated "
+                "token_ver=%d user_ver=%d",
                 user.id, token_rec.token_version, user.token_version,
+            )
+            await _log_auth_event(
+                action         = "token_refresh_failed",
+                success        = False,
+                tenant_id      = user.tenant_id,
+                user_id        = user.id,
+                failure_reason = "session_invalidated",
             )
             raise SessionInvalidatedException()
 
@@ -261,7 +288,13 @@ class AuthService:
         )
         await db.commit()
 
-        logger.info("auth_event TOKEN_REFRESHED user_id=%s", user.id)
+        logger.info("auth_event TOKEN_REFRESH_SUCCESS user_id=%s", user.id)
+        await _log_auth_event(
+            action    = "token_refresh_success",
+            success   = True,
+            tenant_id = user.tenant_id,
+            user_id   = user.id,
+        )
 
         return RefreshResult(
             access_token  = new_access,
@@ -269,7 +302,21 @@ class AuthService:
             expires_in    = _settings.jwt_access_token_expire_minutes * 60,
         )
 
-    async def logout(self, refresh_token_raw: str, db: AsyncSession) -> None:
+    async def logout(
+        self,
+        refresh_token_raw: str,
+        db:                AsyncSession,
+        reason:            str = "manual",
+    ) -> None:
+        """
+        Revokes refresh token and logs LOGOUT with reason.
+
+        reason: pre-validated by endpoint (LogoutReason enum).
+        Invalid values are normalized to "manual" at endpoint level —
+        service trusts the reason passed in.
+
+        Logging: non-blocking _log_auth_event(), best-effort.
+        """
         from db.repositories.refresh_token import RefreshTokenRepository
         from services.auth.token import hash_refresh_token
 
@@ -280,7 +327,14 @@ class AuthService:
         if token_rec:
             await rt_repo.revoke(token_hash)
             await db.commit()
-            logger.info("auth_event LOGOUT user_id=%s", token_rec.user_id)
+            logger.info("auth_event LOGOUT user_id=%s reason=%s",
+                        token_rec.user_id, reason)
+            await _log_auth_event(
+                action         = "logout",
+                success        = True,
+                user_id        = token_rec.user_id,
+                failure_reason = reason,   # reason stored in failure_reason field
+            )
 
     async def logout_all_sessions(self, user_id: UUID, db: AsyncSession) -> None:
         """

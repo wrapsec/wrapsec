@@ -197,7 +197,7 @@ style={{ height: "32px", padding: "0 10px", fontSize: "12px", borderRadius: "6px
                       </td>
                       <td className="px-4 py-3">
                         {item.output_decision
-                          ? <Badge label={item.output_decision} className={decisionClass(item.output_decision)} />
+                          ? <DecisionBadge decision={item.output_decision} />
                           : <span className="text-slate-300">--</span>
                         }
                       </td>

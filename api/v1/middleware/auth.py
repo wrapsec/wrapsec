@@ -5,7 +5,7 @@ from datetime import datetime
 from uuid import UUID
 
 from fastapi import Request
-from jwt.exceptions import InvalidTokenError
+from jwt.exceptions import ExpiredSignatureError, InvalidTokenError
 from starlette.middleware.base import BaseHTTPMiddleware
 from starlette.responses import JSONResponse, Response
 
@@ -25,6 +25,10 @@ PUBLIC_PATHS = {
     "/v1/auth/login",    # login is public — no auth required
     "/v1/auth/refresh",  # refresh uses httpOnly cookie — no Bearer required
 }
+
+# Paths where middleware must NOT log SESSION_EXPIRED
+# (refresh service owns its own logging for these paths)
+SKIP_AUTH_EVENT_LOGGING = {"/v1/auth/refresh"}
 
 # Paths accessible even when force_password_change = True
 FORCE_CHANGE_ALLOWED = {
@@ -55,26 +59,104 @@ def _unauthorized(request: Request, reason: str) -> JSONResponse:
     )
 
 
-# Test DB URL — must match conftest.py TEST_DATABASE_URL exactly.
-# The middleware uses this in test mode so JWT lookups hit the same
-# SQLite DB that the test fixtures populate, not the production PostgreSQL DB.
-_TEST_DATABASE_URL = settings.database_url  # PostgreSQL — same as production
+async def _log_session_expired(
+    token:          str,
+    failure_reason: str,
+    path:           str,
+) -> None:
+    """
+    Logs SESSION_EXPIRED to auth_events.
+
+    Attempts to extract user_id and tenant_id from the token payload
+    even if the token is expired or invalid (decode without expiry check).
+    If extraction fails, logs with NULL context — never skips logging.
+
+    Non-blocking: NullPool session, best-effort, always closes in finally.
+    Must NOT be called when no token is present (noise from health checks).
+    Must NOT be called for /v1/auth/refresh path (service owns that logging).
+    """
+    from uuid import UUID as _UUID
+
+    user_id   = None
+    tenant_id = None
+
+    # Attempt context extraction from token even if invalid/expired
+    try:
+        import jwt as _jwt
+        from config.settings import get_settings as _get_settings
+        _s = _get_settings()
+        raw_payload = _jwt.decode(
+            token,
+            _s.secret_key,
+            algorithms = [_s.jwt_algorithm],
+            options    = {"verify_exp": False, "verify_aud": False},
+        )
+        sub = raw_payload.get("sub")
+        tid = raw_payload.get("tenant_id")
+        if sub:
+            try:
+                user_id = _UUID(sub)
+            except (ValueError, TypeError):
+                pass
+        if tid:
+            try:
+                tenant_id = _UUID(tid)
+            except (ValueError, TypeError):
+                pass
+    except Exception:
+        pass   # extraction best-effort — continue with NULL context
+
+    logger.warning(
+        "auth_event SESSION_EXPIRED user_id=%s tenant_id=%s reason=%s path=%s",
+        user_id, tenant_id, failure_reason, path,
+    )
+
+    session = None
+    engine  = None
+    try:
+        from sqlalchemy.ext.asyncio import create_async_engine, async_sessionmaker, AsyncSession
+        from sqlalchemy.pool import NullPool
+        from config.settings import get_settings
+        from db.repositories.auth_event import AuthEventRepository
+
+        _settings = get_settings()
+        engine    = create_async_engine(_settings.database_url, poolclass=NullPool)
+        sf        = async_sessionmaker(bind=engine, class_=AsyncSession,
+                                        expire_on_commit=False)
+        session   = sf()
+        from domain.enums import AuthEventAction as _Action, AuthFailureReason as _Reason
+        repo      = AuthEventRepository(session)
+        await repo.insert(
+            action         = _Action.SESSION_EXPIRED,
+            success        = False,
+            tenant_id      = tenant_id,
+            user_id        = user_id,
+            failure_reason = _Reason(failure_reason),
+        )
+        await session.commit()
+    except Exception as e:
+        logger.error("auth_event DB logging failed action=session_expired error=%s", e)
+    finally:
+        if session:
+            await session.close()
+        if engine:
+            await engine.dispose()
 
 
 async def _get_db_session():
     """
-    Returns an async session for JWT user lookup.
+    Returns an async session appropriate for the current environment.
 
     Production: uses AsyncSessionFactory (pooled, efficient)
-    Testing:    uses NullPool against the real PostgreSQL database.
-                Must NOT use app.dependency_overrides[get_db] — that override
-                points at SQLite for non-JWT tests and would cause user_not_found
-                for JWT tests where users are in PostgreSQL.
+    Testing: uses NullPool engine (no cross-loop pool poisoning)
+
+    NullPool opens/closes a fresh connection each time — slightly slower
+    but completely safe when each pytest test function gets its own event loop.
     """
     if _TESTING:
         from sqlalchemy.ext.asyncio import create_async_engine, async_sessionmaker, AsyncSession
         from sqlalchemy.pool import NullPool
-        engine = create_async_engine(_TEST_DATABASE_URL, poolclass=NullPool)
+        engine = create_async_engine(settings.database_url, poolclass=NullPool)
         sf     = async_sessionmaker(bind=engine, class_=AsyncSession,
                                      expire_on_commit=False)
         return engine, sf()
@@ -212,9 +294,18 @@ class AuthMiddleware(BaseHTTPMiddleware):
         from services.auth.token import decode_access_token
 
         # Step 1 — decode and validate JWT
+        # ExpiredSignatureError must be caught BEFORE InvalidTokenError
+        # (it is a subclass — order is mandatory, never swap)
+        skip_logging = request.url.path in SKIP_AUTH_EVENT_LOGGING
         try:
             payload = decode_access_token(token)
+        except ExpiredSignatureError:
+            if not skip_logging:
+                await _log_session_expired(token, "token_expired", request.url.path)
+            return _unauthorized(request, "invalid_or_expired_token")
         except InvalidTokenError:
+            if not skip_logging:
+                await _log_session_expired(token, "token_invalid", request.url.path)
             return _unauthorized(request, "invalid_or_expired_token")
 
         # Step 2 — parse sub claim
@@ -279,11 +370,13 @@ class AuthMiddleware(BaseHTTPMiddleware):
         # Step 4 — token version check
         if payload.get("ver") != user.token_version:
             logger.warning(
-                "auth_event SESSION_INVALIDATED user_id=%s "
+                "auth_event SESSION_EXPIRED user_id=%s reason=session_invalidated "
                 "token_ver=%s user_ver=%s path=%s",
                 user_id_str, payload.get("ver"),
                 user.token_version, request.url.path,
             )
+            if not skip_logging:
+                await _log_session_expired(token, "session_invalidated", request.url.path)
             return JSONResponse(
                 status_code=401,
                 content={"error": {
