@@ -1,6 +1,6 @@
 "use client"
 
-import React, { useState } from "react"
+import { useState } from "react"
 import useSWR from "swr"
 import { Shell } from "@/components/layout/Shell"
 import { Card, CardHeader } from "@/components/ui/Card"
@@ -8,65 +8,30 @@ import { PageSpinner } from "@/components/ui/Spinner"
 import { Button } from "@/components/ui/Button"
 import { getProxyInteractions } from "@/lib/api"
 import { ProxyInteraction, Decision, ExecutionStatus } from "@/lib/types"
-import { DecisionBadge } from "@/components/ui/Badge"
-
-function StatusBadge({ status }: { status: ExecutionStatus }) {
-  const STYLES: Record<string, React.CSSProperties> = {
-    SUCCESS:        { background: "rgba(0,225,255,0.10)", color: "#0369a1",  border: "1px solid rgba(0,225,255,0.35)" },
-    BLOCKED:        { background: "#fef2f2",              color: "#b91c1c",  border: "1px solid #fecaca" },
-    OUTPUT_BLOCKED: { background: "#fff7ed",              color: "#92400e",  border: "1px solid #fed7aa" },
-    FAILED:         { background: "#fef2f2",              color: "#b91c1c",  border: "1px solid #fecaca" },
-    TIMEOUT:        { background: "#fffbeb",              color: "#92400e",  border: "1px solid #fde68a" },
-  }
-  return (
-    <span style={{
-      display: "inline-flex", alignItems: "center",
-      padding: "2px 7px", borderRadius: "4px",
-      fontSize: "11px", fontWeight: 600, whiteSpace: "nowrap" as const,
-      ...(STYLES[status] ?? { background: "#f9fafb", color: "#9ca3af", border: "1px solid #e5e7eb" }),
-    }}>
-      {status.replace(/_/g, " ")}
-    </span>
-  )
-}
 
 const PAGE_SIZE = 20
 
 // Decision badge colours
 function decisionClass(d: Decision | null): string {
-  if (d === "BLOCK")    return ""
-  if (d === "SANITIZE") return ""
-  if (d === "ALLOW")    return ""
-  return ""
-}
-
-function decisionStyle(d: Decision | null): React.CSSProperties {
-  if (d === "BLOCK")    return { background: "#fef2f2", color: "#dc2626", border: "1px solid #fecaca" }
-  if (d === "SANITIZE") return { background: "#fffbeb", color: "#d97706", border: "1px solid #fde68a" }
-  if (d === "ALLOW")    return { background: "#f0fdf4", color: "#16a34a", border: "1px solid #bbf7d0" }
-  return { background: "#f9fafb", color: "#9ca3af", border: "1px solid #e5e7eb" }
+  if (d === "BLOCK")    return "bg-red-100 text-red-700"
+  if (d === "SANITIZE") return "bg-yellow-100 text-yellow-700"
+  if (d === "ALLOW")    return "bg-green-100 text-green-700"
+  return "bg-slate-100 text-slate-500"
 }
 
 // Execution status badge colours
-function statusClass(s: ExecutionStatus): string { return "" }
-
-function statusStyle(s: ExecutionStatus): React.CSSProperties {
-  if (s === "SUCCESS")        return { background: "#f0fdf4", color: "#16a34a", border: "1px solid #bbf7d0" }
-  if (s === "BLOCKED")        return { background: "#fef2f2", color: "#dc2626", border: "1px solid #fecaca" }
-  if (s === "OUTPUT_BLOCKED") return { background: "#fff7ed", color: "#ea580c", border: "1px solid #fed7aa" }
-  if (s === "FAILED")         return { background: "#fef2f2", color: "#dc2626", border: "1px solid #fecaca" }
-  if (s === "TIMEOUT")        return { background: "#fffbeb", color: "#d97706", border: "1px solid #fde68a" }
-  return { background: "#f9fafb", color: "#9ca3af", border: "1px solid #e5e7eb" }
+function statusClass(s: ExecutionStatus): string {
+  if (s === "SUCCESS")        return "bg-green-100 text-green-700"
+  if (s === "BLOCKED")        return "bg-red-100 text-red-700"
+  if (s === "OUTPUT_BLOCKED") return "bg-orange-100 text-orange-700"
+  if (s === "FAILED")         return "bg-red-100 text-red-600"
+  if (s === "TIMEOUT")        return "bg-yellow-100 text-yellow-700"
+  return "bg-slate-100 text-slate-500"
 }
 
-function Badge({ label, style }: { label: string; style?: React.CSSProperties }) {
+function Badge({ label, className }: { label: string; className: string }) {
   return (
-    <span style={{
-      display: "inline-flex", alignItems: "center",
-      padding: "2px 8px", borderRadius: "4px",
-      fontSize: "11px", fontWeight: 600, whiteSpace: "nowrap" as const,
-      ...style,
-    }}>
+    <span className={`inline-flex items-center px-2 py-0.5 rounded text-xs font-medium ${className}`}>
       {label}
     </span>
   )
@@ -126,7 +91,7 @@ export default function ProxyInteractionsPage() {
           </div>
           <a
             href="/settings"
-style={{ fontSize: "12px", color: "#670FEF", textDecoration: "none", fontWeight: 500 }}
+            className="text-xs text-blue-700 hover:underline"
           >
             Back to settings
           </a>
@@ -137,7 +102,7 @@ style={{ fontSize: "12px", color: "#670FEF", textDecoration: "none", fontWeight:
           <select
             value={statusFilter}
             onChange={(e) => { setStatusFilter(e.target.value); setOffset(0) }}
-style={{ height: "32px", padding: "0 10px", fontSize: "12px", borderRadius: "6px", border: "1px solid #e5e7eb", background: "#fff", color: "#374151", outline: "none" }}
+            className="h-8 px-3 text-xs rounded-md border border-slate-200 bg-white text-slate-900 focus:outline-none focus:ring-2 focus:ring-blue-800"
           >
             {STATUS_OPTIONS.map((o) => (
               <option key={o.value} value={o.value}>{o.label}</option>
@@ -159,15 +124,15 @@ style={{ height: "32px", padding: "0 10px", fontSize: "12px", borderRadius: "6px
             <div className="overflow-x-auto">
               <table className="w-full text-xs">
                 <thead>
-                  <tr>
-                    <th style={{ textAlign: "left", padding: "10px 16px", fontSize: "10px", fontWeight: 700, color: "#9ca3af", textTransform: "uppercase" as const, letterSpacing: "0.07em", whiteSpace: "nowrap" as const, borderBottom: "1px solid #f3f4f6", background: "#fafafa" }}>Time</th>
-                    <th style={{ textAlign: "left", padding: "10px 16px", fontSize: "10px", fontWeight: 700, color: "#9ca3af", textTransform: "uppercase" as const, letterSpacing: "0.07em", whiteSpace: "nowrap" as const, borderBottom: "1px solid #f3f4f6", background: "#fafafa" }}>Trace ID</th>
-                    <th style={{ textAlign: "left", padding: "10px 16px", fontSize: "10px", fontWeight: 700, color: "#9ca3af", textTransform: "uppercase" as const, letterSpacing: "0.07em", whiteSpace: "nowrap" as const, borderBottom: "1px solid #f3f4f6", background: "#fafafa" }}>Input</th>
-                    <th style={{ textAlign: "left", padding: "10px 16px", fontSize: "10px", fontWeight: 700, color: "#9ca3af", textTransform: "uppercase" as const, letterSpacing: "0.07em", whiteSpace: "nowrap" as const, borderBottom: "1px solid #f3f4f6", background: "#fafafa" }}>Output</th>
-                    <th style={{ textAlign: "left", padding: "10px 16px", fontSize: "10px", fontWeight: 700, color: "#9ca3af", textTransform: "uppercase" as const, letterSpacing: "0.07em", whiteSpace: "nowrap" as const, borderBottom: "1px solid #f3f4f6", background: "#fafafa" }}>Status</th>
-                    <th style={{ textAlign: "left", padding: "10px 16px", fontSize: "10px", fontWeight: 700, color: "#9ca3af", textTransform: "uppercase" as const, letterSpacing: "0.07em", whiteSpace: "nowrap" as const, borderBottom: "1px solid #f3f4f6", background: "#fafafa" }}>Provider</th>
-                    <th style={{ textAlign: "left", padding: "10px 16px", fontSize: "10px", fontWeight: 700, color: "#9ca3af", textTransform: "uppercase" as const, letterSpacing: "0.07em", whiteSpace: "nowrap" as const, borderBottom: "1px solid #f3f4f6", background: "#fafafa" }}>Model</th>
-                    <th style={{ textAlign: "right", padding: "10px 16px", fontSize: "10px", fontWeight: 700, color: "#9ca3af", textTransform: "uppercase" as const, letterSpacing: "0.07em", whiteSpace: "nowrap" as const, borderBottom: "1px solid #f3f4f6", background: "#fafafa" }}>Latency</th>
+                  <tr className="border-b border-slate-100 bg-slate-50">
+                    <th className="px-4 py-2.5 text-left font-medium text-slate-500">Time</th>
+                    <th className="px-4 py-2.5 text-left font-medium text-slate-500">Trace ID</th>
+                    <th className="px-4 py-2.5 text-left font-medium text-slate-500">Input</th>
+                    <th className="px-4 py-2.5 text-left font-medium text-slate-500">Output</th>
+                    <th className="px-4 py-2.5 text-left font-medium text-slate-500">Status</th>
+                    <th className="px-4 py-2.5 text-left font-medium text-slate-500">Provider</th>
+                    <th className="px-4 py-2.5 text-left font-medium text-slate-500">Model</th>
+                    <th className="px-4 py-2.5 text-right font-medium text-slate-500">Latency</th>
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-slate-50">
@@ -177,9 +142,7 @@ style={{ height: "32px", padding: "0 10px", fontSize: "12px", borderRadius: "6px
                       onClick={() => setSelectedTrace(
                         selectedTrace === item.trace_id ? null : item.trace_id
                       )}
-                      style={{ cursor: "pointer", transition: "background 0.1s" }}
-                      onMouseEnter={e => (e.currentTarget as HTMLElement).style.background = "rgba(103,15,239,0.03)"}
-                      onMouseLeave={e => (e.currentTarget as HTMLElement).style.background = ""}
+                      className="hover:bg-slate-50 cursor-pointer"
                     >
                       <td className="px-4 py-3 text-slate-500 whitespace-nowrap">
                         {formatTime(item.created_at)}
@@ -188,7 +151,10 @@ style={{ height: "32px", padding: "0 10px", fontSize: "12px", borderRadius: "6px
                         {item.trace_id.slice(0, 20)}...
                       </td>
                       <td className="px-4 py-3">
-                        {item.input_decision && <DecisionBadge decision={item.input_decision} size="sm" />}
+                        <Badge
+                          label={item.input_decision}
+                          className={decisionClass(item.input_decision)}
+                        />
                         {item.input_attack_type && (
                           <span className="ml-1.5 text-slate-400">
                             {item.input_attack_type}
@@ -202,7 +168,10 @@ style={{ height: "32px", padding: "0 10px", fontSize: "12px", borderRadius: "6px
                         }
                       </td>
                       <td className="px-4 py-3">
-                        <StatusBadge status={item.execution_status} />
+                        <Badge
+                          label={item.execution_status}
+                          className={statusClass(item.execution_status)}
+                        />
                       </td>
                       <td className="px-4 py-3 text-slate-600">
                         {item.provider ?? "--"}

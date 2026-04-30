@@ -1,6 +1,7 @@
 "use client"
 
 import { useState } from "react"
+import { useAuthMode } from "@/hooks/useAuthMode"
 import { Button } from "@/components/ui/Button"
 import { LLMSettings } from "@/lib/types"
 import { updateLLMSettings } from "@/lib/api"
@@ -24,6 +25,7 @@ export function LLMSettingsForm({ settings, onUpdated }: LLMSettingsFormProps) {
   const [trigger,    setTrigger]    = useState(settings.llm_trigger)
   const [loading,    setLoading]    = useState(false)
   const [saved,      setSaved]      = useState(false)
+  const { isJwt } = useAuthMode()
   const [error,      setError]      = useState<string | null>(null)
 
   const handleSave = async () => {
@@ -163,9 +165,19 @@ export function LLMSettingsForm({ settings, onUpdated }: LLMSettingsFormProps) {
       )}
 
       <div className="flex items-center gap-3">
-        <Button onClick={handleSave} loading={loading}>
-          Save LLM settings
-        </Button>
+        {isJwt ? (
+          <Button size="sm" onClick={handleSave} loading={loading}>
+            Save LLM settings
+          </Button>
+        ) : (
+          <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
+            <Button size="sm" disabled>Save LLM settings</Button>
+            <span style={{ fontSize: "11px", color: "#9ca3af" }}>
+              Requires admin login —{" "}
+              <a href="/login" style={{ color: "#670FEF", textDecoration: "underline" }}>sign in with email</a>
+            </span>
+          </div>
+        )}
         {saved && (
           <span className="text-xs text-green-600">Saved successfully</span>
         )}

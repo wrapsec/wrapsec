@@ -8,6 +8,7 @@ import { logout } from "@/lib/auth"
 
 export function TopBar({ title }: { title: string }) {
   const [status,    setStatus]    = useState<"ok" | "degraded" | "down">("ok")
+  const [checks,    setChecks]    = useState<Record<string, string>>({})
   const [userEmail, setUserEmail] = useState<string | null>(null)
   const [userRole,  setUserRole]  = useState<string | null>(null)
   const [menuOpen,  setMenuOpen]  = useState(false)
@@ -20,6 +21,7 @@ export function TopBar({ title }: { title: string }) {
         setUserEmail(d.email ?? null)
         setUserRole(d.role ?? null)
       } else if (res.status === 403) {
+        // API key session — /me requires JWT, 403 is expected and handled
         setUserEmail("Admin Key")
         setUserRole("API KEY")
       }
@@ -30,7 +32,10 @@ export function TopBar({ title }: { title: string }) {
     const check = async () => {
       try {
         const health = await getHealth()
-        setStatus(Object.values(health.checks).every(v => v === "ok") ? "ok" : "degraded")
+        const c      = health.checks ?? {}
+        setChecks(c)
+        const allOk  = Object.keys(c).length > 0 && Object.values(c).every(v => v === "ok")
+        setStatus(allOk ? "ok" : "degraded")
       } catch { setStatus("down") }
     }
     check()
@@ -49,13 +54,18 @@ export function TopBar({ title }: { title: string }) {
     : "AK"
 
   const statusColor = status === "ok" ? "#00E1FF" : status === "degraded" ? "#d97706" : "#dc2626"
-  const statusLabel = status === "ok" ? "All systems operational" : status === "degraded" ? "Degraded" : "API unavailable"
+  const failed      = Object.entries(checks).filter(([, v]) => v !== "ok").map(([k]) => k)
+  const statusLabel = status === "ok"
+    ? "All systems operational"
+    : status === "degraded"
+    ? `Degraded${failed.length ? `: ${failed.join(", ")}` : ""}`
+    : "API unavailable"
 
   return (
     <header style={{
       height:       "56px",
       background:   "var(--topbar-bg)",
-      borderBottom: "1px solid var(--topbar-border)",
+      borderBottom: "none",
       display:      "flex",
       alignItems:   "center",
       justifyContent: "space-between",
@@ -69,7 +79,7 @@ export function TopBar({ title }: { title: string }) {
         bottom:     0,
         left:       0,
         right:      0,
-        height:     "4px",
+        height:     "2px",
         background: "linear-gradient(90deg, #670FEF 0%, #CD00FF 40%, #00E1FF 80%, #00B1FF 100%)",
       }} />
 
@@ -137,14 +147,14 @@ export function TopBar({ title }: { title: string }) {
               <div style={{
                 position:   "fixed",
                 right:      "16px",
-                top:        "50px",
+                top:        "60px",
                 width:      "180px",
                 background: "#ffffff",
                 border:     "1px solid var(--card-border)",
                 borderRadius: "8px",
                 boxShadow:  "0 4px 16px rgba(0,0,0,0.10)",
                 zIndex:     50,
-                padding:    "0px",
+                padding:    "4px",
               }}>
                 <Link
                   href="/profile"
@@ -163,7 +173,7 @@ export function TopBar({ title }: { title: string }) {
                   </svg>
                   Profile
                 </Link>
-                <div style={{ height: "1px", background: "var(--card-border)", margin: "0" }} />
+                <div style={{ height: "1px", background: "var(--card-border)", margin: "4px 0" }} />
                 <button
                   onClick={handleLogout}
                   style={{

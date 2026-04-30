@@ -85,9 +85,9 @@ export async function POST(request: NextRequest) {
       path:     "/",
     })
 
-    // Non-httpOnly session indicator — readable by middleware
+    // Session indicator — httpOnly, used by middleware for route protection only
     res.cookies.set("wrapsec_session", "jwt", {
-      httpOnly: false,
+      httpOnly: true,
       secure:   process.env.NODE_ENV === "production",
       sameSite: "strict",
       maxAge:   data.expires_in || 1800,

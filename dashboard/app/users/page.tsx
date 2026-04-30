@@ -5,6 +5,7 @@ import useSWR from "swr"
 import { Shell } from "@/components/layout/Shell"
 import { Card } from "@/components/ui/Card"
 import { Button, PlusIcon } from "@/components/ui/Button"
+import { useAuthMode } from "@/hooks/useAuthMode"
 import { PageSpinner } from "@/components/ui/Spinner"
 import {
   getUsers, createUser, updateUser, resetUserPassword,
@@ -74,6 +75,7 @@ function CreateUserModal({
   const [deptId,   setDeptId]   = useState(depts[0]?.id ?? "")
   const [saving,   setSaving]   = useState(false)
   const [error,    setError]    = useState<string | null>(null)
+  const { isJwt } = useAuthMode()
 
   const handleCreate = async () => {
     setError(null)
@@ -149,7 +151,10 @@ function CreateUserModal({
           User will be required to change password on first login.
         </p>
         <div className="flex gap-3 mt-4">
-          <Button size="sm" onClick={handleCreate} loading={saving}>Create user</Button>
+          {isJwt
+            ? <Button size="sm" onClick={handleCreate} loading={saving}>Create user</Button>
+            : <Button size="sm" disabled>Create user</Button>
+          }
           <button
             onClick={onClose}
             className="text-sm text-slate-500 hover:text-slate-700"
@@ -179,6 +184,7 @@ function EditUserModal({
   const [deptId,   setDeptId]   = useState(user.dept_id ?? depts[0]?.id ?? "")
   const [saving,   setSaving]   = useState(false)
   const [error,    setError]    = useState<string | null>(null)
+  const { isJwt } = useAuthMode()
 
   const [confirmToggle, setConfirmToggle] = useState(false)
 
@@ -273,7 +279,10 @@ function EditUserModal({
         {error && <p className="text-xs text-red-600 mt-3">{error}</p>}
 
         <div className="flex gap-2 mt-4">
-          <Button size="sm" onClick={handleSave} loading={saving}>Save</Button>
+          {isJwt
+            ? <Button size="sm" onClick={handleSave} loading={saving}>Save</Button>
+            : <Button size="sm" disabled>Save</Button>
+          }
           <Button size="sm" variant="secondary" onClick={onClose}>Cancel</Button>
         </div>
 
@@ -343,6 +352,7 @@ function EditUserModal({
 export default function UsersPage() {
   const [showCreate, setShowCreate] = useState(false)
   const [editing,    setEditing]    = useState<DashboardUser | null>(null)
+  const { isJwt } = useAuthMode()
 
   const { data: usersData, isLoading, mutate } = useSWR("users", () => getUsers())
   const { data: deptsData } = useSWR("departments", getDepartments)
@@ -363,7 +373,7 @@ export default function UsersPage() {
           <p className="text-sm text-slate-500">
             Manage dashboard users and their access.
           </p>
-          <Button size="sm" onClick={() => setShowCreate(true)}>
+          <Button size="sm" onClick={() => setShowCreate(true)} disabled={!isJwt} title={!isJwt ? "Requires admin login" : undefined}>
             <PlusIcon /> Add user
           </Button>
         </div>

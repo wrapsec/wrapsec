@@ -62,8 +62,17 @@ export function ApiKeyTable({ keys, onRevoke, onRotate, revoking }: ApiKeyTableP
         </div>
       )}
 
-      <table className="w-full text-sm">
-        <thead>
+      <table className="w-full text-sm" style={{ tableLayout: "fixed" }}>
+          <colgroup>
+            <col style={{ width: "20%" }} />
+            <col style={{ width: "18%" }} />
+            <col style={{ width: "15%" }} />
+            <col style={{ width: "15%" }} />
+            <col style={{ width: "12%" }} />
+            <col style={{ width: "12%" }} />
+            <col style={{ width: "8%" }}  />
+          </colgroup>
+          <thead>
           <tr className="border-b border-slate-100">
             {["Name", "Key ID", "Department", "Application", "Created", "Last Used", ""].map((h) => (
               <th key={h} className="text-left pb-2.5 text-xs font-medium text-slate-500 uppercase tracking-wide">
@@ -101,7 +110,7 @@ export function ApiKeyTable({ keys, onRevoke, onRotate, revoking }: ApiKeyTableP
                     </div>
                   </td>
 
-                  <td className="py-3 font-mono text-xs text-slate-500">
+                  <td className="py-3 font-mono text-xs text-slate-500" style={{ overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
                     {key.key_id}
                   </td>
 

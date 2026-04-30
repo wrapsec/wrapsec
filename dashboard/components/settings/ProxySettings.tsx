@@ -1,6 +1,7 @@
 "use client"
 
 import { useState } from "react"
+import { useAuthMode } from "@/hooks/useAuthMode"
 import { Button } from "@/components/ui/Button"
 import {
   getProxySettings,
@@ -32,6 +33,7 @@ export function ProxySettingsForm({ config, onUpdated }: ProxySettingsFormProps)
   const [saved,     setSaved]     = useState(false)
   const [deleting,  setDeleting]  = useState(false)
   const [testing,   setTesting]   = useState(false)
+  const { isJwt } = useAuthMode()
   const [error,     setError]     = useState<string | null>(null)
   const [health,    setHealth]    = useState<ProxyHealthResult | null>(null)
 
@@ -210,14 +212,24 @@ export function ProxySettingsForm({ config, onUpdated }: ProxySettingsFormProps)
       {error && <p className="text-xs text-red-600">{error}</p>}
 
       <div className="flex items-center gap-3 flex-wrap">
-        <Button onClick={handleSave} loading={saving}>
-          Save
-        </Button>
-        <Button variant="secondary" onClick={handleTest} loading={testing} disabled={!config}>
+        {isJwt ? (
+          <Button size="sm" onClick={handleSave} loading={saving}>
+            Save
+          </Button>
+        ) : (
+          <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
+            <Button size="sm" disabled>Save</Button>
+            <span style={{ fontSize: "11px", color: "#9ca3af" }}>
+              Requires admin login —{" "}
+              <a href="/login" style={{ color: "#670FEF", textDecoration: "underline" }}>sign in with email</a>
+            </span>
+          </div>
+        )}
+        <Button size="sm" variant="secondary" onClick={handleTest} loading={testing} disabled={!config}>
           Test connection
         </Button>
         {config && (
-          <Button variant="danger" onClick={handleDelete} loading={deleting}>
+          <Button size="sm" variant="danger" onClick={handleDelete} loading={deleting}>
             Remove
           </Button>
         )}

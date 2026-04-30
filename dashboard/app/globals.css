@@ -24,12 +24,12 @@
   --ws-green-border:#bbf7d0;
 
   /* Layout */
-  --sidebar-bg:     #0d1117;
-  --sidebar-border: rgba(255,255,255,0.06);
-  --sidebar-text:   rgba(255,255,255,0.55);
-  --sidebar-hover:  rgba(255,255,255,0.06);
-  --sidebar-active-bg: rgba(103,15,239,0.15);
-  --sidebar-active-text: #a78bfa;
+  --sidebar-bg:        #0d1526;
+  --sidebar-border:    rgba(255,255,255,0.07);
+  --sidebar-text:      rgba(255,255,255,0.50);
+  --sidebar-hover:     rgba(255,255,255,0.06);
+  --sidebar-active-bg: linear-gradient(90deg, rgba(103,15,239,0.25), rgba(0,177,255,0.10));
+  --sidebar-active-text: #e0d4ff;
 
   /* Content */
   --page-bg:        #f4f5f7;

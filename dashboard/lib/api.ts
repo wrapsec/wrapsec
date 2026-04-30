@@ -547,7 +547,7 @@ export async function updateUser(
   }
 ): Promise<DashboardUser> {
   return request<DashboardUser>(`/v1/admin/users/${userId}`, {
-    method: "PUT",
+    method: "PATCH",
     body:   JSON.stringify(data),
   })
 }

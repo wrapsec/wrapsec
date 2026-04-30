@@ -1,6 +1,7 @@
 "use client"
 
 import { useState } from "react"
+import { useAuthMode } from "@/hooks/useAuthMode"
 import { Button } from "@/components/ui/Button"
 import { updateTenant } from "@/lib/api"
 
@@ -40,6 +41,7 @@ export function TenantSettingsForm({
   const [contact,     setContact]     = useState(tenant.contact_email || "")
   const [saving,      setSaving]      = useState(false)
   const [saved,       setSaved]       = useState(false)
+  const { isJwt } = useAuthMode()
   const [error,       setError]       = useState<string | null>(null)
 
   const handleSave = async () => {
@@ -137,9 +139,19 @@ export function TenantSettingsForm({
       {error && <p className="text-xs text-red-600">{error}</p>}
 
       <div className="flex items-center gap-3">
-        <Button onClick={handleSave} loading={saving}>
-          Save organisation settings
-        </Button>
+        {isJwt ? (
+          <Button size="sm" onClick={handleSave} loading={saving}>
+            Save organisation settings
+          </Button>
+        ) : (
+          <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
+            <Button size="sm" disabled>Save organisation settings</Button>
+            <span style={{ fontSize: "11px", color: "#9ca3af" }}>
+              Requires admin login —{" "}
+              <a href="/login" style={{ color: "#670FEF", textDecoration: "underline" }}>sign in with email</a>
+            </span>
+          </div>
+        )}
         {saved && (
           <span className="text-xs text-green-600">Saved successfully</span>
         )}

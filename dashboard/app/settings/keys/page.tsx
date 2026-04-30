@@ -40,7 +40,7 @@ export default function ApiKeysPage() {
 
   return (
     <Shell title="API Keys">
-      <div className="max-w-3xl">
+      <div>
         <Card padding={false}>
           <div className="flex items-center justify-between px-5 py-4 border-b border-slate-100">
             <CardHeader

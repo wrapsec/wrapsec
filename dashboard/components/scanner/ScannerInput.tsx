@@ -52,7 +52,7 @@ export function ScannerInput({ onScan, loading }: ScannerInputProps) {
             </label>
           ))}
         </div>
-        <Button
+        <Button size="sm"
           onClick={handleScan}
           loading={loading}
           disabled={!input.trim()}
