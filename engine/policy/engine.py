@@ -67,6 +67,12 @@ class PolicyEngine:
             bt = block_threshold    or self.rules.block_threshold
             st = sanitize_threshold or self.rules.sanitize_threshold
 
+            if bt < st:
+                logger.warning(
+                    f"PolicyEngine misconfiguration: block_threshold ({bt}) < "
+                    f"sanitize_threshold ({st}) — SANITIZE decision is unreachable"
+                )
+
             # PII guardrail thresholds
             pii_bt = pii_block_threshold    if pii_block_threshold    is not None else bt
             pii_st = pii_sanitize_threshold if pii_sanitize_threshold is not None else st

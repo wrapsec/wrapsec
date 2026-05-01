@@ -68,10 +68,15 @@ class IdempotencyMiddleware(BaseHTTPMiddleware):
             from cache.redis_client import get_redis
             redis = get_redis()
 
-            stored_hash = await redis.get(hash_key)
+            # Atomically claim this idempotency slot before processing.
+            # SET NX ensures only one concurrent request can claim the key —
+            # eliminates the TOCTOU race between GET and later SET.
+            claimed = await redis.set(hash_key, body_hash, nx=True, ex=IDEMPOTENCY_TTL)
 
-            if stored_hash:
-                if stored_hash != body_hash:
+            if not claimed:
+                # Key exists — check for conflict or cached replay
+                stored_hash = await redis.get(hash_key)
+                if stored_hash and stored_hash != body_hash:
                     # Same idempotency key — different body → CONFLICT
                     logger.warning(
                         f"Idempotency conflict — "
@@ -90,7 +95,7 @@ class IdempotencyMiddleware(BaseHTTPMiddleware):
                         },
                     )
 
-                # Same key + same body → return cached response
+                # Same key + same body → return cached response if available
                 cached = await redis.get(response_key)
                 if cached:
                     logger.info(
@@ -105,6 +110,9 @@ class IdempotencyMiddleware(BaseHTTPMiddleware):
                     )
                     response.headers["X-Idempotency-Replayed"] = "true"
                     return response
+
+                # Concurrent in-flight request claimed the key but hasn't stored
+                # a response yet — fall through and process normally.
 
         except Exception as e:
             logger.warning(f"Idempotency cache check failed: {e} — processing normally")
@@ -131,8 +139,8 @@ class IdempotencyMiddleware(BaseHTTPMiddleware):
 
                 response_data = json.loads(response_body)
 
-                # Store body hash and response separately
-                await redis.setex(hash_key,     IDEMPOTENCY_TTL, body_hash)
+                # hash_key was set atomically before processing via SET NX.
+                # Only store the response — no hash_key race possible here.
                 await redis.setex(response_key, IDEMPOTENCY_TTL, json.dumps({
                     "body":        response_data,
                     "status_code": response.status_code,

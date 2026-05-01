@@ -175,6 +175,11 @@ async def resolve_policy(
 
     except Exception as e:
         logger.error(f"Policy resolution failed: {e} — using system defaults")
+        try:
+            from observability.metrics import SYSTEM_ERRORS
+            SYSTEM_ERRORS.labels(execution_mode="unknown").inc()
+        except Exception:
+            pass
 
     policy_source = determine_policy_source(
         dept_override, app_override

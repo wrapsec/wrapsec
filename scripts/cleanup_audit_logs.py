@@ -44,6 +44,9 @@ async def cleanup_audit_logs(retention_days: int = 30, dry_run: bool = False) ->
     from db.session import AsyncSessionFactory
     from sqlalchemy import text
 
+    if retention_days < 1:
+        raise ValueError(f"retention_days must be >= 1, got {retention_days}")
+
     cutoff_sql   = f"NOW() - INTERVAL '{retention_days} days'"
     count_query  = text(f"SELECT COUNT(*) FROM audit_logs WHERE created_at < {cutoff_sql}")
     delete_query = text(f"DELETE FROM audit_logs WHERE created_at < {cutoff_sql}")
@@ -84,6 +87,9 @@ async def cleanup_proxy_interactions(retention_days: int = 7, dry_run: bool = Fa
     """
     from db.session import AsyncSessionFactory
     from sqlalchemy import text
+
+    if retention_days < 1:
+        raise ValueError(f"retention_days must be >= 1, got {retention_days}")
 
     cutoff_sql = f"NOW() - INTERVAL '{retention_days} days'"
 

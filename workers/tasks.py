@@ -118,6 +118,9 @@ async def _cleanup_audit_logs() -> int:
     from sqlalchemy import text
 
     retention_days = await _resolve_audit_retention()
+    if retention_days < 1:
+        logger.error(f"Retention worker: invalid retention_days={retention_days} — must be >= 1, skipping audit cleanup")
+        return 0
     cutoff_sql     = f"NOW() - INTERVAL '{retention_days} days'"
 
     count_query  = text(f"SELECT COUNT(*) FROM audit_logs WHERE created_at < {cutoff_sql}")
@@ -158,6 +161,9 @@ async def _cleanup_proxy_interactions() -> int:
 
     cfg            = get_settings()
     retention_days = cfg.data_retention_days_proxy
+    if retention_days < 1:
+        logger.error(f"Retention worker: invalid data_retention_days_proxy={retention_days} — must be >= 1, skipping proxy cleanup")
+        return 0
     cutoff_sql     = f"NOW() - INTERVAL '{retention_days} days'"
 
     count_query = text(f"""
