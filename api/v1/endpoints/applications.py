@@ -3,13 +3,14 @@
 # WrapSec v1.0 | AI Security Gateway - https://wrapsec.com
 
 import uuid
-from fastapi import APIRouter, Depends
+from fastapi import APIRouter, Depends, Request
 from fastapi.responses import JSONResponse
 from sqlalchemy.ext.asyncio import AsyncSession
+from api.v1.dependencies.auth import get_current_principal, require_admin
 from api.v1.dependencies.db import get_db
 from db.repositories.application import ApplicationRepository
 from db.repositories.department import DepartmentRepository
-from db.repositories.tenant import TenantRepository
+from domain.entities.principal import Principal
 from errors.exceptions import NotFoundError
 from pydantic import BaseModel
 
@@ -62,21 +63,22 @@ class ApplicationUpdateSchema(BaseModel):
 
 @router.post("")
 async def create_application(
-    body: ApplicationCreateSchema,
-    db:   AsyncSession = Depends(get_db),
+    body:      ApplicationCreateSchema,
+    request:   Request,
+    db:        AsyncSession = Depends(get_db),
+    principal: Principal    = Depends(require_admin()),
 ):
-    tenant_repo = TenantRepository(db)
-    tenant      = await tenant_repo.get_default()
+    tenant_id = uuid.UUID(request.state.tenant_id)
 
-    # Validate department belongs to tenant
+    # Validate department belongs to authenticated tenant
     dept_repo = DepartmentRepository(db)
     dept      = await dept_repo.get_by_id(uuid.UUID(body.dept_id))
-    if not dept or str(dept.tenant_id) != str(tenant.id):
+    if not dept or str(dept.tenant_id) != str(tenant_id):
         raise NotFoundError("department", body.dept_id)
 
     repo   = ApplicationRepository(db)
     record = await repo.create({
-        "tenant_id":           tenant.id,
+        "tenant_id":           tenant_id,
         "dept_id":             uuid.UUID(body.dept_id),
         "slug":                body.slug,
         "name":                body.name,
@@ -93,23 +95,34 @@ async def create_application(
 
 @router.get("")
 async def list_applications(
-    dept_id: str | None = None,
-    db: AsyncSession = Depends(get_db),
+    request:   Request,
+    dept_id:   str | None = None,
+    db:        AsyncSession = Depends(get_db),
+    principal: Principal    = Depends(get_current_principal),
 ):
-    tenant_repo = TenantRepository(db)
-    tenant      = await tenant_repo.get_default()
-    repo        = ApplicationRepository(db)
+    tenant_id = uuid.UUID(request.state.tenant_id)
+    repo      = ApplicationRepository(db)
 
-    if dept_id:
-        items = await repo.list_by_dept(uuid.UUID(dept_id))
+    # ADMIN: filter by requested dept_id or show all
+    # DEVELOPER: always scoped to own dept from state
+    effective_dept = dept_id
+    if not request.state.is_admin and request.state.dept_id:
+        effective_dept = request.state.dept_id
+
+    if effective_dept:
+        items = await repo.list_by_dept(uuid.UUID(effective_dept))
     else:
-        items = await repo.list_by_tenant(tenant.id)
+        items = await repo.list_by_tenant(tenant_id)
 
     return JSONResponse(content={"applications": [_format(a) for a in items]})
 
 
 @router.get("/{app_id}")
-async def get_application(app_id: str, db: AsyncSession = Depends(get_db)):
+async def get_application(
+    app_id:    str,
+    db:        AsyncSession = Depends(get_db),
+    principal: Principal    = Depends(get_current_principal),
+):
     repo   = ApplicationRepository(db)
     record = await repo.get_by_id(uuid.UUID(app_id))
     if not record:
@@ -119,9 +132,10 @@ async def get_application(app_id: str, db: AsyncSession = Depends(get_db)):
 
 @router.put("/{app_id}")
 async def update_application(
-    app_id: str,
-    body:   ApplicationUpdateSchema,
-    db:     AsyncSession = Depends(get_db),
+    app_id:    str,
+    body:      ApplicationUpdateSchema,
+    db:        AsyncSession = Depends(get_db),
+    principal: Principal    = Depends(require_admin()),
 ):
     repo = ApplicationRepository(db)
     data = {k: v for k, v in body.model_dump().items() if v is not None}
@@ -134,7 +148,11 @@ async def update_application(
 
 
 @router.delete("/{app_id}")
-async def delete_application(app_id: str, db: AsyncSession = Depends(get_db)):
+async def delete_application(
+    app_id:    str,
+    db:        AsyncSession = Depends(get_db),
+    principal: Principal    = Depends(require_admin()),
+):
     repo   = ApplicationRepository(db)
     record = await repo.update(uuid.UUID(app_id), {"is_active": False})
     if not record:
@@ -143,8 +161,9 @@ async def delete_application(app_id: str, db: AsyncSession = Depends(get_db)):
 
 @router.get("/{app_id}/policy")
 async def get_application_policy(
-    app_id: str,
-    db:     AsyncSession = Depends(get_db),
+    app_id:    str,
+    db:        AsyncSession = Depends(get_db),
+    principal: Principal    = Depends(get_current_principal),
 ):
     """
     Returns the fully resolved effective policy for this application.
@@ -182,9 +201,10 @@ class ApplicationPolicySchema(BaseModel):
 
 @router.put("/{app_id}/policy")
 async def set_application_policy(
-    app_id: str,
-    body:   ApplicationPolicySchema,
-    db:     AsyncSession = Depends(get_db),
+    app_id:    str,
+    body:      ApplicationPolicySchema,
+    db:        AsyncSession = Depends(get_db),
+    principal: Principal    = Depends(require_admin()),
 ):
     """
     Set or update application-level policy override.
@@ -221,8 +241,9 @@ async def set_application_policy(
 
 @router.delete("/{app_id}/policy")
 async def reset_application_policy(
-    app_id: str,
-    db:     AsyncSession = Depends(get_db),
+    app_id:    str,
+    db:        AsyncSession = Depends(get_db),
+    principal: Principal    = Depends(require_admin()),
 ):
     """
     Reset application policy override to null.

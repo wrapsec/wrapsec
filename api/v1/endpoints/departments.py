@@ -6,9 +6,10 @@ import uuid
 from fastapi import APIRouter, Depends, Request
 from fastapi.responses import JSONResponse
 from sqlalchemy.ext.asyncio import AsyncSession
+from api.v1.dependencies.auth import get_current_principal, require_admin
 from api.v1.dependencies.db import get_db
 from db.repositories.department import DepartmentRepository
-from db.repositories.tenant import TenantRepository
+from domain.entities.principal import Principal
 from errors.exceptions import NotFoundError
 from pydantic import BaseModel
 
@@ -47,15 +48,17 @@ class DepartmentUpdateSchema(BaseModel):
 
 @router.post("")
 async def create_department(
-    body: DepartmentCreateSchema,
-    db:   AsyncSession = Depends(get_db),
+    body:      DepartmentCreateSchema,
+    request:   Request,
+    db:        AsyncSession = Depends(get_db),
+    principal: Principal    = Depends(require_admin()),
 ):
-    tenant_repo = TenantRepository(db)
-    tenant      = await tenant_repo.get_default()
+    import uuid as _uuid
+    tenant_id = _uuid.UUID(request.state.tenant_id)
 
     repo   = DepartmentRepository(db)
     record = await repo.create({
-        "tenant_id":       tenant.id,
+        "tenant_id":       tenant_id,
         "slug":            body.slug,
         "name":            body.name,
         "description":     body.description,
@@ -66,19 +69,29 @@ async def create_department(
 
 
 @router.get("")
-async def list_departments(db: AsyncSession = Depends(get_db)):
-    tenant_repo = TenantRepository(db)
-    tenant      = await tenant_repo.get_default()
+async def list_departments(
+    request:   Request,
+    db:        AsyncSession = Depends(get_db),
+    principal: Principal    = Depends(get_current_principal),
+):
+    import uuid as _uuid
+    tenant_id = _uuid.UUID(request.state.tenant_id)
 
     repo  = DepartmentRepository(db)
-    items = await repo.list_by_tenant(tenant.id)
+    # ADMIN sees all departments; DEVELOPER sees only their own
+    if request.state.is_admin or not request.state.dept_id:
+        items = await repo.list_by_tenant(tenant_id)
+    else:
+        dept = await repo.get_by_id(_uuid.UUID(request.state.dept_id))
+        items = [dept] if dept else []
     return JSONResponse(content={"departments": [_format(d) for d in items]})
 
 
 @router.get("/{dept_id}/stats")
 async def get_department_stats(
-    dept_id: str,
-    db:      AsyncSession = Depends(get_db),
+    dept_id:   str,
+    db:        AsyncSession = Depends(get_db),
+    principal: Principal    = Depends(get_current_principal),
 ):
     from sqlalchemy import func
     from db.models import AuditLogModel
@@ -143,8 +156,9 @@ async def get_department_stats(
 
 @router.get("/{dept_id}/policy")
 async def get_department_policy(
-    dept_id: str,
-    db:      AsyncSession = Depends(get_db),
+    dept_id:   str,
+    db:        AsyncSession = Depends(get_db),
+    principal: Principal    = Depends(get_current_principal),
 ):
     """
     Returns the fully resolved effective policy for this department.
@@ -175,7 +189,11 @@ async def get_department_policy(
     })
 
 @router.get("/{dept_id}")
-async def get_department(dept_id: str, db: AsyncSession = Depends(get_db)):
+async def get_department(
+    dept_id:   str,
+    db:        AsyncSession = Depends(get_db),
+    principal: Principal    = Depends(get_current_principal),
+):
     repo   = DepartmentRepository(db)
     record = await repo.get_by_id(uuid.UUID(dept_id))
     if not record:
@@ -185,9 +203,10 @@ async def get_department(dept_id: str, db: AsyncSession = Depends(get_db)):
 
 @router.put("/{dept_id}")
 async def update_department(
-    dept_id: str,
-    body:    DepartmentUpdateSchema,
-    db:      AsyncSession = Depends(get_db),
+    dept_id:   str,
+    body:      DepartmentUpdateSchema,
+    db:        AsyncSession = Depends(get_db),
+    principal: Principal    = Depends(require_admin()),
 ):
     repo = DepartmentRepository(db)
     # Use exclude_unset=True so explicitly set null values (e.g. policy_override=null)
@@ -200,7 +219,11 @@ async def update_department(
 
 
 @router.delete("/{dept_id}")
-async def delete_department(dept_id: str, db: AsyncSession = Depends(get_db)):
+async def delete_department(
+    dept_id:   str,
+    db:        AsyncSession = Depends(get_db),
+    principal: Principal    = Depends(require_admin()),
+):
     repo   = DepartmentRepository(db)
     record = await repo.update(uuid.UUID(dept_id), {"is_active": False})
     if not record:

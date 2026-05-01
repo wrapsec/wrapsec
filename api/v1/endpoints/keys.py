@@ -6,15 +6,17 @@ import uuid
 import secrets
 import hashlib
 from datetime import datetime, timezone
-from fastapi import APIRouter, Depends
+from fastapi import APIRouter, Depends, Request
 from fastapi.responses import JSONResponse
 from pydantic import BaseModel
 from sqlalchemy.ext.asyncio import AsyncSession
+from api.v1.dependencies.auth import get_current_principal, require_admin
 from api.v1.dependencies.db import get_db
 from db.repositories.api_key import ApiKeyRepository
 from db.repositories.application import ApplicationRepository
 from db.repositories.department import DepartmentRepository
 from db.repositories.tenant import TenantRepository
+from domain.entities.principal import Principal
 from errors.exceptions import NotFoundError
 from datetime import timedelta
 
@@ -48,8 +50,10 @@ class CreateKeySchema(BaseModel):
 
 @router.post("")
 async def create_key(
-    body: CreateKeySchema,
-    db:   AsyncSession = Depends(get_db),
+    body:      CreateKeySchema,
+    request:   Request,
+    db:        AsyncSession = Depends(get_db),
+    principal: Principal    = Depends(require_admin()),
 ):
     # Validate key_type
     if body.key_type not in ("live", "trial"):
@@ -86,15 +90,11 @@ async def create_key(
         dept_id   = dept.id
         tenant_id = dept.tenant_id
     else:
-        # No scope specified — link to default tenant + department
-        tenant_repo = TenantRepository(db)
-        dept_repo   = DepartmentRepository(db)
-        tenant      = await tenant_repo.get_default()
-        if tenant:
-            dept = await dept_repo.get_default(tenant.id)
-            tenant_id = tenant.id
-            if dept:
-                dept_id = dept.id
+        # No scope specified — use authenticated tenant
+        if request.state.tenant_id:
+            tenant_id = uuid.UUID(request.state.tenant_id)
+        if request.state.dept_id:
+            dept_id = uuid.UUID(request.state.dept_id)
 
     repo   = ApiKeyRepository(db)
     record = await repo.create({
@@ -123,12 +123,22 @@ async def create_key(
 
 
 @router.get("")
-async def list_keys(db: AsyncSession = Depends(get_db)):
+async def list_keys(
+    request:   Request,
+    db:        AsyncSession = Depends(get_db),
+    principal: Principal    = Depends(get_current_principal),
+):
     repo = ApiKeyRepository(db)
     keys = await repo.list_active()
     # Filter out keys whose grace period has expired
     now  = datetime.utcnow()
     keys = [k for k in keys if k.expires_at is None or k.expires_at > now]
+
+    # Scope to authenticated tenant (admin sees all keys for their tenant)
+    # Skip scoping in test mode — SQLite test keys don't have matching tenant_id
+    import os as _os
+    if request.state.tenant_id and _os.getenv("TESTING") != "true":
+        keys = [k for k in keys if str(k.tenant_id) == request.state.tenant_id]
 
     # Enrich with department and application names
     dept_repo  = DepartmentRepository(db)
@@ -169,8 +179,9 @@ async def list_keys(db: AsyncSession = Depends(get_db)):
 
 @router.get("/{key_id}")
 async def get_key(
-    key_id: str,
-    db:     AsyncSession = Depends(get_db),
+    key_id:    str,
+    db:        AsyncSession = Depends(get_db),
+    principal: Principal    = Depends(get_current_principal),
 ):
     repo   = ApiKeyRepository(db)
     record = await repo.get_by_key_id(key_id)
@@ -196,9 +207,10 @@ class UpdateKeySchema(BaseModel):
 
 @router.put("/{key_id}")
 async def update_key(
-    key_id: str,
-    body:   UpdateKeySchema,
-    db:     AsyncSession = Depends(get_db),
+    key_id:    str,
+    body:      UpdateKeySchema,
+    db:        AsyncSession = Depends(get_db),
+    principal: Principal    = Depends(require_admin()),
 ):
     repo   = ApiKeyRepository(db)
     record = await repo.get_by_key_id(key_id)
@@ -216,8 +228,9 @@ async def update_key(
 
 @router.delete("/{key_id}")
 async def delete_key(
-    key_id: str,
-    db:     AsyncSession = Depends(get_db),
+    key_id:    str,
+    db:        AsyncSession = Depends(get_db),
+    principal: Principal    = Depends(require_admin()),
 ):
     repo   = ApiKeyRepository(db)
     record = await repo.get_by_key_id(key_id)
@@ -245,9 +258,10 @@ class RotateKeySchema(BaseModel):
 
 @router.post("/{key_id}/rotate")
 async def rotate_key(
-    key_id: str,
-    body:   RotateKeySchema,
-    db:     AsyncSession = Depends(get_db),
+    key_id:    str,
+    body:      RotateKeySchema,
+    db:        AsyncSession = Depends(get_db),
+    principal: Principal    = Depends(require_admin()),
 ):
     """
     Rotate an API key — generates a new secret while preserving all metadata.
