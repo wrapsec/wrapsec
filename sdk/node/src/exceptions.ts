@@ -80,8 +80,13 @@ export class WrapSecBlockError extends WrapSecError {
   readonly result: unknown
 
   constructor(result: unknown) {
-    const reason  = (result as any)?.primaryReason ?? "unknown"
-    const traceId = (result as any)?.traceId       ?? "unknown"
+    // #5 — sanitize API data before including in error message
+    // primaryReason valid values are UPPER_SNAKE_CASE only (RULE_DETECTOR etc.)
+    // traceId valid values are req_ prefix + alphanumeric only
+    const rawReason  = String((result as any)?.primaryReason ?? "unknown")
+    const rawTraceId = String((result as any)?.traceId       ?? "unknown")
+    const reason     = rawReason.slice(0, 64).replace(/[^A-Z0-9_]/g, "")  // UPPER_SNAKE_CASE only
+    const traceId    = rawTraceId.slice(0, 32).replace(/[^a-z0-9_]/g, "") // lowercase alphanumeric + _
     super(
       `Input blocked by WrapSec security policy (reason: ${reason}, trace: ${traceId})`
     )

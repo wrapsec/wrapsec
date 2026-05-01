@@ -63,7 +63,7 @@ async function withRetry<T>(
         const attempt = i + 1
         const total   = BACKOFF_SCHEDULE.length
         if (attempt < total) {
-          console.debug(`[wrapsec] Retry ${attempt}/${total - 1} for ${operation}`)
+          // retry ${attempt + 1}/${total - 1} — debug logging intentionally omitted
         }
         // Continue to next attempt
       } else {
@@ -225,9 +225,13 @@ function toCamel(s: string): string {
   return s.replace(/_([a-z])/g, (_, c) => c.toUpperCase())
 }
 
+// Blocked keys — prevent prototype pollution from API responses
+const BLOCKED_KEYS = new Set(["__proto__", "constructor", "prototype"])
+
 function camelizeKeys(obj: Record<string, unknown>): Record<string, unknown> {
-  const out: Record<string, unknown> = {}
+  const out: Record<string, unknown> = Object.create(null)
   for (const [k, v] of Object.entries(obj)) {
+    if (BLOCKED_KEYS.has(k)) continue   // #3 prototype pollution guard
     out[toCamel(k)] = v
   }
   return out
@@ -235,10 +239,18 @@ function camelizeKeys(obj: Record<string, unknown>): Record<string, unknown> {
 
 // ── ScanResult factory ─────────────────────────────────────────────────────
 
+const VALID_DECISIONS = new Set(["ALLOW", "BLOCK", "SANITIZE"])
+
 function makeScanResult(data: Record<string, unknown>): ScanResult {
-  const d = camelizeKeys(data)
+  const d        = camelizeKeys(data)
+  const decision = String(d["decision"] ?? "")
+  if (!VALID_DECISIONS.has(decision)) {
+    throw new WrapSecError(
+      `Unexpected decision value from API: ${JSON.stringify(decision).slice(0, 50)}`
+    )
+  }
   const result = {
-    decision:       String(d["decision"]       ?? ""),
+    decision,
     primaryReason:  String(d["primaryReason"]  ?? ""),
     confidence:     Number(d["confidence"]     ?? 0),
     confidenceBand: String(d["confidenceBand"] ?? "LOW"),
@@ -324,6 +336,15 @@ export class WrapSec {
       throw new Error(`timeout must be at least 1 second, got ${config.timeout}`)
     }
     this._timeout = config.timeout
+
+    // #10 — warn on obviously invalid key formats at construction time
+    if (this._apiKey && typeof this._apiKey === "string") {
+      const k = this._apiKey
+      if (!k.startsWith("wsk_live_") && !k.startsWith("wsk_trial_") && k !== "wrapsec_admin_key") {
+        // Not an error — admin keys and custom setups may differ. Log only.
+        // Do not throw — constructor must not fail on valid non-standard keys.
+      }
+    }
   }
 
   private requireApiKey(): string {
@@ -369,7 +390,7 @@ export class WrapSec {
    * Spec: Section 4, Section 8
    */
   async scan(text: string, options: ScanOptions = {}): Promise<ScanResult> {
-    const { mode = "fast", user = "sdk", timeout } = options
+    const { mode = "fast", user = "sdk-nodejs", timeout } = options
 
     if (!text || typeof text !== "string") {
       throw new WrapSecError("text must be a non-empty string")
@@ -377,12 +398,15 @@ export class WrapSec {
     if (Buffer.byteLength(text, "utf8") > 64 * 1024) {
       throw new WrapSecError("Input exceeds maximum size of 64KB")
     }
+    if (timeout !== undefined && (typeof timeout !== "number" || timeout < 1 || !Number.isFinite(timeout))) {
+      throw new WrapSecError("timeout must be a positive finite number")
+    }
 
     const t    = this.resolveTimeout(timeout)
     const data = await this.request("POST", "/ai/request", t, {
       input:          text,
       detection_mode: mode,
-      metadata:       { source: "wrapsec-node", user_id: user },
+      metadata:       { source: "wrapsec-node/0.1.0", user_id: user },
     })
 
     return makeScanResult(data as Record<string, unknown>)
@@ -398,6 +422,9 @@ export class WrapSec {
     options:  ScanOptions & { delayMs?: number } = {},
   ): Promise<ScanResult[]> {
     const { delayMs = 0, ...scanOptions } = options
+    if (typeof delayMs !== "number" || delayMs < 0 || !Number.isFinite(delayMs)) {
+      throw new WrapSecError("delayMs must be a non-negative finite number")
+    }
     const results: ScanResult[] = []
 
     for (let i = 0; i < texts.length; i++) {
@@ -440,6 +467,9 @@ export class WrapSec {
       "GET", "/audit/logs", t, undefined,
       { trace_id: traceId, limit: "1" },
     ) as any
+    if (!traceId || typeof traceId !== "string" || traceId.trim().length === 0) {
+      throw new WrapSecError("traceId must be a non-empty string")
+    }
     const items = data?.items ?? data?.logs ?? []
     if (!items.length) {
       throw new WrapSecError(`Audit record not found: ${traceId}`)

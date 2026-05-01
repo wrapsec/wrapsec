@@ -55,14 +55,17 @@ async function wrapSecPlugin(fastify: any, options: FastifyPluginOptions) {
 
   fastify.addHook("preHandler", async (request: any, reply: any) => {
     const body = request.body
-    if (!body) return
+
+    // #2 — explicit null/undefined check before any property access
+    if (body === null || body === undefined) return
 
     // Extract text
     let text: string | null = null
     if (typeof body === "string") {
       text = body
-    } else if (typeof body === "object") {
-      const value = body[inputKey]
+    } else if (typeof body === "object" && !Array.isArray(body)) {
+      // #2 — confirm body is a plain object before key access
+      const value = (body as Record<string, unknown>)[inputKey]
       if (typeof value === "string") text = value
     }
 

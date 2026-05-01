@@ -29,20 +29,32 @@ const MAX_PAYLOAD_BYTES = 64 * 1024   // 64KB
 function extractInput(req: Request, inputKey?: string): string | null {
   const body = req.body
 
-  if (!body) return null
+  // #2 — explicit null/undefined check before any property access
+  if (body === null || body === undefined) return null
 
   if (typeof body === "string") return body
 
-  if (typeof body === "object") {
-    const key    = inputKey ?? "input"
-    const value  = body[key]
+  // #2 — confirm body is a plain object (not array, Date, etc.) before key access
+  if (typeof body === "object" && !Array.isArray(body)) {
+    const key   = inputKey ?? "input"
+    const value = (body as Record<string, unknown>)[key]
     if (typeof value === "string") return value
+  }
 
-    // Fallback: stringify entire body if it's a messages array (OpenAI-style)
-    if (Array.isArray(body.messages)) {
-      return body.messages
-        .map((m: any) => (typeof m?.content === "string" ? m.content : ""))
-        .join("\n")
+  // Fallback: OpenAI-style messages array
+  if (typeof body === "object" && body !== null) {
+    const messages = (body as any).messages
+    if (Array.isArray(messages)) {
+      return messages
+        .map((m: unknown) => {
+          // #2 — confirm m is object and content is string before accessing
+          if (m !== null && typeof m === "object" && typeof (m as any).content === "string") {
+            return (m as any).content as string
+          }
+          return ""
+        })
+        .filter(Boolean)
+        .join("\n") || null
     }
   }
 
