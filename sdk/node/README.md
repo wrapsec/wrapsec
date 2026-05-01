@@ -4,6 +4,44 @@ Official Node.js SDK for the [WrapSec](https://wrapsec.com) AI Security Gateway.
 
 WrapSec sits between your application and LLM providers, inspecting every prompt and response for threats — prompt injection, jailbreak attempts, PII leakage, toxicity, and more.
 
+## Why WrapSec
+
+Traditional input validation does not protect against AI-specific threats. WrapSec provides:
+
+- **Prompt injection detection** — catches attempts to override system instructions
+- **Jailbreak prevention** — blocks attempts to bypass model safety guidelines
+- **PII protection and redaction** — detects and redacts sensitive data before it reaches the LLM
+- **Toxicity filtering** — blocks hate speech and harmful content
+- **Real-time enforcement** — decisions made before LLM execution, not after
+
+## How WrapSec works
+
+```
+Your Application
+      │
+      ▼
+┌─────────────────┐
+│  WrapSec SDK    │  ← wrapsec-node
+│  (this package) │
+└────────┬────────┘
+         │  scan(userInput)
+         ▼
+┌─────────────────┐
+│  WrapSec        │  ← your on-premise instance
+│  Gateway        │
+└────────┬────────┘
+         │  ALLOW / BLOCK / SANITIZE
+         ▼
+┌─────────────────┐
+│  LLM Provider   │  ← only reached on ALLOW or SANITIZE
+│  (OpenAI, etc.) │
+└─────────────────┘
+```
+
+**WrapSec is designed for on-premise deployment.** In production, `baseUrl` must point to your internal WrapSec instance. The default `http://localhost:8000` is for local development only — never rely on it in production.
+
+---
+
 ## Requirements
 
 - Node.js ≥ 18 (uses native `fetch` — no HTTP dependencies)
@@ -14,6 +52,8 @@ WrapSec sits between your application and LLM providers, inspecting every prompt
 ```bash
 npm install wrapsec-node
 ```
+
+---
 
 ## Configuration
 
@@ -29,13 +69,17 @@ const client = new WrapSec({
 })
 ```
 
-| Option    | Type   | Default                    | Description |
-|-----------|--------|----------------------------|-------------|
-| `apiKey`  | string | `WRAPSEC_API_KEY` env var  | API key (`wsk_live_...`). Required. |
+| Option | Type | Default | Description |
+|---|---|---|---|
+| `apiKey` | string | `WRAPSEC_API_KEY` env var | API key (`wsk_live_...`). Required. |
 | `baseUrl` | string | `WRAPSEC_BASE_URL` env var | WrapSec API base URL. Always set explicitly in production. Defaults to `http://localhost:8000` (dev only). |
-| `timeout` | number | `30`                       | Default request timeout in seconds. Minimum 1. Override per-call. |
+| `timeout` | number | `30` | Default request timeout in seconds. Minimum 1. Override per-call. |
 
 **Never hardcode API keys.** Always use environment variables.
+
+**WrapSec is on-premise software.** `baseUrl` must always point to your internal WrapSec instance in production. The default `http://localhost:8000` is for local development only.
+
+**API keys are scoped for runtime use only.** Administrative actions — user management, API key creation, settings updates — require JWT-based admin authentication via the WrapSec dashboard. API key sessions have read-only access to settings and audit data.
 
 ---
 
@@ -63,13 +107,23 @@ if (result.isBlocked) {
 }
 ```
 
-**Important:** `BLOCK` is never thrown as an exception. Always check `result.decision` or `result.isBlocked`. The SDK only throws on infrastructure failures (network, auth, server errors).
+> ⚠️ **CRITICAL SECURITY RULE**
+> If `result.isBlocked === true`, you **MUST NOT** forward the request to your LLM.
+> Bypassing this check defeats the purpose of WrapSec and exposes your system to
+> prompt injection and data exfiltration risks.
+
+> ⚠️ **BLOCK is a security decision, not an exception.**
+> It must always be handled explicitly using `result.isBlocked`.
+> Do not use try/catch to handle BLOCK — it will never be caught there.
+> The SDK only throws on infrastructure failures (network, auth, server errors).
 
 ---
 
 ## scan()
 
 Scans a single input for security threats.
+
+**Maximum input size: 64KB per request.** Requests exceeding this limit are rejected before making any API call.
 
 ```typescript
 const result = await client.scan(text, options?)
@@ -78,7 +132,7 @@ const result = await client.scan(text, options?)
 | Parameter | Type | Default | Description |
 |---|---|---|---|
 | `text` | string | required | Input to scan. Max 64KB. |
-| `options.mode` | `"fast"` \| `"full"` | `"fast"` | `fast` uses rule + ML detectors (~5ms). `full` adds LLM semantic analysis (~100-500ms extra). |
+| `options.mode` | `"fast"` \| `"full"` | `"fast"` | `fast` uses rule + ML detectors (~5ms). `full` adds LLM semantic analysis (~100–500ms extra). |
 | `options.user` | string | `"sdk-nodejs"` | User ID for audit attribution. |
 | `options.timeout` | number | client default | Per-request timeout in seconds. Overrides client default for this call only. |
 
@@ -88,8 +142,8 @@ const result = await client.scan(text, options?)
 |---|---|---|
 | `decision` | `"ALLOW"` \| `"BLOCK"` \| `"SANITIZE"` | Security verdict. Always check this. |
 | `primaryReason` | string | What triggered the decision. e.g. `RULE_DETECTOR`, `ML_DETECTOR`, `PII_GUARDRAIL_BLOCK` |
-| `confidence` | number | 0.0–1.0. Agreement between detectors, not probability of attack. |
-| `confidenceBand` | `"HIGH"` \| `"MEDIUM"` \| `"LOW"` | Confidence band. HIGH ≥ 0.7, MEDIUM ≥ 0.4, LOW < 0.4 |
+| `confidence` | number | 0.0–1.0. Reflects agreement between detection layers, not probability of attack. A high confidence means multiple detectors agree — not that an attack is certain. |
+| `confidenceBand` | `"HIGH"` \| `"MEDIUM"` \| `"LOW"` | HIGH ≥ 0.7, MEDIUM ≥ 0.4, LOW < 0.4 |
 | `traceId` | string | Unique request ID (`req_...`). Use for debugging and audit lookup. |
 | `threats` | string[] | Detected threat categories. |
 | `latencyMs` | number | Detection time in milliseconds. |
@@ -98,6 +152,22 @@ const result = await client.scan(text, options?)
 | `isSanitized` | boolean | Shorthand for `decision === "SANITIZE"` |
 | `isAllowed` | boolean | Shorthand for `decision === "ALLOW"` |
 | `isSystemError` | boolean | True when `primaryReason === "SYSTEM_ERROR"`. Treat as failure — do not forward to LLM. |
+
+**Always log `traceId` in production systems.** It can be used to:
+- Look up the request in the WrapSec dashboard
+- Correlate application logs with security decisions
+- Debug false positives or missed detections
+- File support requests with your security team
+
+**All response fields are camelCase** (JavaScript convention):
+
+| API field | SDK field |
+|---|---|
+| `primary_reason` | `primaryReason` |
+| `confidence_band` | `confidenceBand` |
+| `trace_id` | `traceId` |
+| `sanitized_input` | `sanitizedInput` |
+| `latency_ms` | `latencyMs` |
 
 **Critical — SYSTEM_ERROR behaviour:**
 
@@ -110,16 +180,6 @@ if (result.isSystemError) {
   throw new Error('WrapSec detection failed — request rejected')
 }
 ```
-
-**All response fields are camelCase** (JavaScript convention):
-
-| API field | SDK field |
-|---|---|
-| `primary_reason` | `primaryReason` |
-| `confidence_band` | `confidenceBand` |
-| `trace_id` | `traceId` |
-| `sanitized_input` | `sanitizedInput` |
-| `latency_ms` | `latencyMs` |
 
 ---
 
@@ -144,7 +204,7 @@ const results = await client.batch(inputs, { delayMs: 100 })
 
 results.forEach((result, i) => {
   if (result.isBlocked) {
-    console.log(`Input ${i} blocked: ${result.primaryReason}`)
+    console.log(`Input ${i} blocked:`, result.primaryReason, result.traceId)
   }
 })
 ```
@@ -153,7 +213,7 @@ results.forEach((result, i) => {
 
 ## Express middleware
 
-Automatically scans request body before your route handler runs.
+Automatically scans the request body before your route handler runs.
 
 ```typescript
 import express from 'express'
@@ -176,7 +236,7 @@ app.use('/api/chat', wrapSecMiddleware({
 }))
 
 app.post('/api/chat', (req, res) => {
-  // req.wrapsec contains the ScanResult
+  // req.wrapsec contains the full ScanResult
   // If decision was SANITIZE, req.body.input is already updated with sanitizedInput
   const safeInput = req.body.input
   // ... forward to LLM
@@ -192,7 +252,7 @@ app.post('/api/chat', (req, res) => {
 | `timeout` | number | `30` | Request timeout in seconds. |
 | `mode` | `"fast"` \| `"full"` | `"fast"` | Detection mode. |
 | `inputKey` | string | `"input"` | Body field to scan. |
-| `onBlock` | function | 403 JSON | Called when input is blocked. |
+| `onBlock` | function | 403 JSON | Called when input is blocked. Receives `(req, res, result)`. |
 
 **64KB payload limit:** The middleware enforces a 64KB limit on the scanned field before making any API call. Requests exceeding this receive a 413 response with code `PAYLOAD_TOO_LARGE`.
 
@@ -226,8 +286,8 @@ Same options as Express middleware. The plugin registers a `preHandler` hook on 
 ```typescript
 // List recent requests — scoped to your API key's department
 const logs = await client.auditList({
-  decision:  'BLOCK',      // filter by decision
-  fromDate:  '2026-05-01', // ISO date
+  decision:  'BLOCK',
+  fromDate:  '2026-05-01',
   toDate:    '2026-05-31',
   limit:     50,           // max 100
 })
@@ -264,15 +324,13 @@ console.log(settings.rateLimit)   // { per_minute: 60 }
 const keys = await client.keysList()
 ```
 
-**Note:** Settings are read-only via API key. Modifying settings, creating keys, or revoking keys requires JWT + ADMIN login via the dashboard.
-
 ---
 
 ## Health checks
 
 ```typescript
-// Check if API is reachable — no auth required
-const alive = await client.healthLive()   // returns boolean, never throws
+// Check if API is reachable — no auth required, never throws
+const alive = await client.healthLive()
 if (!alive) { /* WrapSec unreachable */ }
 
 // Full health check — auth required
@@ -304,31 +362,30 @@ try {
   }
 
   if (result.isBlocked) {
-    // Handle block — or throw WrapSecBlockError if you prefer exception flow
+    // Handle block — BLOCK is never thrown automatically
   }
 
 } catch (err) {
   if (err instanceof WrapSecAuthError) {
-    // 401 invalid/revoked key, 403 insufficient permissions
-    // Never retried
+    // 401 invalid/revoked key, 403 insufficient permissions — never retried
   }
   if (err instanceof WrapSecRateLimitError) {
-    // 429 rate limit exceeded
-    // Never retried — use batch({ delayMs: 100 }) to slow down
+    // 429 rate limit exceeded — never retried
+    // Use batch({ delayMs: 100 }) to slow down
   }
   if (err instanceof WrapSecSystemError) {
-    // 5xx server error, timeout, connection failure
-    // Already retried 3 times before being thrown
+    // 5xx, timeout, connection failure — already retried 3 times
   }
   if (err instanceof WrapSecError) {
     // Base class — catches all WrapSec errors
-    console.log(err.statusCode)  // HTTP status code if available
-    console.log(err.response)    // raw response object if available
+    console.log(err.statusCode)  // HTTP status if available
+    console.log(err.response)    // raw response if available
   }
 }
 ```
 
 **Error class hierarchy:**
+
 ```
 WrapSecError
 ├── WrapSecAuthError       — 401, 403
@@ -361,6 +418,8 @@ if (result.isBlocked) {
 
 After 3 failed attempts, `WrapSecSystemError` is thrown.
 
+**Retries apply only to network and server failures.** Security decisions (`BLOCK` / `SANITIZE` / `ALLOW`) are never retried — they are deterministic responses from the WrapSec detection pipeline.
+
 ---
 
 ## Integration patterns
@@ -372,6 +431,7 @@ async function safeLLMCall(userInput: string) {
   const result = await client.scan(userInput)
 
   if (result.isSystemError) {
+    // Detection failed — reject the request
     throw new Error('Security check failed — request rejected')
   }
 
@@ -390,10 +450,12 @@ async function safeLLMCall(userInput: string) {
 ### Pattern B — Express middleware (automatic)
 
 ```typescript
-app.use('/api/ai', wrapSecMiddleware({ apiKey, onBlock }))
+app.use('/api/ai', wrapSecMiddleware({ apiKey, baseUrl, onBlock }))
+
 app.post('/api/ai/chat', (req, res) => {
   // Only reaches here if ALLOW or SANITIZE
   // req.wrapsec has the full ScanResult
+  // req.body.input already contains sanitized text if applicable
   callLLM(req.body.input)
 })
 ```
@@ -404,7 +466,7 @@ app.post('/api/ai/chat', (req, res) => {
 const inputs  = getUserMessages()  // string[]
 const results = await client.batch(inputs, { delayMs: 50 })
 
-const clean   = results
+const clean = results
   .map((r, i) => ({ result: r, original: inputs[i] }))
   .filter(({ result }) => !result.isBlocked)
   .map(({ result, original }) =>
