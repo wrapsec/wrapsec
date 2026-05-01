@@ -4,7 +4,9 @@
 
 from fastapi import APIRouter, Depends
 from sqlalchemy.ext.asyncio import AsyncSession
+from api.v1.dependencies.auth import get_current_principal
 from api.v1.dependencies.db import get_db
+from domain.entities.principal import Principal
 from config.settings import get_settings
 
 router   = APIRouter()
@@ -43,7 +45,10 @@ async def health_live():
 
 
 @router.get("/health/config")
-async def health_config(db: AsyncSession = Depends(get_db)):
+async def health_config(
+    db:         AsyncSession = Depends(get_db),
+    _principal: Principal    = Depends(get_current_principal),
+):
     """
     Returns the currently active system configuration.
     Useful for deployment verification and debugging.

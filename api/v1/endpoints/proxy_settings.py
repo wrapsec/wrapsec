@@ -24,7 +24,9 @@ from pydantic import BaseModel, field_validator, HttpUrl
 from sqlalchemy import select, delete
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from api.v1.dependencies.auth import get_current_principal
 from api.v1.dependencies.db import get_db
+from domain.entities.principal import Principal
 from config.settings import get_settings
 from db.models import ProxyProviderConfigModel
 from security.encryption import encrypt, decrypt, mask
@@ -120,8 +122,9 @@ async def _get_config(key_id: str, db: AsyncSession) -> ProxyProviderConfigModel
 
 @router.get("/proxy")
 async def get_proxy_settings(
-    request: Request,
-    db:      AsyncSession = Depends(get_db),
+    request:    Request,
+    db:         AsyncSession = Depends(get_db),
+    _principal: Principal    = Depends(get_current_principal),
 ):
     key_id = request.state.key_id
     config = await _get_config(key_id, db)
@@ -141,9 +144,10 @@ async def get_proxy_settings(
 
 @router.put("/proxy")
 async def put_proxy_settings(
-    request: Request,
-    body:    ProxySettingsPutSchema,
-    db:      AsyncSession = Depends(get_db),
+    request:    Request,
+    body:       ProxySettingsPutSchema,
+    db:         AsyncSession = Depends(get_db),
+    _principal: Principal    = Depends(get_current_principal),
 ):
     key_id = request.state.key_id
 
@@ -200,8 +204,9 @@ async def put_proxy_settings(
 
 @router.delete("/proxy")
 async def delete_proxy_settings(
-    request: Request,
-    db:      AsyncSession = Depends(get_db),
+    request:    Request,
+    db:         AsyncSession = Depends(get_db),
+    _principal: Principal    = Depends(get_current_principal),
 ):
     key_id = request.state.key_id
     result = await db.execute(
@@ -227,8 +232,9 @@ async def delete_proxy_settings(
 
 @router.get("/proxy/health")
 async def get_proxy_health(
-    request: Request,
-    db:      AsyncSession = Depends(get_db),
+    request:    Request,
+    db:         AsyncSession = Depends(get_db),
+    _principal: Principal    = Depends(get_current_principal),
 ):
     key_id = request.state.key_id
     config = await _get_config(key_id, db)

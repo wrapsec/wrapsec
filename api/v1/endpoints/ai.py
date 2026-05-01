@@ -11,7 +11,9 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from api.v1.schemas.request import AIRequestSchema
+from api.v1.dependencies.auth import get_current_principal
 from api.v1.dependencies.db import get_db
+from domain.entities.principal import Principal
 from db.repositories.audit import AuditRepository
 from config.settings import get_settings
 from domain.enums import DecisionType, DetectionMode, ExecutionMode
@@ -84,9 +86,10 @@ def _build_response(decision, debug: bool = False) -> dict:
 
 @router.post("/request", response_model=None)
 async def ai_request(
-    body:    AIRequestSchema,
-    request: Request,
-    db:      AsyncSession = Depends(get_db),
+    body:      AIRequestSchema,
+    request:   Request,
+    db:        AsyncSession = Depends(get_db),
+    _principal: Principal   = Depends(get_current_principal),
 ):
     if body.options.debug and not getattr(request.state, "is_admin", False):
         raise DebugForbiddenError()
@@ -288,9 +291,10 @@ async def ai_request(
 
 @router.get("/requests/{trace_id}")
 async def get_request(
-    trace_id: str,
-    request:  Request,
-    db:       AsyncSession = Depends(get_db),
+    trace_id:   str,
+    request:    Request,
+    db:         AsyncSession = Depends(get_db),
+    _principal: Principal    = Depends(get_current_principal),
 ):
     repo    = AuditRepository(db)
     dept_id = getattr(request.state, "dept_id", None)

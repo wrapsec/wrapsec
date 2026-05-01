@@ -6,8 +6,10 @@ from fastapi import APIRouter, Depends
 from fastapi.responses import JSONResponse
 from sqlalchemy.ext.asyncio import AsyncSession
 from pydantic import BaseModel
+from api.v1.dependencies.auth import get_current_principal, require_admin
 from api.v1.dependencies.db import get_db
 from db.repositories.tenant import TenantRepository
+from domain.entities.principal import Principal
 
 router = APIRouter()
 
@@ -33,7 +35,10 @@ class TenantUpdateSchema(BaseModel):
 
 
 @router.get("")
-async def get_tenant(db: AsyncSession = Depends(get_db)):
+async def get_tenant(
+    db:        AsyncSession = Depends(get_db),
+    _principal: Principal   = Depends(get_current_principal),
+):
     repo   = TenantRepository(db)
     tenant = await repo.get_default()
     if not tenant:
@@ -43,8 +48,9 @@ async def get_tenant(db: AsyncSession = Depends(get_db)):
 
 @router.put("")
 async def update_tenant(
-    body: TenantUpdateSchema,
-    db:   AsyncSession = Depends(get_db),
+    body:      TenantUpdateSchema,
+    db:        AsyncSession = Depends(get_db),
+    _principal: Principal   = Depends(require_admin()),
 ):
     repo   = TenantRepository(db)
     tenant = await repo.get_default()

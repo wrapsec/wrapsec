@@ -4,6 +4,8 @@
 
 from datetime import datetime, timezone
 from fastapi import APIRouter, Query, Depends, Request
+from api.v1.dependencies.auth import get_current_principal
+from domain.entities.principal import Principal
 from domain.value_objects.severity import compute_severity
 from fastapi.responses import JSONResponse
 from sqlalchemy import func, case, Integer, select
@@ -78,6 +80,7 @@ async def get_audit_logs(
     limit:           int        = Query(50, ge=1, le=500),
     offset:          int        = Query(0, ge=0),
     db:              AsyncSession = Depends(get_db),
+    _principal:      Principal    = Depends(get_current_principal),
 ):
     is_admin = getattr(request.state, "is_admin", False)
     # Non-admin keys are always scoped to their own dept.
@@ -121,6 +124,7 @@ async def get_audit_stats(
     from_:     str | None = Query(None, alias="from"),
     to:        str | None = Query(None),
     db:        AsyncSession = Depends(get_db),
+    _principal: Principal    = Depends(get_current_principal),
 ):
     is_admin = getattr(request.state, "is_admin", False)
     if not is_admin:
@@ -208,6 +212,7 @@ async def get_attribution_report(
     from_:      str | None = Query(None, alias="from"),
     to:         str | None = Query(None),
     db:         AsyncSession = Depends(get_db),
+    _principal: Principal    = Depends(get_current_principal),
 ):
     """
     Returns attribution summary — requests grouped by key, department,
@@ -357,6 +362,7 @@ async def get_analytics(
     group_by:   str        = Query("day", pattern="^(hour|day|week|month)$"),
     dept_id:    str | None = Query(None),
     db:         AsyncSession = Depends(get_db),
+    _principal: Principal    = Depends(get_current_principal),
 ):
     """
     Advanced cross-department analytics with time-series trend data.
@@ -455,6 +461,7 @@ async def export_audit_logs(
     to:              str | None = Query(None),
     limit:           int        = Query(1000, ge=1, le=10000),
     db:              AsyncSession = Depends(get_db),
+    _principal:      Principal    = Depends(get_current_principal),
 ):
     is_admin = getattr(request.state, "is_admin", False)
     if not is_admin:

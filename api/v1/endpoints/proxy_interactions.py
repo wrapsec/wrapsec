@@ -14,7 +14,9 @@ from fastapi import APIRouter, Depends, Request
 from fastapi.responses import JSONResponse
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from api.v1.dependencies.auth import get_current_principal
 from api.v1.dependencies.db import get_db
+from domain.entities.principal import Principal
 from db.repositories.proxy_interaction import ProxyInteractionRepository
 from db.models import ProxyInteractionModel
 
@@ -63,6 +65,7 @@ async def list_proxy_interactions(
     limit:            int = 50,
     offset:           int = 0,
     db:               AsyncSession = Depends(get_db),
+    _principal:       Principal    = Depends(get_current_principal),
 ):
     limit  = min(max(1, limit), 200)
     offset = max(0, offset)
@@ -85,8 +88,9 @@ async def list_proxy_interactions(
 
 @router.get("/interactions/{trace_id}")
 async def get_proxy_interaction(
-    trace_id: str,
-    db:       AsyncSession = Depends(get_db),
+    trace_id:   str,
+    db:         AsyncSession = Depends(get_db),
+    _principal: Principal    = Depends(get_current_principal),
 ):
     repo   = ProxyInteractionRepository(db)
     item   = await repo.get_by_trace_id(trace_id)

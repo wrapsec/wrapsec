@@ -42,6 +42,8 @@ from datetime import datetime
 
 import httpx
 from fastapi import APIRouter, Depends, Request
+from api.v1.dependencies.auth import get_current_principal
+from domain.entities.principal import Principal
 from fastapi.concurrency import run_in_threadpool
 from fastapi.responses import JSONResponse
 from pydantic import BaseModel
@@ -283,9 +285,10 @@ async def _log_interaction(
 
 @router.post("/chat/completions", response_model=None)
 async def proxy_chat_completions(
-    body:    ProxyChatRequest,
-    request: Request,
-    db:      AsyncSession = Depends(get_db),
+    body:      ProxyChatRequest,
+    request:   Request,
+    db:        AsyncSession = Depends(get_db),
+    _principal: Principal   = Depends(get_current_principal),
 ):
     wall_start = time.monotonic()
     trace_id   = str(TraceId.generate())
