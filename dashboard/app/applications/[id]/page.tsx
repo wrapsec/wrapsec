@@ -1,6 +1,7 @@
 "use client"
 
 import { useState } from "react"
+import { useAuthMode } from "@/hooks/useAuthMode"
 import { useParams } from "next/navigation"
 import useSWR from "swr"
 import { Shell } from "@/components/layout/Shell"
@@ -40,6 +41,7 @@ export default function ApplicationDetailPage() {
   const [resetting,   setResetting]   = useState(false)
   const [saved,       setSaved]       = useState(false)
   const [error,       setError]       = useState<string | null>(null)
+  const { isJwt } = useAuthMode()
 
   const handleEditStart = () => {
     const override = policyData?.policy_override
@@ -143,7 +145,7 @@ export default function ApplicationDetailPage() {
               title="Policy Override"
               subtitle={`Override thresholds for this application. Leave blank to inherit from ${deptName}.`}
             />
-            {!editing && (
+            {!editing && isJwt && (
               <Button onClick={handleEditStart} variant="secondary">Edit</Button>
             )}
           </div>
@@ -181,7 +183,7 @@ export default function ApplicationDetailPage() {
                     No overrides set — inheriting policy from {deptName}.
                   </p>
                 )}
-                {hasOverride && (
+                {hasOverride && isJwt && (
                   <button
                     onClick={handleReset}
                     disabled={resetting}
@@ -224,7 +226,10 @@ export default function ApplicationDetailPage() {
               </div>
               {error && <p className="text-xs text-red-600">{error}</p>}
               <div className="flex items-center gap-3">
-                <Button onClick={handleSave} loading={saving}>Save overrides</Button>
+                {isJwt
+                  ? <Button onClick={handleSave} loading={saving}>Save overrides</Button>
+                  : <Button disabled>Save overrides</Button>
+                }
                 <button
                   onClick={() => { setEditing(false); setError(null) }}
                   className="text-sm text-slate-500 hover:text-slate-700"

@@ -8,9 +8,10 @@ interface ApiKeyTableProps {
   onRevoke:  (keyId: string) => void
   onRotate:  (keyId: string, gracePeriodMinutes: number) => Promise<string>
   revoking:  string | null
+  canWrite?: boolean   // false = API key session, hide write actions
 }
 
-export function ApiKeyTable({ keys, onRevoke, onRotate, revoking }: ApiKeyTableProps) {
+export function ApiKeyTable({ keys, onRevoke, onRotate, revoking, canWrite = true }: ApiKeyTableProps) {
   const [rotating,   setRotating]   = useState<string | null>(null)
   const [rotatedKey, setRotatedKey] = useState<{ newKey: string } | null>(null)
   const [graceInput, setGraceInput] = useState<string | null>(null)
@@ -139,8 +140,8 @@ export function ApiKeyTable({ keys, onRevoke, onRotate, revoking }: ApiKeyTableP
                   {/* Actions */}
                   <td className="py-3 text-right">
                     <div className="flex items-center justify-end gap-2">
-                      {/* Rotate — disabled during active grace period */}
-                      <button
+                      {/* Rotate — hidden for API key sessions */}
+                      {canWrite && <button
                         onClick={() => setGraceInput(key.key_id)}
                         disabled={rotating === key.key_id || !!revoking || inGrace}
                         title={inGrace
@@ -150,10 +151,10 @@ export function ApiKeyTable({ keys, onRevoke, onRotate, revoking }: ApiKeyTableP
                         className="text-xs text-slate-500 hover:text-blue-700 disabled:opacity-30 disabled:cursor-not-allowed transition-colors"
                       >
                         {rotating === key.key_id ? "Rotating..." : "Rotate"}
-                      </button>
+                      </button>}
 
-                      {/* Revoke — shows Force revoke during grace period */}
-                      <Button
+                      {/* Revoke — hidden for API key sessions */}
+                      {canWrite && <Button
                         variant="danger"
                         size="sm"
                         loading={revoking === key.key_id}
@@ -164,7 +165,7 @@ export function ApiKeyTable({ keys, onRevoke, onRotate, revoking }: ApiKeyTableP
                         }
                       >
                         {inGrace ? "Force revoke" : "Revoke"}
-                      </Button>
+                      </Button>}
                     </div>
                   </td>
                 </tr>

@@ -1,6 +1,7 @@
 "use client"
 
 import { useState } from "react"
+import { useAuthMode } from "@/hooks/useAuthMode"
 import { useParams } from "next/navigation"
 import useSWR from "swr"
 import { Shell } from "@/components/layout/Shell"
@@ -29,6 +30,7 @@ export default function DepartmentDetailPage() {
   const [saving,      setSaving]      = useState(false)
   const [saved,       setSaved]       = useState(false)
   const [error,       setError]       = useState<string | null>(null)
+  const { isJwt } = useAuthMode()
 
   const handleEditStart = () => {
     const override = dept?.policy_override
@@ -81,27 +83,19 @@ export default function DepartmentDetailPage() {
           </svg>
           Back to departments
         </Link>
+
         {/* Stats */}
         {stats && (
           <div className="grid grid-cols-4 gap-3">
             {[
-              {
-                label: "Total requests",
-                value: stats.total.toLocaleString(),
-              },
+              { label: "Total requests", value: stats.total.toLocaleString() },
               {
                 label: "Block rate",
                 value: `${Math.round(stats.block_rate * 100)}%`,
                 color: stats.block_rate > 0.3 ? "text-red-600" : "text-slate-900",
               },
-              {
-                label: "Avg latency",
-                value: `${stats.avg_latency_ms.toFixed(1)}ms`,
-              },
-              {
-                label: "Top threat",
-                value: stats.top_threats[0]?.category ?? "None",
-              },
+              { label: "Avg latency", value: `${stats.avg_latency_ms.toFixed(1)}ms` },
+              { label: "Top threat",  value: stats.top_threats[0]?.category ?? "None" },
             ].map(({ label, value, color }) => (
               <div key={label} className="bg-white rounded-xl border border-slate-200 px-4 py-3">
                 <p className="text-xs text-slate-400 mb-1">{label}</p>
@@ -162,7 +156,7 @@ export default function DepartmentDetailPage() {
               title="Policy Override"
               subtitle="Override global thresholds for this department. Leave blank to inherit."
             />
-            {!editing && (
+            {!editing && isJwt && (
               <Button onClick={handleEditStart} variant="secondary">
                 Edit
               </Button>
@@ -197,9 +191,7 @@ export default function DepartmentDetailPage() {
             <div className="space-y-4">
               <div className="grid grid-cols-2 gap-4">
                 <div className="flex flex-col gap-1">
-                  <label className="text-xs font-medium text-slate-700">
-                    Block threshold
-                  </label>
+                  <label className="text-xs font-medium text-slate-700">Block threshold</label>
                   <input
                     type="number"
                     min={0.01} max={1.0} step={0.05}
@@ -211,9 +203,7 @@ export default function DepartmentDetailPage() {
                   <p className="text-xs text-slate-400">Leave blank to inherit global</p>
                 </div>
                 <div className="flex flex-col gap-1">
-                  <label className="text-xs font-medium text-slate-700">
-                    Sanitize threshold
-                  </label>
+                  <label className="text-xs font-medium text-slate-700">Sanitize threshold</label>
                   <input
                     type="number"
                     min={0.0} max={0.99} step={0.05}
@@ -227,7 +217,10 @@ export default function DepartmentDetailPage() {
               </div>
               {error && <p className="text-xs text-red-600">{error}</p>}
               <div className="flex items-center gap-3">
-                <Button onClick={handleSave} loading={saving}>Save overrides</Button>
+                {isJwt
+                  ? <Button onClick={handleSave} loading={saving}>Save overrides</Button>
+                  : <Button disabled>Save overrides</Button>
+                }
                 <button
                   onClick={() => { setEditing(false); setError(null) }}
                   className="text-sm text-slate-500 hover:text-slate-700"

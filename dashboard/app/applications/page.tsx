@@ -1,6 +1,7 @@
 "use client"
 
 import { useState } from "react"
+import { useAuthMode } from "@/hooks/useAuthMode"
 import useSWR from "swr"
 import { Shell } from "@/components/layout/Shell"
 import { Card } from "@/components/ui/Card"
@@ -20,6 +21,7 @@ export default function ApplicationsPage() {
   const [environment,  setEnvironment]  = useState("production")
   const [saving,       setSaving]       = useState(false)
   const [error,        setError]        = useState<string | null>(null)
+  const { isJwt } = useAuthMode()
 
   const { data,      isLoading, mutate } = useSWR("applications",  getApplications)
   const { data: deptData }               = useSWR("departments",   getDepartments)
@@ -69,9 +71,19 @@ export default function ApplicationsPage() {
           <p className="text-sm text-slate-500">
             Manage applications and their API key assignments.
           </p>
-          <Button size="sm" onClick={() => setShowCreate(true)}>
-            <PlusIcon /> Add application
-          </Button>
+          {isJwt ? (
+            <Button size="sm" onClick={() => setShowCreate(true)}>
+              <PlusIcon /> Add application
+            </Button>
+          ) : (
+            <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
+              <Button size="sm" disabled><PlusIcon /> Add application</Button>
+              <span style={{ fontSize: "11px", color: "#9ca3af" }}>
+                Requires admin login —{" "}
+                <a href="/login" style={{ color: "#670FEF", textDecoration: "underline" }}>sign in with email</a>
+              </span>
+            </div>
+          )}
         </div>
 
         {/* Create form */}
@@ -81,31 +93,21 @@ export default function ApplicationsPage() {
             <div className="grid grid-cols-2 gap-4">
               <div className="flex flex-col gap-1">
                 <label className="text-xs font-medium text-slate-700">Name *</label>
-                <input
-                  type="text"
-                  value={name}
-                  onChange={(e) => setName(e.target.value)}
+                <input type="text" value={name} onChange={(e) => setName(e.target.value)}
                   placeholder="Finance Bot"
-                  className="h-9 px-3 text-sm rounded-md border border-slate-200 bg-white text-slate-900 placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-blue-800"
-                />
+                  className="h-9 px-3 text-sm rounded-md border border-slate-200 bg-white text-slate-900 placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-blue-800" />
               </div>
               <div className="flex flex-col gap-1">
                 <label className="text-xs font-medium text-slate-700">Slug *</label>
-                <input
-                  type="text"
-                  value={slug}
+                <input type="text" value={slug}
                   onChange={(e) => setSlug(e.target.value.toLowerCase().replace(/\s+/g, "-"))}
                   placeholder="finance-bot"
-                  className="h-9 px-3 text-sm rounded-md border border-slate-200 bg-white text-slate-900 placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-blue-800"
-                />
+                  className="h-9 px-3 text-sm rounded-md border border-slate-200 bg-white text-slate-900 placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-blue-800" />
               </div>
               <div className="flex flex-col gap-1">
                 <label className="text-xs font-medium text-slate-700">Department *</label>
-                <select
-                  value={deptId}
-                  onChange={(e) => setDeptId(e.target.value)}
-                  className="h-9 px-3 text-sm rounded-md border border-slate-200 bg-white text-slate-900 focus:outline-none focus:ring-2 focus:ring-blue-800"
-                >
+                <select value={deptId} onChange={(e) => setDeptId(e.target.value)}
+                  className="h-9 px-3 text-sm rounded-md border border-slate-200 bg-white text-slate-900 focus:outline-none focus:ring-2 focus:ring-blue-800">
                   <option value="">Select department</option>
                   {(deptData?.departments ?? []).map((d) => (
                     <option key={d.id} value={d.id}>{d.name}</option>
@@ -114,11 +116,8 @@ export default function ApplicationsPage() {
               </div>
               <div className="flex flex-col gap-1">
                 <label className="text-xs font-medium text-slate-700">Environment</label>
-                <select
-                  value={environment}
-                  onChange={(e) => setEnvironment(e.target.value)}
-                  className="h-9 px-3 text-sm rounded-md border border-slate-200 bg-white text-slate-900 focus:outline-none focus:ring-2 focus:ring-blue-800"
-                >
+                <select value={environment} onChange={(e) => setEnvironment(e.target.value)}
+                  className="h-9 px-3 text-sm rounded-md border border-slate-200 bg-white text-slate-900 focus:outline-none focus:ring-2 focus:ring-blue-800">
                   <option value="production">Production</option>
                   <option value="staging">Staging</option>
                   <option value="development">Development</option>
@@ -126,38 +125,29 @@ export default function ApplicationsPage() {
               </div>
               <div className="flex flex-col gap-1">
                 <label className="text-xs font-medium text-slate-700">Owner name</label>
-                <input
-                  type="text"
-                  value={ownerName}
-                  onChange={(e) => setOwnerName(e.target.value)}
+                <input type="text" value={ownerName} onChange={(e) => setOwnerName(e.target.value)}
                   placeholder="John Smith"
-                  className="h-9 px-3 text-sm rounded-md border border-slate-200 bg-white text-slate-900 placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-blue-800"
-                />
+                  className="h-9 px-3 text-sm rounded-md border border-slate-200 bg-white text-slate-900 placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-blue-800" />
               </div>
               <div className="flex flex-col gap-1">
                 <label className="text-xs font-medium text-slate-700">Owner email</label>
-                <input
-                  type="email"
-                  value={ownerEmail}
-                  onChange={(e) => setOwnerEmail(e.target.value)}
+                <input type="email" value={ownerEmail} onChange={(e) => setOwnerEmail(e.target.value)}
                   placeholder="john@acme.com"
-                  className="h-9 px-3 text-sm rounded-md border border-slate-200 bg-white text-slate-900 placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-blue-800"
-                />
+                  className="h-9 px-3 text-sm rounded-md border border-slate-200 bg-white text-slate-900 placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-blue-800" />
               </div>
               <div className="flex flex-col gap-1 col-span-2">
                 <label className="text-xs font-medium text-slate-700">Description</label>
-                <input
-                  type="text"
-                  value={description}
-                  onChange={(e) => setDescription(e.target.value)}
+                <input type="text" value={description} onChange={(e) => setDescription(e.target.value)}
                   placeholder="Finance automation system"
-                  className="h-9 px-3 text-sm rounded-md border border-slate-200 bg-white text-slate-900 placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-blue-800"
-                />
+                  className="h-9 px-3 text-sm rounded-md border border-slate-200 bg-white text-slate-900 placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-blue-800" />
               </div>
             </div>
             {error && <p className="text-xs text-red-600 mt-3">{error}</p>}
             <div className="flex gap-3 mt-4">
-              <Button size="sm" onClick={handleCreate} loading={saving}>Create</Button>
+              {isJwt
+                ? <Button size="sm" onClick={handleCreate} loading={saving}>Create</Button>
+                : <Button size="sm" disabled>Create</Button>
+              }
               <Button size="sm" variant="secondary" onClick={() => { setShowCreate(false); setError(null) }}>Cancel</Button>
             </div>
           </Card>
@@ -192,9 +182,7 @@ export default function ApplicationsPage() {
                         <p className="font-medium text-slate-900">{app.name}</p>
                         <p className="text-xs text-slate-400 font-mono">{app.slug}</p>
                       </td>
-                      <td className="px-5 py-3 text-xs text-slate-600">
-                        {deptName(app.dept_id)}
-                      </td>
+                      <td className="px-5 py-3 text-xs text-slate-600">{deptName(app.dept_id)}</td>
                       <td className="px-5 py-3">
                         <span className={`text-xs px-2 py-0.5 rounded-full border ${
                           app.environment === "production"
@@ -206,32 +194,27 @@ export default function ApplicationsPage() {
                           {app.environment}
                         </span>
                       </td>
-                      <td className="px-5 py-3 text-xs text-slate-500">
-                        {app.owner_name || "—"}
-                      </td>
+                      <td className="px-5 py-3 text-xs text-slate-500">{app.owner_name || "—"}</td>
                       <td className="px-5 py-3">
                         {app.policy_override ? (
-                          <span className="text-xs px-2 py-0.5 rounded-full bg-blue-50 text-blue-700 border border-blue-200">
-                            Overridden
-                          </span>
+                          <span className="text-xs px-2 py-0.5 rounded-full bg-blue-50 text-blue-700 border border-blue-200">Overridden</span>
                         ) : (
                           <span className="text-xs text-slate-400">Inherits dept</span>
                         )}
                       </td>
                       <td className="px-5 py-3 text-right">
                         <div className="flex items-center justify-end gap-3">
-                          <Link
-                            href={`/applications/${app.id}`}
-                            className="text-xs text-blue-700 hover:underline"
-                          >
+                          <Link href={`/applications/${app.id}`} className="text-xs text-blue-700 hover:underline">
                             Manage
                           </Link>
-                          <button
-                            onClick={() => handleDeactivate(app.id)}
-                            className="text-xs text-red-500 hover:text-red-700"
-                          >
-                            Deactivate
-                          </button>
+                          {isJwt && (
+                            <button
+                              onClick={() => handleDeactivate(app.id)}
+                              className="text-xs text-red-500 hover:text-red-700"
+                            >
+                              Deactivate
+                            </button>
+                          )}
                         </div>
                       </td>
                     </tr>

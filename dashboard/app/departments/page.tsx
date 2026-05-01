@@ -1,6 +1,7 @@
 "use client"
 
 import { useState } from "react"
+import { useAuthMode } from "@/hooks/useAuthMode"
 import useSWR from "swr"
 import { Shell } from "@/components/layout/Shell"
 import { Card } from "@/components/ui/Card"
@@ -17,6 +18,7 @@ export default function DepartmentsPage() {
   const [contact,     setContact]     = useState("")
   const [saving,      setSaving]      = useState(false)
   const [error,       setError]       = useState<string | null>(null)
+  const { isJwt } = useAuthMode()
 
   const { data, isLoading, mutate } = useSWR("departments", getDepartments)
 
@@ -53,9 +55,19 @@ export default function DepartmentsPage() {
           <p className="text-sm text-slate-500">
             Manage organisational departments and their policy overrides.
           </p>
-          <Button size="sm" onClick={() => setShowCreate(true)}>
-            <PlusIcon /> Add department
-          </Button>
+          {isJwt ? (
+            <Button size="sm" onClick={() => setShowCreate(true)}>
+              <PlusIcon /> Add department
+            </Button>
+          ) : (
+            <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
+              <Button size="sm" disabled><PlusIcon /> Add department</Button>
+              <span style={{ fontSize: "11px", color: "#9ca3af" }}>
+                Requires admin login —{" "}
+                <a href="/login" style={{ color: "#670FEF", textDecoration: "underline" }}>sign in with email</a>
+              </span>
+            </div>
+          )}
         </div>
 
         {/* Create form */}
@@ -106,7 +118,10 @@ export default function DepartmentsPage() {
             </div>
             {error && <p className="text-xs text-red-600 mt-3">{error}</p>}
             <div className="flex gap-3 mt-4">
-              <Button size="sm" onClick={handleCreate} loading={saving}>Create</Button>
+              {isJwt
+                ? <Button size="sm" onClick={handleCreate} loading={saving}>Create</Button>
+                : <Button size="sm" disabled>Create</Button>
+              }
               <Button size="sm" variant="secondary" onClick={() => { setShowCreate(false); setError(null) }}>Cancel</Button>
             </div>
           </Card>
@@ -158,7 +173,7 @@ export default function DepartmentsPage() {
                           >
                             Manage
                           </Link>
-                          {dept.slug !== "default" && (
+                          {isJwt && dept.slug !== "default" && (
                             <button
                               onClick={() => handleDeactivate(dept.id)}
                               className="text-xs text-red-500 hover:text-red-700"
