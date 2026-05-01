@@ -21,9 +21,11 @@ On the login page you have two options:
 
 **Email / Password** — for dashboard users. Enter your email and password. On first login you will be required to change your password before accessing anything else.
 
-**API Key** — for initial setup only, using the hardcoded admin key. This gives limited operational access (scanning, audit, settings). It cannot access user management — creating users, managing roles, and resetting passwords all require an ADMIN account login. Once user accounts are set up, use Email / Password for day-to-day access.
+**API Key** — for initial setup only, using the hardcoded admin key. This gives read-only access to settings, audit logs, and scan endpoints. **API key sessions cannot modify settings, manage users, manage keys, or change any configuration** — all write operations require an ADMIN account login via Email / Password. Once user accounts are set up, use Email / Password for day-to-day access.
 
 If your account has been locked after too many failed attempts, wait 15 minutes and try again.
+
+**Session timeout:** The dashboard automatically logs you out after 15 minutes of inactivity. A warning appears at 2 minutes remaining — click **Stay logged in** to continue, or **Log out now** to end your session immediately.
 
 ---
 
@@ -179,7 +181,7 @@ The **Scanner** page lets you test inputs manually. Enter any text and run a sca
 
 ## Settings
 
-Settings are available to ADMIN and DEVELOPER users (read). Only ADMIN can make changes.
+Settings are readable by all authenticated users (API key or JWT). Only ADMIN users logged in via Email / Password can modify settings. API key sessions see all settings but cannot save changes — a "Requires admin login" message is shown on all save buttons.
 
 ### Detection thresholds
 
@@ -292,4 +294,4 @@ When a department has an override, it shows **Overridden** in the department lis
 
 ---
 
-*WrapSec v1.4 — April 2026*
+*WrapSec v1.5 — May 2026*

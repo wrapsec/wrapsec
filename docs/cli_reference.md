@@ -557,7 +557,9 @@ LLM Configuration:
 ## 8. `wrapsec keys list`
 
 List API keys visible to the current key. **Read-only.**  
-To create or revoke keys, use the dashboard.
+To create, rotate, or revoke keys, use the dashboard — these operations require JWT + ADMIN login.
+
+`GET /v1/keys` accepts API key authentication. All write operations (`POST`, `PUT`, `DELETE`) on keys require JWT + ADMIN and cannot be performed from the CLI.
 
 ```bash
 wrapsec keys list
@@ -633,8 +635,8 @@ wrapsec config clear --force
 ## What the CLI Does NOT Do
 
 ```
-✗ Create, rotate, or revoke API keys
-✗ Change security thresholds or detection policy
+✗ Create, rotate, or revoke API keys (requires JWT + ADMIN — use dashboard)
+✗ Change security thresholds or detection policy (requires JWT + ADMIN — use dashboard)
 ✗ Manage departments or applications
 ✗ Manage users, roles, or passwords (use the dashboard)
 ✗ JWT-based login or session management (CLI uses API keys only)

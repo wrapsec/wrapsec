@@ -2,10 +2,10 @@
 
 > See [Core Concepts](core_concepts.md) for canonical definitions of decision model, SYSTEM_ERROR, and scoring semantics.
 
-Version: 1.4 — User Management  
+Version: 1.5 — Session Hardening + Auth Observability  
 Base URL: `http://your-host:8000`  
 Total endpoints: 63  
-Last updated: April 2026
+Last updated: May 2026
 
 ---
 
@@ -41,6 +41,12 @@ Used by dashboard users. Issued via `POST /v1/auth/login`.
 - Access token: HS256 JWT, 30 min, audience=`wrapsec-dashboard`
 - Refresh token: opaque, 30 days, httpOnly cookie `Path=/v1/auth`
 - Roles: `ADMIN` / `DEVELOPER` / `VIEWER`
+- API key cookie: 8 hours (httpOnly, dashboard sessions only)
+
+**Session timeouts (dashboard):**
+- JWT hard expiry: 30 min (server-enforced)
+- Inactivity timeout: 15 min (client-enforced, dashboard only) — warning at 2 min remaining
+- Silent refresh: on any 401, dashboard attempts `POST /api/auth/refresh` before redirecting to login
 
 **Header precedence:** `x-api-key` always wins. If both headers are present, JWT is ignored.
 
@@ -48,15 +54,31 @@ Used by dashboard users. Issued via `POST /v1/auth/login`.
 
 | Endpoints | API key | JWT |
 |---|---|---|
-| `POST /v1/ai/request`, `POST /v1/chat/completions`, `GET /v1/audit/*` | ✅ | ✅ any role |
-| `GET /v1/ai/requests/{trace_id}` | ✅ | ✅ any role |
+| `GET /health`, `/health/ready`, `/health/live`, `/metrics` | ❌ public | ❌ public |
+| `GET /health/config` | ✅ any key | ✅ any role |
 | `POST /v1/auth/login`, `POST /v1/auth/refresh` | ❌ public/cookie | ❌ public/cookie |
 | `POST /v1/auth/logout`, `GET /v1/auth/me`, `POST /v1/auth/change-password` | ❌ | ✅ any role |
-| `GET /v1/settings/*`, `GET /v1/keys/*` | ✅ | ✅ ADMIN or DEVELOPER |
-| `PUT /v1/settings/*` | ✅ admin key | ✅ ADMIN |
-| `ALL /v1/admin/users/*` | ❌ | ✅ ADMIN |
-| `ALL /v1/admin/tenant`, `/departments`, `/applications` | ✅ admin key | ✅ ADMIN |
-| `/health/*`, `/metrics` | ❌ public | ❌ public |
+| `POST /v1/ai/request`, `POST /v1/chat/completions` | ✅ | ✅ any role |
+| `GET /v1/ai/requests/{trace_id}` | ✅ | ✅ any role |
+| `GET /v1/audit/*` | ✅ | ✅ any role |
+| `GET /v1/proxy/interactions/*` | ✅ | ✅ any role |
+| `GET /v1/settings/*` | ✅ | ✅ any role |
+| `PUT /v1/settings/*` | ❌ | ✅ ADMIN only |
+| `GET/PUT/DELETE /v1/settings/proxy*` | ✅ | ✅ any role |
+| `GET /v1/keys` | ✅ | ✅ any role |
+| `GET /v1/keys/{id}` | ✅ | ✅ any role |
+| `POST /v1/keys`, `PUT /v1/keys/{id}`, `DELETE /v1/keys/{id}`, `POST /v1/keys/{id}/rotate` | ❌ | ✅ ADMIN only |
+| `GET /v1/admin/tenant`, `GET /v1/admin/departments/*`, `GET /v1/admin/applications/*` | ✅ | ✅ any role |
+| `PUT /v1/admin/tenant` | ❌ | ✅ ADMIN only |
+| `POST/PUT/DELETE /v1/admin/departments/*` | ❌ | ✅ ADMIN only |
+| `POST/PUT/DELETE /v1/admin/applications/*` | ❌ | ✅ ADMIN only |
+| `ALL /v1/admin/users/*` | ❌ | ✅ ADMIN only |
+
+**Notes:**
+- `GET /v1/keys` requires auth but accepts API key — CLI `wrapsec keys list` uses this
+- `PUT /v1/settings/*` previously accepted admin API key — now requires JWT + ADMIN (breaking change v1.5)
+- `/v1/settings/proxy*` scoped per `key_id` — JWT and API key each see their own config
+- All write endpoints on admin resources require JWT (no API key writes)
 
 ---
 
@@ -249,6 +271,16 @@ Sets a new rotated `refresh_token` cookie. Parallel refresh requests with the sa
 Revokes the refresh token. Access token expires naturally (max 30 min residual). Clears cookie.
 
 **Auth:** JWT Bearer required.
+
+**Request body (optional):**
+```json
+{"reason": "manual"}
+```
+
+`reason` values: `manual` (default) | `inactivity` | `expired`
+
+Invalid reason values are normalized to `manual` — never returns 400 for bad reason.
+Reason is stored in `auth_events.failure_reason` for audit and debugging.
 
 **Response 200:**
 ```json
@@ -1615,6 +1647,38 @@ SYSTEM_ERROR = detectors failed (exception, timeout, internal error)
 
 ## Changelog
 
+### V1.5 (May 2026) — Session Hardening + Auth Observability
+
+**Auth event observability (backend):**
+- `auth_events` expanded: `logout`, `token_refresh_success`, `token_refresh_failed`, `session_expired` action values added
+- New `failure_reason` values: `token_invalid`, `inactivity`, `manual`, `expired`, `refresh_failed`, `session_invalidated`
+- `POST /v1/auth/logout` now accepts optional `{ reason }` body — logged in auth_events
+- Middleware logs `session_expired` on token failure — skipped when no token present, skipped for `/v1/auth/refresh` path
+- NullPool session pattern enforced — explicit `session.close()` in finally block
+
+**Endpoint auth hardening:**
+- All endpoints now have explicit FastAPI auth dependencies (no implicit middleware-only auth)
+- `PUT /v1/settings/*` — changed from admin API key to JWT + ADMIN only (breaking)
+- `POST/PUT/DELETE /v1/admin/departments/*` and `/applications/*` — now JWT + ADMIN only
+- `GET /v1/admin/departments/*`, `/applications/*`, `/tenant` — now accept API key (read)
+- `GET /v1/keys` — remains API key-accessible (CLI needs this)
+- `POST/PUT/DELETE /v1/keys/*` — JWT + ADMIN only
+- `/health/config` — now requires auth (exposes system config)
+
+**Dashboard session hardening:**
+- Inactivity timeout: 15 min, warning modal at 2 min, `logout("inactivity")` on expiry
+- Silent refresh: 401 → attempt refresh → retry once → redirect to login
+- Three refresh guards: url check, `_retried` flag, `isLoggingOut` flag
+- `/api/*` excluded from Next.js middleware redirect (was causing HTML parse errors)
+- Proxy route guarantees JSON on all error paths — no HTML ever returned
+- API key cookie maxAge: 24h → 8h
+- All cookies httpOnly — auth mode detected via `GET /api/auth/session` server route
+
+**New internal docs:**
+- `docs/internal/session_management.md` — session lifecycle reference
+
+---
+
 ### V1.4 (April 2026) — User Management
 
 **Breaking change:**
@@ -1634,7 +1698,11 @@ SYSTEM_ERROR = detectors failed (exception, timeout, internal error)
 **New error codes:**
 - `ACCOUNT_INACTIVE` — login failure when `is_active = false`
 
-**auth_events failure reasons:** `invalid_password`, `user_not_found`, `account_inactive`, `token_expired`
+**auth_events action values:** `login_success`, `login_failed`, `logout`, `token_refresh_success`, `token_refresh_failed`, `session_expired`
+
+**auth_events failure_reason values:** `invalid_password`, `user_not_found`, `account_inactive`, `account_disabled`, `token_expired`, `token_invalid`, `inactivity`, `manual`, `expired`, `refresh_failed`, `session_invalidated`
+
+See `docs/internal/session_management.md` for full logging ownership rules.
 
 Note: `account_inactive` is the `auth_events.failure_reason` value when `is_active = false`. The API error code returned to the client is always `ACCOUNT_DISABLED` — `ACCOUNT_INACTIVE` never appears in API responses.
 
@@ -1720,7 +1788,7 @@ Note: `account_inactive` is the `auth_events.failure_reason` value when `is_acti
 
 ---
 
-*API version: 1.4 — User Management*  
+*API version: 1.5 — Session Hardening + Auth Observability*  
 *Total endpoints: 63*  
 *Authentication: `x-api-key` OR `Authorization: Bearer {jwt}`*  
-*Last updated: April 2026*
+*Last updated: May 2026*

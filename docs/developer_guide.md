@@ -144,6 +144,41 @@ Not python-jose. These are not interchangeable — exception types differ.
 
 NOT called on reactivation — there are no active sessions to invalidate.
 
+### Dashboard session hardening (v1.5)
+
+**Inactivity timeout:**
+- 15 min inactivity → `logout("inactivity")` → redirect `/login`
+- Warning modal shown at 2 min remaining — blocks interaction, cannot dismiss by clicking outside
+- Events tracked: `mousemove`, `mousedown`, `keydown`, `touchstart`, `scroll`, `visibilitychange`
+- `visibilitychange` to hidden tab counts as inactivity — timer continues
+- Implemented in `dashboard/hooks/useInactivityTimer.ts`, wired in `Shell.tsx`
+
+**Silent refresh on 401:**
+- Any 401 from API → attempt `POST /api/auth/refresh` → retry original request once → redirect `/login`
+- Three guards (all required, all must be present):
+  1. URL check: if URL contains `/api/auth/refresh` → do NOT retry (prevents self-loop)
+  2. `_retried` flag: if request already retried → do NOT retry (prevents loop via other paths)
+  3. `isLoggingOut` flag: if logout in progress → skip refresh, redirect immediately
+- 500/502 errors are NOT treated as 401 — show error to user, never redirect to login for server errors
+
+**isLoggingOut race condition fix:**
+```typescript
+// auth.ts
+export let isLoggingOut = false
+export async function logout(reason = "manual") {
+    isLoggingOut = true   // BEFORE fetch — blocks any concurrent refresh attempt
+    await fetch("/api/auth/logout", { body: JSON.stringify({ reason }) })
+}
+
+// api.ts request() — checked before every refresh attempt
+if (isLoggingOut) { window.location.href = "/login"; throw new Error("Logging out") }
+```
+
+**Next.js middleware exclusion:**
+`/api/*` paths excluded from middleware redirect — these routes return JSON 401, not HTML.
+Without this: expired JWT → middleware redirects `/api/proxy/*` to `/login` (HTML) →
+`JSON.parse("<!DOCTYPE")` crash in frontend modal.
+
 ### Refresh token rotation
 
 Raw token: `secrets.token_urlsafe(32)`. Never stored server-side — only `SHA-256(raw)` is stored.
@@ -231,14 +266,35 @@ Principal is built from `request.state` — no second DB call in dependencies.
 ### Endpoint protection matrix
 
 ```
-Public:           GET /health*, GET /metrics, POST /v1/auth/login, POST /v1/auth/refresh
-JWT any role:     POST /v1/auth/logout, GET /v1/auth/me, POST /v1/auth/change-password
-JWT + ADMIN:      ALL /v1/admin/users*, /v1/admin/tenant*, /v1/admin/departments*,
-                  /v1/admin/applications*, PUT /v1/settings/*
-JWT ADMIN/DEV:    GET /v1/settings/*, ALL /v1/keys/*
-API key OR JWT:   POST /v1/ai/request, POST /v1/chat/completions,
-                  GET /v1/ai/requests/*, GET /v1/audit/*
+Public:            GET /health, /health/ready, /health/live, GET /metrics
+                   POST /v1/auth/login, POST /v1/auth/refresh
+
+JWT any role:      POST /v1/auth/logout, GET /v1/auth/me, POST /v1/auth/change-password
+
+JWT + ADMIN:       ALL /v1/admin/users/*
+                   PUT /v1/admin/tenant
+                   POST/PUT/DELETE /v1/admin/departments/*
+                   POST/PUT/DELETE /v1/admin/applications/*
+                   PUT /v1/settings/*
+                   POST /v1/keys, PUT /v1/keys/{id}, DELETE /v1/keys/{id}
+                   POST /v1/keys/{id}/rotate
+
+API key OR JWT:    POST /v1/ai/request, POST /v1/chat/completions
+                   GET /v1/ai/requests/*, GET /v1/audit/*
+                   GET /v1/settings/*, GET/PUT/DELETE /v1/settings/proxy*
+                   GET /v1/keys, GET /v1/keys/{id}
+                   GET /v1/admin/tenant, GET /v1/admin/departments/*
+                   GET /v1/admin/applications/*
+                   GET /v1/proxy/interactions/*
+                   GET /health/config
 ```
+
+Implementation: every endpoint has an explicit FastAPI dependency — no endpoint relies
+solely on middleware for access control. Middleware enforces auth globally; dependencies
+enforce RBAC per-endpoint.
+
+Breaking change (v1.5): `PUT /v1/settings/*` no longer accepts admin API key.
+Breaking change (v1.5): `POST/PUT/DELETE /v1/keys/*` no longer accepts any API key.
 
 ---
 
@@ -327,36 +383,81 @@ Written to `admin_events` table. Every user management action.
 - `dept_id` = target user's dept_id after the update (post-update state)
 - For `dept_changed`: `admin_events.dept_id` = new_dept_id; metadata contains both old and new
 
-### Auth events (login tracking)
+### Auth events (authentication tracking)
 
-Written to `auth_events` table. Every login attempt.
+Written to `auth_events` table. Non-blocking, separate NullPool session, best-effort.
 
-- Non-blocking — uses a separate NullPool DB session, never the request session
-- Best-effort — failures logged internally and suppressed
-- `tenant_id` is nullable — null when user not found (cannot resolve tenant)
-- Prefer null over incorrect attribution
+- `tenant_id` nullable — null when user not found or token unreadable
+- Prefer null over incorrect attribution. Never fake a tenant_id.
+- NullPool session must be closed in `finally` block — not optional
 
-Action values: `login_success`, `login_failed`
-Failure reasons: `invalid_password`, `user_not_found`, `account_inactive`, `token_expired`
+**Action values (full set):**
+
+| Action | Owner | When |
+|---|---|---|
+| `login_success` | `service.login()` | Credentials verified |
+| `login_failed` | `service.login()` | Bad password, unknown user, inactive |
+| `logout` | `service.logout()` | Refresh token revoked; `failure_reason` = logout reason |
+| `token_refresh_success` | `service.refresh()` | Refresh token rotated |
+| `token_refresh_failed` | `service.refresh()` | Token not found, version mismatch, user disabled |
+| `session_expired` | `auth.py` middleware | JWT rejected; NOT logged for `/v1/auth/refresh` path |
+
+Each action has exactly one owner. Never log the same event in two places.
+
+**Failure reason values (full set):**
+
+```
+invalid_password    — wrong password
+user_not_found      — email not registered
+account_inactive    — is_active = false (internal; client sees ACCOUNT_DISABLED)
+account_disabled    — administratively disabled
+token_expired       — ExpiredSignatureError (JWT exp in past)
+token_invalid       — InvalidTokenError (malformed/tampered, not just expired)
+inactivity          — 15 min dashboard inactivity timeout
+manual              — user clicked logout
+expired             — user acknowledged session expiry
+refresh_failed      — refresh token not found, revoked, or expired
+session_invalidated — token_version mismatch
+```
 
 **Mapping: API error code → auth_events.failure_reason**
 
-| API error code (returned to client) | auth_events.failure_reason (stored in DB) |
+| API error code (client) | auth_events.failure_reason (DB) |
 |---|---|
 | `INVALID_CREDENTIALS` | `invalid_password` or `user_not_found` |
 | `ACCOUNT_DISABLED` | `account_inactive` |
-| `SESSION_INVALIDATED` | `token_expired` |
-| `ACCOUNT_LOCKED` | not stored in auth_events — lockout is Redis-only |
+| `SESSION_INVALIDATED` | `session_invalidated` |
+| `ACCOUNT_LOCKED` | not stored — lockout is Redis-only |
+| `UNAUTHORIZED` (expired JWT) | `token_expired` |
+| `UNAUTHORIZED` (invalid JWT) | `token_invalid` |
 
-Note: `ACCOUNT_INACTIVE` never appears in API responses. The client always receives `ACCOUNT_DISABLED` when `is_active = false`. `account_inactive` is the internal `auth_events` failure reason only.
+`ACCOUNT_INACTIVE` never appears in API responses. `INVALID_CREDENTIALS` intentionally maps
+to two reasons — client gets identical message (no email enumeration).
 
-Note: `INVALID_CREDENTIALS` is the only error code that maps to two different failure reasons — the client receives the same message for both wrong password and unknown email (no enumeration). The auth_event distinguishes them internally.
+**Exception type discrimination (mandatory order in middleware):**
+```python
+from jwt.exceptions import ExpiredSignatureError, InvalidTokenError
+try:
+    payload = decode_access_token(token)
+except ExpiredSignatureError:          # MUST catch first — subclass of InvalidTokenError
+    reason = "token_expired"
+except InvalidTokenError:
+    reason = "token_invalid"
+```
+
+**Middleware skip rules:**
+- Do NOT log `session_expired` when no token is present (health checks, public routes)
+- Do NOT log `session_expired` for `/v1/auth/refresh` path — refresh service owns that event
 
 ### Structured logger
 
-`logging.getLogger("wrapsec.auth")` logs auth events to stdout/file for real-time monitoring. This coexists with `auth_events` DB table — do not remove the logger.
+`logging.getLogger("wrapsec.auth")` logs auth events to stdout/file alongside DB writes.
+Both coexist — do not remove the logger. Every DB write has a matching log line.
 
-Format: `auth_event EVENT_NAME key=value ...`
+Log levels: `login_success`, `token_refresh_success`, `logout` → `logger.info`
+            `login_failed`, `token_refresh_failed`, `session_expired` → `logger.warning`
+
+Format: `auth_event action=login_success user_id=... tenant_id=... reason=...`
 
 ---
 

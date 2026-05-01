@@ -1,6 +1,7 @@
 # WrapSec — User Management Reference
 
-*Version 1.2 — April 2026*
+*Version 1.3 — May 2026*
+*Updated: session hardening + auth_events expansion (session_management.md)*
 *Final. No open questions. Implementation reference.*
 
 ---
@@ -12,8 +13,13 @@ Three independent logging systems. No mixing.
 ```
 audit_logs    → AI and security events (unchanged)
 admin_events  → user and admin actions
-auth_events   → authentication tracking
+auth_events   → authentication tracking (expanded — see session_management.md)
 ```
+
+Reference: `docs/internal/session_management.md` covers the full auth_events expansion
+(logout, token_refresh, session_expired), session lifecycle, inactivity timeout, and
+frontend session hardening. This document covers user management only — auth_events
+base schema and login/logout logging model.
 
 User identity model:
 
@@ -405,46 +411,115 @@ CREATE INDEX idx_auth_events_ip          ON auth_events (ip_address);
 | Login failure — wrong password | user's tenant_id | user's id |
 | Login failure — account inactive | user's tenant_id | user's id |
 | Login failure — user not found | NULL | NULL |
+| Logout | user's tenant_id | user's id |
+| Token refresh success | user's tenant_id | user's id |
+| Token refresh failed — token not found | NULL | NULL |
+| Session expired — token expired | extracted from payload if possible, else NULL | extracted if possible, else NULL |
+| Session expired — token invalid | NULL | NULL |
+
+**Context extraction for session_expired:**
+Even on invalid/expired tokens, middleware attempts `jwt.decode(token, options={"verify_exp": False})` to extract `sub` and `tenant_id` from payload. If extraction fails, log with NULL — never skip the event.
 
 Prefer NULL over incorrect attribution. Never resolve a fake tenant_id.
 
 ### Action enum
 
 ```
-login_success
-login_failed
+login_success          — login succeeded
+login_failed           — login failed (see failure_reason)
+logout                 — user logged out (see failure_reason for logout reason)
+token_refresh_success  — refresh token rotated, new access token issued
+token_refresh_failed   — refresh attempt failed (see failure_reason)
+session_expired        — JWT rejected by middleware (expired or invalid)
 ```
+
+**Logging ownership — one owner per event, never duplicated:**
+
+| Action | Owner | Notes |
+|---|---|---|
+| `login_success` | `services/auth/service.py :: login()` | |
+| `login_failed` | `services/auth/service.py :: login()` | |
+| `logout` | `services/auth/service.py :: logout()` | failure_reason = logout reason |
+| `token_refresh_success` | `services/auth/service.py :: refresh()` | |
+| `token_refresh_failed` | `services/auth/service.py :: refresh()` | |
+| `session_expired` | `api/v1/middleware/auth.py` | NOT logged for /v1/auth/refresh path |
+
+Middleware does NOT log for `/v1/auth/refresh` — refresh service owns that logging.
+Middleware does NOT log when no token is present (health checks, unauthenticated access — expected noise).
 
 ### failure_reason enum
 
 ```
-invalid_password
-user_not_found
-account_disabled
-account_inactive
-token_expired
+invalid_password    — wrong password supplied
+user_not_found      — email not registered
+account_disabled    — API error code returned to client when is_active = false
+account_inactive    — auth_events internal reason when is_active = false
+token_expired       — JWT exp claim in the past (ExpiredSignatureError)
+token_invalid       — malformed or tampered JWT (InvalidTokenError, not expired)
+inactivity          — 15 min client-side inactivity timer triggered logout
+manual              — user clicked logout button
+expired             — user acknowledged session expiry
+refresh_failed      — refresh token not found, revoked, or expired
+session_invalidated — token_version mismatch (password change, role change, deactivation)
 ```
 
-`account_inactive` covers is_active = false, distinct from account_disabled which covers administrative disabling. Both must be present.
+**Critical distinction:**
+- `account_inactive` is the auth_events `failure_reason` value stored in DB
+- `ACCOUNT_DISABLED` is the API error code returned to the client
+- These are intentionally different — `ACCOUNT_INACTIVE` never appears in API responses
+
+**Critical distinction (token failures):**
+- `token_expired` — catch `ExpiredSignatureError` (subclass of `InvalidTokenError`)
+- `token_invalid` — catch `InvalidTokenError` (everything else: tampered, malformed)
+- `ExpiredSignatureError` MUST be caught before `InvalidTokenError` — order is mandatory
 
 ### Logging model
 
-auth_events are non-blocking and must not delay the login response under any condition.
+auth_events are non-blocking and must not delay the response under any condition.
 
 Implementation:
 
 ```
-1. complete login operation
+1. complete auth operation
 2. return response to client
-3. insert auth_event using a background task or separate DB session
-4. if logging fails → log internally, do not retry, do not affect response
+3. insert auth_event via NullPool session (separate from request session)
+4. if logging fails → log to Python logger, do not retry, do not affect response
 ```
 
-auth_events must NOT use the same blocking DB session tied to the login request. Use FastAPI BackgroundTasks or an independent async DB session. This is the key difference from admin_events which use the request session.
+auth_events must NOT use the same session as the request. Always use a separate NullPool session.
+
+**NullPool session pattern — mandatory:**
+```python
+session = None
+engine  = None
+try:
+    engine  = create_async_engine(database_url, poolclass=NullPool)
+    session = async_sessionmaker(bind=engine)()
+    await repo.insert(...)
+    await session.commit()
+except Exception as e:
+    logger.error("auth_event logging failed: %s", e)
+finally:
+    if session: await session.close()   # MANDATORY — NullPool does not pool
+    if engine:  await engine.dispose()
+```
+
+The `finally` block is mandatory. NullPool opens a real connection per session — unclosed sessions leak connections under load.
+
+**Dual logging rule:**
+Every auth_event DB write must have a matching Python log line written in the same function:
+```python
+logger.info("auth_event action=%s user_id=%s reason=%s", action, user_id, reason)
+```
+DB write = history. App log = real-time debugging. Never split them.
 
 ### Existing logger
 
-`logging.getLogger("wrapsec.auth")` already logs login events to stdout/file for real-time monitoring. auth_events adds structured DB history. Both coexist intentionally — do not remove the existing logger.
+`logging.getLogger("wrapsec.auth")` logs all auth events to stdout/file for real-time monitoring. auth_events adds structured DB history. Both coexist intentionally — do not remove the existing logger.
+
+Log levels:
+- `login_success`, `token_refresh_success`, `logout` → `logger.info`
+- `login_failed`, `token_refresh_failed`, `session_expired` → `logger.warning`
 
 ### Future usage (no schema change required)
 
@@ -663,4 +738,4 @@ Step 13 — docs:
 
 ---
 
-*Version 1.2 — Final. No open questions. Use as implementation reference.*
+*Version 1.3 — Updated May 2026. auth_events expanded (session_management.md). No open questions.*

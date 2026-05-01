@@ -574,11 +574,12 @@ It is NOT a replacement for the dashboard.
 
 | Command | Risk | Alternative |
 |---|---|---|
-| `settings set-threshold` | Policy change with no audit trail | Dashboard → Settings |
-| `settings enable/disable layer` | Silently weakens security posture | Dashboard → Settings |
-| `keys create` | Bypasses dashboard audit | Dashboard → API Keys |
-| `keys revoke` | Accidental revocation breaks production | Dashboard → API Keys |
-| `departments set-policy` | No audit trail | Dashboard → Departments |
+| `settings set-threshold` | Requires JWT + ADMIN — CLI uses API key only | Dashboard → Settings |
+| `settings enable/disable layer` | Requires JWT + ADMIN — CLI uses API key only | Dashboard → Settings |
+| `keys create` | Requires JWT + ADMIN — CLI uses API key only | Dashboard → API Keys |
+| `keys revoke` | Requires JWT + ADMIN — CLI uses API key only | Dashboard → API Keys |
+| `keys rotate` | Requires JWT + ADMIN — CLI uses API key only | Dashboard → API Keys |
+| `departments set-policy` | Requires JWT + ADMIN — CLI uses API key only | Dashboard → Departments |
 | `scan --show-scores` | Exposes internal scoring - attackers calibrate | Never implement |
 
 ---
@@ -880,7 +881,10 @@ Lists API keys visible to current key. Strictly read-only.
 Shows: key_id, name, created_at, last_used_at
 Does NOT show key secret.
 
-To create or revoke: use the dashboard.
+Auth: API key required (GET /v1/keys accepts API key — no JWT needed).
+      Results scoped to authenticated tenant.
+
+To create, rotate, or revoke: use the dashboard (JWT + ADMIN required).
 ```
 
 #### `wrapsec ping`
@@ -1233,12 +1237,17 @@ The CLI will never:
   - Collect telemetry or transmit data externally
 
 These actions belong exclusively in the dashboard,
-where every change is authenticated, audited, and attributable.
+where every change is authenticated (JWT + ADMIN), audited, and attributable.
+
+Technical reason: all write operations on settings, keys, departments, and
+applications now require JWT + ADMIN role. The CLI authenticates exclusively
+with API keys — JWT auth is not supported in v1.
 ```
 
 ---
 
 *WrapSec CLI & SDK Design Specification (Internal)*  
-*Version 1.6 - April 2026*  
+*Version 1.7 - May 2026*  
 *Review cycles: 7 (initial + 6 external reviews)*  
-*Last updated: April 2026*
+*Last updated: May 2026*  
+*v1.7 update: JWT + ADMIN required for all write operations — CLI read-only by design*
