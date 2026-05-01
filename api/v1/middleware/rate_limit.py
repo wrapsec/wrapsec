@@ -17,7 +17,9 @@ async def _get_live_rate_limit() -> int:
     """
     Resolve the effective rate limit for live keys.
     Priority: Redis cache → DB settings → .env default.
-    Cache TTL: 5 minutes — changes take effect within 5 minutes.
+    Cache TTL: 60 seconds — changes take effect immediately when updated via
+    PUT /v1/settings/rate_limit (which deletes the cache key), or within 1 minute
+    for any node that hasn't yet received the invalidation.
     In test mode — always returns .env default to avoid DB/Redis dependency.
     """
     import os
@@ -44,9 +46,8 @@ async def _get_live_rate_limit() -> int:
             stored = await repo.get("rate_limit")
             if stored and "per_minute" in stored:
                 limit = int(stored["per_minute"])
-                # Cache for 5 minutes
                 import json
-                await redis.setex(cache_key, 300, json.dumps(stored))
+                await redis.setex(cache_key, 60, json.dumps(stored))
                 return limit
     except Exception:
         pass  # Fail open — use .env default

@@ -242,7 +242,7 @@ export default function LoginPage() {
                   onChange={e => setEmail(e.target.value)}
                   onKeyDown={e => e.key === "Enter" && handleCredentials()}
                   placeholder="you@example.com"
-                  autoFocus autoComplete="email" disabled={loading}
+                  autoFocus autoComplete="off" disabled={loading}
                   style={INPUT}
                   onFocus={e => (e.target as HTMLInputElement).style.borderColor = "#670FEF"}
                   onBlur={e => (e.target as HTMLInputElement).style.borderColor = "rgba(255,255,255,0.12)"}
@@ -255,7 +255,7 @@ export default function LoginPage() {
                   onChange={e => setPassword(e.target.value)}
                   onKeyDown={e => e.key === "Enter" && handleCredentials()}
                   placeholder="••••••••"
-                  autoComplete="current-password" disabled={loading}
+                  autoComplete="off" disabled={loading}
                   style={INPUT}
                   onFocus={e => (e.target as HTMLInputElement).style.borderColor = "#670FEF"}
                   onBlur={e => (e.target as HTMLInputElement).style.borderColor = "rgba(255,255,255,0.12)"}

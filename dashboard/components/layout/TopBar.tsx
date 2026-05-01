@@ -45,7 +45,11 @@ export function TopBar({ title }: { title: string }) {
 
   const handleLogout = async () => {
     setMenuOpen(false)
-    await logout()
+    try {
+      await logout()
+    } catch {
+      // Best effort — cookies are cleared server-side regardless
+    }
     router.push("/login")
   }
 

@@ -36,12 +36,50 @@ def normalize_email(email: str) -> str:
     return email.lower().strip()
 
 
+_MAX_PASSWORD_LEN = 128
+
+# Top common passwords that pass basic character-variety checks.
+# Stored lowercase — comparison uses password.lower() so case variants are caught.
+_COMMON_PASSWORDS: frozenset[str] = frozenset({
+    "password1", "password12", "password123", "password1234",
+    "passw0rd", "p@ssword1", "p@ssw0rd",
+    "admin123", "admin1234", "admin@123",
+    "welcome1", "welcome12", "welcome123",
+    "qwerty123", "qwerty12", "qwerty1",
+    "abc123456", "abcd1234", "abcde123",
+    "letmein1", "letmein12",
+    "iloveyou1", "iloveyou12",
+    "monkey123", "monkey12",
+    "dragon123", "dragon12",
+    "master123", "master12",
+    "sunshine1", "sunshine12",
+    "princess1",
+    "football1", "football12",
+    "baseball1",
+    "superman1", "superman12",
+    "batman123",
+    "trustno1",
+    "hello123", "hello1234",
+    "shadow123",
+    "michael1",
+    "mustang1",
+    "access123",
+    "login123",
+    "test1234", "test@123",
+    "changeme1", "changeme123",
+    "secret123",
+    "wrapsec1", "wrapsec123",
+})
+
+
 def hash_password(password: str) -> str:
     """
     Returns bcrypt hash of the given password.
     Always call validate_password_strength() before this.
     NEVER store the result of this function in logs.
     """
+    if len(password) > _MAX_PASSWORD_LEN:
+        raise ValueError(f"Password must not exceed {_MAX_PASSWORD_LEN} characters")
     return pwd_context.hash(password)
 
 
@@ -49,7 +87,13 @@ def verify_password(plain: str, hashed: str) -> bool:
     """
     Constant-time bcrypt comparison via passlib.
     Timing-safe — bcrypt work factor equalises comparison time across inputs.
+
+    Passwords exceeding _MAX_PASSWORD_LEN are rejected immediately — bcrypt
+    only processes the first 72 bytes, so over-length inputs can never match
+    a hash produced by hash_password() which enforces the same limit.
     """
+    if len(plain) > _MAX_PASSWORD_LEN:
+        return False
     return pwd_context.verify(plain, hashed)
 
 
@@ -80,11 +124,16 @@ def validate_password_strength(password: str) -> None:
     Call before hash_password() on: user creation, password change, bootstrap.
 
     Requirements:
+        - At most 128 characters (bcrypt DoS prevention)
         - At least 8 characters
         - At least 1 uppercase letter
         - At least 1 lowercase letter
         - At least 1 digit
+        - At least 4 unique characters (prevents repetitive patterns)
+        - Not a known-common password
     """
+    if len(password) > _MAX_PASSWORD_LEN:
+        raise ValueError(f"Password must not exceed {_MAX_PASSWORD_LEN} characters")
     errors = []
     if len(password) < 8:
         errors.append("at least 8 characters")
@@ -96,3 +145,7 @@ def validate_password_strength(password: str) -> None:
         errors.append("at least one digit")
     if errors:
         raise ValueError(f"Password must contain: {', '.join(errors)}")
+    if len(set(password)) < 4:
+        raise ValueError("Password must contain at least 4 different characters")
+    if password.lower() in _COMMON_PASSWORDS:
+        raise ValueError("Password is too common. Please choose a more unique password.")

@@ -27,10 +27,13 @@ export function useInactivityTimer() {
   const [showWarning,      setShowWarning]      = useState(false)
   const [secondsRemaining, setSecondsRemaining] = useState(0)
 
-  const timerRef    = useRef<ReturnType<typeof setTimeout>  | null>(null)
-  const warningRef  = useRef<ReturnType<typeof setTimeout>  | null>(null)
-  const intervalRef = useRef<ReturnType<typeof setInterval> | null>(null)
-  const startedAt   = useRef<number>(Date.now())
+  const timerRef       = useRef<ReturnType<typeof setTimeout>  | null>(null)
+  const warningRef     = useRef<ReturnType<typeof setTimeout>  | null>(null)
+  const intervalRef    = useRef<ReturnType<typeof setInterval> | null>(null)
+  const startedAt      = useRef<number>(Date.now())
+  // Mirrors showWarning state so the event handler reads the current value
+  // without closing over stale state from the initial render.
+  const showWarningRef = useRef(false)
 
   const clearAllTimers = useCallback(() => {
     if (timerRef.current)    clearTimeout(timerRef.current)
@@ -40,6 +43,7 @@ export function useInactivityTimer() {
 
   const doLogout = useCallback(async () => {
     clearAllTimers()
+    showWarningRef.current = false
     setShowWarning(false)
     await logout("inactivity")
     window.location.href = "/login"
@@ -48,10 +52,12 @@ export function useInactivityTimer() {
   const startTimers = useCallback(() => {
     clearAllTimers()
     startedAt.current = Date.now()
+    showWarningRef.current = false
     setShowWarning(false)
 
     // Warning timer — fires at TIMEOUT - WARNING threshold
     warningRef.current = setTimeout(() => {
+      showWarningRef.current = true
       setShowWarning(true)
       setSecondsRemaining(Math.round(WARNING_MS / 1000))
 
@@ -94,8 +100,9 @@ export function useInactivityTimer() {
         return
       }
       // Only reset if warning is not showing — once warning shows,
-      // user must explicitly click "Stay logged in"
-      if (!showWarning) {
+      // user must explicitly click "Stay logged in".
+      // Use ref (not state) to avoid reading a stale closure value.
+      if (!showWarningRef.current) {
         startTimers()
       }
     }

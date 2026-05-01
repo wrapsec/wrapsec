@@ -295,7 +295,7 @@ async def update_rate_limit_settings(
 ):
     """
     Update the global rate limit for live keys.
-    Takes effect within 5 minutes (Redis cache TTL).
+    Takes effect immediately — Redis cache is invalidated on update.
     Does not require server restart.
     Trial key limit is configured via TRIAL_RATE_LIMIT_PER_MINUTE in .env.
     """

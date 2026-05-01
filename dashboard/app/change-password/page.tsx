@@ -72,7 +72,9 @@ export default function ChangePasswordPage() {
     try {
       await changePassword(current, next)
       setSuccess(true)
-      setTimeout(async () => { await logout(); router.replace("/login") }, 2000)
+      setTimeout(() => {
+        logout("manual").finally(() => router.replace("/login"))
+      }, 2000)
     } catch (err) {
       if (err instanceof AuthError) {
         setError(err.code === "INVALID_PASSWORD" ? "Current password is incorrect." : err.message || "Password change failed.")
@@ -158,7 +160,7 @@ export default function ChangePasswordPage() {
             <div>
               <label style={LABEL}>Current password</label>
               <input type="password" value={current} onChange={e => setCurrent(e.target.value)}
-                required disabled={loading} autoComplete="current-password" style={INPUT}
+                required disabled={loading} autoComplete="off" style={INPUT}
                 onFocus={e => (e.target as HTMLInputElement).style.borderColor = "#670FEF"}
                 onBlur={e  => (e.target as HTMLInputElement).style.borderColor = "rgba(255,255,255,0.12)"}
               />
@@ -167,7 +169,7 @@ export default function ChangePasswordPage() {
             <div>
               <label style={LABEL}>New password</label>
               <input type="password" value={next} onChange={e => setNext(e.target.value)}
-                required disabled={loading} autoComplete="new-password" style={INPUT}
+                required disabled={loading} autoComplete="off" style={INPUT}
                 onFocus={e => (e.target as HTMLInputElement).style.borderColor = "#670FEF"}
                 onBlur={e  => (e.target as HTMLInputElement).style.borderColor = "rgba(255,255,255,0.12)"}
               />
@@ -187,7 +189,7 @@ export default function ChangePasswordPage() {
             <div>
               <label style={LABEL}>Confirm new password</label>
               <input type="password" value={confirm} onChange={e => setConfirm(e.target.value)}
-                required disabled={loading} autoComplete="new-password"
+                required disabled={loading} autoComplete="off"
                 style={{ ...INPUT, borderColor: confirm.length > 0 && !passwordsMatch ? "#dc2626" : "rgba(255,255,255,0.12)" }}
                 onFocus={e => (e.target as HTMLInputElement).style.borderColor = confirm.length > 0 && !passwordsMatch ? "#dc2626" : "#670FEF"}
                 onBlur={e  => (e.target as HTMLInputElement).style.borderColor = confirm.length > 0 && !passwordsMatch ? "#dc2626" : "rgba(255,255,255,0.12)"}

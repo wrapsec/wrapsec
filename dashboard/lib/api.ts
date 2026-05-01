@@ -205,7 +205,25 @@ export async function exportAuditLogs(params: {
   if (params.to)              p.set("to",              params.to)
   p.set("limit", String(params.limit ?? 10000))
 
-  const response = await fetch(`/api/proxy/v1/audit/export?${p.toString()}`)
+  // Use the proxy path so the 401 silent-refresh path in request() applies.
+  // The proxy returns text/csv which we read as a blob after the auth check.
+  const proxyPath = `/api/proxy/v1/audit/export?${p.toString()}`
+
+  // Attempt once; if 401, try silent refresh then retry once.
+  const doFetch = () => fetch(proxyPath)
+
+  let response = await doFetch()
+
+  if (response.status === 401 && typeof window !== "undefined") {
+    const refreshed = await fetch("/api/auth/refresh", { method: "POST" })
+    if (!refreshed.ok) {
+      await logout("expired")
+      window.location.href = "/login"
+      throw new Error("Session expired")
+    }
+    response = await doFetch()
+  }
+
   if (!response.ok) throw new Error(`Export failed: ${response.status}`)
   return response.blob()
 }

@@ -48,9 +48,10 @@ export async function POST(request: NextRequest) {
     path:     "/",
   })
 
-  // Keep session indicator alive
+  // Keep session indicator alive — httpOnly matches login/route.ts
+  // Middleware reads this server-side via request.cookies; JS never needs it.
   res.cookies.set("wrapsec_session", "jwt", {
-    httpOnly: false,
+    httpOnly: true,
     secure:   process.env.NODE_ENV === "production",
     sameSite: "strict",
     maxAge:   data.expires_in || 1800,

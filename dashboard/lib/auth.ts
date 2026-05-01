@@ -179,6 +179,7 @@ export interface LoginResponse {
 // Returns AuthUser on success, throws on failure.
 
 export async function initAuth(): Promise<AuthUser> {
+  isLoggingOut = false  // clear flag — a new session is being established
   const refreshed = await fetch("/api/auth/refresh", { method: "POST" })
   if (!refreshed.ok) {
     throw new Error("No active session")
