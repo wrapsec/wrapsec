@@ -125,7 +125,8 @@ def batch(
         sys.exit(1)
 
     # Check file size before starting
-    file_size = os.path.getsize(file)
+    # Resolve symlink for size check too — consistent with the open() below
+    file_size = os.path.getsize(Path(file).resolve())
     if file_size > MAX_FILE_BYTES:
         mb = file_size / (1024 * 1024)
         print_error(f"File too large ({mb:.1f}MB). Maximum is 10MB.")
@@ -142,7 +143,7 @@ def batch(
 
     # Count lines for large-file warning (cheap — just count newlines)
     if not quiet and not json_output:
-        with open(file, "r", encoding="utf-8", errors="replace") as f:
+        with open(Path(file).resolve(), "r", encoding="utf-8", errors="replace") as f:
             line_count = sum(
                 1 for ln in f
                 if ln.strip() and not ln.strip().startswith("#")
@@ -181,7 +182,14 @@ def batch(
 
     signal.signal(signal.SIGINT, _sigint)
 
-    with open(file, "r", encoding="utf-8", errors="replace") as fh:
+    # Fix #8 — resolve symlinks before opening.
+    # click.Path(exists=True) confirms the path exists but does not resolve
+    # symlinks. A symlink could silently point to a file outside the intended
+    # directory (e.g. /etc/passwd, ~/.ssh/id_rsa). resolve() follows all
+    # symlinks to the real absolute path, making traversal visible and
+    # ensuring we log the actual file being read.
+    resolved_path = Path(file).resolve()
+    with open(resolved_path, "r", encoding="utf-8", errors="replace") as fh:
         for raw_line in fh:
             if interrupted:
                 print_warning("Interrupted by user.", )

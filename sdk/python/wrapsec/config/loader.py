@@ -75,20 +75,53 @@ def _read_config_file() -> dict[str, object]:
             logger.warning("Config file is not a JSON object — ignoring")
             return {}
         return raw
-    except (json.JSONDecodeError, OSError) as e:
-        logger.warning(f"Could not read config file {path}: {e}")
+    except json.JSONDecodeError as e:
+        logger.warning("Config file is not valid JSON — ignoring: %s", e)
+        return {}
+    except OSError as e:
+        # Log the specific OS error (permission denied etc.) internally
+        # but do not surface it to the user — return empty config instead
+        logger.warning("Could not read config file %s: %s", path, e)
         return {}
 
 
 def _write_config_file(data: dict[str, object]) -> None:
-    """Write config file with chmod 600 on Unix."""
+    """
+    Write config file atomically with 0o600 permissions on Unix.
+
+    Fix #1 — TOCTOU race condition:
+        The original implementation called path.write_text() then os.chmod().
+        Between those two calls the file was world-readable, exposing the API key.
+
+        Fix: use os.open() with O_WRONLY | O_CREAT | O_TRUNC and mode=0o600
+        so the file is created with restricted permissions in a single atomic
+        syscall. The chmod after is kept as belt-and-suspenders for existing files
+        but is no longer the primary permission mechanism.
+
+        On Windows: os.open() mode argument is ignored; the chmod fallback
+        is also a no-op, which is acceptable — Windows uses ACLs not Unix modes.
+    """
     _ensure_config_dir()
-    path = get_config_path()
-    path.write_text(json.dumps(data, indent=2), encoding="utf-8")
-    try:
-        os.chmod(path, 0o600)
-    except Exception:
-        pass  # chmod is a no-op on Windows
+    path    = get_config_path()
+    content = json.dumps(data, indent=2).encode("utf-8")
+
+    if sys.platform != "win32":
+        # Atomic creation with 0o600 — API key never exposed to other users
+        flags = os.O_WRONLY | os.O_CREAT | os.O_TRUNC
+        fd    = os.open(path, flags, mode=0o600)
+        try:
+            os.write(fd, content)
+        finally:
+            os.close(fd)
+        # Belt-and-suspenders: fix permissions on pre-existing files
+        # that may have been created with wrong perms by an older version
+        try:
+            os.chmod(path, 0o600)
+        except OSError:
+            pass
+    else:
+        # Windows — write normally, chmod is a no-op on Windows
+        path.write_bytes(content)
 
 
 # ── Public API ──────────────────────────────────────────────────────────────
@@ -122,6 +155,19 @@ def load_config() -> WrapSecConfig:
         or str(DEFAULTS["base_url"])
     )
 
+    # Fix #2 — warn loudly when using the localhost default.
+    # A developer who forgets to set WRAPSEC_BASE_URL in production
+    # silently sends all API keys and prompts to localhost, which either
+    # fails (connection refused) or — worse — hits an unexpected local service.
+    # We warn on stderr so the message is visible even with --quiet or --json.
+    _default_base_url = str(DEFAULTS["base_url"])
+    if base_url == _default_base_url:
+        logger.warning(
+            "WrapSec base_url is using the development default (%s). "
+            "Set WRAPSEC_BASE_URL or run: wrapsec config set base_url <your-instance-url>",
+            _default_base_url,
+        )
+
     # timeout: env → file → default
     raw_timeout = (
         os.environ.get("WRAPSEC_TIMEOUT")
@@ -132,12 +178,12 @@ def load_config() -> WrapSecConfig:
             timeout = int(raw_timeout)
             if timeout < TIMEOUT_MIN:
                 logger.warning(
-                    f"Configured timeout {timeout}s is below minimum {TIMEOUT_MIN}s — "
-                    f"using {TIMEOUT_MIN}s"
+                    "Configured timeout %ds is below minimum %ds — using %ds",
+                    timeout, TIMEOUT_MIN, TIMEOUT_MIN,
                 )
                 timeout = TIMEOUT_MIN
         except (ValueError, TypeError):
-            logger.warning(f"Invalid timeout value {raw_timeout!r} — using default 30s")
+            logger.warning("Invalid timeout value %r — using default 30s", raw_timeout)
             timeout = int(DEFAULTS["timeout"])
     else:
         timeout = int(DEFAULTS["timeout"])

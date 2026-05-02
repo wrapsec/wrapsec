@@ -11,10 +11,14 @@ Spec reference: Section 13.2 (wrapsec scan), Section 11 (Exit Codes),
 
 from __future__ import annotations
 
+import logging
+
 import signal
 import sys
 
 import click
+
+logger = logging.getLogger('wrapsec.cli.scan')
 
 from wrapsec.client import Client
 from wrapsec.config.loader import load_config
@@ -176,7 +180,11 @@ def scan(
     except Exception as e:
         if spinner:
             spinner.stop()
-        print_error(f"Unexpected error: {e}")
+        # Fix #4 — log full exception internally, show generic message to user.
+        # Full exception text may contain internal paths, module names, or
+        # server responses that should not be exposed to end users.
+        logger.error("Unexpected error during scan: %s", e, exc_info=True)
+        print_error("An unexpected error occurred. Check logs for details.")
         sys.exit(1)
 
     finally:

@@ -126,6 +126,13 @@ class AsyncClient:
         Scan a single input for security risks. Async version.
         See Client.scan() for full documentation.
         """
+        # Fix #6 — validate mode client-side (mirrors client.py)
+        _VALID_MODES = ("fast", "full")
+        if mode not in _VALID_MODES:
+            raise ValueError(
+                f"mode must be one of {_VALID_MODES}, got {mode!r}"
+            )
+
         text = normalize_text(text)
         text = validate_input(text)
         t    = self._resolve_timeout(timeout)
@@ -176,12 +183,14 @@ class AsyncClient:
     ) -> list[AuditLog]:
         params: dict[str, str] = {"limit": str(min(limit, 100))}
         if decision:  params["decision"] = decision
-        if reason:    params["primary_reason"] = reason
+        if reason:    params["reason"]   = reason
         if from_date: params["from"]     = from_date
         if to_date:   params["to"]       = to_date
 
         data = await self._request("GET", "/audit/logs", self._resolve_timeout(timeout), params=params)
-        return [AuditLog.from_dict(item) for item in data.get("logs", [])]
+        # Fix #7 — match sync client.py: check "items" first, fallback to "logs"
+        # Mismatch caused async to silently return [] when API returns "items" key
+        return [AuditLog.from_dict(item) for item in data.get("items", data.get("logs", []))]
 
     async def audit_get(self, trace_id: str, timeout: int | None = None) -> AuditLog:
         data  = await self._request(
@@ -257,4 +266,3 @@ class AsyncClient:
         if resp.is_success:
             return resp.json()
         return {}
-

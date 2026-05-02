@@ -160,6 +160,17 @@ class Client:
 
         Spec: Section 4, Section 8 (WrapSecBlockError not raised automatically)
         """
+        # Fix #6 — validate mode client-side before making any API call.
+        # The CLI uses click.Choice() which catches bad values, but the SDK
+        # is called directly by developers who may pass arbitrary strings.
+        # Sending an invalid mode to the API wastes a network round-trip
+        # and returns a cryptic 422 error instead of a clear local message.
+        _VALID_MODES = ("fast", "full")
+        if mode not in _VALID_MODES:
+            raise ValueError(
+                f"mode must be one of {_VALID_MODES}, got {mode!r}"
+            )
+
         text = normalize_text(text)
         text = validate_input(text)
         t    = self._resolve_timeout(timeout)
