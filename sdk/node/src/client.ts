@@ -462,14 +462,14 @@ export class WrapSec {
    * Spec: Section 13.2 (audit get)
    */
   async auditGet(traceId: string, timeout?: number): Promise<AuditLog> {
+    if (!traceId || typeof traceId !== "string" || traceId.trim().length === 0) {
+      throw new WrapSecError("traceId must be a non-empty string")
+    }
     const t    = this.resolveTimeout(timeout)
     const data = await this.request(
       "GET", "/audit/logs", t, undefined,
       { trace_id: traceId, limit: "1" },
     ) as any
-    if (!traceId || typeof traceId !== "string" || traceId.trim().length === 0) {
-      throw new WrapSecError("traceId must be a non-empty string")
-    }
     const items = data?.items ?? data?.logs ?? []
     if (!items.length) {
       throw new WrapSecError(`Audit record not found: ${traceId}`)

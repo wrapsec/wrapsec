@@ -94,7 +94,7 @@ async function wrapSecPlugin(fastify: any, options: FastifyPluginOptions) {
       request.wrapsec = result
 
       if (result.isSanitized && result.sanitizedInput) {
-        if (typeof request.body === "object") {
+        if (typeof request.body === "object" && request.body !== null) {
           request.body[inputKey] = result.sanitizedInput
         }
       }
