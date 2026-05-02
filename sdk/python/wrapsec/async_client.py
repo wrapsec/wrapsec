@@ -176,7 +176,7 @@ class AsyncClient:
     ) -> list[AuditLog]:
         params: dict[str, str] = {"limit": str(min(limit, 100))}
         if decision:  params["decision"] = decision
-        if reason:    params["reason"]   = reason
+        if reason:    params["primary_reason"] = reason
         if from_date: params["from"]     = from_date
         if to_date:   params["to"]       = to_date
 
@@ -257,3 +257,4 @@ class AsyncClient:
         if resp.is_success:
             return resp.json()
         return {}
+
