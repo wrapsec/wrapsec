@@ -290,6 +290,29 @@ async def proxy_chat_completions(
     db:        AsyncSession = Depends(get_db),
     _principal: Principal   = Depends(get_current_principal),
 ):
+    """
+    OpenAI-compatible proxy endpoint. Scans input, forwards to the configured LLM provider,
+    then scans the output before returning it to the caller.
+
+    Pipeline (steps executed in order):
+      0. Trial key guard — proxy mode blocked for trial keys.
+      1. Parse model string — must be in "provider/model" format (e.g. "openai/gpt-4o").
+      2. Load proxy provider config — keyed to the API key's key_id.
+      3. Read WrapSec request headers (X-WrapSec-Mode, X-WrapSec-Scan-All-Messages, X-WrapSec-Inline-Meta).
+      4. Extract scan target — last user message, or all user messages if scan_all=true.
+      5. Run input detection pipeline (GatewayService).
+      6. Handle input BLOCK — log and return 400.
+      7. Apply SANITIZE to messages — replaces user content with sanitized version.
+      8. Forward to provider — resolve provider instance and call chat_completions.
+      9. Run OutputGuard on provider response.
+     10. Handle output BLOCK — log and return 400.
+     11. Log successful interaction to proxy_interactions + audit_logs.
+     12. Record proxy metrics (non-blocking).
+     13. Return OpenAI-compatible response with WrapSec response headers.
+
+    All execution paths write to audit_logs. X-WrapSec-* headers are always included.
+    Auth: any valid live API key (trial keys are rejected).
+    """
     wall_start = time.monotonic()
     trace_id   = str(TraceId.generate())
     key_id     = getattr(request.state, "key_id", None)

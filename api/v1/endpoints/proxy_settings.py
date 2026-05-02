@@ -126,6 +126,11 @@ async def get_proxy_settings(
     db:         AsyncSession = Depends(get_db),
     _principal: Principal    = Depends(get_current_principal),
 ):
+    """
+    Returns the proxy provider config for the current API key.
+    The provider API key is always masked in the response — never returned in plaintext.
+    404 if no provider has been configured.
+    """
     key_id = request.state.key_id
     config = await _get_config(key_id, db)
 
@@ -149,6 +154,11 @@ async def put_proxy_settings(
     db:         AsyncSession = Depends(get_db),
     _principal: Principal    = Depends(get_current_principal),
 ):
+    """
+    Creates or replaces the proxy provider config for the current API key (upsert).
+    The provider API key is encrypted before storage using the server's secret_key.
+    Providers "openai" and "custom" require api_key; "ollama" does not.
+    """
     key_id = request.state.key_id
 
     # Validate: openai and custom providers require an api_key
@@ -208,6 +218,11 @@ async def delete_proxy_settings(
     db:         AsyncSession = Depends(get_db),
     _principal: Principal    = Depends(get_current_principal),
 ):
+    """
+    Removes the proxy provider config for the current API key.
+    After deletion, proxy mode requests will fail with proxy_not_configured.
+    404 if no config exists.
+    """
     key_id = request.state.key_id
     result = await db.execute(
         delete(ProxyProviderConfigModel).where(
@@ -236,6 +251,12 @@ async def get_proxy_health(
     db:         AsyncSession = Depends(get_db),
     _principal: Principal    = Depends(get_current_principal),
 ):
+    """
+    Tests live connectivity to the configured LLM provider.
+    Always returns HTTP 200 — reachable=true/false indicates the provider status.
+    Ollama: GET /api/tags. OpenAI-compatible: GET /models with Authorization header.
+    Timeout for the connectivity check is fixed at 10 seconds.
+    """
     key_id = request.state.key_id
     config = await _get_config(key_id, db)
 

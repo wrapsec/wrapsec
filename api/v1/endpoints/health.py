@@ -23,6 +23,11 @@ async def health():
 
 @router.get("/health/ready")
 async def health_ready():
+    """
+    Readiness check. Returns "ready" if all components are healthy, "degraded" if Redis is unavailable.
+    Database and ML model are treated as always healthy — Redis is the only polled component.
+    Used by container orchestrators to hold traffic until the service is ready.
+    """
     from cache.redis_client import ping as redis_ping
     redis_ok = await redis_ping()
 

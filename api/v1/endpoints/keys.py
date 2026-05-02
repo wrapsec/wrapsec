@@ -55,6 +55,15 @@ async def create_key(
     db:        AsyncSession = Depends(get_db),
     principal: Principal    = Depends(require_admin()),
 ):
+    """
+    Creates an API key. Scope resolution follows a three-tier chain:
+      app_id provided  → derive dept + tenant from the app record
+      dept_id provided → derive tenant from the dept record
+      neither          → use the authenticated principal's tenant/dept
+
+    The raw key value is returned once and cannot be retrieved again.
+    Auth: JWT + ADMIN role required.
+    """
     # Validate key_type
     if body.key_type not in ("live", "trial"):
         from errors.exceptions import WrapSecError
@@ -128,6 +137,11 @@ async def list_keys(
     db:        AsyncSession = Depends(get_db),
     principal: Principal    = Depends(get_current_principal),
 ):
+    """
+    Lists all active, non-expired keys for the authenticated principal's tenant.
+    Each key is enriched with department name and application name where available.
+    Keys past their grace-period expiry are excluded from the response.
+    """
     repo = ApiKeyRepository(db)
     keys = await repo.list_active()
     # Filter out keys whose grace period has expired
@@ -183,6 +197,7 @@ async def get_key(
     db:        AsyncSession = Depends(get_db),
     principal: Principal    = Depends(get_current_principal),
 ):
+    """Returns full metadata for a single key by key_id. 404 if not found."""
     repo   = ApiKeyRepository(db)
     record = await repo.get_by_key_id(key_id)
     if not record:
@@ -212,6 +227,7 @@ async def update_key(
     db:        AsyncSession = Depends(get_db),
     principal: Principal    = Depends(require_admin()),
 ):
+    """Renames an API key. Does not rotate the key secret. Auth: JWT + ADMIN required."""
     repo   = ApiKeyRepository(db)
     record = await repo.get_by_key_id(key_id)
     if not record:
@@ -232,6 +248,11 @@ async def delete_key(
     db:        AsyncSession = Depends(get_db),
     principal: Principal    = Depends(require_admin()),
 ):
+    """
+    Revokes an API key immediately. If the key is still in a rotation grace period,
+    it is revoked early and a warning is included in the response.
+    Auth: JWT + ADMIN role required.
+    """
     repo   = ApiKeyRepository(db)
     record = await repo.get_by_key_id(key_id)
     if not record:

@@ -39,6 +39,10 @@ async def get_tenant(
     db:        AsyncSession = Depends(get_db),
     _principal: Principal   = Depends(get_current_principal),
 ):
+    """
+    Returns the default tenant profile including global_policy, contact_email, and metadata.
+    Auth: any valid principal.
+    """
     repo   = TenantRepository(db)
     tenant = await repo.get_default()
     if not tenant:
@@ -52,6 +56,11 @@ async def update_tenant(
     db:        AsyncSession = Depends(get_db),
     _principal: Principal   = Depends(require_admin()),
 ):
+    """
+    Partially updates tenant metadata: name, description, contact_email, global_policy.
+    Only fields present in the request body are updated.
+    Auth: JWT + ADMIN role required.
+    """
     repo   = TenantRepository(db)
     tenant = await repo.get_default()
     if not tenant:

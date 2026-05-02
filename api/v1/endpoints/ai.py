@@ -91,6 +91,23 @@ async def ai_request(
     db:        AsyncSession = Depends(get_db),
     _principal: Principal   = Depends(get_current_principal),
 ):
+    """
+    Main AI security scan endpoint.
+
+    Processing order:
+      1. Debug mode guard — only admin keys may request debug output.
+      2. Trial key restrictions — input size cap and proxy mode blocked.
+      3. Trial rate limit — stricter per-minute limit applied on top of global middleware limit.
+      4. Semantic cache lookup — returns cached result on hit, skips pipeline.
+      5. Policy resolution — resolves effective thresholds and detection layers for the
+         request's tenant/dept/app scope.
+      6. Detection pipeline — runs via GatewayService (rule, ML, LLM layers as configured).
+      7. Audit log write — persists full decision record to audit_logs.
+      8. Metrics recording — non-blocking; errors are swallowed.
+      9. Semantic cache write — caches successful responses for future identical inputs.
+
+    Auth: any valid principal (API key).
+    """
     if body.options.debug and not getattr(request.state, "is_admin", False):
         raise DebugForbiddenError()
 
@@ -296,6 +313,13 @@ async def get_request(
     db:         AsyncSession = Depends(get_db),
     _principal: Principal    = Depends(get_current_principal),
 ):
+    """
+    Returns the full audit record for a single request by trace_id.
+    Admin keys use an unscoped lookup; all other keys are scoped to their dept_id.
+    For proxy requests, the response is enriched with the full proxy_interactions record
+    including provider response, output decision, and execution status.
+    404 if the record does not exist or is out of scope.
+    """
     repo    = AuditRepository(db)
     dept_id = getattr(request.state, "dept_id", None)
 

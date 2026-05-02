@@ -53,6 +53,10 @@ async def create_department(
     db:        AsyncSession = Depends(get_db),
     principal: Principal    = Depends(require_admin()),
 ):
+    """
+    Creates a new department under the authenticated principal's tenant.
+    Auth: JWT + ADMIN role required.
+    """
     import uuid as _uuid
     tenant_id = _uuid.UUID(request.state.tenant_id)
 
@@ -74,6 +78,10 @@ async def list_departments(
     db:        AsyncSession = Depends(get_db),
     principal: Principal    = Depends(get_current_principal),
 ):
+    """
+    Lists departments scoped to the authenticated principal's tenant.
+    ADMIN principals see all departments. Non-admin principals see only their own department.
+    """
     import uuid as _uuid
     tenant_id = _uuid.UUID(request.state.tenant_id)
 
@@ -93,6 +101,11 @@ async def get_department_stats(
     db:        AsyncSession = Depends(get_db),
     principal: Principal    = Depends(get_current_principal),
 ):
+    """
+    Aggregates audit_logs for this department.
+    Returns total request count, decision breakdown, block rate, average latency,
+    and the top 5 threat categories by frequency.
+    """
     from sqlalchemy import func
     from db.models import AuditLogModel
     from sqlalchemy import select as sa_select
@@ -194,6 +207,7 @@ async def get_department(
     db:        AsyncSession = Depends(get_db),
     principal: Principal    = Depends(get_current_principal),
 ):
+    """Returns a single department by ID. 404 if not found."""
     repo   = DepartmentRepository(db)
     record = await repo.get_by_id(uuid.UUID(dept_id))
     if not record:
@@ -208,6 +222,12 @@ async def update_department(
     db:        AsyncSession = Depends(get_db),
     principal: Principal    = Depends(require_admin()),
 ):
+    """
+    Partially updates a department. Only fields present in the request body are applied.
+    Explicitly set null values (e.g. policy_override=null) are also applied — use this
+    to clear a department's policy override back to tenant-level defaults.
+    Auth: JWT + ADMIN role required.
+    """
     repo = DepartmentRepository(db)
     # Use exclude_unset=True so explicitly set null values (e.g. policy_override=null)
     # are included — filtering "if v is not None" would silently drop them
@@ -224,6 +244,11 @@ async def delete_department(
     db:        AsyncSession = Depends(get_db),
     principal: Principal    = Depends(require_admin()),
 ):
+    """
+    Soft-deletes a department by setting is_active=False.
+    The department record is retained for audit history.
+    Auth: JWT + ADMIN role required.
+    """
     repo   = DepartmentRepository(db)
     record = await repo.update(uuid.UUID(dept_id), {"is_active": False})
     if not record:

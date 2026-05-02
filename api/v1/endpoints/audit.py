@@ -82,6 +82,11 @@ async def get_audit_logs(
     db:              AsyncSession = Depends(get_db),
     _principal:      Principal    = Depends(get_current_principal),
 ):
+    """
+    Returns a paginated, filterable list of audit log entries.
+    Non-admin keys are always scoped to their own dept_id and tenant_id — any
+    dept_id/tenant_id query parameters from non-admin callers are ignored.
+    """
     is_admin = getattr(request.state, "is_admin", False)
     # Non-admin keys are always scoped to their own dept.
     # Ignore any dept_id query param from the caller — use identity from auth.
@@ -126,6 +131,13 @@ async def get_audit_stats(
     db:        AsyncSession = Depends(get_db),
     _principal: Principal    = Depends(get_current_principal),
 ):
+    """
+    Returns aggregated statistics for the given time range.
+    Includes: total request count, block/sanitize/allow rates, avg and p95 latency,
+    top threat categories, and severity breakdown (CRITICAL/HIGH/MEDIUM/LOW).
+    Non-admin keys are scoped to their own tenant_id.
+    Returns zeroed stats (not 404) when no requests match the filters.
+    """
     is_admin = getattr(request.state, "is_admin", False)
     if not is_admin:
         tenant_id = getattr(request.state, "tenant_id", None)
@@ -463,13 +475,14 @@ async def export_audit_logs(
     db:              AsyncSession = Depends(get_db),
     _principal:      Principal    = Depends(get_current_principal),
 ):
+    """
+    Exports audit logs as a CSV file for compliance reporting (up to 10,000 rows).
+    Non-admin keys are scoped to their own dept_id.
+    Response is streamed as attachment: wrapsec_audit_export.csv.
+    """
     is_admin = getattr(request.state, "is_admin", False)
     if not is_admin:
         dept_id = getattr(request.state, "dept_id", None)
-    """
-    Export audit logs as CSV for compliance reporting.
-    Extensible: additional filters and formats (JSON, PDF) in v1.1.
-    """
     import csv
     import io
     from starlette.responses import StreamingResponse

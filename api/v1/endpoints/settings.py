@@ -68,6 +68,10 @@ async def get_thresholds(
     db:        AsyncSession = Depends(get_db),
     _principal = Depends(get_current_principal),
 ):
+    """
+    Returns the active block and sanitize thresholds.
+    Source is 'database' if thresholds have been explicitly set, 'environment' if using defaults.
+    """
     repo   = SettingsRepository(db)
     stored = await repo.get(THRESHOLD_KEY)
     return JSONResponse(content=stored or DEFAULT_THRESHOLDS)
@@ -79,6 +83,11 @@ async def update_thresholds(
     db:        AsyncSession = Depends(get_db),
     _principal = Depends(require_admin()),
 ):
+    """
+    Updates block and/or sanitize thresholds. Merges with existing stored values.
+    Validation enforces: block_threshold > sanitize_threshold, both in (0.0, 1.0].
+    Auth: JWT + ADMIN role required.
+    """
     repo    = SettingsRepository(db)
     current = await repo.get(THRESHOLD_KEY) or DEFAULT_THRESHOLDS.copy()
 
@@ -100,6 +109,7 @@ async def get_layers(
     db:        AsyncSession = Depends(get_db),
     _principal = Depends(get_current_principal),
 ):
+    """Returns the active detection layer configuration (rule, ML, LLM enabled flags)."""
     repo   = SettingsRepository(db)
     stored = await repo.get(LAYERS_KEY)
     return JSONResponse(content=stored or DEFAULT_LAYERS)
@@ -111,6 +121,11 @@ async def update_layers(
     db:        AsyncSession = Depends(get_db),
     _principal = Depends(require_admin()),
 ):
+    """
+    Enables or disables detection layers (rule, ML, LLM). Merges with existing values.
+    Note: proxy mode requires llm_enabled=true — disabling LLM will block proxy requests.
+    Auth: JWT + ADMIN role required.
+    """
     repo    = SettingsRepository(db)
     current = await repo.get(LAYERS_KEY) or DEFAULT_LAYERS.copy()
 
@@ -165,6 +180,7 @@ async def get_llm_settings(
     db:        AsyncSession = Depends(get_db),
     _principal = Depends(get_current_principal),
 ):
+    """Returns the active LLM layer configuration (provider, model, base_url, timeout, llm_trigger threshold)."""
     repo   = SettingsRepository(db)
     stored = await repo.get(LLM_KEY)
     return JSONResponse(content=stored or DEFAULT_LLM)
@@ -176,6 +192,11 @@ async def update_llm_settings(
     db:        AsyncSession = Depends(get_db),
     _principal = Depends(require_admin()),
 ):
+    """
+    Updates LLM layer settings. Merges with existing values.
+    Supported providers: ollama, openai, groq.
+    Auth: JWT + ADMIN role required.
+    """
     repo    = SettingsRepository(db)
     current = await repo.get(LLM_KEY) or DEFAULT_LLM.copy()
 
@@ -212,6 +233,10 @@ async def get_retention_settings(
     db:        AsyncSession = Depends(get_db),
     _principal = Depends(get_current_principal),
 ):
+    """
+    Returns the audit log retention period in days.
+    Source is 'database' if explicitly set via PUT, 'environment' if using the default.
+    """
     repo    = SettingsRepository(db)
     stored  = await repo.get(RETENTION_KEY)
     days    = stored.get("retention_days", settings.audit_retention_days) if stored else settings.audit_retention_days
@@ -227,6 +252,10 @@ async def update_retention_settings(
     db:        AsyncSession = Depends(get_db),
     _principal = Depends(require_admin()),
 ):
+    """
+    Updates the audit log retention period. Valid range: 7–3650 days (7 days to 10 years).
+    Auth: JWT + ADMIN role required.
+    """
     repo = SettingsRepository(db)
     await repo.set(RETENTION_KEY, {"retention_days": body.retention_days})
     return JSONResponse(content={
