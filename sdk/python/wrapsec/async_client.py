@@ -161,8 +161,11 @@ class AsyncClient:
         delay_ms: int = 0,
     ) -> list[ScanResult]:
         """
-        Scan multiple inputs concurrently (with optional delay).
+        Scan multiple inputs sequentially (with optional delay between requests).
         Returns results in the same order as inputs.
+
+        Note: inputs are scanned one at a time, not concurrently.
+        For true concurrent scanning, use asyncio.gather() with individual scan() calls.
         """
         import asyncio
         results: list[ScanResult] = []
@@ -183,7 +186,7 @@ class AsyncClient:
     ) -> list[AuditLog]:
         params: dict[str, str] = {"limit": str(min(limit, 100))}
         if decision:  params["decision"] = decision
-        if reason:    params["reason"]   = reason
+        if reason:    params["primary_reason"] = reason  # Bug #1 fix: match API param name and sync client
         if from_date: params["from"]     = from_date
         if to_date:   params["to"]       = to_date
 

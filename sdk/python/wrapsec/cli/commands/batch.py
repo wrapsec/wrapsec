@@ -69,8 +69,8 @@ LARGE_FILE_WARN = 100                 # lines
 @click.option(
     "--limit",
     default=None,
-    type=int,
-    help="Maximum number of lines to process.",
+    type=click.IntRange(1, None),   # Bug #3 fix: reject 0 and negative values
+    help="Maximum number of lines to process. Must be at least 1.",
 )
 @click.option(
     "--summary",
@@ -145,8 +145,10 @@ def batch(
     if not quiet and not json_output:
         with open(Path(file).resolve(), "r", encoding="utf-8", errors="replace") as f:
             line_count = sum(
+                # Bug #2 fix: strip BOM (﻿) before checking — matches
+                # the processing loop which also strips BOM via lstrip("﻿")
                 1 for ln in f
-                if ln.strip() and not ln.strip().startswith("#")
+                if ln.lstrip("﻿").strip() and not ln.lstrip("﻿").strip().startswith("#")
             )
 
         effective = min(line_count, limit) if limit else line_count

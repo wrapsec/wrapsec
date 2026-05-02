@@ -132,8 +132,15 @@ def map_response_error(
             response=response_data,
         )
 
+    # Bug #5 fix: never include raw response text in the error message.
+    # raw_text could be an HTML error page containing internal server paths,
+    # stack traces, or infrastructure details. Log it internally instead.
+    import logging as _logging
+    _logging.getLogger("wrapsec.http").debug(
+        "Unexpected HTTP %d raw response: %s", status_code, raw_text[:500]
+    )
     return WrapSecError(
-        f"Unexpected HTTP {status_code}: {error_detail or raw_text[:200]}",
+        f"Unexpected HTTP {status_code}{': ' + error_detail if error_detail else ''}",
         status_code=status_code,
         response=response_data,
     )
