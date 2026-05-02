@@ -4,7 +4,6 @@ WrapSec is a production-grade AI security gateway and enforcement layer that pro
 
 It inspects every prompt and response through a multi-layer detection pipeline and enforces decisions - ALLOW, BLOCK, or SANITIZE - before anything reaches the model.
 
----
 
 ## Why WrapSec
 
@@ -18,7 +17,6 @@ WrapSec supports two execution modes:
 
 **Proxy** - WrapSec sits in the full request path, inspects input, forwards to the LLM provider using an encrypted API key, inspects the response, and returns an OpenAI-compatible response to the application. Both input and output decisions are enforced.
 
----
 
 ## Detection Pipeline
 
@@ -38,7 +36,6 @@ Detection risk score: `rule×0.40 + ml×0.30 + llm×0.30`
 
 Guardrails (PII, toxicity) are architecturally separate from detection and operate independently. They can override detection decisions regardless of risk score. Guardrail thresholds are independent of detection thresholds.
 
----
 
 ## Security Decisions
 
@@ -52,7 +49,6 @@ Guardrails (PII, toxicity) are architecturally separate from detection and opera
 
 `primary_reason = SYSTEM_ERROR` means the detection pipeline failed. The returned `ALLOW` decision is not trustworthy and must not be used. Applications must treat this as a failure and must not forward input to the LLM.
 
----
 
 ## Stack
 
@@ -65,7 +61,6 @@ Guardrails (PII, toxicity) are architecturally separate from detection and opera
 | ML model | TF-IDF + logistic regression, trained on 7 threat categories |
 | Observability | Prometheus, Grafana |
 
----
 
 ## Entity Model
 
@@ -80,7 +75,6 @@ tenant
 
 Policy resolution: system defaults → DB settings → department override → application override. Each layer deep-merges - null fields inherit from the layer above.
 
----
 
 ## API
 
@@ -100,7 +94,6 @@ Authentication: `x-api-key` header for API keys, `Authorization: Bearer` for JWT
 
 Full API reference: `docs/api.md` (47 endpoints)
 
----
 
 ## Python SDK and CLI
 
@@ -137,7 +130,6 @@ input_to_forward = result.sanitized_input if result.is_sanitized else user_input
 
 SDK documentation: `sdk/python/README.md`
 
----
 
 ## Node.js SDK
 
@@ -162,7 +154,6 @@ if (result.isBlocked) {
 
 Express and Fastify middleware included. SDK documentation: `sdk/node/README.md`
 
----
 
 ## Proxy Mode
 
@@ -184,7 +175,6 @@ response = client.chat.completions.create(
 
 Proxy mode enforces both input and output security and removes the need for application-level integration. Provider API keys are stored encrypted (AES-256-GCM) and never returned in full after creation.
 
----
 
 ## Auth and Access Control
 
@@ -200,7 +190,6 @@ API keys are strictly for runtime machine-to-machine access. All administrative 
 
 Account lockout: 5 failed login attempts triggers a 15-minute Redis-backed lockout.
 
----
 
 ## Data Storage
 
@@ -214,7 +203,6 @@ Three modes, set via `DATA_STORAGE_MODE` environment variable:
 
 This allows deployment in regulated environments where storing raw user input is restricted. Audit logs are retained per the configured retention period (default 30 days). A background worker runs daily at 02:00 UTC.
 
----
 
 ## Observability
 
@@ -222,7 +210,6 @@ Prometheus scrapes `GET /metrics`. Three Grafana dashboards are included: Securi
 
 These metrics enable real-time monitoring of threat activity, latency, and system health. Key metrics: `wrapsec_requests_total`, `wrapsec_blocked_total`, `wrapsec_request_latency_ms`, `wrapsec_system_errors_total`, `wrapsec_proxy_latency_ms`.
 
----
 
 ## Running Locally
 
@@ -248,7 +235,6 @@ export PYTHONPATH=$(pwd)
 pytest tests/unit tests/integration -v
 ```
 
----
 
 ## Documentation
 
@@ -264,7 +250,6 @@ pytest tests/unit tests/integration -v
 | Python SDK | `sdk/python/README.md` |
 | Node.js SDK | `sdk/node/README.md` |
 
----
 
 ## Production Notes
 
@@ -276,8 +261,6 @@ pytest tests/unit tests/integration -v
 - JWT department mismatch warnings (`auth_event=JWT_DEPT_MISMATCH`) must be routed to the security monitoring pipeline.
 
 WrapSec ensures that every AI interaction in your system is inspected, controlled, and auditable by design.
-
----
 
 ## License
 
