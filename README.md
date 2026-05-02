@@ -6,17 +6,11 @@ It inspects every prompt and response through a multi-layer detection pipeline a
 
 ---
 
-## Overview
-
----
-
 ## Why WrapSec
 
 Traditional input validation does not protect against AI-specific threats such as prompt injection, jailbreak attempts, data exfiltration, and PII leakage. WrapSec provides real-time enforcement before LLM execution, not after.
 
 WrapSec enforces security decisions before any request reaches the LLM. Blocked requests never leave your system.
-
----
 
 WrapSec supports two execution modes:
 
@@ -280,10 +274,6 @@ pytest tests/unit tests/integration -v
 - Pin Grafana to 10.4.0 - Grafana 12 has dashboard provisioning issues.
 - Prometheus target changes from `host.docker.internal:8000` to `api:8000` in Docker deployment.
 - JWT department mismatch warnings (`auth_event=JWT_DEPT_MISMATCH`) must be routed to the security monitoring pipeline.
-
----
-
----
 
 WrapSec ensures that every AI interaction in your system is inspected, controlled, and auditable by design.
 
