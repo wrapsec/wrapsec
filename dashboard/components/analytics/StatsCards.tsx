@@ -1,3 +1,6 @@
+// SPDX-License-Identifier: MIT
+// Copyright (c) 2026 WrapSec. All rights reserved.
+// WrapSec v1.0 | AI Security Gateway - https://wrapsec.com
 import { Card } from "@/components/ui/Card"
 import { AuditStatsResponse } from "@/lib/types"
 import { formatRate, formatLatency } from "@/lib/utils"
