@@ -1,509 +1,294 @@
-# WrapSec - AI Security Gateway
+# WrapSec
 
-> Production-grade security gateway for enterprise AI applications. Protects every LLM interaction with a multi-layer detection pipeline, independent guardrail enforcement, and a complete attribution audit trail.
+WrapSec is a production-grade AI security gateway and enforcement layer that protects applications interacting with LLMs.
 
-WrapSec enforces security, compliance, and observability for every LLM request — both as a scan-only inspector and as a full AI interaction firewall with proxy mode.
-
-[![Python](https://img.shields.io/badge/Python-3.10+-blue?style=flat-square)](https://python.org)
-[![FastAPI](https://img.shields.io/badge/FastAPI-0.100+-green?style=flat-square)](https://fastapi.tiangolo.com)
-[![Next.js](https://img.shields.io/badge/Next.js-14-black?style=flat-square)](https://nextjs.org)
-[![PostgreSQL](https://img.shields.io/badge/PostgreSQL-15-blue?style=flat-square)](https://postgresql.org)
-[![Tests](https://img.shields.io/badge/Tests-148%20passing-brightgreen?style=flat-square)](#running-tests)
-[![License](https://img.shields.io/badge/License-MIT-yellow?style=flat-square)](LICENSE)
+It inspects every prompt and response through a multi-layer detection pipeline and enforces decisions - ALLOW, BLOCK, or SANITIZE - before anything reaches the model.
 
 ---
 
-## What is WrapSec?
-
-WrapSec is a self-hosted AI security gateway that sits between your application and any LLM provider. It operates in two modes:
-
-**Scan-only:** Every prompt passes through a four-layer detection pipeline. Threats are blocked or sanitised in real time. Your application forwards clean prompts to the LLM itself.
-
-**Proxy mode (AI Interaction Firewall):** WrapSec acts as a drop-in replacement for the OpenAI API. Change your SDK's `base_url` and prefix your model name. WrapSec scans the input, forwards it to the real provider using your encrypted API key, scans the output, and returns an OpenAI-compatible response. Security is enforced on both input and output.
-
-Every decision is logged with full security attribution, a confidence score, and a primary reason — giving security teams and compliance officers a complete, explainable audit trail. Text storage depends on the configured storage mode (`full` / `masked` / `none`).
+## Overview
 
 ---
 
-## Why WrapSec?
+## Why WrapSec
 
-| Problem | WrapSec Solution |
+Traditional input validation does not protect against AI-specific threats such as prompt injection, jailbreak attempts, data exfiltration, and PII leakage. WrapSec provides real-time enforcement before LLM execution, not after.
+
+WrapSec enforces security decisions before any request reaches the LLM. Blocked requests never leave your system.
+
+---
+
+WrapSec supports two execution modes:
+
+**Scan-only** - the application sends a prompt to WrapSec, receives a security decision (ALLOW / BLOCK / SANITIZE), and handles LLM forwarding itself.
+
+**Proxy** - WrapSec sits in the full request path, inspects input, forwards to the LLM provider using an encrypted API key, inspects the response, and returns an OpenAI-compatible response to the application. Both input and output decisions are enforced.
+
+---
+
+## Detection Pipeline
+
+The pipeline combines rule-based, machine learning, and optional LLM-based analysis to produce a final security decision. Every request passes through four independent layers:
+
+```
+Input
+  ├── InputGuard         PII detection, 22+ entity types, regex-based redaction
+  ├── RuleDetector       Regex and heuristic patterns, ~1ms
+  ├── MLDetector         TF-IDF + logistic regression, 7 labels, ~5ms
+  ├── ToxicityGuard      Reads ML toxicity label directly, independent threshold
+  ├── LLMDetector        Semantic analysis, full mode only, ~100–500ms additional
+  └── PolicyEngine       BLOCK / SANITIZE / ALLOW
+```
+
+Detection risk score: `rule×0.40 + ml×0.30 + llm×0.30`
+
+Guardrails (PII, toxicity) are architecturally separate from detection and operate independently. They can override detection decisions regardless of risk score. Guardrail thresholds are independent of detection thresholds.
+
+---
+
+## Security Decisions
+
+| Decision | Meaning |
 |---|---|
-| Prompt injection and jailbreak attacks | Rule + ML + LLM detection pipeline |
-| PII leaking into AI systems | Independent PII guardrail with 22+ entity types on input and output |
-| Detection threshold changes impacting PII protection | Guardrail thresholds fully decoupled from detection thresholds |
-| LLM provider API keys exposed in client code | Provider keys stored AES-256-GCM encrypted server-side, client only holds WrapSec key |
-| Raw user messages and LLM responses stored indefinitely | Configurable storage modes (full / masked / none) with retention policy |
-| No audit trail for AI requests | Full attribution chain per request, unified view of scan-only and proxy traffic |
-| Black-box decisions | primary_reason + confidence on every response |
-| Cannot distinguish clean input from system failure | SYSTEM_ERROR is always distinct from NO_THREAT_DETECTED |
-| Duplicate processing on retries | Idempotency-Key: same key + different body returns 409 CONFLICT |
-| CJK and dense text overloading LLMs | Heuristic token limit: ceil(len/2) > 4000 returns 422 |
-| Compliance gaps (GDPR, EU AI Act, SOC 2) | Confidence bands, decision versioning, CSV export, configurable retention |
+| `ALLOW` | No threat detected. Safe to forward to LLM. |
+| `BLOCK` | Threat detected. Must not forward to LLM. |
+| `SANITIZE` | Sensitive content redacted. Forward `sanitized_input` to LLM, not the original. |
+
+`risk_score = 0.0` does not mean safe. Always rely on `decision` as the authoritative verdict. Guardrails can produce `BLOCK` with `risk_score = 0.0`.
+
+`primary_reason = SYSTEM_ERROR` means the detection pipeline failed. The returned `ALLOW` decision is not trustworthy and must not be used. Applications must treat this as a failure and must not forward input to the LLM.
 
 ---
 
-## Key Features
+## Stack
 
-**Detection pipeline:**
-- Rule-based detector: regex and heuristic patterns, ~<1ms
-- ML classifier: TF-IDF + LogisticRegression trained on 6,700+ samples from peer-reviewed security datasets, ~5ms
-- LLM semantic detector: conditional invocation in full mode, ~100–500ms depending on provider and model
-- PII guardrail: 22+ entity types, scans both input and LLM output
-
-**ML model:**
-- 6,742 training samples across 7 threat classes
-- 97.7% test accuracy, 97.0% cross-validation accuracy
-- Datasets: HackAPrompt (NeurIPS 2023), JailbreakBench (NeurIPS 2024), Measuring Hate Speech (UC Berkeley, ACL 2022), Jigsaw Toxic Comments (Google/Wikipedia CC0, WWW 2017), Stanford Alpaca, deepset Prompt Injections, ai4privacy PII Masking 300k
-- All classes achieve F1 > 0.93 on evaluation datasets
-
-**Proxy mode — AI Interaction Firewall:**
-- Drop-in OpenAI SDK replacement — change `base_url`, prefix the model name, configure the provider once via `PUT /v1/settings/proxy`, and use a WrapSec API key. No changes to request structure.
-- Provider support: OpenAI, Groq, Azure OpenAI, Together AI, Ollama, any OpenAI-compatible endpoint
-- Provider API keys encrypted AES-256-GCM at rest, never returned in API responses
-- Input PII enforcement — real data never reaches the provider when SANITIZE applies
-- Output PII enforcement — model responses scanned and redacted before returning to client
-- Configurable storage modes: `full` | `masked` (default) | `none`
-- Text retention policy — raw content purged after N days, security metadata kept permanently
-- X-WrapSec-* headers on every response for client-side observability
-
-**Decision model:**
-- Guardrail-first: PII evaluated independently, always overrides detection
-- Guardrail thresholds (guardrails.pii.*) fully decoupled from detection thresholds
-- risk_score = rule x 0.40 + ml x 0.30 + llm x 0.30 (PII excluded)
-- primary_reason: 7 values, SYSTEM_ERROR indicates a detection failure — never confused with NO_THREAT_DETECTED which requires successful clean detection
-- confidence: variance-based with HIGH/MEDIUM/LOW band, 0.0 on system failure
-- decision_version: algorithm version in every response
-
-**Reliability:**
-- Idempotency-Key: same key + same body returns cached result, same key + different body returns 409
-- ULID trace IDs: time-sortable
-- Input limit: 8,000 chars / 4,000 estimated tokens (heuristic, safe for CJK)
-- Per-detector try/catch: individual failures do not crash the pipeline
-- SYSTEM_ERROR on detector failure: never confused with NO_THREAT_DETECTED — only returned for successful clean evaluations
-
-**Policy hierarchy:**
-- System defaults → tenant global → department overrides
-- Detection thresholds and PII thresholds configured and resolved independently
-- All settings configurable at runtime without restart
+| Component | Technology |
+|---|---|
+| API | FastAPI, Python 3.10 |
+| Database | PostgreSQL (SQLAlchemy async) |
+| Cache | Redis |
+| Dashboard | Next.js 16, React 19 |
+| ML model | TF-IDF + logistic regression, trained on 7 threat categories |
+| Observability | Prometheus, Grafana |
 
 ---
 
-## Architecture
-
-### Scan-Only Mode
+## Entity Model
 
 ```
-Calling Application
-        |  x-api-key: wsk_live_...
-        |  POST /v1/ai/request
-        v
-    WrapSec API (FastAPI)
-    +--------------------------------------------------+
-    |  Trace -> RateLimit -> Auth -> Idempotency -> Log|
-    |                                                  |
-    |  Gateway Service                                 |
-    |  +-- InputGuard    PII detection + redaction     |
-    |  +-- RuleDetector  try/catch (~<1ms)              |
-    |  +-- MLDetector    try/catch (~5ms)              |
-    |  +-- LLMDetector   try/catch (full mode only)    |
-    |  +-- RiskScorer    rule+ml+llm weighted          |
-    |  +-- PolicyEngine  BLOCK / SANITIZE / ALLOW      |
-    +--------------------------------------------------+
-        |
-        +-- audit_logs (decision, scores, threats)
-        v
-    Response -> Application -> (app forwards to LLM itself)
+tenant
+└── departments
+    ├── policy_override  (independent thresholds per dept)
+    └── applications
+        ├── policy_override
+        └── api_keys     (wsk_live_ | wsk_trial_)
 ```
 
-### Proxy Mode — AI Interaction Firewall
-
-```
-Calling Application
-        |  x-api-key: wsk_live_...        (WrapSec key)
-        |  POST /v1/chat/completions
-        |  model: "openai/gpt-4o"
-        v
-    WrapSec API (FastAPI)
-    +--------------------------------------------------+
-    |  Input Guard                                     |
-    |  +-- Detection pipeline (same as scan-only)      |
-    |  +-- BLOCK    -> 400, provider never called      |
-    |  +-- SANITIZE -> redact PII before forwarding    |
-    |                                                  |
-    |  Provider Layer (encrypted API key server-side)  |
-    |  +-- OpenAI / Groq / Azure / Together AI         |
-    |  +-- Ollama (local)                              |
-    |  +-- Custom (any OpenAI-compatible endpoint)     |
-    |                                                  |
-    |  Output Guard                                    |
-    |  +-- PII scan on provider response               |
-    |  +-- BLOCK    -> 400, response suppressed        |
-    |  +-- SANITIZE -> redact PII before returning     |
-    +--------------------------------------------------+
-        |
-        +-- proxy_interactions (full lifecycle, text subject to storage mode)
-        +-- audit_logs (FK linked, unified requests view)
-        v
-    OpenAI-compatible response + X-WrapSec-* headers
-```
-
-**Scoring:**
-
-```
-Detection risk score (PII excluded):
-  risk_score = rule x 0.40 + ml x 0.30 + llm x 0.30
-
-Guardrail (independent thresholds):
-  pii >= guardrails.pii.block_threshold    -> BLOCK
-  pii >= guardrails.pii.sanitize_threshold -> SANITIZE
-
-Policy decision (if no guardrail triggered):
-  risk_score >= thresholds.block    -> BLOCK
-  risk_score >= thresholds.sanitize -> SANITIZE
-  otherwise                         -> ALLOW
-
-Primary reason (in order of priority):
-  detection_failed = True -> SYSTEM_ERROR
-  guardrail triggered     -> PII_GUARDRAIL_BLOCK/SANITIZE
-  max detector > 0        -> RULE/ML/LLM_DETECTOR
-  all scores = 0          -> NO_THREAT_DETECTED
-```
+Policy resolution: system defaults → DB settings → department override → application override. Each layer deep-merges - null fields inherit from the layer above.
 
 ---
 
-## Response Format
+## API
 
-### Scan-Only
-
-```json
-{
-  "trace_id":             "req_01knzhh81wrwg2r8r7wnwq139y",
-  "decision":             "BLOCK",
-  "decision_version":     "v1.0",
-  "risk_score":           0.85,
-  "primary_reason":       "RULE_DETECTOR",
-  "confidence":           0.75,
-  "confidence_band":      "HIGH",
-  "sanitization_applied": false,
-  "threats":              ["PROMPT_INJECTION"],
-  "processing": {
-    "latency_ms": 2.1, "llm_invoked": false,
-    "detection_mode": "fast", "execution_mode": "scan_only"
-  }
-}
+**Scan-only:**
+```
+POST /v1/ai/request
 ```
 
-### Proxy Mode — Success
-
-```json
-{
-  "id":      "wrapsec-req_01...",
-  "object":  "chat.completion",
-  "model":   "gemma3:4b",
-  "choices": [{"index": 0, "message": {"role": "assistant", "content": "..."}, "finish_reason": "stop"}]
-}
+**Proxy (OpenAI-compatible):**
+```
+POST /v1/chat/completions
 ```
 
-Response headers:
-```
-X-WrapSec-Trace-Id:          req_01...
-X-WrapSec-Input-Decision:    ALLOW
-X-WrapSec-Output-Decision:   ALLOW
-X-WrapSec-Execution-Status:  SUCCESS
-X-WrapSec-Provider:          ollama
-X-WrapSec-Model:             gemma3:4b
-X-WrapSec-Latency-Ms:        3047
-```
+Use `/v1/ai/request` for scan-only integration. Use `/v1/chat/completions` for full proxy mode - a drop-in OpenAI-compatible replacement.
 
-### Proxy Mode — Input Blocked
+Authentication: `x-api-key` header for API keys, `Authorization: Bearer` for JWT. If both are present, API key takes precedence unconditionally.
 
-Proxy error responses may include `input_*` and `output_*` fields to distinguish input and output lifecycle stages.
-
-```json
-{
-  "error": {
-    "code":     "input_blocked",
-    "message":  "Request blocked by security policy.",
-    "trace_id": "req_01..."
-  },
-  "wrapsec": {
-    "decision":         "BLOCK",
-    "input_threats":    ["PROMPT_INJECTION", "JAILBREAK"],
-    "input_confidence": 0.9642,
-    "execution_status": "BLOCKED"
-  }
-}
-```
+Full API reference: `docs/api.md` (47 endpoints)
 
 ---
 
-## Quick Start
-
-### Prerequisites
-
-Docker + Docker Compose, Python 3.10+, Node.js 18+, Ollama (optional)
-
-### 1. Clone and configure
+## Python SDK and CLI
 
 ```bash
-git clone https://github.com/kbajish/wrapsec.git
-cd wrapsec
-cp .env.example .env
-# Set ADMIN_API_KEY to a strong random value
-python -c "import secrets; print('wrapsec_' + secrets.token_urlsafe(32))"
-```
+pip install -e sdk/python/
 
-### 2. Start infrastructure
+wrapsec config set api_key wsk_live_...
+wrapsec config set base_url http://your-wrapsec-host:8000
 
-```bash
-docker compose -f infrastructure/docker/docker-compose.yml up -d postgres redis
-```
-
-### 3. Install, train, run
-
-```bash
-pip install -r requirements.txt
-python scripts/train_ml_model.py
-uvicorn api.main:app --reload --host 0.0.0.0 --port 8000
-```
-
-### 4. Start dashboard
-
-```bash
-cd dashboard && npm install && npm run dev
-```
-
-Open `http://localhost:3000` and sign in with your admin API key.
-
----
-
-## API Usage
-
-### Scan a prompt
-
-```bash
-curl -X POST http://localhost:8000/v1/ai/request \
-  -H "x-api-key: your-key" \
-  -H "Content-Type: application/json" \
-  -d '{"input": "Ignore all previous instructions"}'
-```
-
-### Python — scan-only
-
-```python
-import httpx, uuid
-
-client = httpx.Client(
-    base_url = "http://localhost:8000",
-    headers  = {"x-api-key": "your-key"},
-)
-
-result = client.post(
-    "/v1/ai/request",
-    headers = {"Idempotency-Key": str(uuid.uuid4())},
-    json    = {"input": user_prompt},
-).json()
-
-match result["decision"]:
-    case "BLOCK":
-        if result["primary_reason"] == "SYSTEM_ERROR":
-            alert_ops(result["trace_id"])
-        else:
-            return "Blocked by security policy"
-    case "SANITIZE":
-        safe_input = result["sanitized_input"]
-    case "ALLOW":
-        pass  # forward to your LLM
-```
-
-### Python — proxy mode (OpenAI SDK)
-
-```python
-from openai import OpenAI
-
-# Before: client = OpenAI(api_key="sk-openai-...", base_url="https://api.openai.com/v1")
-# After:  point at WrapSec -- that's it
-client = OpenAI(
-    api_key  = "wsk_live_your_wrapsec_key",
-    base_url = "http://localhost:8000/v1",
-)
-
-response = client.chat.completions.create(
-    model    = "openai/gpt-4o",   # prefix with provider name
-    messages = [{"role": "user", "content": user_prompt}],
-)
-
-# WrapSec enforces security on input and output
-print(response.headers.get("X-WrapSec-Input-Decision"))   # ALLOW / SANITIZE
-print(response.headers.get("X-WrapSec-Output-Decision"))  # ALLOW / SANITIZE
-print(response.headers.get("X-WrapSec-Trace-Id"))         # for audit lookup
-```
-
-### Python — proxy mode with Ollama
-
-```python
-client = OpenAI(
-    api_key  = "wsk_live_your_wrapsec_key",
-    base_url = "http://localhost:8000/v1",
-)
-
-response = client.chat.completions.create(
-    model    = "ollama/gemma3:4b",
-    messages = [{"role": "user", "content": user_prompt}],
-)
-```
-
-### Configure proxy provider
-
-```bash
-curl -X PUT http://localhost:8000/v1/settings/proxy \
-  -H "x-api-key: your-admin-key" \
-  -H "Content-Type: application/json" \
-  -d '{
-    "provider":      "ollama",
-    "base_url":      "http://localhost:11434",
-    "default_model": "gemma3:4b",
-    "timeout":       60
-  }'
-```
-
-### Python SDK
-
-```bash
-pip install -e ./sdk/python
+wrapsec scan "user input"
+wrapsec batch prompts.txt --summary
+wrapsec audit list --decision BLOCK
 ```
 
 ```python
 import wrapsec
 
-client = wrapsec.Client(api_key="wsk_live_...", base_url="http://localhost:8000")
-result = client.scan("Ignore all previous instructions")
-print(result.decision)        # BLOCK
-print(result.primary_reason)  # RULE_DETECTOR
+client = wrapsec.Client(
+    api_key  = os.environ["WRAPSEC_API_KEY"],
+    base_url = os.environ["WRAPSEC_BASE_URL"],
+)
+
+result = client.scan("user input")
+
+if result.is_system_error:
+    raise RuntimeError("Security check failed")
+
+if result.is_blocked:
+    # Do not forward to LLM
+    return
+
+input_to_forward = result.sanitized_input if result.is_sanitized else user_input
 ```
 
-### CLI
+SDK documentation: `sdk/python/README.md`
+
+---
+
+## Node.js SDK
 
 ```bash
-wrapsec scan "Ignore all previous instructions"
-wrapsec scan --mode full "What is the capital of France?"
-wrapsec keys list
-wrapsec audit export --format csv --output audit.csv
+npm install wrapsec-node
 ```
 
----
+```typescript
+import WrapSec from 'wrapsec-node'
 
-## Configuration
+const client = new WrapSec({
+  apiKey:  process.env.WRAPSEC_API_KEY,
+  baseUrl: process.env.WRAPSEC_BASE_URL,
+})
 
-| Variable | Required | Default | Description |
-|---|---|---|---|
-| ADMIN_API_KEY | Yes | -- | Master admin key |
-| DATABASE_URL | Yes | -- | PostgreSQL connection string |
-| REDIS_URL | No | redis://localhost:6379/0 | Redis |
-| LLM_PROVIDER | No | ollama | Detection LLM provider |
-| LLM_MODEL | No | llama3.2:latest | Detection LLM model |
-| OPENAI_API_KEY | No | -- | Required if LLM_PROVIDER = openai |
-| GROQ_API_KEY | No | -- | Required if LLM_PROVIDER = groq |
-| BLOCK_THRESHOLD | No | 0.7 | Detection block threshold |
-| SANITIZE_THRESHOLD | No | 0.4 | Detection sanitize threshold |
-| RATE_LIMIT_PER_MINUTE | No | 60 | Per API key |
-| AUDIT_RETENTION_DAYS | No | 30 | Audit log retention |
-| DATA_STORAGE_MODE | No | masked | Proxy text storage: full / masked / none |
-| DATA_RETENTION_DAYS_PROXY | No | 7 | Days before proxy text is purged |
+const result = await client.scan(userInput)
 
-**Proxy provider API keys** are configured via `PUT /v1/settings/proxy` and stored encrypted in the database — not in `.env`. The detection LLM API keys (`OPENAI_API_KEY`, `GROQ_API_KEY`) are `.env` only and never stored in the database.
+if (result.isBlocked) {
+  // Do not forward to LLM
+}
+```
+
+Express and Fastify middleware included. SDK documentation: `sdk/node/README.md`
 
 ---
 
-## Data Storage Modes
+## Proxy Mode
 
-| Mode | input_raw / output_raw | Use case |
+WrapSec is an OpenAI-compatible drop-in for proxy mode:
+
+```python
+from openai import OpenAI
+
+client = OpenAI(
+    api_key  = "wsk_live_your_wrapsec_key",
+    base_url = "http://your-wrapsec-host:8000/v1",
+)
+
+response = client.chat.completions.create(
+    model    = "openai/gpt-4o",   # format: provider/model
+    messages = [{"role": "user", "content": user_prompt}],
+)
+```
+
+Proxy mode enforces both input and output security and removes the need for application-level integration. Provider API keys are stored encrypted (AES-256-GCM) and never returned in full after creation.
+
+---
+
+## Auth and Access Control
+
+Dashboard users authenticate with email and password. JWT access tokens expire after 30 minutes. Refresh tokens are stored as SHA-256 hashes in the database - raw tokens are never persisted server-side.
+
+| Role | Scope | Permissions |
 |---|---|---|
-| `full` | Stored as-is | Development, debugging |
-| `masked` | PII redacted before storing (default) | Production |
-| `none` | NULL — text never persisted | Strict compliance |
+| ADMIN | Tenant-wide | Full access - users, settings, keys, all departments |
+| DEVELOPER | Department-scoped | Scan, audit, API keys, read settings |
+| VIEWER | Department-scoped | Read-only audit access |
 
-Metadata (decisions, threats, scores, latency, execution_status) is always retained regardless of mode. Run the retention worker daily:
+API keys are strictly for runtime machine-to-machine access. All administrative operations - user management, key creation, settings changes - require JWT-based authentication via the dashboard.
+
+Account lockout: 5 failed login attempts triggers a 15-minute Redis-backed lockout.
+
+---
+
+## Data Storage
+
+Three modes, set via `DATA_STORAGE_MODE` environment variable:
+
+| Mode | Behaviour |
+|---|---|
+| `masked` | PII redacted before storing (default) |
+| `full` | Text stored as-is |
+| `none` | Text never persisted - security metadata only |
+
+This allows deployment in regulated environments where storing raw user input is restricted. Audit logs are retained per the configured retention period (default 30 days). A background worker runs daily at 02:00 UTC.
+
+---
+
+## Observability
+
+Prometheus scrapes `GET /metrics`. Three Grafana dashboards are included: Security Overview, Latency and Performance, Threat Intelligence.
+
+These metrics enable real-time monitoring of threat activity, latency, and system health. Key metrics: `wrapsec_requests_total`, `wrapsec_blocked_total`, `wrapsec_request_latency_ms`, `wrapsec_system_errors_total`, `wrapsec_proxy_latency_ms`.
+
+---
+
+## Running Locally
+
+This setup runs the full WrapSec stack locally for development and testing.
 
 ```bash
-python scripts/cleanup_audit_logs.py             # uses configured retention days
-python scripts/cleanup_audit_logs.py --dry-run   # preview without deleting
-python scripts/cleanup_audit_logs.py --proxy-only --proxy-days 0  # purge all proxy text immediately
+# Infrastructure
+docker compose -f infrastructure/docker/docker-compose.yml up -d postgres redis
+
+# API
+export PYTHONPATH=$(pwd)
+uvicorn api.main:app --reload --host 0.0.0.0 --port 8000
+
+# Dashboard
+cd dashboard && npm run dev
 ```
 
----
-
-## Failure Modes
-
-| Failure | Decision | Confidence | Primary Reason |
-|---|---|---|---|
-| One detector fails | based on remaining detectors | from remaining | per remaining |
-| All detectors fail | ALLOW | LOW (0.0) | SYSTEM_ERROR |
-| PII threshold triggered | BLOCK/SANITIZE | HIGH | PII_GUARDRAIL_BLOCK/SANITIZE |
-| PII detection failure | ALLOW | LOW (0.0) | SYSTEM_ERROR |
-| Gateway exception | BLOCK | LOW (0.0) | SYSTEM_ERROR |
-| LLM timeout (detection) | continues | from rule+ML | RULE/ML |
-| Provider timeout (proxy) | 504 | -- | -- |
-| Provider unreachable (proxy) | 502 | -- | -- |
-| Redis unavailable | allows | -- | rate limit + idempotency disabled |
-
-Detection and gateway failures return SYSTEM_ERROR. Provider and network failures return HTTP errors (502, 504) and are not SYSTEM_ERROR. SYSTEM_ERROR indicates a failure in the detection pipeline, not a clean result. NO_THREAT_DETECTED is returned only for successful clean evaluations. Monitor SYSTEM_ERROR separately from security decisions.
-
----
-
-## Full Docker Stack
-
-| Service | Port | Description |
-|---|---|---|
-| Nginx | 80 | Reverse proxy, 64KB limit |
-| API | 8000 (internal) | FastAPI |
-| PostgreSQL | 5432 | Primary database |
-| Redis | 6379 | Idempotency, rate limiting, cache |
-| Prometheus | 9090 | Metrics |
-| Grafana | 3001 | Observability |
-
----
-
-## Running Tests
+Tests:
 
 ```bash
-# Windows
-$env:TESTING = "true"; pytest tests/unit tests/integration -v
-
-# Linux/Mac
-TESTING=true pytest tests/unit tests/integration -v
+export TESTING=true
+export PYTHONPATH=$(pwd)
+pytest tests/unit tests/integration -v
 ```
-
-148 tests covering engine scoring, confidence, primary reason, policy resolver, proxy endpoint lifecycle, provider layer, and all API endpoints.
 
 ---
 
 ## Documentation
 
-| Document | Description |
+| Document | Location |
 |---|---|
-| [API Reference](docs/api.md) | All 43 endpoints with proxy mode examples |
-| [Architecture](docs/architecture.md) | Entity model, policy, DB schema, proxy lifecycle |
-| [Scoring Model](docs/scoring_model.md) | Detection pipeline, confidence, primary reason |
-| [Implementation Plan](docs/implementation_plan.md) | Sprint breakdown and roadmap |
+| Core concepts and decision model | `docs/core_concepts.md` |
+| API reference (47 endpoints) | `docs/api.md` |
+| Architecture and database schema | `docs/architecture.md` |
+| Risk scoring and confidence model | `docs/scoring_model.md` |
+| Developer guide | `docs/developer_guide.md` |
+| User guide (dashboard) | `docs/user_guide.md` |
+| CLI reference | `docs/cli_reference.md` |
+| Python SDK | `sdk/python/README.md` |
+| Node.js SDK | `sdk/node/README.md` |
 
 ---
 
-## Roadmap
+## Production Notes
 
-**V1.2:** Per-model token counting (tiktoken), Application policy overrides, Key rotation, Cursor pagination, Background retention worker, Per-key storage mode override
+- Set `WRAPSEC_BASE_URL` explicitly. The default `http://localhost:8000` must not be used in production.
+- Set `DATA_STORAGE_MODE` to `masked` or `none` for regulated environments.
+- Change `SECRET_KEY` and Grafana default password before first deployment.
+- Pin Grafana to 10.4.0 - Grafana 12 has dashboard provisioning issues.
+- Prometheus target changes from `host.docker.internal:8000` to `api:8000` in Docker deployment.
+- JWT department mismatch warnings (`auth_event=JWT_DEPT_MISMATCH`) must be routed to the security monitoring pipeline.
 
-**V2.0:** WildGuard over-refusal/under-refusal detection, Output evaluation engine, Security Events feed and alerting, JWT + SSO, Role-based overrides, Human review queue, SaaS multi-tenancy, SDK, Webhooks, Streaming
+---
+
+---
+
+WrapSec ensures that every AI interaction in your system is inspected, controlled, and auditable by design.
 
 ---
 
 ## License
 
-MIT -- see [LICENSE](LICENSE)
-
-## Author
-
-Built by [@kbajish](https://github.com/kbajish)
-
-WrapSec v1.1 -- Production-grade AI security gateway with proxy mode
+MIT - Copyright © 2026 WrapSec
