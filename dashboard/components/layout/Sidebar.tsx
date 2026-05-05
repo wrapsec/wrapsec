@@ -288,7 +288,7 @@ export function Sidebar() {
             borderTop:  "1px solid var(--sidebar-border)",
             flexShrink: 0,
           }}>
-            <p style={{ fontSize: "11px", color: "rgba(255,255,255,0.25)" }}>WrapSec v1.4.0</p>
+            <p style={{ fontSize: "11px", color: "rgba(255,255,255,0.25)" }}>WrapSec v1.0</p>
           </div>
         )}
       </aside>

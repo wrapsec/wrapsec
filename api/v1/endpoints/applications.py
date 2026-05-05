@@ -13,6 +13,7 @@ from db.repositories.department import DepartmentRepository
 from domain.entities.principal import Principal
 from errors.exceptions import NotFoundError
 from pydantic import BaseModel
+from services.policy_resolver import resolve_policy
 
 router = APIRouter()
 
@@ -90,6 +91,7 @@ async def create_application(
         "policy_override":     body.policy_override,
         "rate_limit_override": body.rate_limit_override,
     })
+    await db.commit()
     return JSONResponse(content=_format(record), status_code=201)
 
 
@@ -119,74 +121,83 @@ async def list_applications(
 
 @router.get("/{app_id}")
 async def get_application(
-    app_id:    str,
+    app_id:    uuid.UUID,
+    request:   Request,
     db:        AsyncSession = Depends(get_db),
     principal: Principal    = Depends(get_current_principal),
 ):
     repo   = ApplicationRepository(db)
-    record = await repo.get_by_id(uuid.UUID(app_id))
-    if not record:
-        raise NotFoundError("application", app_id)
+    record = await repo.get_by_id(app_id)
+    if not record or str(record.tenant_id) != request.state.tenant_id:
+        raise NotFoundError("application", str(app_id))
     return JSONResponse(content=_format(record))
 
 
 @router.put("/{app_id}")
 async def update_application(
-    app_id:    str,
+    app_id:    uuid.UUID,
     body:      ApplicationUpdateSchema,
+    request:   Request,
     db:        AsyncSession = Depends(get_db),
     principal: Principal    = Depends(require_admin()),
 ):
-    repo = ApplicationRepository(db)
+    repo    = ApplicationRepository(db)
+    existing = await repo.get_by_id(app_id)
+    if not existing or str(existing.tenant_id) != request.state.tenant_id:
+        raise NotFoundError("application", str(app_id))
     data = {k: v for k, v in body.model_dump().items() if v is not None}
     if "metadata" in data:
         data["metadata_"] = data.pop("metadata")
-    record = await repo.update(uuid.UUID(app_id), data)
+    record = await repo.update(app_id, data)
     if not record:
-        raise NotFoundError("application", app_id)
+        raise NotFoundError("application", str(app_id))
+    await db.commit()
     return JSONResponse(content=_format(record))
 
 
 @router.delete("/{app_id}")
 async def delete_application(
-    app_id:    str,
+    app_id:    uuid.UUID,
+    request:   Request,
     db:        AsyncSession = Depends(get_db),
     principal: Principal    = Depends(require_admin()),
 ):
-    repo   = ApplicationRepository(db)
-    record = await repo.update(uuid.UUID(app_id), {"is_active": False})
+    repo     = ApplicationRepository(db)
+    existing = await repo.get_by_id(app_id)
+    if not existing or str(existing.tenant_id) != request.state.tenant_id:
+        raise NotFoundError("application", str(app_id))
+    record = await repo.update(app_id, {"is_active": False})
     if not record:
-        raise NotFoundError("application", app_id)
-    return JSONResponse(content={"app_id": app_id, "deactivated": True})
+        raise NotFoundError("application", str(app_id))
+    await db.commit()
+    return JSONResponse(content={"app_id": str(app_id), "deactivated": True})
 
 @router.get("/{app_id}/policy")
 async def get_application_policy(
-    app_id:    str,
+    app_id:    uuid.UUID,
+    request:   Request,
     db:        AsyncSession = Depends(get_db),
     principal: Principal    = Depends(get_current_principal),
 ):
     """
     Returns the fully resolved effective policy for this application.
     Merges: system defaults → tenant global → department → application.
-    Application overrides are null in v1 — will be active in v1.1.
+    Application overrides are currently null for most keys — set via policy_override field.
     """
-    from services.policy_resolver import resolve_policy
-    import uuid as uuid_lib
-
     repo = ApplicationRepository(db)
-    app  = await repo.get_by_id(uuid_lib.UUID(app_id))
-    if not app:
-        raise NotFoundError("application", app_id)
+    app  = await repo.get_by_id(app_id)
+    if not app or str(app.tenant_id) != request.state.tenant_id:
+        raise NotFoundError("application", str(app_id))
 
     policy, policy_source = await resolve_policy(
         db        = db,
         tenant_id = str(app.tenant_id),
         dept_id   = str(app.dept_id),
-        app_id    = app_id,
+        app_id    = str(app_id),
     )
 
     return JSONResponse(content={
-        "app_id":          app_id,
+        "app_id":          str(app_id),
         "app_name":        app.name,
         "dept_id":         str(app.dept_id),
         "policy_source":   policy_source,
@@ -201,8 +212,9 @@ class ApplicationPolicySchema(BaseModel):
 
 @router.put("/{app_id}/policy")
 async def set_application_policy(
-    app_id:    str,
+    app_id:    uuid.UUID,
     body:      ApplicationPolicySchema,
+    request:   Request,
     db:        AsyncSession = Depends(get_db),
     principal: Principal    = Depends(require_admin()),
 ):
@@ -212,24 +224,24 @@ async def set_application_policy(
     Pass policy_override: null to remove all overrides.
     """
     repo   = ApplicationRepository(db)
-    record = await repo.get_by_id(uuid.UUID(app_id))
-    if not record:
-        raise NotFoundError("application", app_id)
+    record = await repo.get_by_id(app_id)
+    if not record or str(record.tenant_id) != request.state.tenant_id:
+        raise NotFoundError("application", str(app_id))
 
-    record = await repo.update(uuid.UUID(app_id), {
+    record = await repo.update(app_id, {
         "policy_override": body.policy_override
     })
+    await db.commit()
 
-    from services.policy_resolver import resolve_policy
     policy, policy_source = await resolve_policy(
         db        = db,
         tenant_id = str(record.tenant_id),
         dept_id   = str(record.dept_id),
-        app_id    = app_id,
+        app_id    = str(app_id),
     )
 
     return JSONResponse(content={
-        "app_id":          app_id,
+        "app_id":          str(app_id),
         "app_name":        record.name,
         "dept_id":         str(record.dept_id),
         "policy_override": record.policy_override,
@@ -241,7 +253,8 @@ async def set_application_policy(
 
 @router.delete("/{app_id}/policy")
 async def reset_application_policy(
-    app_id:    str,
+    app_id:    uuid.UUID,
+    request:   Request,
     db:        AsyncSession = Depends(get_db),
     principal: Principal    = Depends(require_admin()),
 ):
@@ -250,14 +263,15 @@ async def reset_application_policy(
     Application will inherit from department policy.
     """
     repo   = ApplicationRepository(db)
-    record = await repo.get_by_id(uuid.UUID(app_id))
-    if not record:
-        raise NotFoundError("application", app_id)
+    record = await repo.get_by_id(app_id)
+    if not record or str(record.tenant_id) != request.state.tenant_id:
+        raise NotFoundError("application", str(app_id))
 
-    await repo.update(uuid.UUID(app_id), {"policy_override": None})
+    await repo.update(app_id, {"policy_override": None})
+    await db.commit()
 
     return JSONResponse(content={
-        "app_id":          app_id,
+        "app_id":          str(app_id),
         "app_name":        record.name,
         "policy_override": None,
         "reset":           True,

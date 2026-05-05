@@ -6,6 +6,7 @@ import logging
 from dataclasses import dataclass
 from engine.guardrails.pii.detector import PIIDetector
 from engine.guardrails.pii.redactor import PIIRedactor
+from engine.guardrails.toxicity.detector import ToxicityDetector
 from engine.detection.base import DetectionResult
 
 logger = logging.getLogger("wrapsec.engine")
@@ -36,6 +37,7 @@ class InputGuard:
     def __init__(self):
         self._pii_detector = PIIDetector()
         self._pii_redactor = PIIRedactor()
+        self._tox_detector = ToxicityDetector()
 
     def inspect(self, text: str) -> InputGuardResult:
         """Run PII guardrail. Toxicity is added later via inspect_toxicity()."""
@@ -85,9 +87,7 @@ class InputGuard:
         Returns updated InputGuardResult with toxicity_result populated.
         """
         try:
-            from engine.guardrails.toxicity.detector import ToxicityDetector
-            tox_detector    = ToxicityDetector()
-            toxicity_result = tox_detector.detect_from_ml(ml_result)
+            toxicity_result = self._tox_detector.detect_from_ml(ml_result)
 
             return InputGuardResult(
                 text            = guard_result.text,

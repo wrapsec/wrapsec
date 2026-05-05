@@ -16,7 +16,7 @@ import sys
 
 import click
 
-from wrapsec.__init__ import __version__
+from wrapsec import __version__
 
 
 # ── SIGPIPE guard — Unix only ───────────────────────────────────────────────

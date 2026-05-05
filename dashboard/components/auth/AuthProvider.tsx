@@ -123,3 +123,9 @@ export function useAuth(): AuthContextValue {
   if (!ctx) throw new Error("useAuth must be used inside <AuthProvider>")
   return ctx
 }
+
+// Safe variant for components that may render outside AuthProvider during SSR.
+// Returns null when context is not available — callers must guard against null.
+export function useAuthOptional(): AuthContextValue | null {
+  return useContext(AuthContext)
+}

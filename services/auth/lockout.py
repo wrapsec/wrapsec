@@ -7,8 +7,7 @@ import logging
 from cache.redis_client import get_redis
 from config.settings import get_settings
 
-logger   = logging.getLogger("wrapsec.auth")
-settings = get_settings()
+logger = logging.getLogger("wrapsec.auth")
 
 # ── Redis key scheme ───────────────────────────────────────────────────────────
 #
@@ -55,19 +54,24 @@ async def record_failure(email: str) -> tuple[int, bool]:
     Records one failed login attempt for the given normalized email.
     Returns (attempt_count, is_now_locked).
 
-    Counter TTL is set on first failure only (fixed window).
+    INCR and EXPIRE run in a single MULTI/EXEC pipeline so a crash between
+    them cannot leave the counter without a TTL (permanent lockout).
+    TTL is refreshed on every failure (sliding window), which is intentional:
+    an attacker who keeps retrying cannot outlast the counter window.
     Lock key TTL is reset on every failure >= MAX (extends lockout on retry).
     """
+    _settings    = get_settings()
     redis        = get_redis()
     failed_key   = _failed_key(email)
     locked_key   = _locked_key(email)
-    max_attempts = settings.auth_max_failed_attempts
-    ttl          = settings.auth_lockout_duration_seconds
+    max_attempts = _settings.auth_max_failed_attempts
+    ttl          = _settings.auth_lockout_duration_seconds
 
-    count = await redis.incr(failed_key)
-    if count == 1:
-        # Set TTL on first failure only — fixed window
-        await redis.expire(failed_key, ttl)
+    async with redis.pipeline(transaction=True) as pipe:
+        pipe.incr(failed_key)
+        pipe.expire(failed_key, ttl)
+        results = await pipe.execute()
+    count = results[0]
 
     is_now_locked = False
     if count >= max_attempts:

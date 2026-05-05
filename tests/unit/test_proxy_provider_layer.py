@@ -3,7 +3,7 @@
 # WrapSec v1.0 | AI Security Gateway - https://wrapsec.com
 
 """
-Phase 2 unit tests -- provider layer and extended OutputGuard.
+Unit tests — provider layer and extended OutputGuard.
 
 Run:
     $env:TESTING = "true"

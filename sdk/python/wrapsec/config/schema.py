@@ -63,7 +63,7 @@ class WrapSecConfig:
             self.base_url = self.base_url.rstrip("/")
 
 
-def validate_config_value(key: str, value: str) -> object:
+def validate_config_value(key: str, value: str) -> str | int:
     """
     Validate and coerce a raw string value for a given config key.
     Called at config-write time (wrapsec config set) and at load time.

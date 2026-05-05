@@ -63,9 +63,9 @@ class PolicyEngine:
         try:
             score = risk_score.value
 
-            # Detection thresholds
-            bt = block_threshold    or self.rules.block_threshold
-            st = sanitize_threshold or self.rules.sanitize_threshold
+            # Detection thresholds — use is-None check; 0.0 is a valid threshold
+            bt = self.rules.block_threshold    if block_threshold    is None else block_threshold
+            st = self.rules.sanitize_threshold if sanitize_threshold is None else sanitize_threshold
 
             if bt < st:
                 logger.warning(

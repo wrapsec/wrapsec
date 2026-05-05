@@ -2,7 +2,7 @@
 
 > See [Core Concepts](core_concepts.md) for canonical definitions of decision model, SYSTEM_ERROR, and scoring semantics.
 
-Version: 1.5 — Session Hardening + Auth Observability  
+Version: 1.0  
 Base URL: `http://your-host:8000`  
 Total endpoints: 63  
 Last updated: May 2026
@@ -54,7 +54,8 @@ Used by dashboard users. Issued via `POST /v1/auth/login`.
 
 | Endpoints | API key | JWT |
 |---|---|---|
-| `GET /health`, `/health/ready`, `/health/live`, `/metrics` | ❌ public | ❌ public |
+| `GET /health`, `/health/ready`, `/health/live` | ❌ public | ❌ public |
+| `GET /metrics` | 🔑 Bearer `METRICS_TOKEN` (falls back to `ADMIN_API_KEY`) | 🔑 Bearer `METRICS_TOKEN` |
 | `GET /health/config` | ✅ any key | ✅ any role |
 | `POST /v1/auth/login`, `POST /v1/auth/refresh` | ❌ public/cookie | ❌ public/cookie |
 | `POST /v1/auth/logout`, `GET /v1/auth/me`, `POST /v1/auth/change-password` | ❌ | ✅ any role |
@@ -76,7 +77,7 @@ Used by dashboard users. Issued via `POST /v1/auth/login`.
 
 **Notes:**
 - `GET /v1/keys` requires auth but accepts API key — CLI `wrapsec keys list` uses this
-- `PUT /v1/settings/*` previously accepted admin API key — now requires JWT + ADMIN (breaking change v1.5)
+- `PUT /v1/settings/*` requires JWT + ADMIN — admin API key not accepted
 - `/v1/settings/proxy*` scoped per `key_id` — JWT and API key each see their own config
 - All write endpoints on admin resources require JWT (no API key writes)
 
@@ -1576,7 +1577,11 @@ Active configuration snapshot. Does not expose API keys or secrets.
 
 ### GET /metrics
 
-Prometheus exposition format. No auth required. Scrape at `http://host:8000/metrics`.
+Prometheus exposition format. Requires `Authorization: Bearer <token>`.
+
+Token resolution order: `METRICS_TOKEN` env var → `ADMIN_API_KEY` (fallback). Set a dedicated `METRICS_TOKEN` in production so your Prometheus scraper does not need the admin key.
+
+Scrape at `http://host:8000/metrics`. Returns `401` if no valid Bearer token is provided.
 
 ---
 
@@ -1673,6 +1678,10 @@ SYSTEM_ERROR = detectors failed (exception, timeout, internal error)
 - Proxy route guarantees JSON on all error paths — no HTML ever returned
 - API key cookie maxAge: 24h → 8h
 - All cookies httpOnly — auth mode detected via `GET /api/auth/session` server route
+
+**Security hardening (env vars):**
+- `METRICS_TOKEN` — dedicated Bearer token for `/metrics` endpoint scraping. Falls back to `ADMIN_API_KEY` if unset. `/metrics` is no longer unauthenticated.
+- `TRUSTED_PROXY_IPS` — comma-separated list of trusted reverse proxy IPs/CIDRs. `x-forwarded-for` is only trusted for audit log attribution when the direct connection IP matches this list. Leave empty (default) to always use the direct connection IP — safe when not behind a proxy. Example: `TRUSTED_PROXY_IPS=10.0.0.1,172.16.0.0/12`
 
 **New internal docs:**
 - `docs/internal/session_management.md` — session lifecycle reference
@@ -1788,7 +1797,7 @@ Note: `account_inactive` is the `auth_events.failure_reason` value when `is_acti
 
 ---
 
-*API version: 1.5 — Session Hardening + Auth Observability*  
+*API version: 1.0*  
 *Total endpoints: 63*  
 *Authentication: `x-api-key` OR `Authorization: Bearer {jwt}`*  
 *Last updated: May 2026*

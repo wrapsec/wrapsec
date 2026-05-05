@@ -77,26 +77,36 @@ def guardrail_confidence(
 
 
 def compute_confidence(
-    rule_score:         float,
-    ml_score:           float,
-    llm_score:          float,
-    pii_score:          float,
-    rule_enabled:       bool  = True,
-    ml_enabled:         bool  = True,
-    llm_invoked:        bool  = False,
-    guardrail_triggered: bool = False,
-    block_threshold:    float = 0.7,
-    sanitize_threshold: float = 0.4,
+    rule_score:                  float,
+    ml_score:                    float,
+    llm_score:                   float,
+    pii_score:                   float,
+    rule_enabled:                bool  = True,
+    ml_enabled:                  bool  = True,
+    llm_invoked:                 bool  = False,
+    guardrail_triggered:         bool  = False,
+    block_threshold:             float = 0.7,
+    sanitize_threshold:          float = 0.4,
+    toxicity_score:              float = 0.0,
+    toxicity_guardrail_triggered: bool = False,
 ) -> tuple[float, str]:
     """
     Returns (confidence, confidence_band).
 
-    If guardrail triggered → use guardrail confidence
-    Else                   → use detector confidence
+    Priority:
+      1. PII guardrail triggered      → guardrail_confidence(pii_score)
+      2. Toxicity guardrail triggered → guardrail_confidence(toxicity_score)
+      3. Detection-based              → detector_confidence(rule/ml/llm)
     """
     if guardrail_triggered:
         confidence = guardrail_confidence(
             pii_score          = pii_score,
+            block_threshold    = block_threshold,
+            sanitize_threshold = sanitize_threshold,
+        )
+    elif toxicity_guardrail_triggered:
+        confidence = guardrail_confidence(
+            pii_score          = toxicity_score,
             block_threshold    = block_threshold,
             sanitize_threshold = sanitize_threshold,
         )

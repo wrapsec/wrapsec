@@ -12,10 +12,10 @@ class DecisionType(str, Enum):
 
 
 class RiskLevel(str, Enum):
-    CRITICAL = "critical"   # >= 0.9
-    HIGH     = "high"       # >= 0.7
-    MEDIUM   = "medium"     # >= 0.4
-    LOW      = "low"        # < 0.4
+    CRITICAL = "CRITICAL"   # >= 0.9
+    HIGH     = "HIGH"       # >= 0.7
+    MEDIUM   = "MEDIUM"     # >= 0.4
+    LOW      = "LOW"        # < 0.4
 
 
 class ThreatCategory(str, Enum):

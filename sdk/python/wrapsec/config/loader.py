@@ -19,6 +19,7 @@ Spec reference: Section 3 (config/loader.py), Section 13.2 (config command),
 
 from __future__ import annotations
 
+import functools
 import json
 import logging
 import os
@@ -126,6 +127,7 @@ def _write_config_file(data: dict[str, object]) -> None:
 
 # ── Public API ──────────────────────────────────────────────────────────────
 
+@functools.lru_cache(maxsize=1)
 def load_config() -> WrapSecConfig:
     """
     Resolve and return the active configuration.

@@ -23,8 +23,7 @@ from engine.proxy.providers.ollama import OllamaProxyProvider
 from security.encryption import decrypt
 from config.settings import get_settings
 
-logger   = logging.getLogger("wrapsec.proxy.router")
-settings = get_settings()
+logger = logging.getLogger("wrapsec.proxy.router")
 
 SUPPORTED_PROVIDERS = {"openai", "ollama", "custom"}
 
@@ -84,7 +83,7 @@ def resolve_provider(
 
     if config.provider_api_key_enc:
         try:
-            decrypted_key = decrypt(config.provider_api_key_enc, settings.secret_key)
+            decrypted_key = decrypt(config.provider_api_key_enc, get_settings().secret_key)
         except ValueError as exc:
             raise ValueError(
                 "Could not decrypt provider API key. "
@@ -92,6 +91,11 @@ def resolve_provider(
             ) from exc
 
     if provider in ("openai", "custom"):
+        if provider == "openai" and not decrypted_key:
+            raise ValueError(
+                "OpenAI provider requires an API key but none is configured. "
+                "Set provider_api_key_enc on the proxy provider config."
+            )
         return OpenAIProxyProvider(
             api_key  = decrypted_key or "",
             base_url = config.base_url,

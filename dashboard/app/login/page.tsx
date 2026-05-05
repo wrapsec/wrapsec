@@ -58,8 +58,6 @@ export default function LoginPage() {
       if (err instanceof AuthError) {
         if (err.code === "ACCOUNT_LOCKED") {
           setError("Account locked after too many failed attempts. Try again later.")
-        } else if (err.code === "ACCOUNT_DISABLED") {
-          setError("This account has been disabled. Contact your administrator.")
         } else {
           setError("Invalid email or password.")
         }
@@ -333,7 +331,7 @@ export default function LoginPage() {
           )}
 
           <p style={{ fontSize: "11px", color: "rgba(255,255,255,0.20)", marginTop: "32px", textAlign: "center" }}>
-            WrapSec v1.5 · AI Security Gateway
+            WrapSec v1.0 · AI Security Gateway
           </p>
         </div>
       </div>

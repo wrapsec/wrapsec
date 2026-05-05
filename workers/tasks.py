@@ -121,13 +121,12 @@ async def _cleanup_audit_logs() -> int:
     if retention_days < 1:
         logger.error(f"Retention worker: invalid retention_days={retention_days} — must be >= 1, skipping audit cleanup")
         return 0
-    cutoff_sql     = f"NOW() - INTERVAL '{retention_days} days'"
 
-    count_query  = text(f"SELECT COUNT(*) FROM audit_logs WHERE created_at < {cutoff_sql}")
-    delete_query = text(f"DELETE FROM audit_logs WHERE created_at < {cutoff_sql}")
+    count_query  = text("SELECT COUNT(*) FROM audit_logs WHERE created_at < NOW() - INTERVAL '1 day' * :days")
+    delete_query = text("DELETE FROM audit_logs WHERE created_at < NOW() - INTERVAL '1 day' * :days")
 
     async with AsyncSessionFactory() as session:
-        result = await session.execute(count_query)
+        result = await session.execute(count_query, {"days": retention_days})
         count  = result.scalar() or 0
 
         if count == 0:
@@ -137,7 +136,7 @@ async def _cleanup_audit_logs() -> int:
             )
             return 0
 
-        await session.execute(delete_query)
+        await session.execute(delete_query, {"days": retention_days})
         await session.commit()
 
         logger.info(
@@ -164,25 +163,24 @@ async def _cleanup_proxy_interactions() -> int:
     if retention_days < 1:
         logger.error(f"Retention worker: invalid data_retention_days_proxy={retention_days} — must be >= 1, skipping proxy cleanup")
         return 0
-    cutoff_sql     = f"NOW() - INTERVAL '{retention_days} days'"
 
-    count_query = text(f"""
+    count_query = text("""
         SELECT COUNT(*)
         FROM proxy_interactions
-        WHERE created_at < {cutoff_sql}
+        WHERE created_at < NOW() - INTERVAL '1 day' * :days
           AND (input_raw IS NOT NULL OR output_raw IS NOT NULL)
     """)
 
-    purge_query = text(f"""
+    purge_query = text("""
         UPDATE proxy_interactions
         SET input_raw  = NULL,
             output_raw = NULL
-        WHERE created_at < {cutoff_sql}
+        WHERE created_at < NOW() - INTERVAL '1 day' * :days
           AND (input_raw IS NOT NULL OR output_raw IS NOT NULL)
     """)
 
     async with AsyncSessionFactory() as session:
-        result = await session.execute(count_query)
+        result = await session.execute(count_query, {"days": retention_days})
         count  = result.scalar() or 0
 
         if count == 0:
@@ -192,7 +190,7 @@ async def _cleanup_proxy_interactions() -> int:
             )
             return 0
 
-        await session.execute(purge_query)
+        await session.execute(purge_query, {"days": retention_days})
         await session.commit()
 
         logger.info(

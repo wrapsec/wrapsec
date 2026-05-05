@@ -2,13 +2,13 @@
 # Copyright (c) 2026 WrapSec. All rights reserved.
 # WrapSec v1.0 | AI Security Gateway - https://wrapsec.com
 
+import hashlib
+import json
 import time
 from fastapi import Request
 from starlette.middleware.base import BaseHTTPMiddleware
 from starlette.responses import JSONResponse, Response
 from config.settings import get_settings
-
-settings = get_settings()
 
 PUBLIC_PATHS = {"/health", "/health/ready", "/health/live", "/metrics"}
 
@@ -35,7 +35,6 @@ async def _get_live_rate_limit() -> int:
         cache_key = "wrapsec:settings:rate_limit"
         cached    = await redis.get(cache_key)
         if cached:
-            import json
             return int(json.loads(cached).get("per_minute", _settings.rate_limit_per_minute))
 
         # Cache miss — read from DB
@@ -46,7 +45,6 @@ async def _get_live_rate_limit() -> int:
             stored = await repo.get("rate_limit")
             if stored and "per_minute" in stored:
                 limit = int(stored["per_minute"])
-                import json
                 await redis.setex(cache_key, 60, json.dumps(stored))
                 return limit
     except Exception:
@@ -67,7 +65,7 @@ class RateLimitMiddleware(BaseHTTPMiddleware):
         if request.url.path in PUBLIC_PATHS:
             return await call_next(request)
 
-        if not settings.rate_limit_enabled:
+        if not get_settings().rate_limit_enabled:
             return await call_next(request)
 
         # Rate limit per API key — more precise than per IP
@@ -80,7 +78,6 @@ class RateLimitMiddleware(BaseHTTPMiddleware):
         if key_id:
             rate_limit_id = f"key:{key_id}"
         elif api_key:
-            import hashlib
             rate_limit_id = f"key:{hashlib.sha256(api_key.encode()).hexdigest()[:16]}"
         else:
             rate_limit_id = f"ip:{client_ip}"

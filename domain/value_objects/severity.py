@@ -27,7 +27,9 @@ module — no other files need to change.
 """
 
 # Threshold above which a detection-based BLOCK is escalated to CRITICAL.
-# Adjust via settings in a future iteration if runtime configurability needed.
+# Intentionally hardcoded — this is a classification boundary for SIEM output,
+# distinct from block_threshold/sanitize_threshold which gate request decisions.
+# If block_threshold changes significantly, review this constant too.
 CRITICAL_RISK_THRESHOLD = 0.9
 
 # Severity levels — ordered from highest to lowest for reference
@@ -73,7 +75,8 @@ def compute_severity(
         # Lower confidence detection block or SYSTEM_ERROR block
         return "HIGH"
 
-    # SYSTEM_ERROR — scanner failed, needs ops attention
+    # Only reached for non-BLOCK decisions (SANITIZE / ALLOW / SYSTEM_ERROR on ALLOW).
+    # BLOCK always returns inside the branch above.
     if primary_reason == "SYSTEM_ERROR":
         return "HIGH"
 

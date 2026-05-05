@@ -23,7 +23,8 @@ class DepartmentRepository(BaseRepository):
     async def get_by_id(self, dept_id) -> DepartmentModel | None:
         result = await self.session.execute(
             select(DepartmentModel).where(
-                DepartmentModel.id == dept_id,
+                DepartmentModel.id        == dept_id,
+                DepartmentModel.is_active == True,
             )
         )
         return result.scalar_one_or_none()
@@ -40,14 +41,19 @@ class DepartmentRepository(BaseRepository):
     async def create(self, data: dict) -> DepartmentModel:
         record = DepartmentModel(**data)
         self.session.add(record)
-        await self.commit()
+        await self.flush()
         return record
 
     async def update(self, dept_id, data: dict) -> DepartmentModel | None:
+        _UPDATABLE = frozenset({
+            "name", "description", "policy_override", "contact_email", "is_active",
+        })
         record = await self.get_by_id(dept_id)
         if not record:
             return None
         for key, value in data.items():
+            if key not in _UPDATABLE:
+                raise ValueError(f"Field '{key}' cannot be updated via update().")
             setattr(record, key, value)
-        await self.commit()
+        await self.flush()
         return record

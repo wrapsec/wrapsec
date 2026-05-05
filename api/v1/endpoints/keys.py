@@ -85,7 +85,7 @@ async def create_key(
         # App-scoped key: derive dept + tenant from app
         app_repo = ApplicationRepository(db)
         app      = await app_repo.get_by_id(uuid.UUID(body.app_id))
-        if not app:
+        if not app or str(app.tenant_id) != request.state.tenant_id:
             raise NotFoundError("application", body.app_id)
         app_id    = app.id
         dept_id   = app.dept_id
@@ -94,7 +94,7 @@ async def create_key(
         # Dept-scoped key: derive tenant from dept
         dept_repo = DepartmentRepository(db)
         dept      = await dept_repo.get_by_id(uuid.UUID(body.dept_id))
-        if not dept:
+        if not dept or str(dept.tenant_id) != request.state.tenant_id:
             raise NotFoundError("department", body.dept_id)
         dept_id   = dept.id
         tenant_id = dept.tenant_id
@@ -117,6 +117,7 @@ async def create_key(
         "dept_id":   dept_id,
         "tenant_id": tenant_id,
     })
+    await db.commit()
 
     return JSONResponse(content={
         "key_id":     key_id,
@@ -142,17 +143,12 @@ async def list_keys(
     Each key is enriched with department name and application name where available.
     Keys past their grace-period expiry are excluded from the response.
     """
+    tenant_id = uuid.UUID(request.state.tenant_id) if request.state.tenant_id else None
     repo = ApiKeyRepository(db)
-    keys = await repo.list_active()
+    keys = await repo.list_active(tenant_id=tenant_id)
     # Filter out keys whose grace period has expired
     now  = datetime.utcnow()
     keys = [k for k in keys if k.expires_at is None or k.expires_at > now]
-
-    # Scope to authenticated tenant (admin sees all keys for their tenant)
-    # Skip scoping in test mode — SQLite test keys don't have matching tenant_id
-    import os as _os
-    if request.state.tenant_id and _os.getenv("TESTING") != "true":
-        keys = [k for k in keys if str(k.tenant_id) == request.state.tenant_id]
 
     # Enrich with department and application names
     dept_repo  = DepartmentRepository(db)
@@ -194,13 +190,14 @@ async def list_keys(
 @router.get("/{key_id}")
 async def get_key(
     key_id:    str,
+    request:   Request,
     db:        AsyncSession = Depends(get_db),
     principal: Principal    = Depends(get_current_principal),
 ):
     """Returns full metadata for a single key by key_id. 404 if not found."""
     repo   = ApiKeyRepository(db)
     record = await repo.get_by_key_id(key_id)
-    if not record:
+    if not record or str(record.tenant_id) != request.state.tenant_id:
         raise NotFoundError("key", key_id)
 
     return JSONResponse(content={
@@ -224,13 +221,14 @@ class UpdateKeySchema(BaseModel):
 async def update_key(
     key_id:    str,
     body:      UpdateKeySchema,
+    request:   Request,
     db:        AsyncSession = Depends(get_db),
     principal: Principal    = Depends(require_admin()),
 ):
     """Renames an API key. Does not rotate the key secret. Auth: JWT + ADMIN required."""
     repo   = ApiKeyRepository(db)
     record = await repo.get_by_key_id(key_id)
-    if not record:
+    if not record or str(record.tenant_id) != request.state.tenant_id:
         raise NotFoundError("key", key_id)
 
     record.name = body.name
@@ -245,6 +243,7 @@ async def update_key(
 @router.delete("/{key_id}")
 async def delete_key(
     key_id:    str,
+    request:   Request,
     db:        AsyncSession = Depends(get_db),
     principal: Principal    = Depends(require_admin()),
 ):
@@ -255,7 +254,7 @@ async def delete_key(
     """
     repo   = ApiKeyRepository(db)
     record = await repo.get_by_key_id(key_id)
-    if not record:
+    if not record or str(record.tenant_id) != request.state.tenant_id:
         raise NotFoundError("key", key_id)
 
     was_in_grace = record.expires_at is not None and not record.revoked
@@ -281,6 +280,7 @@ class RotateKeySchema(BaseModel):
 async def rotate_key(
     key_id:    str,
     body:      RotateKeySchema,
+    request:   Request,
     db:        AsyncSession = Depends(get_db),
     principal: Principal    = Depends(require_admin()),
 ):
@@ -293,7 +293,7 @@ async def rotate_key(
     """
     repo   = ApiKeyRepository(db)
     record = await repo.get_by_key_id(key_id)
-    if not record:
+    if not record or str(record.tenant_id) != request.state.tenant_id:
         raise NotFoundError("key", key_id)
     if record.revoked:
         return JSONResponse(
@@ -323,8 +323,11 @@ async def rotate_key(
                 status_code=400,
             )
 
-    # Generate new key
-    new_api_key = generate_api_key()
+    key_type = getattr(record, "key_type", "live") or "live"
+
+    # Generate new key once with the correct prefix — do NOT generate twice.
+    # A second generate_api_key() call would orphan the first hash in the DB.
+    new_api_key = generate_api_key(key_type)
     new_key_id  = generate_key_id()
     new_hash    = _hash_key(new_api_key)
 
@@ -337,7 +340,7 @@ async def rotate_key(
         "key_id":    new_key_id,
         "name":      record.name,
         "key_hash":  new_hash,
-        "key_type":  getattr(record, "key_type", "live") or "live",
+        "key_type":  key_type,
         "is_admin":  record.is_admin,
         "revoked":   False,
         "app_id":    record.app_id,
@@ -345,13 +348,7 @@ async def rotate_key(
         "tenant_id": record.tenant_id,
     })
 
-    # Update new_api_key prefix to match key_type
-    new_api_key = generate_api_key(getattr(record, "key_type", "live") or "live")
-    new_hash    = _hash_key(new_api_key)
-    new_record.key_hash = new_hash
-    await db.commit()
-
-    # Set old key to expire at end of grace period
+    # Set old key to expire at end of grace period — both changes in one commit
     record.expires_at = grace_expires
     await db.commit()
 

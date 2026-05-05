@@ -294,4 +294,4 @@ When a department has an override, it shows **Overridden** in the department lis
 
 ---
 
-*WrapSec v1.5 — May 2026*
+*WrapSec v1.0 — May 2026*

@@ -27,9 +27,10 @@ Backoff schedule:
 
 from __future__ import annotations
 
+import asyncio
 import logging
 import time
-from typing import Callable, TypeVar
+from typing import Awaitable, Callable, TypeVar
 
 from wrapsec.exceptions import WrapSecSystemError
 
@@ -91,14 +92,12 @@ def with_retry(fn: Callable[[], T], operation: str = "request") -> T:
     )
 
 
-async def with_retry_async(fn: Callable[[], T], operation: str = "request") -> T:
+async def with_retry_async(fn: Callable[[], Awaitable[T]], operation: str = "request") -> T:
     """
     Async version of with_retry for use with async_client.py.
 
     Spec: Section 9 — retry logic shared by sync and async clients
     """
-    import asyncio
-
     last_error: Exception | None = None
 
     for attempt, delay in enumerate(BACKOFF_SCHEDULE):

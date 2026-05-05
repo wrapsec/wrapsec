@@ -6,6 +6,7 @@ import time
 from contextlib import asynccontextmanager
 from observability.logging import setup_logging
 from observability.metrics import get_metrics
+import hmac
 from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
@@ -21,8 +22,6 @@ from api.v1.middleware.logging import LoggingMiddleware
 from api.v1.middleware.auth import AuthMiddleware
 from api.v1.middleware.rate_limit import RateLimitMiddleware
 from api.v1.middleware.idempotency import IdempotencyMiddleware
-
-settings = get_settings()
 
 setup_logging()
 
@@ -52,6 +51,8 @@ async def bootstrap_admin() -> None:
             hash_password, normalize_email, validate_password_strength,
         )
 
+        _settings = get_settings()
+
         async with AsyncSessionFactory() as db:
             tenant = await TenantRepository(db).get_default()
             if not tenant:
@@ -62,10 +63,10 @@ async def bootstrap_admin() -> None:
             if await user_repo.count_by_tenant(tenant.id) > 0:
                 return  # Users already exist — skip silently
 
-            email = normalize_email(settings.admin_email)
+            email = normalize_email(_settings.admin_email)
 
             try:
-                validate_password_strength(settings.admin_password)
+                validate_password_strength(_settings.admin_password)
             except ValueError as e:
                 logger.error("bootstrap admin_password_too_weak: %s — skipping", e)
                 return
@@ -74,7 +75,7 @@ async def bootstrap_admin() -> None:
                 "tenant_id":             tenant.id,
                 "dept_id":               None,
                 "email":                 email,
-                "password_hash":         hash_password(settings.admin_password),
+                "password_hash":         hash_password(_settings.admin_password),
                 "role":                  "ADMIN",
                 "force_password_change": True,
             })
@@ -82,8 +83,8 @@ async def bootstrap_admin() -> None:
 
             # Production safety check — warn loudly if default password unchanged
             DEFAULT_PASSWORD = "ChangeMe!OnFirstLogin"
-            if (settings.environment == "production"
-                    and settings.admin_password == DEFAULT_PASSWORD):
+            if (_settings.environment == "production"
+                    and _settings.admin_password == DEFAULT_PASSWORD):
                 warning_msg = (
                     "\n"
                     "╔══════════════════════════════════════════════════════════════╗\n"
@@ -114,30 +115,34 @@ async def bootstrap_admin() -> None:
 async def lifespan(app: FastAPI):
     import os
     if os.getenv("TESTING") != "true":
-        from db.session import create_tables
+        from db.session import create_tables, dispose_engine
         from cache.redis_client import ping, close
         from workers.queue import start_scheduler, stop_scheduler
+        _settings = get_settings()
         await create_tables()
         redis_ok = await ping()
         await start_scheduler()
         await bootstrap_admin()          # create first admin if users table is empty
-        print(f"Starting {settings.app_name} v{settings.app_version}")
-        print(f"Environment: {settings.environment}")
+        print(f"Starting {_settings.app_name} v{_settings.app_version}")
+        print(f"Environment: {_settings.environment}")
         print(f"Redis: {'connected' if redis_ok else 'unavailable'}")
         yield
         await stop_scheduler()
         await close()
-        print(f"Shutting down {settings.app_name}")
+        await dispose_engine()
+        print(f"Shutting down {_settings.app_name}")
     else:
         yield
 
 
+_startup_settings = get_settings()
+
 app = FastAPI(
-    title       = settings.app_name,
-    version     = settings.app_version,
+    title       = _startup_settings.app_name,
+    version     = _startup_settings.app_version,
     description = "AI Security Gateway for Intelligent Applications",
-    docs_url    = "/docs" if settings.environment != "production" else None,
-    redoc_url   = "/redoc" if settings.environment != "production" else None,
+    docs_url    = "/docs" if _startup_settings.environment != "production" else None,
+    redoc_url   = "/redoc" if _startup_settings.environment != "production" else None,
     lifespan    = lifespan,
 )
 
@@ -151,10 +156,15 @@ app.add_middleware(RateLimitMiddleware)
 app.add_middleware(TraceMiddleware)
 
 # ── CORS ──────────────────────────────────────────────────────
+# RFC 6454: allow_credentials=True with allow_origins=["*"] is invalid —
+# browsers reject this combination. Credentials are only sent when origins
+# are explicitly listed via CORS_ALLOWED_ORIGINS in .env.
+_cors_origins     = _startup_settings.cors_allowed_origins
+_cors_credentials = bool(_cors_origins)
 app.add_middleware(
     CORSMiddleware,
-    allow_origins     = ["*"] if settings.environment == "development" else [],
-    allow_credentials = True,
+    allow_origins     = _cors_origins,
+    allow_credentials = _cors_credentials,
     allow_methods     = ["*"],
     allow_headers     = ["*"],
 )
@@ -168,7 +178,14 @@ app.add_exception_handler(Exception, unhandled_exception_handler)
 app.include_router(v1_router)
 
 # ── Metrics endpoint ──────────────────────────────────────────
+# Requires Bearer token: METRICS_TOKEN if set, otherwise ADMIN_API_KEY.
 @app.get("/metrics", include_in_schema=False)
-async def metrics():
+async def metrics(request: Request):
+    _s          = get_settings()
+    expected    = _s.metrics_token or _s.admin_api_key
+    auth_header = request.headers.get("authorization", "")
+    token       = auth_header.removeprefix("Bearer ").strip()
+    if not token or not hmac.compare_digest(token, expected):
+        return JSONResponse(status_code=401, content={"error": "Unauthorized"})
     data, content_type = get_metrics()
     return Response(content=data, media_type=content_type)

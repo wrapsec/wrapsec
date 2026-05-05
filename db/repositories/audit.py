@@ -2,8 +2,9 @@
 # Copyright (c) 2026 WrapSec. All rights reserved.
 # WrapSec v1.0 | AI Security Gateway - https://wrapsec.com
 
+import json
 from datetime import datetime
-from sqlalchemy import select, func, text
+from sqlalchemy import select, func, text, case
 from sqlalchemy.ext.asyncio import AsyncSession
 from db.models import AuditLogModel
 from db.repositories.base import BaseRepository
@@ -85,11 +86,9 @@ class AuditRepository(BaseRepository):
         if decision:
             query = query.where(AuditLogModel.decision == decision.upper())
         if threat_category:
-            import json
-            from sqlalchemy import text
             val = json.dumps([threat_category.upper()])
             query = query.where(
-                text(f"threats::jsonb @> '{val}'::jsonb")
+                text("threats::jsonb @> :val::jsonb").bindparams(val=val)
             )
         if from_dt:
             query = query.where(AuditLogModel.created_at >= from_dt)
@@ -128,19 +127,27 @@ class AuditRepository(BaseRepository):
         from_dt:   datetime | None = None,
         to_dt:     datetime | None = None,
     ) -> dict:
-        query = select(AuditLogModel)
-
+        # Build shared WHERE conditions
+        filters = []
         if tenant_id:
-            query = query.where(AuditLogModel.tenant_id == tenant_id)
+            filters.append(AuditLogModel.tenant_id == tenant_id)
         if from_dt:
-            query = query.where(AuditLogModel.created_at >= from_dt)
+            filters.append(AuditLogModel.created_at >= from_dt)
         if to_dt:
-            query = query.where(AuditLogModel.created_at <= to_dt)
+            filters.append(AuditLogModel.created_at <= to_dt)
 
-        result = await self.session.execute(query)
-        items  = result.scalars().all()
+        # Single aggregation query for counts — avoids fetching all rows into memory
+        count_q = select(
+            func.count().label("total"),
+            func.sum(case((AuditLogModel.decision == "BLOCK",    1), else_=0)).label("block_count"),
+            func.sum(case((AuditLogModel.decision == "SANITIZE", 1), else_=0)).label("sanitize_count"),
+            func.sum(case((AuditLogModel.decision == "ALLOW",    1), else_=0)).label("allow_count"),
+        )
+        if filters:
+            count_q = count_q.where(*filters)
+        counts_row = (await self.session.execute(count_q)).one()
 
-        if not items:
+        if not counts_row.total:
             return {
                 "total":          0,
                 "block_count":    0,
@@ -150,16 +157,27 @@ class AuditRepository(BaseRepository):
                 "threats":        [],
             }
 
-        latencies = [i.latency_ms for i in items]
-        threats   = []
-        for item in items:
-            threats.extend(item.threats or [])
+        # Fetch only latency_ms, pre-sorted — used for avg/p95 by caller
+        lat_q = select(AuditLogModel.latency_ms).order_by(AuditLogModel.latency_ms)
+        if filters:
+            lat_q = lat_q.where(*filters)
+        lat_rows  = (await self.session.execute(lat_q)).fetchall()
+        latencies = [r[0] for r in lat_rows if r[0] is not None]
+
+        # Fetch only threats column — unnest JSONB arrays in Python
+        threat_q = select(AuditLogModel.threats)
+        if filters:
+            threat_q = threat_q.where(*filters)
+        threat_rows = (await self.session.execute(threat_q)).fetchall()
+        threats: list[str] = []
+        for (threat_list,) in threat_rows:
+            threats.extend(threat_list or [])
 
         return {
-            "total":          len(items),
-            "block_count":    sum(1 for i in items if i.decision == "BLOCK"),
-            "sanitize_count": sum(1 for i in items if i.decision == "SANITIZE"),
-            "allow_count":    sum(1 for i in items if i.decision == "ALLOW"),
-            "latencies":      sorted(latencies),
+            "total":          counts_row.total,
+            "block_count":    counts_row.block_count    or 0,
+            "sanitize_count": counts_row.sanitize_count or 0,
+            "allow_count":    counts_row.allow_count    or 0,
+            "latencies":      latencies,
             "threats":        threats,
         }

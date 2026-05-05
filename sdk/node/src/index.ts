@@ -9,7 +9,8 @@
  *   import WrapSec from 'wrapsec-node'
  *   import { WrapSecError, WrapSecBlockError } from 'wrapsec-node'
  *
- *   import { wrapSecMiddleware } from 'wrapsec-node/middleware'
+ *   import { wrapSecMiddleware } from 'wrapsec-node/middleware/express'
+ *   import wrapSecPlugin from 'wrapsec-node/middleware/fastify'
  */
 
 export { WrapSec } from "./client"
@@ -31,6 +32,10 @@ export type {
   AuditListOptions,
   ExpressMiddlewareOptions,
 } from "./types"
+
+// Re-export Fastify plugin options so consumers can type-annotate their config:
+// import type { FastifyPluginOptions } from 'wrapsec-node'
+export type { FastifyPluginOptions } from "./middleware/fastify"
 
 // Default export for convenience: import WrapSec from 'wrapsec-node'
 export { WrapSec as default } from "./client"

@@ -118,9 +118,12 @@ class RiskScorer:
             )
 
         except Exception as e:
-            logger.error(f"RiskScorer failed: {e}")
+            # Fail closed — a scoring failure must not produce a permissive result.
+            # RiskScore(1.0) ensures PolicyEngine blocks the request rather than
+            # allowing it through with a false score of zero.
+            logger.error("RiskScorer failed: %s", e, exc_info=True)
             return ScoringResult(
-                final_score    = RiskScore(0.0),
+                final_score    = RiskScore(1.0),
                 rule_score     = 0.0,
                 ml_score       = 0.0,
                 llm_score      = 0.0,

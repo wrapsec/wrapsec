@@ -12,7 +12,7 @@ from domain.enums import ThreatCategory
 PII_PATTERNS = [
     # Identity
     (r"\b\d{3}-\d{2}-\d{4}\b",                                          "SSN"),
-    (r"\b\d{9}\b",                                                        "SSN_RAW"),
+    (r"\b(ssn|social\s+security(\s+number|\s+no|\s+#)?)\s*:?\s*\d{9}\b", "SSN_RAW"),
     (r"\bpassport\s*(number|no|#)?\s*:?\s*[A-Z]{1,2}\d{6,9}\b",         "PASSPORT"),
     (r"\b(driver'?s?\s*license|dl)\s*(number|no|#)?\s*:?\s*[A-Z0-9]{5,15}\b", "DRIVERS_LICENSE"),
 
@@ -41,7 +41,7 @@ PII_PATTERNS = [
     (r"\b(aws[\s_]?access[\s_]?key[\s_]?id)\s*[:=]\s*[A-Z0-9]{20}\b",  "AWS_KEY"),
 
     # Location
-    (r"\b\d{5}(?:-\d{4})?\b",                                            "ZIP_CODE"),
+    (r"\b(zip\s*code|zipcode|postal\s*code)\s*:?\s*\d{5}(?:-\d{4})?\b", "ZIP_CODE"),
     (r"\b(address)\s*:?\s*\d+\s+[A-Za-z\s]{3,50}(street|st|avenue|ave|road|rd|blvd)\b", "ADDRESS"),
 ]
 

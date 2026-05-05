@@ -36,6 +36,7 @@ Response headers added to every response:
     X-WrapSec-Latency-Ms
 """
 
+import copy
 import logging
 import time
 from datetime import datetime
@@ -44,25 +45,25 @@ import httpx
 from fastapi import APIRouter, Depends, Request
 from api.v1.dependencies.auth import get_current_principal
 from domain.entities.principal import Principal
-from fastapi.concurrency import run_in_threadpool
 from fastapi.responses import JSONResponse
 from pydantic import BaseModel
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from api.v1.dependencies.db import get_db
-from config.settings import get_settings
 from db.models import ProxyInteractionModel, ProxyProviderConfigModel
+from db.repositories.audit import AuditRepository
 from domain.enums import DetectionMode, ExecutionMode
 from domain.entities.request import IncomingRequest, RequestMetadata
 from domain.value_objects.trace_id import TraceId
 from engine.guardrails.output_guard import OutputGuard
 from engine.proxy.router import parse_model_string, resolve_provider
+from observability.metrics import record_proxy_request, record_request
 from services.gateway.service import GatewayService
+from services.policy_resolver import resolve_policy
 
-router   = APIRouter()
-settings = get_settings()
-logger   = logging.getLogger("wrapsec.proxy")
+router = APIRouter()
+logger = logging.getLogger("wrapsec.proxy")
 
 _gateway      = GatewayService()
 _output_guard = OutputGuard()
@@ -75,9 +76,7 @@ STATUS_FAILED         = "FAILED"
 STATUS_TIMEOUT        = "TIMEOUT"
 
 
-# ---------------------------------------------------------------------------
-# Request schema
-# ---------------------------------------------------------------------------
+# ── Request schema ─────────────────────────────────────────────────────────────
 
 class ProxyChatRequest(BaseModel):
     model:       str
@@ -86,12 +85,10 @@ class ProxyChatRequest(BaseModel):
     max_tokens:  int | None   = None
     top_p:       float | None = None
 
-    model_config = {"extra": "allow"}
+    model_config = {"extra": "forbid"}
 
 
-# ---------------------------------------------------------------------------
-# Helpers
-# ---------------------------------------------------------------------------
+# ── Helpers ────────────────────────────────────────────────────────────────────
 
 def _extract_scan_target(messages: list[dict], scan_all: bool) -> str:
     """
@@ -122,7 +119,6 @@ def _apply_sanitization(
     Replace user message content with sanitized version.
     Returns a new list -- does not mutate the original.
     """
-    import copy
     messages = copy.deepcopy(messages)
 
     user_indices = [i for i, m in enumerate(messages) if m.get("role") == "user"]
@@ -253,7 +249,6 @@ async def _log_interaction(
         await db.flush()   # flush to get interaction.id before audit_logs insert
 
         # 2. Insert into audit_logs with FK
-        from db.repositories.audit import AuditRepository
         repo = AuditRepository(db)
         await repo.create({
             "trace_id":              trace_id,
@@ -279,9 +274,7 @@ async def _log_interaction(
         logger.error(f"Failed to log proxy interaction trace_id={trace_id}: {exc}")
 
 
-# ---------------------------------------------------------------------------
-# Endpoint
-# ---------------------------------------------------------------------------
+# ── Endpoint ───────────────────────────────────────────────────────────────────
 
 @router.post("/chat/completions", response_model=None)
 async def proxy_chat_completions(
@@ -393,7 +386,6 @@ async def proxy_chat_completions(
         )
 
     # -- 5. Run detection pipeline --
-    from services.policy_resolver import resolve_policy
     policy, _ = await resolve_policy(
         db        = db,
         tenant_id = getattr(request.state, "tenant_id", None),
@@ -415,8 +407,7 @@ async def proxy_chat_completions(
 
     pii_policy      = policy.get("guardrails", {}).get("pii", {})
     toxicity_policy = policy.get("guardrails", {}).get("toxicity", {})
-    gateway_result = await run_in_threadpool(
-        _gateway.process,
+    gateway_result = await _gateway.process(
         incoming,
         policy["thresholds"]["block"],
         policy["thresholds"]["sanitize"],
@@ -437,6 +428,14 @@ async def proxy_chat_completions(
     input_threats  = [t.value for t in gd.threats]
     input_attack   = input_threats[0] if input_threats else None
     input_sanit    = gd.sanitized_input
+
+    # Compute once; reused at every _log_interaction call site below
+    _det_scores = {
+        "rule": gd.layer_scores.rule_score,
+        "ml":   gd.layer_scores.ml_score,
+        "llm":  gd.layer_scores.llm_score,
+    } if gd.layer_scores else {}
+    _grd_scores = {"pii": gd.layer_scores.pii_score} if gd.layer_scores else {}
 
     # -- 6. Handle input BLOCK --
     if input_decision == "BLOCK":
@@ -459,12 +458,8 @@ async def proxy_chat_completions(
             output_confidence=None, output_threats=None,
             total_latency_ms=total_ms,
             risk_score       = gd.risk_score.value if hasattr(gd, "risk_score") else 0.0,
-            detection_scores = {
-                "rule": gd.layer_scores.rule_score,
-                "ml":   gd.layer_scores.ml_score,
-                "llm":  gd.layer_scores.llm_score,
-            } if gd.layer_scores else {},
-            guardrail_scores = {"pii": gd.layer_scores.pii_score} if gd.layer_scores else {},
+            detection_scores = _det_scores,
+            guardrail_scores = _grd_scores,
             input_length     = len(scan_input),
         )
         return _error_response(
@@ -493,13 +488,13 @@ async def proxy_chat_completions(
         provider_instance, _ = resolve_provider(provider_name, config)
     except ValueError as exc:
         total_ms = int((time.monotonic() - wall_start) * 1000)
-        logger.error(f"Provider resolution failed trace_id={trace_id}: {exc}")
+        logger.error("Provider resolution failed trace_id=%s: %s", trace_id, exc)
         return JSONResponse(
             status_code=500,
-            content={"error": {"message": str(exc), "type": "provider_error", "code": "provider_config_error"}},
+            content={"error": {"message": "Provider configuration error.", "type": "provider_error", "code": "provider_config_error"}},
         )
 
-    # Build kwargs from request body -- pass through model params unchanged
+    # Build kwargs from explicitly declared request fields only
     kwargs = {}
     if body.temperature is not None:
         kwargs["temperature"] = body.temperature
@@ -507,9 +502,6 @@ async def proxy_chat_completions(
         kwargs["max_tokens"] = body.max_tokens
     if body.top_p is not None:
         kwargs["top_p"] = body.top_p
-    # Pass through any extra fields the client sent
-    for k, v in (body.model_extra or {}).items():
-        kwargs[k] = v
 
     provider_latency = None
     provider_response = None
@@ -543,12 +535,8 @@ async def proxy_chat_completions(
             output_confidence=None, output_threats=None,
             total_latency_ms=total_ms,
             risk_score       = gd.risk_score.value if hasattr(gd, "risk_score") else 0.0,
-            detection_scores = {
-                "rule": gd.layer_scores.rule_score,
-                "ml":   gd.layer_scores.ml_score,
-                "llm":  gd.layer_scores.llm_score,
-            } if gd.layer_scores else {},
-            guardrail_scores = {"pii": gd.layer_scores.pii_score} if gd.layer_scores else {},
+            detection_scores = _det_scores,
+            guardrail_scores = _grd_scores,
             input_length     = len(scan_input),
         )
         return _error_response(
@@ -585,12 +573,8 @@ async def proxy_chat_completions(
             output_confidence=None, output_threats=None,
             total_latency_ms=total_ms,
             risk_score       = gd.risk_score.value if hasattr(gd, "risk_score") else 0.0,
-            detection_scores = {
-                "rule": gd.layer_scores.rule_score,
-                "ml":   gd.layer_scores.ml_score,
-                "llm":  gd.layer_scores.llm_score,
-            } if gd.layer_scores else {},
-            guardrail_scores = {"pii": gd.layer_scores.pii_score} if gd.layer_scores else {},
+            detection_scores = _det_scores,
+            guardrail_scores = _grd_scores,
             input_length     = len(scan_input),
         )
         return _error_response(
@@ -638,12 +622,8 @@ async def proxy_chat_completions(
             output_confidence=output_conf, output_threats=output_threats,
             total_latency_ms=total_ms,
             risk_score       = gd.risk_score.value if hasattr(gd, "risk_score") else 0.0,
-            detection_scores = {
-                "rule": gd.layer_scores.rule_score,
-                "ml":   gd.layer_scores.ml_score,
-                "llm":  gd.layer_scores.llm_score,
-            } if gd.layer_scores else {},
-            guardrail_scores = {"pii": gd.layer_scores.pii_score} if gd.layer_scores else {},
+            detection_scores = _det_scores,
+            guardrail_scores = _grd_scores,
             input_length     = len(scan_input),
         )
         return _error_response(
@@ -680,18 +660,13 @@ async def proxy_chat_completions(
         output_confidence=output_conf, output_threats=output_threats,
         total_latency_ms=total_ms,
         risk_score       = gd.risk_score.value if hasattr(gd, "risk_score") else 0.0,
-            detection_scores = {
-                "rule": gd.layer_scores.rule_score,
-                "ml":   gd.layer_scores.ml_score,
-                "llm":  gd.layer_scores.llm_score,
-            } if gd.layer_scores else {},
-            guardrail_scores = {"pii": gd.layer_scores.pii_score} if gd.layer_scores else {},
+            detection_scores = _det_scores,
+            guardrail_scores = _grd_scores,
             input_length     = len(scan_input),
     )
 
     # -- 12. Record proxy metrics --
     try:
-        from observability.metrics import record_proxy_request, record_request
         record_proxy_request(
             execution_status = execution_status,
             total_latency_ms = total_ms,

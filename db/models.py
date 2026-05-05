@@ -92,6 +92,8 @@ class AuditLogModel(Base):
     ip_address         = Column(String(50),  nullable=True)
     user_agent         = Column(String(255), nullable=True)
     attribution_verified = Column(Boolean,   nullable=False, default=False)
+    # String columns intentionally — no ForeignKey to preserve audit history after
+    # entity deletion (tenant/dept/app can be deactivated or removed without losing logs).
     app_id         = Column(String(50),  nullable=True)
     dept_id        = Column(String(50),  nullable=True)
     tenant_id      = Column(String(50),  nullable=True)
@@ -102,7 +104,7 @@ class AuditLogModel(Base):
     source         = Column(String(100), nullable=True)
     user_id        = Column(String(100), nullable=True)
     input_length   = Column(Integer,     nullable=True,  default=0)
-    proxy_interaction_id = Column(UUID(as_uuid=True), nullable=True)
+    proxy_interaction_id = Column(UUID(as_uuid=True), ForeignKey("proxy_interactions.id", ondelete="SET NULL"), nullable=True)
     severity       = Column(String(10),  nullable=True)
     principal_type = Column(String(20),  nullable=True,  default="api_key")
     created_at     = Column(DateTime,    nullable=False, default=datetime.utcnow)
@@ -139,6 +141,9 @@ class APIKeyModel(Base):
     created_at   = Column(DateTime,    nullable=False, default=datetime.utcnow)
 
     __table_args__ = (
+        # Only enforced in PostgreSQL (production). SQLite (used in tests) silently
+        # skips this constraint — test scenarios that create invalid API key rows
+        # will not be caught until the production schema is exercised.
         CheckConstraint(
             "is_admin = true OR (tenant_id IS NOT NULL AND dept_id IS NOT NULL)",
             name="ck_api_keys_non_admin_tenant",
@@ -152,7 +157,7 @@ class SettingsModel(Base):
 
     key        = Column(String(100), primary_key=True)
     value      = Column(Text,        nullable=False)
-    updated_at = Column(DateTime,    nullable=False, default=datetime.utcnow)
+    updated_at = Column(DateTime,    nullable=False, default=datetime.utcnow, onupdate=datetime.utcnow)
 
 
 class ProxyProviderConfigModel(Base):

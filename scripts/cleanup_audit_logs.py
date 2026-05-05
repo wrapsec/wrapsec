@@ -47,12 +47,11 @@ async def cleanup_audit_logs(retention_days: int = 30, dry_run: bool = False) ->
     if retention_days < 1:
         raise ValueError(f"retention_days must be >= 1, got {retention_days}")
 
-    cutoff_sql   = f"NOW() - INTERVAL '{retention_days} days'"
-    count_query  = text(f"SELECT COUNT(*) FROM audit_logs WHERE created_at < {cutoff_sql}")
-    delete_query = text(f"DELETE FROM audit_logs WHERE created_at < {cutoff_sql}")
+    count_query  = text("SELECT COUNT(*) FROM audit_logs WHERE created_at < NOW() - INTERVAL '1 day' * :days")
+    delete_query = text("DELETE FROM audit_logs WHERE created_at < NOW() - INTERVAL '1 day' * :days")
 
     async with AsyncSessionFactory() as session:
-        result = await session.execute(count_query)
+        result = await session.execute(count_query, {"days": retention_days})
         count  = result.scalar()
 
         logger.info(
@@ -68,7 +67,7 @@ async def cleanup_audit_logs(retention_days: int = 30, dry_run: bool = False) ->
             logger.info(f"[audit_logs] [DRY RUN] Would delete {count} rows")
             return count
 
-        await session.execute(delete_query)
+        await session.execute(delete_query, {"days": retention_days})
         await session.commit()
         logger.info(f"[audit_logs] Deleted {count} rows older than {retention_days} days")
         return count
@@ -91,25 +90,23 @@ async def cleanup_proxy_interactions(retention_days: int = 7, dry_run: bool = Fa
     if retention_days < 1:
         raise ValueError(f"retention_days must be >= 1, got {retention_days}")
 
-    cutoff_sql = f"NOW() - INTERVAL '{retention_days} days'"
-
-    count_query = text(f"""
+    count_query = text("""
         SELECT COUNT(*)
         FROM proxy_interactions
-        WHERE created_at < {cutoff_sql}
+        WHERE created_at < NOW() - INTERVAL '1 day' * :days
           AND (input_raw IS NOT NULL OR output_raw IS NOT NULL)
     """)
 
-    purge_query = text(f"""
+    purge_query = text("""
         UPDATE proxy_interactions
         SET input_raw  = NULL,
             output_raw = NULL
-        WHERE created_at < {cutoff_sql}
+        WHERE created_at < NOW() - INTERVAL '1 day' * :days
           AND (input_raw IS NOT NULL OR output_raw IS NOT NULL)
     """)
 
     async with AsyncSessionFactory() as session:
-        result = await session.execute(count_query)
+        result = await session.execute(count_query, {"days": retention_days})
         count  = result.scalar()
 
         logger.info(
@@ -125,7 +122,7 @@ async def cleanup_proxy_interactions(retention_days: int = 7, dry_run: bool = Fa
             logger.info(f"[proxy_interactions] [DRY RUN] Would null input_raw/output_raw in {count} rows")
             return count
 
-        await session.execute(purge_query)
+        await session.execute(purge_query, {"days": retention_days})
         await session.commit()
         logger.info(
             f"[proxy_interactions] Purged input_raw/output_raw from {count} rows "

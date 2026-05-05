@@ -229,7 +229,7 @@ export default function ChangePasswordPage() {
         </div>
 
         <p style={{ fontSize: "11px", color: "rgba(255,255,255,0.18)", textAlign: "center", marginTop: "24px" }}>
-          WrapSec v1.5 · AI Security Gateway
+          WrapSec v1.0 · AI Security Gateway
         </p>
       </div>
       <style>{`input::placeholder { color: rgba(255,255,255,0.20) !important }`}</style>

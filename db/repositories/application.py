@@ -40,14 +40,20 @@ class ApplicationRepository(BaseRepository):
     async def create(self, data: dict) -> ApplicationModel:
         record = ApplicationModel(**data)
         self.session.add(record)
-        await self.commit()
+        await self.flush()
         return record
 
     async def update(self, app_id, data: dict) -> ApplicationModel | None:
+        _UPDATABLE = frozenset({
+            "name", "description", "owner_name", "owner_email", "environment",
+            "metadata_", "policy_override", "rate_limit_override", "is_active",
+        })
         record = await self.get_by_id(app_id)
         if not record:
             return None
         for key, value in data.items():
+            if key not in _UPDATABLE:
+                raise ValueError(f"Field '{key}' cannot be updated via update().")
             setattr(record, key, value)
-        await self.commit()
+        await self.flush()
         return record

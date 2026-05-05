@@ -144,7 +144,7 @@ Not python-jose. These are not interchangeable — exception types differ.
 
 NOT called on reactivation — there are no active sessions to invalidate.
 
-### Dashboard session hardening (v1.5)
+### Dashboard session hardening
 
 **Inactivity timeout:**
 - 15 min inactivity → `logout("inactivity")` → redirect `/login`
@@ -293,8 +293,8 @@ Implementation: every endpoint has an explicit FastAPI dependency — no endpoin
 solely on middleware for access control. Middleware enforces auth globally; dependencies
 enforce RBAC per-endpoint.
 
-Breaking change (v1.5): `PUT /v1/settings/*` no longer accepts admin API key.
-Breaking change (v1.5): `POST/PUT/DELETE /v1/keys/*` no longer accepts any API key.
+Breaking change: `PUT /v1/settings/*` requires JWT + ADMIN — admin API key no longer accepted.
+Breaking change: `POST/PUT/DELETE /v1/keys/*` requires JWT + ADMIN — API key no longer accepted.
 
 ---
 
@@ -555,7 +555,7 @@ resolved_policy
 $env:TESTING = "true"
 $env:PYTHONPATH = "D:\Projects\wrapsec"
 pytest tests/unit tests/integration -v
-# Expected: 251 passed
+# Expected: 259 passed
 ```
 
 ### Test infrastructure
@@ -650,6 +650,26 @@ These rules must be followed in all new code. Violation creates real production 
 
 ---
 
+## Key Environment Variables
+
+| Variable | Default | Description |
+|---|---|---|
+| `SECRET_KEY` | — | HMAC secret for JWT signing — must be changed before production |
+| `ACCESS_TOKEN_EXPIRE_MINUTES` | `30` | JWT access token lifetime |
+| `REFRESH_TOKEN_EXPIRE_DAYS` | `30` | Refresh token lifetime |
+| `TRUSTED_PROXY_IPS` | `""` | Comma-separated IPs trusted to set `X-Forwarded-For` (e.g. `127.0.0.1,10.0.0.1`) |
+| `METRICS_TOKEN` | `""` | If set, `GET /metrics` requires `Authorization: Bearer <token>` |
+| `DATA_STORAGE_MODE` | `masked` | `full` / `masked` / `none` — controls proxy text persistence |
+| `DATA_RETENTION_DAYS` | `30` | Audit log retention in days (min 7, max 3650) |
+| `DATA_RETENTION_DAYS_PROXY` | `7` | Proxy interaction text retention in days |
+| `RETENTION_WORKER_ENABLED` | `true` | Enable/disable background retention worker |
+| `RETENTION_WORKER_HOUR` | `2` | UTC hour for daily cleanup |
+| `RETENTION_WORKER_MINUTE` | `0` | UTC minute for daily cleanup |
+| `LOCKOUT_MAX_ATTEMPTS` | `5` | Failed login attempts before lockout |
+| `LOCKOUT_DURATION_SECONDS` | `900` | Lockout duration (15 min) |
+
+---
+
 ## Starting the Stack
 
 ```powershell
@@ -679,7 +699,6 @@ Cursor-based pagination          — replace offset pagination on audit endpoint
 Per-key storage mode override    — allow individual keys to override DATA_STORAGE_MODE
 tiktoken                         — per-model token counting (replaces ceil(len/2) heuristic)
 Production deployment            — domain ready, Groq instead of Ollama
-Node.js SDK                      — after Python SDK stabilises
 OWNER role                       — single per tenant, cannot be deactivated
 Email invitations                — for SaaS onboarding
 Permission engine                — replace has_role() with has_permission() (v2+)
@@ -687,4 +706,4 @@ Permission engine                — replace has_role() with has_permission() (v
 
 ---
 
-*WrapSec Developer Guide — v1.4 — April 2026*
+*WrapSec Developer Guide — v1.0 — May 2026*

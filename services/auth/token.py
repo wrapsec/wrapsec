@@ -12,8 +12,7 @@ from jwt.exceptions import InvalidTokenError
 
 from config.settings import get_settings
 
-logger   = logging.getLogger("wrapsec.auth")
-settings = get_settings()
+logger = logging.getLogger("wrapsec.auth")
 
 ACCESS_TOKEN_AUDIENCE = "wrapsec-dashboard"
 # Audience claim prevents tokens issued for the dashboard from being reused
@@ -40,8 +39,9 @@ def create_access_token(user: "UserModel") -> str:
         email       — unnecessary exposure if token is logged
         permissions — not enforced in v1 (roles only)
     """
+    _settings = get_settings()
     now     = datetime.now(timezone.utc)
-    expires = now + timedelta(minutes=settings.jwt_access_token_expire_minutes)
+    expires = now + timedelta(minutes=_settings.jwt_access_token_expire_minutes)
     payload = {
         "sub":       str(user.id),
         "type":      "access",
@@ -53,7 +53,7 @@ def create_access_token(user: "UserModel") -> str:
         "iat":       now,
         "exp":       expires,
     }
-    return jwt.encode(payload, settings.secret_key, algorithm=settings.jwt_algorithm)
+    return jwt.encode(payload, _settings.secret_key, algorithm=_settings.jwt_algorithm)
 
 
 def create_refresh_token() -> tuple[str, str]:
@@ -95,11 +95,12 @@ def decode_access_token(token: str) -> dict:
     Raises: InvalidTokenError with generic message on any failure.
     Returns: validated payload dict on success.
     """
+    _settings = get_settings()
     try:
         payload = jwt.decode(
             token,
-            settings.secret_key,
-            algorithms = [settings.jwt_algorithm],
+            _settings.secret_key,
+            algorithms = [_settings.jwt_algorithm],
             audience   = ACCESS_TOKEN_AUDIENCE,
         )
     except InvalidTokenError as e:

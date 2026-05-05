@@ -14,7 +14,7 @@ interface TenantSettingsFormProps {
     name:          string
     description:   string | null
     contact_email: string | null
-    global_policy: Record<string, any>
+    global_policy?: Record<string, any>
   }
   onUpdated:      (t: any) => void
   // Actual enforced values — from DB settings, not global_policy

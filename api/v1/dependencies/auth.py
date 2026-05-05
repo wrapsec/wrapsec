@@ -7,9 +7,11 @@ from starlette.responses import JSONResponse
 
 from domain.entities.principal import (
     Principal,
+    ROLE_PERMISSIONS,
     build_principal_from_api_key,
     build_principal_from_user,
 )
+from domain.enums import PrincipalType
 from errors.exceptions import ForbiddenError, UnauthorizedError
 
 
@@ -32,15 +34,11 @@ def _get_principal_from_state(request: Request) -> Principal:
         # (UserModel not available here — middleware already validated everything)
         return Principal(
             id          = getattr(request.state, "key_id", ""),       # "user:{uuid}"
-            type        = __import__(
-                              "domain.enums", fromlist=["PrincipalType"]
-                          ).PrincipalType.USER,
+            type        = PrincipalType.USER,
             tenant_id   = tenant_id or "",
             dept_id     = getattr(request.state, "dept_id", None),
             roles       = [request.state.user_role] if request.state.user_role else [],
-            permissions = __import__(
-                              "domain.entities.principal", fromlist=["ROLE_PERMISSIONS"]
-                          ).ROLE_PERMISSIONS.get(request.state.user_role or "", []),
+            permissions = ROLE_PERMISSIONS.get(request.state.user_role or "", []),
             is_admin    = getattr(request.state, "is_admin", False),
             email       = getattr(request.state, "key_name", None),
         )
@@ -48,18 +46,13 @@ def _get_principal_from_state(request: Request) -> Principal:
         # API key path — build from state fields directly
         return Principal(
             id          = getattr(request.state, "key_id", ""),       # "key:{key_id}"
-            type        = __import__(
-                              "domain.enums", fromlist=["PrincipalType"]
-                          ).PrincipalType.API_KEY,
+            type        = PrincipalType.API_KEY,
             tenant_id   = tenant_id or "",
             dept_id     = getattr(request.state, "dept_id", None),
             roles       = ["ADMIN"] if getattr(request.state, "is_admin", False) else ["DEVELOPER"],
-            permissions = __import__(
-                              "domain.entities.principal", fromlist=["ROLE_PERMISSIONS"]
-                          ).ROLE_PERMISSIONS.get(
-                              "ADMIN" if getattr(request.state, "is_admin", False) else "DEVELOPER",
-                              [],
-                          ),
+            permissions = ROLE_PERMISSIONS.get(
+                "ADMIN" if getattr(request.state, "is_admin", False) else "DEVELOPER", []
+            ),
             is_admin    = getattr(request.state, "is_admin", False),
         )
 

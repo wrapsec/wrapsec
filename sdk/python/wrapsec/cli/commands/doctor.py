@@ -19,7 +19,7 @@ import sys
 
 import click
 
-from wrapsec.__init__ import __version__
+from wrapsec import __version__
 from wrapsec.client import Client
 from wrapsec.config.loader import (
     get_config_path,
@@ -166,21 +166,24 @@ def doctor() -> None:
             if not ok:
                 all_ok = False
 
-    # ── Check 5: Configuration summary ─────────────────────────────────────
-    click.echo("\n5. Active Configuration")
+    # ── Checks 5+6: fetch config once, reuse for both ──────────────────────
+    config_data: dict = {}
     try:
         config_data = client.health_config()
-        if config_data:
-            thresholds = config_data.get("thresholds", {})
-            layers     = config_data.get("detection_layers", {})
-            click.echo(f"   Block threshold:   {thresholds.get('block', 'Unknown')}")
-            click.echo(f"   Sanitize threshold:{thresholds.get('sanitize', 'Unknown')}")
-            click.echo(f"   Rule detector:     {'enabled' if layers.get('rule') else 'disabled'}")
-            click.echo(f"   ML detector:       {'enabled' if layers.get('ml') else 'disabled'}")
-            click.echo(f"   LLM detector:      {'enabled' if layers.get('llm') else 'disabled'}")
-        else:
-            click.echo("   — Configuration data unavailable")
     except Exception:
+        pass
+
+    # ── Check 5: Configuration summary ─────────────────────────────────────
+    click.echo("\n5. Active Configuration")
+    if config_data:
+        thresholds = config_data.get("thresholds", {})
+        layers     = config_data.get("detection_layers", {})
+        click.echo(f"   Block threshold:   {thresholds.get('block', 'Unknown')}")
+        click.echo(f"   Sanitize threshold:{thresholds.get('sanitize', 'Unknown')}")
+        click.echo(f"   Rule detector:     {'enabled' if layers.get('rule') else 'disabled'}")
+        click.echo(f"   ML detector:       {'enabled' if layers.get('ml') else 'disabled'}")
+        click.echo(f"   LLM detector:      {'enabled' if layers.get('llm') else 'disabled'}")
+    else:
         click.echo("   — Configuration data unavailable")
 
     # ── Check 6: Version compatibility ─────────────────────────────────────
@@ -188,12 +191,7 @@ def doctor() -> None:
     click.echo(f"   CLI version:   {__version__}")
     click.echo(f"   Expected API:  {EXPECTED_API_VERSION}")
 
-    api_version = "Unknown"
-    try:
-        config_data = client.health_config()
-        api_version = config_data.get("version", "Unknown")
-    except Exception:
-        pass
+    api_version = config_data.get("version", "Unknown") if config_data else "Unknown"
 
     click.echo(f"   API version:   {api_version}")
 

@@ -12,15 +12,17 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from api.v1.dependencies.auth import require_admin
 from api.v1.dependencies.db import get_db
+from api.v1.middleware.auth import get_client_ip
+from db.repositories.admin_event import AdminEventRepository
+from db.repositories.user import UserRepository
 from domain.entities.principal import Principal
 from domain.enums import AdminEventAction
 from errors.exceptions import NotFoundError
+from services.auth.password import hash_password, normalize_email, validate_password_strength
 from services.auth.service import AuthService
 
 router = APIRouter()
 logger = logging.getLogger("wrapsec.admin.users")
-
-auth_service = AuthService()
 
 
 # ── Formatters ─────────────────────────────────────────────────────────────────
@@ -41,10 +43,7 @@ def _format(user) -> dict:
 
 def _get_client_info(request: Request) -> tuple[str | None, str | None]:
     """Extract ip_address and user_agent from request for audit logging."""
-    ip = (
-        request.headers.get("x-forwarded-for", "").split(",")[0].strip()
-        or (request.client.host if request.client else None)
-    )
+    ip = get_client_ip(request)
     ua = request.headers.get("user-agent")
     return ip or None, ua or None
 
@@ -68,7 +67,6 @@ async def _log_admin_event(
     If logging fails, logs internally and continues.
     """
     try:
-        from db.repositories.admin_event import AdminEventRepository
         repo = AdminEventRepository(db)
         await repo.insert(
             tenant_id      = tenant_id,
@@ -140,11 +138,6 @@ async def create_user(
 
     Auth: JWT + ADMIN role required.
     """
-    from db.repositories.user import UserRepository
-    from services.auth.password import (
-        hash_password, normalize_email, validate_password_strength,
-    )
-
     email = normalize_email(str(body.email))
     ip, ua = _get_client_info(request)
 
@@ -186,6 +179,15 @@ async def create_user(
             }},
         )
 
+    if body.dept_id:
+        try:
+            uuid.UUID(body.dept_id)
+        except ValueError:
+            return JSONResponse(
+                status_code=400,
+                content={"error": {"code": "INVALID_REQUEST", "message": "dept_id must be a valid UUID."}},
+            )
+
     try:
         user = await repo.create({
             "tenant_id":             uuid.UUID(str(principal.tenant_id)),
@@ -197,9 +199,10 @@ async def create_user(
         })
         await db.commit()
     except ValueError as e:
+        logger.warning("user create rejected: %s", e)
         return JSONResponse(
             status_code=400,
-            content={"error": {"code": "INVALID_REQUEST", "message": str(e)}},
+            content={"error": {"code": "INVALID_REQUEST", "message": "Invalid request parameters."}},
         )
 
     # Log admin event (post-commit, best-effort)
@@ -237,8 +240,6 @@ async def list_users(
 
     Auth: JWT + ADMIN role required.
     """
-    from db.repositories.user import UserRepository
-
     repo = UserRepository(db)
     users, total = await repo.list_by_tenant(
         tenant_id = uuid.UUID(str(principal.tenant_id)),
@@ -256,7 +257,7 @@ async def list_users(
 
 @router.get("/{user_id}")
 async def get_user(
-    user_id:   str,
+    user_id:   uuid.UUID,
     principal: Principal    = Depends(require_admin()),
     db:        AsyncSession = Depends(get_db),
 ) -> JSONResponse:
@@ -266,20 +267,18 @@ async def get_user(
 
     Auth: JWT + ADMIN role required.
     """
-    from db.repositories.user import UserRepository
-
     repo = UserRepository(db)
-    user = await repo.get_by_id(uuid.UUID(user_id))
+    user = await repo.get_by_id(user_id)
 
     if not user or str(user.tenant_id) != principal.tenant_id:
-        raise NotFoundError("user", user_id)
+        raise NotFoundError("user", str(user_id))
 
     return JSONResponse(content=_format(user))
 
 
 @router.patch("/{user_id}")
 async def update_user(
-    user_id:   str,
+    user_id:   uuid.UUID,
     body:      UserPatchSchema,
     request:   Request,
     principal: Principal    = Depends(require_admin()),
@@ -304,17 +303,15 @@ async def update_user(
 
     Auth: JWT + ADMIN role required.
     """
-    from db.repositories.user import UserRepository
-
     ip, ua = _get_client_info(request)
-    actor_id = uuid.UUID(str(principal.id).replace("user:", ""))
+    actor_id  = uuid.UUID(str(principal.id).replace("user:", ""))
     tenant_id = uuid.UUID(str(principal.tenant_id))
 
     repo = UserRepository(db)
-    user = await repo.get_by_id(uuid.UUID(user_id))
+    user = await repo.get_by_id(user_id)
 
     if not user or str(user.tenant_id) != principal.tenant_id:
-        raise NotFoundError("user", user_id)
+        raise NotFoundError("user", str(user_id))
 
     data = body.model_dump(exclude_unset=True)
 
@@ -378,32 +375,42 @@ async def update_user(
 
     # Convert dept_id to UUID if provided and not None
     if "dept_id" in data and data["dept_id"] is not None:
-        data["dept_id"] = uuid.UUID(data["dept_id"])
+        try:
+            data["dept_id"] = uuid.UUID(data["dept_id"])
+        except ValueError:
+            return JSONResponse(
+                status_code=400,
+                content={"error": {"code": "INVALID_REQUEST", "message": "dept_id must be a valid UUID."}},
+            )
 
     # Capture old values for audit metadata before update
     old_role    = user.role
     old_dept_id = str(user.dept_id) if user.dept_id else None
 
     try:
-        updated = await repo.update(uuid.UUID(user_id), data)
-        await db.commit()
+        updated = await repo.update(user_id, data)
+        # Do NOT commit yet — session invalidation must be atomic with the update.
     except ValueError as e:
+        logger.warning("user update rejected: %s", e)
         return JSONResponse(
             status_code=400,
-            content={"error": {"code": "INVALID_REQUEST", "message": str(e)}},
+            content={"error": {"code": "INVALID_REQUEST", "message": "Invalid request parameters."}},
         )
 
-    # Session invalidation
+    # Session invalidation — commits the user update + invalidation atomically.
     invalidate_session = (
         new_role is not None or
         "dept_id" in data or
         new_is_active is False
     )
     if invalidate_session:
-        await auth_service.logout_all_sessions(uuid.UUID(user_id), db)
+        await AuthService().logout_all_sessions(user_id, db)
+        # logout_all_sessions() issues db.commit() — user update is now persisted.
+    else:
+        await db.commit()
 
     # Admin event logging — one event per change type, post-commit, best-effort
-    target_uuid = uuid.UUID(user_id)
+    target_uuid = user_id
     post_dept_id = updated.dept_id  # post-update value for dept_id rows
 
     if new_role is not None and new_role != old_role:
@@ -466,7 +473,7 @@ async def update_user(
 
 @router.post("/{user_id}/reset-password")
 async def reset_password(
-    user_id:   str,
+    user_id:   uuid.UUID,
     body:      ResetPasswordSchema,
     request:   Request,
     principal: Principal    = Depends(require_admin()),
@@ -479,18 +486,15 @@ async def reset_password(
 
     Auth: JWT + ADMIN role required.
     """
-    from db.repositories.user import UserRepository
-    from services.auth.password import hash_password, validate_password_strength
-
     ip, ua = _get_client_info(request)
     actor_id  = uuid.UUID(str(principal.id).replace("user:", ""))
     tenant_id = uuid.UUID(str(principal.tenant_id))
 
     repo = UserRepository(db)
-    user = await repo.get_by_id(uuid.UUID(user_id))
+    user = await repo.get_by_id(user_id)
 
     if not user or str(user.tenant_id) != principal.tenant_id:
-        raise NotFoundError("user", user_id)
+        raise NotFoundError("user", str(user_id))
 
     try:
         validate_password_strength(body.new_password)
@@ -500,13 +504,13 @@ async def reset_password(
             content={"error": {"code": "INVALID_REQUEST", "message": str(e)}},
         )
 
-    await repo.update(uuid.UUID(user_id), {
+    await repo.update(user_id, {
         "password_hash":         hash_password(body.new_password),
         "force_password_change": True,
     })
     await db.commit()
 
-    await auth_service.logout_all_sessions(uuid.UUID(user_id), db)
+    await AuthService().logout_all_sessions(user_id, db)
 
     # Log admin event (post-commit, best-effort)
     await _log_admin_event(
@@ -515,7 +519,7 @@ async def reset_password(
         actor_user_id  = actor_id,
         action         = AdminEventAction.PASSWORD_RESET,
         dept_id        = user.dept_id,
-        target_user_id = uuid.UUID(user_id),
+        target_user_id = user_id,
         ip_address     = ip,
         user_agent     = ua,
     )

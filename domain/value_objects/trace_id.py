@@ -2,7 +2,7 @@
 # Copyright (c) 2026 WrapSec. All rights reserved.
 # WrapSec v1.0 | AI Security Gateway - https://wrapsec.com
 
-import os
+import uuid
 
 
 class TraceId:
@@ -26,9 +26,8 @@ class TraceId:
             from ulid import ULID
             return str(ULID()).lower()
         except ImportError:
-            # Fallback — random hex (maintains backward compatibility)
-            import uuid
-            return uuid.uuid4().hex[:8]
+            # Fallback — full 128-bit random hex for collision safety
+            return uuid.uuid4().hex
 
     @property
     def value(self) -> str:
@@ -38,10 +37,21 @@ class TraceId:
     def generate(cls) -> "TraceId":
         return cls()
 
+    _MIN_SUFFIX_LEN = 20
+    _MAX_LEN        = 64
+
     @classmethod
     def from_string(cls, value: str) -> "TraceId":
-        if not value.startswith(cls.PREFIX + "_"):
+        prefix = cls.PREFIX + "_"
+        if not value.startswith(prefix):
             raise ValueError(f"Invalid trace_id format: {value}")
+        suffix = value[len(prefix):]
+        if len(suffix) < cls._MIN_SUFFIX_LEN:
+            raise ValueError(f"Invalid trace_id format: suffix too short")
+        if len(value) > cls._MAX_LEN:
+            raise ValueError(f"Invalid trace_id format: value too long")
+        if not all(c in "0123456789abcdefghijklmnopqrstuvwxyz-" for c in suffix):
+            raise ValueError(f"Invalid trace_id format: invalid characters in suffix")
         return cls(value)
 
     def __str__(self) -> str:

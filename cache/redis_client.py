@@ -6,8 +6,7 @@ import logging
 from redis.asyncio import Redis, ConnectionPool
 from config.settings import get_settings
 
-logger   = logging.getLogger("wrapsec.cache")
-settings = get_settings()
+logger = logging.getLogger("wrapsec.cache")
 
 _pool: ConnectionPool | None = None
 _client: Redis | None = None
@@ -17,7 +16,7 @@ def get_redis_pool() -> ConnectionPool:
     global _pool
     if _pool is None:
         _pool = ConnectionPool.from_url(
-            settings.redis_url,
+            get_settings().redis_url,
             max_connections   = 20,
             decode_responses  = True,
             socket_timeout    = 2,        # fail fast on ping
@@ -37,7 +36,7 @@ async def ping() -> bool:
     """Always creates a fresh connection for health checks — never uses cached pool."""
     try:
         fresh = Redis.from_url(
-            settings.redis_url,
+            get_settings().redis_url,
             socket_timeout         = 2,
             socket_connect_timeout = 2,
             decode_responses       = True,

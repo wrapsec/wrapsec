@@ -61,5 +61,9 @@ class PIIRedactor:
             return redacted, redacted_types
 
         except Exception as e:
-            logger.error(f"PIIRedactor failed: {e}")
-            return text, []
+            # Fail closed — do not return the original text, which may contain
+            # unredacted PII. Re-raise so the caller (gateway service) treats
+            # this as an error and blocks the request rather than passing raw
+            # PII to the client.
+            logger.error("PIIRedactor failed: %s", e, exc_info=True)
+            raise

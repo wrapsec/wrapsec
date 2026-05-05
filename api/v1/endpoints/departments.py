@@ -5,9 +5,11 @@
 import uuid
 from fastapi import APIRouter, Depends, Request
 from fastapi.responses import JSONResponse
+from sqlalchemy import func, select as sa_select
 from sqlalchemy.ext.asyncio import AsyncSession
 from api.v1.dependencies.auth import get_current_principal, require_admin
 from api.v1.dependencies.db import get_db
+from db.models import AuditLogModel
 from db.repositories.department import DepartmentRepository
 from domain.entities.principal import Principal
 from errors.exceptions import NotFoundError
@@ -57,8 +59,7 @@ async def create_department(
     Creates a new department under the authenticated principal's tenant.
     Auth: JWT + ADMIN role required.
     """
-    import uuid as _uuid
-    tenant_id = _uuid.UUID(request.state.tenant_id)
+    tenant_id = uuid.UUID(request.state.tenant_id)
 
     repo   = DepartmentRepository(db)
     record = await repo.create({
@@ -69,6 +70,7 @@ async def create_department(
         "policy_override": body.policy_override,
         "contact_email":   body.contact_email,
     })
+    await db.commit()
     return JSONResponse(content=_format(record), status_code=201)
 
 
@@ -82,15 +84,14 @@ async def list_departments(
     Lists departments scoped to the authenticated principal's tenant.
     ADMIN principals see all departments. Non-admin principals see only their own department.
     """
-    import uuid as _uuid
-    tenant_id = _uuid.UUID(request.state.tenant_id)
+    tenant_id = uuid.UUID(request.state.tenant_id)
 
     repo  = DepartmentRepository(db)
     # ADMIN sees all departments; DEVELOPER sees only their own
     if request.state.is_admin or not request.state.dept_id:
         items = await repo.list_by_tenant(tenant_id)
     else:
-        dept = await repo.get_by_id(_uuid.UUID(request.state.dept_id))
+        dept = await repo.get_by_id(uuid.UUID(request.state.dept_id))
         items = [dept] if dept else []
     return JSONResponse(content={"departments": [_format(d) for d in items]})
 
@@ -98,6 +99,7 @@ async def list_departments(
 @router.get("/{dept_id}/stats")
 async def get_department_stats(
     dept_id:   str,
+    request:   Request,
     db:        AsyncSession = Depends(get_db),
     principal: Principal    = Depends(get_current_principal),
 ):
@@ -106,9 +108,9 @@ async def get_department_stats(
     Returns total request count, decision breakdown, block rate, average latency,
     and the top 5 threat categories by frequency.
     """
-    from sqlalchemy import func
-    from db.models import AuditLogModel
-    from sqlalchemy import select as sa_select
+    dept_check = await DepartmentRepository(db).get_by_id(uuid.UUID(dept_id))
+    if not dept_check or str(dept_check.tenant_id) != request.state.tenant_id:
+        raise NotFoundError("department", dept_id)
 
     # Total requests
     total = await db.scalar(
@@ -170,6 +172,7 @@ async def get_department_stats(
 @router.get("/{dept_id}/policy")
 async def get_department_policy(
     dept_id:   str,
+    request:   Request,
     db:        AsyncSession = Depends(get_db),
     principal: Principal    = Depends(get_current_principal),
 ):
@@ -182,7 +185,7 @@ async def get_department_policy(
 
     repo   = DepartmentRepository(db)
     dept   = await repo.get_by_id(uuid.UUID(dept_id))
-    if not dept:
+    if not dept or str(dept.tenant_id) != request.state.tenant_id:
         raise NotFoundError("department", dept_id)
 
     policy, policy_source = await resolve_policy(
@@ -204,13 +207,14 @@ async def get_department_policy(
 @router.get("/{dept_id}")
 async def get_department(
     dept_id:   str,
+    request:   Request,
     db:        AsyncSession = Depends(get_db),
     principal: Principal    = Depends(get_current_principal),
 ):
     """Returns a single department by ID. 404 if not found."""
     repo   = DepartmentRepository(db)
     record = await repo.get_by_id(uuid.UUID(dept_id))
-    if not record:
+    if not record or str(record.tenant_id) != request.state.tenant_id:
         raise NotFoundError("department", dept_id)
     return JSONResponse(content=_format(record))
 
@@ -219,6 +223,7 @@ async def get_department(
 async def update_department(
     dept_id:   str,
     body:      DepartmentUpdateSchema,
+    request:   Request,
     db:        AsyncSession = Depends(get_db),
     principal: Principal    = Depends(require_admin()),
 ):
@@ -228,19 +233,24 @@ async def update_department(
     to clear a department's policy override back to tenant-level defaults.
     Auth: JWT + ADMIN role required.
     """
-    repo = DepartmentRepository(db)
+    repo     = DepartmentRepository(db)
+    existing = await repo.get_by_id(uuid.UUID(dept_id))
+    if not existing or str(existing.tenant_id) != request.state.tenant_id:
+        raise NotFoundError("department", dept_id)
     # Use exclude_unset=True so explicitly set null values (e.g. policy_override=null)
     # are included — filtering "if v is not None" would silently drop them
     data = body.model_dump(exclude_unset=True)
     record = await repo.update(uuid.UUID(dept_id), data)
     if not record:
         raise NotFoundError("department", dept_id)
+    await db.commit()
     return JSONResponse(content=_format(record))
 
 
 @router.delete("/{dept_id}")
 async def delete_department(
     dept_id:   str,
+    request:   Request,
     db:        AsyncSession = Depends(get_db),
     principal: Principal    = Depends(require_admin()),
 ):
@@ -249,8 +259,12 @@ async def delete_department(
     The department record is retained for audit history.
     Auth: JWT + ADMIN role required.
     """
-    repo   = DepartmentRepository(db)
+    repo     = DepartmentRepository(db)
+    existing = await repo.get_by_id(uuid.UUID(dept_id))
+    if not existing or str(existing.tenant_id) != request.state.tenant_id:
+        raise NotFoundError("department", dept_id)
     record = await repo.update(uuid.UUID(dept_id), {"is_active": False})
     if not record:
         raise NotFoundError("department", dept_id)
+    await db.commit()
     return JSONResponse(content={"dept_id": dept_id, "deactivated": True})

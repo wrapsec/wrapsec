@@ -91,6 +91,9 @@ async def _flush_test_redis_keys():
     Flushes rate limit and auth lockout Redis keys before auth tests.
     Rate limit key: rate_limit:{ip} — accumulates across tests from 127.0.0.1
     Lockout keys: auth:failed:{email}, auth:locked:{email}
+
+    Uses KEYS — O(N) blocking command. Acceptable for test cleanup on a local
+    Redis instance with a small keyspace. Never use KEYS in production code.
     """
     try:
         from cache.redis_client import get_redis

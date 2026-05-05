@@ -14,8 +14,13 @@ Spec reference: Section 3 (async_client.py), Section 4 (Public API Surface)
 
 from __future__ import annotations
 
+import asyncio
 import logging
 from typing import Any
+
+import httpx
+
+from wrapsec.exceptions import WrapSecError
 
 from wrapsec.config.loader import load_config
 from wrapsec.config.schema import WrapSecConfig
@@ -59,7 +64,7 @@ class AsyncClient:
     ) -> None:
         self._config: WrapSecConfig = load_config()
 
-        self._api_key: str | None = api_key or self._config.api_key
+        self._api_key: str | None = api_key if api_key is not None else self._config.api_key
         self._base_url: str = (
             (base_url or "").rstrip("/")
             or self._config.base_url
@@ -126,7 +131,7 @@ class AsyncClient:
         Scan a single input for security risks. Async version.
         See Client.scan() for full documentation.
         """
-        # Fix #6 — validate mode client-side (mirrors client.py)
+        # Validate mode client-side — mirrors client.py
         _VALID_MODES = ("fast", "full")
         if mode not in _VALID_MODES:
             raise ValueError(
@@ -163,11 +168,7 @@ class AsyncClient:
         """
         Scan multiple inputs sequentially (with optional delay between requests).
         Returns results in the same order as inputs.
-
-        Note: inputs are scanned one at a time, not concurrently.
-        For true concurrent scanning, use asyncio.gather() with individual scan() calls.
         """
-        import asyncio
         results: list[ScanResult] = []
         for i, text in enumerate(texts):
             if delay_ms > 0 and i > 0:
@@ -182,17 +183,16 @@ class AsyncClient:
         from_date: str | None = None,
         to_date:   str | None = None,
         limit:     int = 20,
+        offset:    int = 0,
         timeout:   int | None = None,
     ) -> list[AuditLog]:
-        params: dict[str, str] = {"limit": str(min(limit, 100))}
+        params: dict[str, str] = {"limit": str(min(limit, 100)), "offset": str(max(offset, 0))}
         if decision:  params["decision"] = decision
-        if reason:    params["primary_reason"] = reason  # Bug #1 fix: match API param name and sync client
+        if reason:    params["primary_reason"] = reason
         if from_date: params["from"]     = from_date
         if to_date:   params["to"]       = to_date
 
         data = await self._request("GET", "/audit/logs", self._resolve_timeout(timeout), params=params)
-        # Fix #7 — match sync client.py: check "items" first, fallback to "logs"
-        # Mismatch caused async to silently return [] when API returns "items" key
         return [AuditLog.from_dict(item) for item in data.get("items", data.get("logs", []))]
 
     async def audit_get(self, trace_id: str, timeout: int | None = None) -> AuditLog:
@@ -203,7 +203,6 @@ class AsyncClient:
         )
         items = data.get("items", data.get("logs", []))
         if not items:
-            from wrapsec.exceptions import WrapSecError
             raise WrapSecError(f"Audit record not found: {trace_id}")
         return AuditLog.from_dict(items[0])
 
@@ -232,19 +231,25 @@ class AsyncClient:
         data = await self._request("GET", "/keys", self._resolve_timeout(timeout))
         return data.get("keys", [])
 
-    async def health_live(self) -> bool:
-        import httpx
+    async def health_live(self, timeout: int = 5) -> bool:
+        """
+        Check if the API is reachable (/health/live). No auth required.
+        Fixed default timeout: 5s — matches sync client interface.
+        """
         try:
-            async with httpx.AsyncClient(timeout=5) as c:
+            async with httpx.AsyncClient(timeout=timeout) as c:
                 resp = await c.get(f"{self._base_url}/health/live")
                 return resp.is_success
         except Exception:
             return False
 
-    async def health_ready(self) -> dict[str, Any]:
-        import httpx
+    async def health_ready(self, timeout: int = 5) -> dict[str, Any]:
+        """
+        Check full service health (/health/ready). Auth required.
+        Fixed default timeout: 5s — matches sync client interface.
+        """
         api_key = self._require_api_key()
-        async with httpx.AsyncClient(timeout=5) as c:
+        async with httpx.AsyncClient(timeout=timeout) as c:
             resp = await c.get(
                 f"{self._base_url}/health/ready",
                 headers=build_headers(api_key),
@@ -258,10 +263,12 @@ class AsyncClient:
             pass
         raise map_response_error(resp.status_code, response_data)
 
-    async def health_config(self) -> dict[str, Any]:
-        import httpx
+    async def health_config(self, timeout: int = 5) -> dict[str, Any]:
+        """
+        Retrieve gateway active config. Fixed default timeout: 5s.
+        """
         api_key = self._require_api_key()
-        async with httpx.AsyncClient(timeout=5) as c:
+        async with httpx.AsyncClient(timeout=timeout) as c:
             resp = await c.get(
                 f"{self._base_url}/health/config",
                 headers=build_headers(api_key),

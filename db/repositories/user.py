@@ -87,7 +87,12 @@ class UserRepository(BaseRepository):
                 tenant_id = user.tenant_id,
             )
 
+        _UPDATABLE = frozenset({
+            "role", "dept_id", "is_active", "force_password_change", "password_hash",
+        })
         for key, value in data.items():
+            if key not in _UPDATABLE:
+                raise ValueError(f"Field '{key}' cannot be updated via update().")
             setattr(user, key, value)
 
         return user
@@ -149,14 +154,14 @@ class UserRepository(BaseRepository):
         on their next request to the middleware.
         Called exclusively by AuthService.logout_all_sessions().
         """
-        await self.session.execute(
+        result = await self.session.execute(
             update(UserModel)
             .where(UserModel.id == user_id)
             .values(token_version=UserModel.token_version + 1)
+            .returning(UserModel.token_version)
         )
-        # Re-fetch to return the new version
-        user = await self.get_by_id(user_id)
-        return user.token_version if user else 0
+        row = result.fetchone()
+        return row[0] if row else 0
 
     async def update_last_login(self, user_id: UUID) -> None:
         """

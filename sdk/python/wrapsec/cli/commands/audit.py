@@ -51,6 +51,8 @@ def audit() -> None:
 @click.option("--to",        "to_date",    default=None, help="To date (YYYY-MM-DD).")
 @click.option("--limit",     default=20,   show_default=True, type=click.IntRange(1, 100),
               help="Number of records (max 100).")
+@click.option("--offset",    default=0,    show_default=True, type=click.IntRange(min=0),
+              help="Number of records to skip (for pagination).")
 @click.option("--json",      "json_output", is_flag=True, help="Pure JSON output.")
 def audit_list(
     decision:    str | None,
@@ -58,6 +60,7 @@ def audit_list(
     from_date:   str | None,
     to_date:     str | None,
     limit:       int,
+    offset:      int,
     json_output: bool,
 ) -> None:
     """List recent audit log entries.
@@ -68,6 +71,7 @@ def audit_list(
       wrapsec audit list --decision BLOCK --limit 50
       wrapsec audit list --reason SYSTEM_ERROR
       wrapsec audit list --from 2026-04-01 --to 2026-04-16
+      wrapsec audit list --offset 100 --limit 50
       wrapsec audit list --json | jq .[].trace_id
     """
     client = _get_client()
@@ -78,6 +82,7 @@ def audit_list(
             from_date = from_date,
             to_date   = to_date,
             limit     = limit,
+            offset    = offset,
         )
     except WrapSecError as e:
         print_error(str(e))
@@ -115,12 +120,12 @@ def audit_list(
         color   = {"BLOCK": "red", "SANITIZE": "yellow", "ALLOW": "green"}.get(log.decision)
         reason  = (log.primary_reason or "—")[:30]
         source  = (log.source or "—")[:18]
-        created = log.created_at[:19] if log.created_at else "—"
+        created = str(log.created_at)[:19] if log.created_at else "—"
         click.secho(
             f"{log.trace_id:<32}  "
             f"{log.decision:<10}  "
             f"{reason:<30}  "
-            f"{round(log.confidence, 2):<5.2f}  "
+            f"{round(log.confidence, 1):<4.1f}  "
             f"{log.confidence_band or '—':<5}  "
             f"{source:<18}  "
             f"{created}",
@@ -168,7 +173,7 @@ def audit_get(trace_id: str, json_output: bool) -> None:
     color = {"BLOCK": "red", "SANITIZE": "yellow", "ALLOW": "green"}.get(log.decision)
     click.secho(f"Decision:       {log.decision}", fg=color, bold=True)
     click.echo(f"Reason:         {log.primary_reason}")
-    click.echo(f"Confidence:     {round(log.confidence, 2)} ({log.confidence_band})")
+    click.echo(f"Confidence:     {round(log.confidence, 1)} ({log.confidence_band})")
     click.echo(f"Trace ID:       {log.trace_id}")
     click.echo(f"Latency:        {log.latency_ms:.1f}ms")
     click.echo(f"Input length:   {log.input_length} chars")

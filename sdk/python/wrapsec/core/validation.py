@@ -12,6 +12,7 @@ Spec reference: Section 3 (core/validation.py), Section 13.2 (scan token limit n
 
 from __future__ import annotations
 
+import math
 import re
 import unicodedata
 
@@ -45,7 +46,7 @@ def validate_input(text: str) -> str:
       - text is empty after normalization
       - text exceeds MAX_INPUT_CHARS
 
-    Returns the validated (normalized) text.
+    Returns the validated text (does not normalize — call normalize_text first).
 
     Spec: Section 13.2 — token limit note, Section 3 — validation in core/
     """
@@ -68,7 +69,6 @@ def estimate_tokens(text: str) -> int:
     Estimate token count using the server's heuristic: ceil(len / 2).
     Used for warnings — not enforced client-side.
     """
-    import math
     return math.ceil(len(text) / 2)
 
 

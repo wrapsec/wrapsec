@@ -3,10 +3,13 @@
 // WrapSec v1.0 | AI Security Gateway - https://wrapsec.com
 "use client"
 
+import { useEffect } from "react"
+import { useRouter } from "next/navigation"
 import { Sidebar } from "./Sidebar"
 import { TopBar } from "./TopBar"
 import { useInactivityTimer } from "@/hooks/useInactivityTimer"
 import { InactivityWarning } from "./InactivityWarning"
+import { useAuthOptional } from "@/components/auth/AuthProvider"
 
 interface ShellProps {
   title:    string
@@ -14,7 +17,21 @@ interface ShellProps {
 }
 
 export function Shell({ title, children }: ShellProps) {
+  const auth    = useAuthOptional()
+  const router  = useRouter()
   const { showWarning, secondsRemaining, resetTimer, logoutNow } = useInactivityTimer()
+
+  // Force-password-change users must change password before accessing any page.
+  // This mirrors ProtectedRoute — catches JWT users who navigate directly to a
+  // Shell-wrapped page without going through ProtectedRoute first.
+  // Guard against null: useAuthOptional() returns null during static prerendering.
+  useEffect(() => {
+    if (auth && !auth.isLoading && auth.currentUser?.force_password_change) {
+      router.replace("/change-password")
+    }
+  }, [auth, router])
+
+  if (auth && !auth.isLoading && auth.currentUser?.force_password_change) return null
 
   return (
     <div className="flex h-screen" style={{ background: "var(--page-bg)" }}>

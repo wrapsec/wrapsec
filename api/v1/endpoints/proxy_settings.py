@@ -13,14 +13,16 @@ Endpoints:
     GET    /v1/settings/proxy/health   -- test provider connectivity
 """
 
+import ipaddress
 import logging
 import time
 from typing import Literal
+from urllib.parse import urlparse
 
 import httpx
 from fastapi import APIRouter, Depends, Request
-from fastapi.responses import JSONResponse
-from pydantic import BaseModel, field_validator, HttpUrl
+from fastapi.responses import JSONResponse, Response
+from pydantic import BaseModel, field_validator, HttpUrl, SecretStr
 from sqlalchemy import select, delete
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -31,21 +33,43 @@ from config.settings import get_settings
 from db.models import ProxyProviderConfigModel
 from security.encryption import encrypt, decrypt, mask
 
-router   = APIRouter()
-settings = get_settings()
-logger   = logging.getLogger("wrapsec.proxy.settings")
+router = APIRouter()
+logger = logging.getLogger("wrapsec.proxy.settings")
 
 SUPPORTED_PROVIDERS = {"openai", "ollama", "custom"}
 
+_PRIVATE_NETS = [
+    ipaddress.ip_network("127.0.0.0/8"),
+    ipaddress.ip_network("10.0.0.0/8"),
+    ipaddress.ip_network("172.16.0.0/12"),
+    ipaddress.ip_network("192.168.0.0/16"),
+    ipaddress.ip_network("169.254.0.0/16"),
+    ipaddress.ip_network("0.0.0.0/8"),
+    ipaddress.ip_network("::1/128"),
+    ipaddress.ip_network("fc00::/7"),
+    ipaddress.ip_network("fe80::/10"),
+]
+_BLOCKED_HOSTS = frozenset({"localhost", "metadata.google.internal", "metadata.goog"})
 
-# ---------------------------------------------------------------------------
-# Schemas
-# ---------------------------------------------------------------------------
+
+def _is_ssrf_target(url: str) -> bool:
+    """Return True if the URL targets a private, loopback, or cloud-metadata address."""
+    host = (urlparse(url).hostname or "").lower()
+    if host in _BLOCKED_HOSTS:
+        return True
+    try:
+        addr = ipaddress.ip_address(host)
+        return any(addr in net for net in _PRIVATE_NETS)
+    except ValueError:
+        return False
+
+
+# ── Schemas ────────────────────────────────────────────────────────────────────
 
 class ProxySettingsPutSchema(BaseModel):
     provider:      str
     base_url:      str
-    api_key:       str | None = None
+    api_key:       SecretStr | None = None
     default_model: str
     timeout:       int = 60
 
@@ -71,6 +95,8 @@ class ProxySettingsPutSchema(BaseModel):
         v = v.rstrip("/")
         if not v.startswith(("http://", "https://")):
             raise ValueError("base_url must start with http:// or https://")
+        if _is_ssrf_target(v):
+            raise ValueError("base_url must not target private or internal addresses")
         return v
 
     @field_validator("default_model")
@@ -82,16 +108,14 @@ class ProxySettingsPutSchema(BaseModel):
         return v
 
 
-# ---------------------------------------------------------------------------
-# Helpers
-# ---------------------------------------------------------------------------
+# ── Helpers ────────────────────────────────────────────────────────────────────
 
 def _build_config_response(config: ProxyProviderConfigModel) -> dict:
     """Build the safe response dict -- api key is always masked."""
     masked = None
     if config.provider_api_key_enc:
         try:
-            plaintext = decrypt(config.provider_api_key_enc, settings.secret_key)
+            plaintext = decrypt(config.provider_api_key_enc, get_settings().secret_key)
             masked    = mask(plaintext)
         except ValueError:
             masked = "****"
@@ -116,9 +140,7 @@ async def _get_config(key_id: str, db: AsyncSession) -> ProxyProviderConfigModel
     return result.scalar_one_or_none()
 
 
-# ---------------------------------------------------------------------------
-# GET /v1/settings/proxy
-# ---------------------------------------------------------------------------
+# ── GET /v1/settings/proxy ─────────────────────────────────────────────────────
 
 @router.get("/proxy")
 async def get_proxy_settings(
@@ -143,9 +165,7 @@ async def get_proxy_settings(
     return JSONResponse(status_code=200, content=_build_config_response(config))
 
 
-# ---------------------------------------------------------------------------
-# PUT /v1/settings/proxy
-# ---------------------------------------------------------------------------
+# ── PUT /v1/settings/proxy ─────────────────────────────────────────────────────
 
 @router.put("/proxy")
 async def put_proxy_settings(
@@ -162,7 +182,7 @@ async def put_proxy_settings(
     key_id = request.state.key_id
 
     # Validate: openai and custom providers require an api_key
-    if body.provider in ("openai", "custom") and not body.api_key:
+    if body.provider in ("openai", "custom") and not (body.api_key and body.api_key.get_secret_value()):
         return JSONResponse(
             status_code=422,
             content={
@@ -176,7 +196,7 @@ async def put_proxy_settings(
     # Encrypt the api_key before storing
     encrypted_key = None
     if body.api_key:
-        encrypted_key = encrypt(body.api_key, settings.secret_key)
+        encrypted_key = encrypt(body.api_key.get_secret_value(), get_settings().secret_key)
 
     existing = await _get_config(key_id, db)
 
@@ -208,9 +228,7 @@ async def put_proxy_settings(
     return JSONResponse(status_code=200, content=_build_config_response(config))
 
 
-# ---------------------------------------------------------------------------
-# DELETE /v1/settings/proxy
-# ---------------------------------------------------------------------------
+# ── DELETE /v1/settings/proxy ──────────────────────────────────────────────────
 
 @router.delete("/proxy")
 async def delete_proxy_settings(
@@ -238,12 +256,10 @@ async def delete_proxy_settings(
         )
 
     logger.info(f"Proxy config deleted for key_id={key_id}")
-    return JSONResponse(status_code=204, content=None)
+    return Response(status_code=204)
 
 
-# ---------------------------------------------------------------------------
-# GET /v1/settings/proxy/health
-# ---------------------------------------------------------------------------
+# ── GET /v1/settings/proxy/health ──────────────────────────────────────────────
 
 @router.get("/proxy/health")
 async def get_proxy_health(
@@ -270,7 +286,7 @@ async def get_proxy_health(
     api_key = None
     if config.provider_api_key_enc:
         try:
-            api_key = decrypt(config.provider_api_key_enc, settings.secret_key)
+            api_key = decrypt(config.provider_api_key_enc, get_settings().secret_key)
         except ValueError:
             return JSONResponse(
                 status_code=500,
@@ -325,14 +341,14 @@ async def get_proxy_health(
                 "error":     "Connection timed out after 10 seconds",
             },
         )
-    except httpx.ConnectError as exc:
+    except httpx.ConnectError:
         return JSONResponse(
             status_code=200,
             content={
                 "provider":  config.provider,
                 "base_url":  config.base_url,
                 "reachable": False,
-                "error":     f"Connection refused: {exc}",
+                "error":     "Connection refused.",
             },
         )
     except httpx.HTTPStatusError as exc:
@@ -342,17 +358,17 @@ async def get_proxy_health(
                 "provider":  config.provider,
                 "base_url":  config.base_url,
                 "reachable": False,
-                "error":     f"HTTP {exc.response.status_code}: {exc.response.text[:200]}",
+                "error":     f"HTTP {exc.response.status_code}",
             },
         )
     except Exception as exc:
-        logger.error(f"Health check failed for key_id={key_id}: {exc}")
+        logger.error("Health check failed for key_id=%s: %s", key_id, exc)
         return JSONResponse(
             status_code=200,
             content={
                 "provider":  config.provider,
                 "base_url":  config.base_url,
                 "reachable": False,
-                "error":     str(exc),
+                "error":     "Health check failed.",
             },
         )

@@ -190,6 +190,7 @@ function EditUserModal({
   const { isJwt } = useAuthMode()
 
   const [confirmToggle, setConfirmToggle] = useState(false)
+  const [toggling,      setToggling]      = useState(false)
 
   // Reset password state
   const [showReset,   setShowReset]   = useState(false)
@@ -216,12 +217,16 @@ function EditUserModal({
   }
 
   const handleToggleActive = async () => {
+    if (toggling) return
+    setToggling(true)
     try {
       await updateUser(user.id, { is_active: !user.is_active })
       onSaved()
       onClose()
     } catch (e: any) {
       setError(e.message)
+    } finally {
+      setToggling(false)
     }
   }
 
@@ -336,7 +341,7 @@ function EditUserModal({
               <span className="text-xs text-slate-600">
                 {user.is_active ? "Deactivate" : "Reactivate"} this user?
               </span>
-              <Button size="sm" variant="danger" onClick={handleToggleActive}>Confirm</Button>
+              <Button size="sm" variant="danger" onClick={handleToggleActive} loading={toggling}>Confirm</Button>
               <Button size="sm" variant="secondary" onClick={() => setConfirmToggle(false)}>Cancel</Button>
             </div>
           )}

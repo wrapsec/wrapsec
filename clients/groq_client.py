@@ -8,8 +8,7 @@ import httpx
 from interfaces.base_llm import BaseLLMClient, LLMResponse
 from config.settings import get_settings
 
-logger   = logging.getLogger("wrapsec.clients")
-settings = get_settings()
+logger = logging.getLogger("wrapsec.clients")
 
 GROQ_API_URL = "https://api.groq.com/openai/v1/chat/completions"
 
@@ -40,8 +39,9 @@ class GroqClient(BaseLLMClient):
         temperature:   float = 0.0,
         max_tokens:    int = 500,
     ) -> LLMResponse:
-        start   = time.perf_counter()
-        timeout = self._llm_settings.get("timeout") or settings.llm_timeout
+        _settings = get_settings()
+        start     = time.perf_counter()
+        timeout   = self._llm_settings.get("timeout") or _settings.llm_timeout
 
         # Groq requires a valid model name
         requested      = model or self._llm_settings.get("model") or DEFAULT_GROQ_MODEL
@@ -52,7 +52,7 @@ class GroqClient(BaseLLMClient):
                 response = await client.post(
                     GROQ_API_URL,
                     headers={
-                        "Authorization": f"Bearer {settings.groq_api_key}",
+                        "Authorization": f"Bearer {_settings.groq_api_key}",
                         "Content-Type":  "application/json",
                     },
                     json={
@@ -87,13 +87,14 @@ class GroqClient(BaseLLMClient):
             )
 
     async def is_available(self) -> bool:
-        if not settings.groq_api_key:
+        _settings = get_settings()
+        if not _settings.groq_api_key:
             return False
         try:
             async with httpx.AsyncClient(timeout=5) as client:
                 response = await client.get(
                     "https://api.groq.com/openai/v1/models",
-                    headers={"Authorization": f"Bearer {settings.groq_api_key}"},
+                    headers={"Authorization": f"Bearer {_settings.groq_api_key}"},
                 )
                 return response.status_code == 200
         except Exception:

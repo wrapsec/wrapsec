@@ -3,6 +3,7 @@
 # WrapSec v1.0 | AI Security Gateway - https://wrapsec.com
 
 import logging
+import uuid
 from db.repositories.tenant import TenantRepository
 from db.repositories.department import DepartmentRepository
 from db.repositories.application import ApplicationRepository
@@ -102,12 +103,10 @@ async def resolve_policy(
 
     Resolution order:
       system defaults
-        → tenant global_policy
+        → DB settings (policy_thresholds, detection_layers, llm_settings, rate_limit)
           → department policy_override
-            → application policy_override (v1.1)
+            → application policy_override
     """
-    import uuid
-
     policy = system_defaults()
 
     dept_override   = None
@@ -162,7 +161,7 @@ async def resolve_policy(
             except Exception as e:
                 logger.warning(f"Failed to load department policy: {e}")
 
-        # Application policy_override (null in v1 — placeholder)
+        # Application policy_override — applied if set; null inherits from department
         if app_id:
             try:
                 app_repo = ApplicationRepository(db)
@@ -180,6 +179,18 @@ async def resolve_policy(
             SYSTEM_ERRORS.labels(execution_mode="unknown").inc()
         except Exception:
             pass
+
+    # Validate final thresholds — DB or override values could be inconsistent
+    block    = policy["thresholds"]["block"]
+    sanitize = policy["thresholds"]["sanitize"]
+    if not (0.0 < sanitize < block <= 1.0):
+        logger.error(
+            "Resolved thresholds invalid (block=%.2f sanitize=%.2f) — "
+            "reverting to system defaults",
+            block, sanitize,
+        )
+        policy["thresholds"]["block"]    = settings.block_threshold
+        policy["thresholds"]["sanitize"] = settings.sanitize_threshold
 
     policy_source = determine_policy_source(
         dept_override, app_override

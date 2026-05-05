@@ -30,7 +30,7 @@ import click
 
 from wrapsec.client import Client
 from wrapsec.config.loader import load_config
-from wrapsec.core.validation import normalize_text, validate_input
+from wrapsec.core.validation import MAX_INPUT_CHARS, normalize_text, validate_input
 from wrapsec.exceptions import WrapSecError, WrapSecRateLimitError
 from wrapsec.cli._output import (
     get_scan_exit_code,
@@ -40,7 +40,7 @@ from wrapsec.cli._output import (
 )
 
 MAX_FILE_BYTES  = 10 * 1024 * 1024   # 10MB
-MAX_LINE_CHARS  = 8000
+MAX_LINE_CHARS  = MAX_INPUT_CHARS
 LARGE_FILE_WARN = 100                 # lines
 
 
@@ -141,21 +141,13 @@ def batch(
         )
         sys.exit(1)
 
-    # Count lines for large-file warning (cheap — just count newlines)
+    # Large-file warning — estimate from file size to avoid a second open.
+    # Average line length of ~50 chars gives a conservative over-estimate.
     if not quiet and not json_output:
-        with open(Path(file).resolve(), "r", encoding="utf-8", errors="replace") as f:
-            line_count = sum(
-                # Bug #2 fix: strip BOM (﻿) before checking — matches
-                # the processing loop which also strips BOM via lstrip("﻿")
-                1 for ln in f
-                if ln.lstrip("﻿").strip() and not ln.lstrip("﻿").strip().startswith("#")
-            )
-
-        effective = min(line_count, limit) if limit else line_count
-
-        if effective > LARGE_FILE_WARN and delay == 0:
+        estimated_lines = file_size // 50
+        if estimated_lines > LARGE_FILE_WARN and delay == 0:
             click.echo(
-                f"Warning: scanning {effective:,} prompts with no delay between requests.\n"
+                f"Warning: large file — potentially many prompts with no delay.\n"
                 f"Consider --delay 100 to avoid rate limiting.",
                 err=True,
             )
@@ -259,7 +251,7 @@ def batch(
                     )
                     click.secho(
                         f"[{processed:>4}] {result.decision:<8} "
-                        f"{round(result.confidence, 2):.2f}  "
+                        f"{round(result.confidence, 1):.1f}  "
                         f"{result.trace_id}  "
                         f"{text[:60]}{'...' if len(text) > 60 else ''}",
                         fg=color,

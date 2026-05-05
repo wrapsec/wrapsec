@@ -21,7 +21,12 @@ Spec reference: Section 3 (client.py), Section 4 (Public API Surface),
 from __future__ import annotations
 
 import logging
+import time
 from typing import Any
+
+import requests
+
+from wrapsec.exceptions import WrapSecError
 
 from wrapsec.config.loader import load_config
 from wrapsec.config.schema import WrapSecConfig
@@ -30,6 +35,7 @@ from wrapsec.core.http import (
     DEFAULT_BASE_URL,
     build_headers,
     execute_request,
+    map_response_error,
     resolve_timeout,
 )
 from wrapsec.core.retry import with_retry
@@ -79,7 +85,7 @@ class Client:
         self._config: WrapSecConfig = load_config()
 
         # Resolve api_key: constructor arg → env/file (already in config)
-        self._api_key: str | None = api_key or self._config.api_key
+        self._api_key: str | None = api_key if api_key is not None else self._config.api_key
 
         # Resolve base_url: constructor arg → env/file → default
         self._base_url: str = (
@@ -208,7 +214,6 @@ class Client:
 
         Spec: Section 13.1 (batch command)
         """
-        import time
         results: list[ScanResult] = []
         for i, text in enumerate(texts):
             if delay_ms > 0 and i > 0:
@@ -223,6 +228,7 @@ class Client:
         from_date: str | None = None,
         to_date:   str | None = None,
         limit:     int = 20,
+        offset:    int = 0,
         timeout:   int | None = None,
     ) -> list[AuditLog]:
         """
@@ -231,7 +237,7 @@ class Client:
 
         Spec: Section 13.2 (wrapsec audit list)
         """
-        params: dict[str, str] = {"limit": str(min(limit, 100))}
+        params: dict[str, str] = {"limit": str(min(limit, 100)), "offset": str(max(offset, 0))}
         if decision:  params["decision"]        = decision
         if reason:    params["primary_reason"]  = reason
         if from_date: params["from"]            = from_date
@@ -254,7 +260,6 @@ class Client:
         )
         items = data.get("items", data.get("logs", []))
         if not items:
-            from wrapsec.exceptions import WrapSecError
             raise WrapSecError(f"Audit record not found: {trace_id}")
         return AuditLog.from_dict(items[0])
 
@@ -312,11 +317,10 @@ class Client:
         Fixed timeout: 5s (not user configurable per spec Section 13.2)
         Spec: Section 13.2 (wrapsec ping)
         """
-        import requests as req
         try:
-            resp = req.get(
+            resp = requests.get(
                 f"{self._base_url}/health/live",
-                timeout=5,
+                timeout=timeout,
             )
             return resp.ok
         except Exception:
@@ -327,16 +331,13 @@ class Client:
         Check full service health (/health/ready). Auth required.
         Used by doctor command.
 
-        Fixed timeout: 5s per check (not user configurable).
         Spec: Section 13.2 (wrapsec doctor)
         """
-        from wrapsec.core.http import map_response_error as _map_err
-        import requests as req
         api_key = self._require_api_key()
-        resp = req.get(
+        resp = requests.get(
             f"{self._base_url}/health/ready",
             headers=build_headers(api_key),
-            timeout=5,
+            timeout=timeout,
         )
         if resp.ok:
             return resp.json()
@@ -345,19 +346,17 @@ class Client:
             response_data = resp.json()
         except Exception:
             pass
-        raise _map_err(resp.status_code, response_data)
+        raise map_response_error(resp.status_code, response_data)
 
     def health_config(self, timeout: int = 5) -> dict[str, Any]:
         """
         Retrieve gateway active config for version check in doctor.
-        Fixed timeout: 5s.
         """
         api_key = self._require_api_key()
-        import requests as req
-        resp = req.get(
+        resp = requests.get(
             f"{self._base_url}/health/config",
             headers=build_headers(api_key),
-            timeout=5,
+            timeout=timeout,
         )
         if resp.ok:
             return resp.json()

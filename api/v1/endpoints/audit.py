@@ -2,6 +2,8 @@
 # Copyright (c) 2026 WrapSec. All rights reserved.
 # WrapSec v1.0 | AI Security Gateway - https://wrapsec.com
 
+import csv
+import io
 from datetime import datetime, timezone
 from fastapi import APIRouter, Query, Depends, Request
 from api.v1.dependencies.auth import get_current_principal
@@ -10,6 +12,7 @@ from domain.value_objects.severity import compute_severity
 from fastapi.responses import JSONResponse
 from sqlalchemy import func, case, Integer, select
 from sqlalchemy.ext.asyncio import AsyncSession
+from starlette.responses import StreamingResponse
 from api.v1.dependencies.db import get_db
 from db.repositories.audit import AuditRepository
 from db.models import AuditLogModel
@@ -231,13 +234,17 @@ async def get_attribution_report(
     and application. Useful for security review and capacity planning.
     Supports from/to date filtering (ISO format) for time-scoped reports.
     """
-    from sqlalchemy import select as sa_select
-
-    is_admin = getattr(request.state, "is_admin", False)
+    is_admin  = getattr(request.state, "is_admin", False)
+    tenant_id = None
     if not is_admin:
-        dept_id = getattr(request.state, "dept_id", None)
+        dept_id   = getattr(request.state, "dept_id",   None)
+        tenant_id = getattr(request.state, "tenant_id", None)
 
     base_where = []
+    # Non-admin keys are always scoped to their own tenant — prevents cross-tenant
+    # data exposure when a key has no dept_id association.
+    if not is_admin and tenant_id:
+        base_where.append(AuditLogModel.tenant_id == tenant_id)
     if dept_id:
         base_where.append(AuditLogModel.dept_id == dept_id)
     if from_:
@@ -256,7 +263,7 @@ async def get_attribution_report(
             pass
 
     # By API key
-    key_query = sa_select(
+    key_query = select(
         AuditLogModel.key_id,
         AuditLogModel.source,
         func.count().label("total"),
@@ -283,7 +290,7 @@ async def get_attribution_report(
     ]
 
     # By department — scoped to same dept filter as rest of attribution
-    dept_query = sa_select(
+    dept_query = select(
         AuditLogModel.dept_id,
         func.count().label("total"),
         func.sum(
@@ -305,7 +312,7 @@ async def get_attribution_report(
     ]
 
     # By application
-    app_query = sa_select(
+    app_query = select(
         AuditLogModel.app_id,
         func.count().label("total"),
         func.sum(
@@ -329,7 +336,7 @@ async def get_attribution_report(
     ]
 
     # By primary reason
-    reason_query = sa_select(
+    reason_query = select(
         AuditLogModel.primary_reason,
         func.count().label("total"),
     ).where(*base_where).group_by(
@@ -344,7 +351,7 @@ async def get_attribution_report(
     ]
 
     # By confidence band
-    band_query = sa_select(
+    band_query = select(
         AuditLogModel.confidence_band,
         func.count().label("total"),
     ).where(*base_where).group_by(
@@ -380,10 +387,6 @@ async def get_analytics(
     Advanced cross-department analytics with time-series trend data.
     Groups requests by time period with decision breakdowns.
     """
-    from sqlalchemy import select, func
-    from db.models import AuditLogModel
-    from datetime import datetime, timezone
-
     is_admin = getattr(request.state, "is_admin", False)
     if not is_admin:
         dept_id = getattr(request.state, "dept_id", None)
@@ -483,9 +486,7 @@ async def export_audit_logs(
     is_admin = getattr(request.state, "is_admin", False)
     if not is_admin:
         dept_id = getattr(request.state, "dept_id", None)
-    import csv
-    import io
-    from starlette.responses import StreamingResponse
+
 
     repo = AuditRepository(db)
     _, items = await repo.list(

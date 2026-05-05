@@ -3,6 +3,8 @@
 # WrapSec v1.0 | AI Security Gateway - https://wrapsec.com
 
 import hashlib
+import hmac
+import ipaddress
 import logging
 import os
 from datetime import datetime
@@ -10,13 +12,18 @@ from uuid import UUID
 
 from fastapi import Request
 from jwt.exceptions import ExpiredSignatureError, InvalidTokenError
+from sqlalchemy.ext.asyncio import create_async_engine, async_sessionmaker, AsyncSession
+from sqlalchemy.pool import NullPool
 from starlette.middleware.base import BaseHTTPMiddleware
 from starlette.responses import JSONResponse, Response
 
 from config.settings import get_settings
 
-logger   = logging.getLogger("wrapsec.auth")
-settings = get_settings()
+logger = logging.getLogger("wrapsec.auth")
+
+_auth_event_engine = create_async_engine(get_settings().database_url, poolclass=NullPool)
+_auth_event_sf     = async_sessionmaker(bind=_auth_event_engine, class_=AsyncSession,
+                                        expire_on_commit=False)
 
 PUBLIC_PATHS = {
     "/health",
@@ -42,6 +49,47 @@ FORCE_CHANGE_ALLOWED = {
 }
 
 _TESTING = os.getenv("TESTING") == "true"
+
+
+def _parse_trusted_proxy_nets(raw: str) -> list[ipaddress.IPv4Network | ipaddress.IPv6Network]:
+    nets = []
+    for entry in raw.split(","):
+        entry = entry.strip()
+        if not entry:
+            continue
+        try:
+            nets.append(ipaddress.ip_network(entry, strict=False))
+        except ValueError:
+            logger.warning("trusted_proxy_ips: ignoring invalid entry %r", entry)
+    return nets
+
+
+def get_client_ip(request: Request) -> str:
+    """
+    Returns the real client IP, trusting x-forwarded-for only when the
+    direct connection IP is listed in TRUSTED_PROXY_IPS. Without a trusted
+    proxy guard, any client can set x-forwarded-for to spoof their IP in
+    audit logs and bypass IP-based controls.
+    """
+    direct_ip = (request.client.host if request.client else None) or "unknown"
+    forwarded  = request.headers.get("x-forwarded-for", "").split(",")[0].strip()
+
+    if not forwarded:
+        return direct_ip
+
+    trusted_raw = get_settings().trusted_proxy_ips
+    if not trusted_raw:
+        return direct_ip
+
+    try:
+        addr = ipaddress.ip_address(direct_ip)
+        nets = _parse_trusted_proxy_nets(trusted_raw)
+        if any(addr in net for net in nets):
+            return forwarded
+    except ValueError:
+        pass
+
+    return direct_ip
 
 
 def _unauthorized(request: Request, reason: str) -> JSONResponse:
@@ -115,21 +163,12 @@ async def _log_session_expired(
         user_id, tenant_id, failure_reason, path,
     )
 
-    session = None
-    engine  = None
-    try:
-        from sqlalchemy.ext.asyncio import create_async_engine, async_sessionmaker, AsyncSession
-        from sqlalchemy.pool import NullPool
-        from config.settings import get_settings
-        from db.repositories.auth_event import AuthEventRepository
+    from db.repositories.auth_event import AuthEventRepository
+    from domain.enums import AuthEventAction as _Action, AuthFailureReason as _Reason
 
-        _settings = get_settings()
-        engine    = create_async_engine(_settings.database_url, poolclass=NullPool)
-        sf        = async_sessionmaker(bind=engine, class_=AsyncSession,
-                                        expire_on_commit=False)
-        session   = sf()
-        from domain.enums import AuthEventAction as _Action, AuthFailureReason as _Reason
-        repo      = AuthEventRepository(session)
+    session = _auth_event_sf()
+    try:
+        repo = AuthEventRepository(session)
         await repo.insert(
             action         = _Action.SESSION_EXPIRED,
             success        = False,
@@ -141,10 +180,7 @@ async def _log_session_expired(
     except Exception as e:
         logger.error("auth_event DB logging failed action=session_expired error=%s", e)
     finally:
-        if session:
-            await session.close()
-        if engine:
-            await engine.dispose()
+        await session.close()
 
 
 async def _get_db_session():
@@ -160,7 +196,7 @@ async def _get_db_session():
     if _TESTING:
         from sqlalchemy.ext.asyncio import create_async_engine, async_sessionmaker, AsyncSession
         from sqlalchemy.pool import NullPool
-        engine = create_async_engine(settings.database_url, poolclass=NullPool)
+        engine = create_async_engine(get_settings().database_url, poolclass=NullPool)
         sf     = async_sessionmaker(bind=engine, class_=AsyncSession,
                                      expire_on_commit=False)
         return engine, sf()
@@ -188,10 +224,7 @@ class AuthMiddleware(BaseHTTPMiddleware):
             return await call_next(request)
 
         # Always capture network attribution
-        request.state.ip_address = (
-            request.headers.get("x-forwarded-for", "").split(",")[0].strip()
-            or (request.client.host if request.client else "unknown")
-        )
+        request.state.ip_address = get_client_ip(request)
         request.state.user_agent = request.headers.get("user-agent", "")
 
         # Initialise all state fields
@@ -222,7 +255,7 @@ class AuthMiddleware(BaseHTTPMiddleware):
     async def _authenticate_api_key(
         self, api_key: str, request: Request, call_next
     ) -> Response:
-        if api_key == settings.admin_api_key:
+        if hmac.compare_digest(api_key, get_settings().admin_api_key or ""):
             return await self._authenticate_admin_key(request, call_next)
 
         if api_key.startswith("wsk_live_") or api_key.startswith("wsk_trial_"):

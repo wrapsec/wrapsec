@@ -2,27 +2,24 @@
 # Copyright (c) 2026 WrapSec. All rights reserved.
 # WrapSec v1.0 | AI Security Gateway - https://wrapsec.com
 
+import ipaddress
 from datetime import datetime, timezone
+from urllib.parse import urlparse
 from fastapi import APIRouter, Depends, Request
 from fastapi.responses import JSONResponse
-from pydantic import BaseModel, model_validator
+from pydantic import BaseModel, model_validator, field_validator
 from sqlalchemy.ext.asyncio import AsyncSession
 from api.v1.dependencies.db import get_db
 from api.v1.dependencies.auth import get_current_principal, require_admin
+from cache.redis_client import get_redis
 from db.repositories.settings import SettingsRepository
 from config.settings import get_settings
 from errors.exceptions import ValidationError
 
-router    = APIRouter()
-settings  = get_settings()
+router = APIRouter()
 
 THRESHOLD_KEY = "policy_thresholds"
 LAYERS_KEY    = "detection_layers"
-
-DEFAULT_THRESHOLDS = {
-    "block_threshold":    settings.block_threshold,
-    "sanitize_threshold": settings.sanitize_threshold,
-}
 
 DEFAULT_LAYERS = {
     "rule_enabled": True,
@@ -31,14 +28,20 @@ DEFAULT_LAYERS = {
 }
 
 
+def _default_thresholds() -> dict:
+    _s = get_settings()
+    return {"block_threshold": _s.block_threshold, "sanitize_threshold": _s.sanitize_threshold}
+
+
 class ThresholdsUpdateSchema(BaseModel):
     block_threshold:    float | None = None
     sanitize_threshold: float | None = None
 
     @model_validator(mode="after")
     def validate_thresholds(self) -> "ThresholdsUpdateSchema":
-        block    = self.block_threshold    if self.block_threshold    is not None else settings.block_threshold
-        sanitize = self.sanitize_threshold if self.sanitize_threshold is not None else settings.sanitize_threshold
+        _s       = get_settings()
+        block    = self.block_threshold    if self.block_threshold    is not None else _s.block_threshold
+        sanitize = self.sanitize_threshold if self.sanitize_threshold is not None else _s.sanitize_threshold
 
         if block <= 0.0:
             raise ValueError("block_threshold must be greater than 0")
@@ -74,7 +77,7 @@ async def get_thresholds(
     """
     repo   = SettingsRepository(db)
     stored = await repo.get(THRESHOLD_KEY)
-    return JSONResponse(content=stored or DEFAULT_THRESHOLDS)
+    return JSONResponse(content=stored or _default_thresholds())
 
 
 @router.put("/thresholds")
@@ -89,7 +92,7 @@ async def update_thresholds(
     Auth: JWT + ADMIN role required.
     """
     repo    = SettingsRepository(db)
-    current = await repo.get(THRESHOLD_KEY) or DEFAULT_THRESHOLDS.copy()
+    current = await repo.get(THRESHOLD_KEY) or _default_thresholds()
 
     if body.block_threshold is not None:
         current["block_threshold"] = body.block_threshold
@@ -97,6 +100,7 @@ async def update_thresholds(
         current["sanitize_threshold"] = body.sanitize_threshold
 
     await repo.set(THRESHOLD_KEY, current)
+    await db.commit()
 
     return JSONResponse(content={
         **current,
@@ -137,6 +141,7 @@ async def update_layers(
         current["llm_enabled"] = body.llm_enabled
 
     await repo.set(LAYERS_KEY, current)
+    await db.commit()
 
     return JSONResponse(content={
         **current,
@@ -145,13 +150,40 @@ async def update_layers(
 
 LLM_KEY = "llm_settings"
 
-DEFAULT_LLM = {
-    "provider":    settings.llm_provider,
-    "model":       settings.llm_model,
-    "base_url":    settings.llm_base_url,
-    "timeout":     settings.llm_timeout,
-    "llm_trigger": settings.llm_trigger_threshold,
-}
+_LLM_PRIVATE_NETS = [
+    ipaddress.ip_network("127.0.0.0/8"),
+    ipaddress.ip_network("10.0.0.0/8"),
+    ipaddress.ip_network("172.16.0.0/12"),
+    ipaddress.ip_network("192.168.0.0/16"),
+    ipaddress.ip_network("169.254.0.0/16"),
+    ipaddress.ip_network("0.0.0.0/8"),
+    ipaddress.ip_network("::1/128"),
+    ipaddress.ip_network("fc00::/7"),
+    ipaddress.ip_network("fe80::/10"),
+]
+_LLM_BLOCKED_HOSTS = frozenset({"localhost", "metadata.google.internal", "metadata.goog"})
+
+
+def _is_ssrf_target(url: str) -> bool:
+    host = (urlparse(url).hostname or "").lower()
+    if host in _LLM_BLOCKED_HOSTS:
+        return True
+    try:
+        addr = ipaddress.ip_address(host)
+        return any(addr in net for net in _LLM_PRIVATE_NETS)
+    except ValueError:
+        return False
+
+
+def _default_llm() -> dict:
+    _s = get_settings()
+    return {
+        "provider":    _s.llm_provider,
+        "model":       _s.llm_model,
+        "base_url":    _s.llm_base_url,
+        "timeout":     _s.llm_timeout,
+        "llm_trigger": _s.llm_trigger_threshold,
+    }
 
 
 class LLMSettingsSchema(BaseModel):
@@ -160,6 +192,18 @@ class LLMSettingsSchema(BaseModel):
     base_url:    str   | None = None
     timeout:     int   | None = None
     llm_trigger: float | None = None
+
+    @field_validator("base_url")
+    @classmethod
+    def validate_base_url(cls, v: str | None) -> str | None:
+        if v is None:
+            return v
+        v = v.rstrip("/")
+        if not v.startswith(("http://", "https://")):
+            raise ValueError("base_url must start with http:// or https://")
+        if _is_ssrf_target(v):
+            raise ValueError("base_url must not target private or internal addresses")
+        return v
 
     @model_validator(mode="after")
     def validate_llm(self) -> "LLMSettingsSchema":
@@ -183,7 +227,7 @@ async def get_llm_settings(
     """Returns the active LLM layer configuration (provider, model, base_url, timeout, llm_trigger threshold)."""
     repo   = SettingsRepository(db)
     stored = await repo.get(LLM_KEY)
-    return JSONResponse(content=stored or DEFAULT_LLM)
+    return JSONResponse(content=stored or _default_llm())
 
 
 @router.put("/llm")
@@ -198,7 +242,7 @@ async def update_llm_settings(
     Auth: JWT + ADMIN role required.
     """
     repo    = SettingsRepository(db)
-    current = await repo.get(LLM_KEY) or DEFAULT_LLM.copy()
+    current = await repo.get(LLM_KEY) or _default_llm()
 
     if body.provider    is not None: current["provider"]    = body.provider
     if body.model       is not None: current["model"]       = body.model
@@ -207,6 +251,7 @@ async def update_llm_settings(
     if body.llm_trigger is not None: current["llm_trigger"] = body.llm_trigger
 
     await repo.set(LLM_KEY, current)
+    await db.commit()
 
     return JSONResponse(content={
         **current,
@@ -239,7 +284,8 @@ async def get_retention_settings(
     """
     repo    = SettingsRepository(db)
     stored  = await repo.get(RETENTION_KEY)
-    days    = stored.get("retention_days", settings.audit_retention_days) if stored else settings.audit_retention_days
+    _s      = get_settings()
+    days    = stored.get("retention_days", _s.audit_retention_days) if stored else _s.audit_retention_days
     return JSONResponse(content={
         "retention_days": days,
         "source":         "database" if stored else "environment",
@@ -258,6 +304,7 @@ async def update_retention_settings(
     """
     repo = SettingsRepository(db)
     await repo.set(RETENTION_KEY, {"retention_days": body.retention_days})
+    await db.commit()
     return JSONResponse(content={
         "retention_days": body.retention_days,
         "updated_at":     datetime.now(timezone.utc).isoformat(),
@@ -266,9 +313,9 @@ async def update_retention_settings(
 
 RATE_LIMIT_KEY = "rate_limit"
 
-DEFAULT_RATE_LIMIT = {
-    "per_minute": settings.rate_limit_per_minute,
-}
+
+def _default_rate_limit() -> dict:
+    return {"per_minute": get_settings().rate_limit_per_minute}
 
 
 class RateLimitUpdateSchema(BaseModel):
@@ -283,7 +330,7 @@ class RateLimitUpdateSchema(BaseModel):
                 raise ValueError("per_minute cannot exceed 10000")
             # Live key limit must always be >= trial limit
             # Otherwise trial keys would be LESS restricted than live keys
-            trial_limit = settings.trial_rate_limit_per_minute
+            trial_limit = get_settings().trial_rate_limit_per_minute
             if self.per_minute < trial_limit:
                 raise ValueError(
                     f"Global rate limit ({self.per_minute}/min) cannot be less than "
@@ -311,7 +358,7 @@ async def get_rate_limit_settings(
             "source": "database",
         })
     return JSONResponse(content={
-        **DEFAULT_RATE_LIMIT,
+        **_default_rate_limit(),
         "source": "environment",
     })
 
@@ -329,16 +376,16 @@ async def update_rate_limit_settings(
     Trial key limit is configured via TRIAL_RATE_LIMIT_PER_MINUTE in .env.
     """
     repo    = SettingsRepository(db)
-    current = await repo.get(RATE_LIMIT_KEY) or DEFAULT_RATE_LIMIT.copy()
+    current = await repo.get(RATE_LIMIT_KEY) or _default_rate_limit()
 
     if body.per_minute is not None:
         current["per_minute"] = body.per_minute
 
     await repo.set(RATE_LIMIT_KEY, current)
+    await db.commit()
 
     # Invalidate Redis cache so new value is picked up on next request
     try:
-        from cache.redis_client import get_redis
         redis = get_redis()
         await redis.delete("wrapsec:settings:rate_limit")
     except Exception:

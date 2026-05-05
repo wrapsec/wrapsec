@@ -45,6 +45,8 @@ Datasets used:
 """
 
 import argparse
+import hashlib
+import io
 import logging
 import pickle
 import sys
@@ -54,25 +56,27 @@ from pathlib import Path
 import pandas as pd
 from sklearn.model_selection import train_test_split
 
+# ── Paths — absolute, resolved relative to this script ───────────────────────
+# Using __file__ ensures correct resolution regardless of CWD at invocation.
+
+_REPO_ROOT    = Path(__file__).resolve().parent.parent
+MODEL_DIR     = _REPO_ROOT / "models"
+MODEL_PATH    = MODEL_DIR / "ml_detector.pkl"
+MODEL_HASH    = MODEL_DIR / "ml_detector.sha256"
+DATASET_PATH  = MODEL_DIR / "training_dataset.csv"
+MODEL_DIR.mkdir(exist_ok=True)
+
 # ── Logging ───────────────────────────────────────────────────────────────────
 
-import io
 logging.basicConfig(
     level  = logging.INFO,
     format = "%(asctime)s [%(levelname)s] %(name)s: %(message)s",
     handlers = [
         logging.StreamHandler(io.TextIOWrapper(sys.stdout.buffer, encoding="utf-8")),
-        logging.FileHandler("models/training.log", mode="w", encoding="utf-8"),
+        logging.FileHandler(MODEL_DIR / "training.log", mode="w", encoding="utf-8"),
     ]
 )
 logger = logging.getLogger("wrapsec.train")
-
-# ── Paths ─────────────────────────────────────────────────────────────────────
-
-MODEL_DIR     = Path("models")
-MODEL_PATH    = MODEL_DIR / "ml_detector.pkl"
-DATASET_PATH  = MODEL_DIR / "training_dataset.csv"
-MODEL_DIR.mkdir(exist_ok=True)
 
 # ── Label mapping — must match ml_detector.py ─────────────────────────────────
 
@@ -181,6 +185,33 @@ CURATED_FALLBACK = [
 ]
 
 
+def _sha256_file(path: Path) -> str:
+    h = hashlib.sha256()
+    with open(path, "rb") as f:
+        for chunk in iter(lambda: f.read(65536), b""):
+            h.update(chunk)
+    return h.hexdigest()
+
+
+def _save_model_hash(path: Path) -> None:
+    MODEL_HASH.write_text(_sha256_file(path))
+
+
+def _verify_model_hash(path: Path) -> bool:
+    if not MODEL_HASH.exists():
+        logger.warning("No hash file at %s — skipping integrity check", MODEL_HASH)
+        return True
+    expected = MODEL_HASH.read_text().strip()
+    actual   = _sha256_file(path)
+    if actual != expected:
+        logger.error(
+            "Model integrity check FAILED — file may be tampered. "
+            "expected=%s actual=%s", expected, actual,
+        )
+        return False
+    return True
+
+
 def load_or_collect(offline: bool, save_dataset: bool) -> pd.DataFrame:
     """Load cached dataset or collect from scratch."""
     if DATASET_PATH.exists() and not offline:
@@ -227,6 +258,9 @@ def main():
     if args.eval_only:
         if not MODEL_PATH.exists():
             logger.error(f"No model found at {MODEL_PATH}. Train first.")
+            sys.exit(1)
+        if not _verify_model_hash(MODEL_PATH):
+            logger.error("Refusing to load model: integrity check failed.")
             sys.exit(1)
         with open(MODEL_PATH, "rb") as f:
             pipeline = pickle.load(f)
@@ -290,7 +324,8 @@ def main():
     # ── Step 7: Save model ────────────────────────────────────────────────────
     with open(MODEL_PATH, "wb") as f:
         pickle.dump(pipeline, f)
-    logger.info(f"\nModel saved to {MODEL_PATH}")
+    _save_model_hash(MODEL_PATH)
+    logger.info(f"\nModel saved to {MODEL_PATH} (hash written to {MODEL_HASH})")
 
     # ── Step 8: Quick sanity test ─────────────────────────────────────────────
     logger.info("\nSanity test on known examples:")

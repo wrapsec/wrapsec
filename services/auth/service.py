@@ -7,9 +7,19 @@ from dataclasses import dataclass
 from datetime import datetime, timedelta, timezone
 from uuid import UUID
 
-from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy.ext.asyncio import AsyncSession, create_async_engine, async_sessionmaker
+from sqlalchemy.pool import NullPool
+from config.settings import get_settings as _get_settings
 
 logger = logging.getLogger("wrapsec.auth")
+
+# Dedicated NullPool engine for auth_event writes — kept at module level so the
+# engine object is not re-created on every login attempt. NullPool still opens
+# a fresh DB connection per session; dispose() is never needed at this scope.
+_auth_settings    = _get_settings()
+_auth_event_engine = create_async_engine(_auth_settings.database_url, poolclass=NullPool)
+_auth_event_sf     = async_sessionmaker(bind=_auth_event_engine, class_=AsyncSession,
+                                        expire_on_commit=False)
 
 
 def _utcnow() -> datetime:
@@ -17,6 +27,9 @@ def _utcnow() -> datetime:
 
 
 def _to_db(dt: datetime) -> datetime:
+    # DB columns are TIMESTAMP WITHOUT TIME ZONE (naive UTC by convention).
+    # Strip tzinfo so SQLAlchemy doesn't reject timezone-aware datetime objects.
+    # If the schema is ever migrated to TIMESTAMPTZ, remove this function.
     return dt.replace(tzinfo=None)
 
 
@@ -40,21 +53,12 @@ async def _log_auth_event(
         Known user   → set from user record
         Unknown user → both None (user not found, cannot resolve tenant)
     """
-    session = None
-    engine  = None
-    try:
-        from sqlalchemy.ext.asyncio import create_async_engine, async_sessionmaker
-        from sqlalchemy.pool import NullPool
-        from config.settings import get_settings
-        from db.repositories.auth_event import AuthEventRepository
+    from db.repositories.auth_event import AuthEventRepository
+    from domain.enums import AuthEventAction as _Action, AuthFailureReason as _Reason
 
-        _settings = get_settings()
-        engine    = create_async_engine(_settings.database_url, poolclass=NullPool)
-        sf        = async_sessionmaker(bind=engine, class_=AsyncSession,
-                                        expire_on_commit=False)
-        session   = sf()
-        from domain.enums import AuthEventAction as _Action, AuthFailureReason as _Reason
-        repo      = AuthEventRepository(session)
+    session = _auth_event_sf()
+    try:
+        repo = AuthEventRepository(session)
         await repo.insert(
             action         = _Action(action),
             success        = success,
@@ -65,14 +69,10 @@ async def _log_auth_event(
             user_agent     = user_agent,
         )
         await session.commit()
-
     except Exception as e:
         logger.error("auth_event DB logging failed action=%s error=%s", action, e)
     finally:
-        if session:
-            await session.close()
-        if engine:
-            await engine.dispose()
+        await session.close()
 
 
 @dataclass
@@ -391,8 +391,9 @@ class AuthService:
             "password_hash":         hash_password(new_password),
             "force_password_change": False,
         })
-        await db.commit()
-
+        # No intermediate commit — password hash update and session invalidation
+        # (token_version increment + refresh token revocations) must be committed
+        # atomically. logout_all_sessions() issues the single commit.
         await self.logout_all_sessions(user_id, db)
 
         logger.info("auth_event PASSWORD_CHANGED user_id=%s", user_id)

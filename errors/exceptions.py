@@ -7,9 +7,22 @@ from domain.value_objects.trace_id import TraceId
 
 class WrapSecError(Exception):
     """Base exception for all WrapSec errors."""
-    def __init__(self, message: str, trace_id: TraceId | None = None):
+    code        = "INTERNAL_ERROR"
+    status_code = 500
+
+    def __init__(
+        self,
+        message:     str,
+        trace_id:    TraceId | None = None,
+        code:        str | None     = None,
+        status_code: int | None     = None,
+    ):
         self.message  = message
         self.trace_id = trace_id
+        if code is not None:
+            self.code = code
+        if status_code is not None:
+            self.status_code = status_code
         super().__init__(message)
 
 
@@ -17,6 +30,8 @@ class WrapSecError(Exception):
 class ValidationError(WrapSecError):
     code = "INVALID_REQUEST"
     status_code = 400
+    def __init__(self, message: str = "Invalid request", trace_id=None):
+        super().__init__(message, trace_id=trace_id)
 
 
 class StreamNotSupportedError(WrapSecError):
@@ -135,8 +150,9 @@ class NotFoundError(WrapSecError):
 class RateLimitError(WrapSecError):
     code = "RATE_LIMIT_EXCEEDED"
     status_code = 429
-    def __init__(self):
-        super().__init__("Too many requests. Retry after 60 seconds.")
+    def __init__(self, retry_after: int = 60):
+        self.retry_after = retry_after
+        super().__init__(f"Too many requests. Retry after {retry_after} seconds.")
 
 
 # ── Detection ─────────────────────────────────────────────────

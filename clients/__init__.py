@@ -1,8 +1,6 @@
 from config.settings import get_settings
 from interfaces.base_llm import BaseLLMClient
 
-settings = get_settings()
-
 
 async def get_llm_settings_from_db() -> dict:
     """Load LLM settings from DB — falls back to .env defaults."""
@@ -25,9 +23,10 @@ def get_llm_client(llm_settings: dict | None = None) -> BaseLLMClient:
     Returns the configured LLM client.
     llm_settings from DB overrides .env settings.
     """
+    _settings = get_settings()
     provider = (
         (llm_settings or {}).get("provider")
-        or settings.llm_provider
+        or _settings.llm_provider
     ).lower()
 
     if provider == "openai":

@@ -213,6 +213,9 @@ test.db
 
 backups/
 
+# Claude Code settings (local only)
+.claude/
+
 # Internal docs (not for public repo)
 docs/internal/
 

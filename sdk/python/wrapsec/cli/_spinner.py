@@ -24,6 +24,7 @@ import itertools
 import os
 import sys
 import threading
+import time
 
 
 def get_spinner_frames() -> list[str]:
@@ -105,7 +106,6 @@ class Spinner:
             sys.stdout.write(f"\r{frame} {message}...")
             sys.stdout.flush()
             # Use a short sleep with lock release so stop() isn't delayed
-            import time
             time.sleep(0.08)
 
     def __enter__(self) -> "Spinner":

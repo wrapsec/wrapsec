@@ -12,9 +12,11 @@ or all encrypted values will become unreadable.
 """
 
 import base64
+import binascii
 import hashlib
 import os
 
+from cryptography.exceptions import InvalidTag
 from cryptography.hazmat.primitives.ciphers.aead import AESGCM
 
 
@@ -54,7 +56,7 @@ def decrypt(encrypted: str, secret_key: str) -> str:
         key    = _derive_key(secret_key)
         aesgcm = AESGCM(key)
         return aesgcm.decrypt(nonce, ct, None).decode("utf-8")
-    except Exception as exc:
+    except (InvalidTag, ValueError, binascii.Error) as exc:
         raise ValueError(
             "Decryption failed: data may be corrupt or key may have changed."
         ) from exc

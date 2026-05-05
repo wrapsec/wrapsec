@@ -11,6 +11,25 @@ from config.settings import get_settings
 settings = get_settings()
 
 
+# Extra fields that must never appear in structured logs — accidental inclusion
+# of secrets via logger.info(..., extra={...}) would write them to log streams.
+_SENSITIVE_EXTRAS = frozenset({
+    "api_key", "secret_key", "secret", "password", "passwd",
+    "token", "access_token", "refresh_token",
+    "provider_api_key", "provider_api_key_enc",
+    "authorization", "credential", "credentials",
+})
+
+_STANDARD_LOG_FIELDS = frozenset({
+    "name", "msg", "args", "levelname", "levelno",
+    "pathname", "filename", "module", "exc_info",
+    "exc_text", "stack_info", "lineno", "funcName",
+    "created", "msecs", "relativeCreated", "thread",
+    "threadName", "processName", "process", "message",
+    "taskName", "trace_id",
+})
+
+
 class JSONFormatter(logging.Formatter):
     """
     Structured JSON log formatter.
@@ -29,16 +48,11 @@ class JSONFormatter(logging.Formatter):
         if hasattr(record, "trace_id"):
             log_entry["trace_id"] = record.trace_id
 
-        # Add extra fields
+        # Add extra fields — skip standard logging internals and sensitive keys
         for key, value in record.__dict__.items():
-            if key not in {
-                "name", "msg", "args", "levelname", "levelno",
-                "pathname", "filename", "module", "exc_info",
-                "exc_text", "stack_info", "lineno", "funcName",
-                "created", "msecs", "relativeCreated", "thread",
-                "threadName", "processName", "process", "message",
-                "taskName", "trace_id",
-            }:
+            if key in _SENSITIVE_EXTRAS:
+                continue
+            if key not in _STANDARD_LOG_FIELDS:
                 try:
                     json.dumps(value)
                     log_entry[key] = value

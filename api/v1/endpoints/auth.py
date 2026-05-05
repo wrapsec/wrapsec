@@ -11,6 +11,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from api.v1.dependencies.auth import require_jwt
 from api.v1.dependencies.db import get_db
+from api.v1.middleware.auth import get_client_ip
 from domain.entities.principal import Principal
 from errors.exceptions import (
     AccountDisabledException,
@@ -48,11 +49,15 @@ def _set_refresh_cookie(response: Response, raw_token: str, max_age: int) -> Non
 
 
 def _clear_refresh_cookie(response: Response) -> None:
+    from config.settings import get_settings
+    _settings = get_settings()
+    # secure flag must match the flag used when the cookie was set; a mismatch
+    # means the browser treats them as different cookies and the old one persists.
     response.set_cookie(
         key      = REFRESH_COOKIE_NAME,
         value    = "",
         httponly = True,
-        secure   = False,
+        secure   = (_settings.environment == "production"),
         samesite = "strict",
         max_age  = 0,
         path     = REFRESH_COOKIE_PATH,
@@ -99,10 +104,7 @@ async def login(
     from config.settings import get_settings
     _settings = get_settings()
 
-    ip_address = (
-        request.headers.get("x-forwarded-for", "").split(",")[0].strip()
-        or (request.client.host if request.client else None)
-    )
+    ip_address = get_client_ip(request) or None
     user_agent = request.headers.get("user-agent")
 
     try:
@@ -120,12 +122,14 @@ async def login(
                 "retry_after": e.retry_after,
             }},
         )
-    except (AuthenticationError, AccountDisabledException) as e:
+    except (AuthenticationError, AccountDisabledException):
+        # Intentionally identical response for wrong credentials and disabled
+        # accounts — distinguishing them leaks whether the account exists.
         return JSONResponse(
             status_code=401,
             content={"error": {
-                "code":    e.code,
-                "message": e.message,
+                "code":    "INVALID_CREDENTIALS",
+                "message": "Invalid email or password.",
             }},
         )
 

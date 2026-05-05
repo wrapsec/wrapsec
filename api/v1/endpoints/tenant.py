@@ -14,17 +14,19 @@ from domain.entities.principal import Principal
 router = APIRouter()
 
 
-def _format(tenant) -> dict:
-    return {
+def _format(tenant, is_admin: bool = False) -> dict:
+    result = {
         "id":            str(tenant.id),
         "slug":          tenant.slug,
         "name":          tenant.name,
         "description":   tenant.description,
-        "global_policy": tenant.global_policy,
         "contact_email": tenant.contact_email,
         "is_active":     tenant.is_active,
         "created_at":    tenant.created_at.isoformat(),
     }
+    if is_admin:
+        result["global_policy"] = tenant.global_policy
+    return result
 
 
 class TenantUpdateSchema(BaseModel):
@@ -36,18 +38,19 @@ class TenantUpdateSchema(BaseModel):
 
 @router.get("")
 async def get_tenant(
-    db:        AsyncSession = Depends(get_db),
-    _principal: Principal   = Depends(get_current_principal),
+    db:         AsyncSession = Depends(get_db),
+    _principal: Principal    = Depends(get_current_principal),
 ):
     """
-    Returns the default tenant profile including global_policy, contact_email, and metadata.
+    Returns tenant profile. global_policy is only returned to admin principals —
+    non-admins see metadata without the security policy configuration.
     Auth: any valid principal.
     """
     repo   = TenantRepository(db)
     tenant = await repo.get_default()
     if not tenant:
         return JSONResponse(content={"error": "No tenant found"}, status_code=404)
-    return JSONResponse(content=_format(tenant))
+    return JSONResponse(content=_format(tenant, is_admin=getattr(_principal, "is_admin", False)))
 
 
 @router.put("")
@@ -73,4 +76,4 @@ async def update_tenant(
 
     await db.commit()
     await db.refresh(tenant)
-    return JSONResponse(content=_format(tenant))
+    return JSONResponse(content=_format(tenant, is_admin=True))

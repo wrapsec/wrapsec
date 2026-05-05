@@ -82,6 +82,9 @@ _REGISTRY: list[tuple[list, ThreatCategory, float]] = [
 
 _COMPILED: list[tuple[list[re.Pattern], ThreatCategory, float]] = [
     (
+        # re.DOTALL allows multi-line injection payloads (e.g. "ignore\nprevious")
+        # to be matched by single-line patterns. Most patterns use \s not .,
+        # but DOTALL is kept so patterns added in future need not opt in explicitly.
         [re.compile(p, re.IGNORECASE | re.DOTALL) for p in patterns],
         category,
         base_score,
@@ -109,6 +112,11 @@ class RuleDetector(BaseDetector):
                 ]
                 if matched:
                     threats.append(category)
+                    # Score is the max across all matching categories, not a sum.
+                    # Multi-category hits do not boost the score — each category
+                    # has a calibrated base_score that already reflects severity.
+                    # The list of threat categories in `threats` carries the
+                    # multi-category signal for policy and audit purposes.
                     max_score = max(max_score, base_score)
                     details[category.value] = matched
 

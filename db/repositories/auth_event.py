@@ -48,6 +48,9 @@ class AuthEventRepository(BaseRepository):
             Login fail (bad pwd)   → tenant_id=user.tenant_id, user_id=user.id
             Login fail (inactive)  → tenant_id=user.tenant_id, user_id=user.id
             Login fail (not found) → tenant_id=None, user_id=None
+
+        Uses flush() not commit() — caller owns the transaction and must commit.
+        This repository never commits so it composes safely in multi-step operations.
         """
         event = AuthEventModel(
             tenant_id      = tenant_id,

@@ -8,8 +8,7 @@ import httpx
 from interfaces.base_llm import BaseLLMClient, LLMResponse
 from config.settings import get_settings
 
-logger   = logging.getLogger("wrapsec.clients")
-settings = get_settings()
+logger = logging.getLogger("wrapsec.clients")
 
 
 class LocalLLMClient(BaseLLMClient):
@@ -30,12 +29,12 @@ class LocalLLMClient(BaseLLMClient):
         max_tokens:    int = 500,
     ) -> LLMResponse:
         start          = time.perf_counter()
-        resolved_model = model or self._llm_settings.get("model") or settings.llm_model
-        base_url       = self._llm_settings.get("base_url") or settings.llm_base_url
-        timeout        = self._llm_settings.get("timeout")  or settings.llm_timeout
+        resolved_model = model or self._llm_settings.get("model") or get_settings().llm_model
+        base_url       = self._llm_settings.get("base_url") or get_settings().llm_base_url
+        timeout        = self._llm_settings.get("timeout")  or get_settings().llm_timeout
 
         try:
-            async with httpx.AsyncClient(timeout=settings.llm_timeout) as client:
+            async with httpx.AsyncClient(timeout=timeout) as client:
                 response = await client.post(
                     f"{base_url}/api/chat",
                     json={
@@ -69,9 +68,11 @@ class LocalLLMClient(BaseLLMClient):
             )
 
     async def is_available(self) -> bool:
+        timeout  = self._llm_settings.get("timeout") or get_settings().llm_timeout
+        base_url = self._llm_settings.get("base_url") or get_settings().llm_base_url
         try:
             async with httpx.AsyncClient(timeout=timeout) as client:
-                response = await client.get(f"{settings.llm_base_url}/api/tags")
+                response = await client.get(f"{base_url}/api/tags")
                 return response.status_code == 200
         except Exception:
             return False

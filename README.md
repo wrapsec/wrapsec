@@ -92,7 +92,7 @@ Use `/v1/ai/request` for scan-only integration. Use `/v1/chat/completions` for f
 
 Authentication: `x-api-key` header for API keys, `Authorization: Bearer` for JWT. If both are present, API key takes precedence unconditionally.
 
-Full API reference: `docs/api.md` (47 endpoints)
+Full API reference: `docs/api.md`
 
 
 ## Python SDK and CLI
@@ -256,6 +256,8 @@ pytest tests/unit tests/integration -v
 - Set `WRAPSEC_BASE_URL` explicitly. The default `http://localhost:8000` must not be used in production.
 - Set `DATA_STORAGE_MODE` to `masked` or `none` for regulated environments.
 - Change `SECRET_KEY` and Grafana default password before first deployment.
+- Set `TRUSTED_PROXY_IPS` to the IP(s) of your reverse proxy so `X-Forwarded-For` is trusted only from known sources.
+- Set `METRICS_TOKEN` to require bearer token authentication on `GET /metrics` — do not expose metrics unauthenticated.
 - Pin Grafana to 10.4.0 - Grafana 12 has dashboard provisioning issues.
 - Prometheus target changes from `host.docker.internal:8000` to `api:8000` in Docker deployment.
 - JWT department mismatch warnings (`auth_event=JWT_DEPT_MISMATCH`) must be routed to the security monitoring pipeline.

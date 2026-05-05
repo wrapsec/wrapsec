@@ -35,8 +35,7 @@ APScheduler is used because:
 import logging
 from config.settings import get_settings
 
-logger   = logging.getLogger("wrapsec.worker_queue")
-settings = get_settings()
+logger = logging.getLogger("wrapsec.worker_queue")
 
 # Module-level scheduler instance — started once, shared across the app
 _scheduler = None
@@ -50,7 +49,9 @@ async def start_scheduler() -> None:
     """
     global _scheduler
 
-    if not settings.retention_worker_enabled:
+    _settings = get_settings()
+
+    if not _settings.retention_worker_enabled:
         logger.info("Retention worker: disabled via RETENTION_WORKER_ENABLED=false")
         return
 
@@ -64,8 +65,8 @@ async def start_scheduler() -> None:
         _scheduler.add_job(
             func              = run_retention_cleanup,
             trigger           = CronTrigger(
-                hour   = settings.retention_worker_hour,
-                minute = settings.retention_worker_minute,
+                hour   = _settings.retention_worker_hour,
+                minute = _settings.retention_worker_minute,
             ),
             id                = "retention_cleanup",
             name              = "WrapSec Retention Cleanup",
@@ -78,7 +79,7 @@ async def start_scheduler() -> None:
 
         logger.info(
             f"Retention worker: scheduler started — "
-            f"runs daily at {settings.retention_worker_hour:02d}:{settings.retention_worker_minute:02d} UTC"
+            f"runs daily at {_settings.retention_worker_hour:02d}:{_settings.retention_worker_minute:02d} UTC"
         )
 
     except ImportError:

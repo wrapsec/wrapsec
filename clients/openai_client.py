@@ -8,8 +8,7 @@ import httpx
 from interfaces.base_llm import BaseLLMClient, LLMResponse
 from config.settings import get_settings
 
-logger   = logging.getLogger("wrapsec.clients")
-settings = get_settings()
+logger = logging.getLogger("wrapsec.clients")
 
 OPENAI_API_URL = "https://api.openai.com/v1/chat/completions"
 
@@ -31,16 +30,17 @@ class OpenAIClient(BaseLLMClient):
         temperature:   float = 0.0,
         max_tokens:    int = 500,
     ) -> LLMResponse:
+        _settings      = get_settings()
         start          = time.perf_counter()
-        resolved_model = model or self._llm_settings.get("model") or settings.llm_model
-        timeout        = self._llm_settings.get("timeout") or settings.llm_timeout
+        resolved_model = model or self._llm_settings.get("model") or _settings.llm_model
+        timeout        = self._llm_settings.get("timeout") or _settings.llm_timeout
 
         try:
             async with httpx.AsyncClient(timeout=timeout) as client:
                 response = await client.post(
                     OPENAI_API_URL,
                     headers={
-                        "Authorization": f"Bearer {settings.openai_api_key}",
+                        "Authorization": f"Bearer {_settings.openai_api_key}",
                         "Content-Type":  "application/json",
                     },
                     json={
@@ -75,13 +75,14 @@ class OpenAIClient(BaseLLMClient):
             )
 
     async def is_available(self) -> bool:
-        if not settings.openai_api_key:
+        _settings = get_settings()
+        if not _settings.openai_api_key:
             return False
         try:
             async with httpx.AsyncClient(timeout=5) as client:
                 response = await client.get(
                     "https://api.openai.com/v1/models",
-                    headers={"Authorization": f"Bearer {settings.openai_api_key}"},
+                    headers={"Authorization": f"Bearer {_settings.openai_api_key}"},
                 )
                 return response.status_code == 200
         except Exception:

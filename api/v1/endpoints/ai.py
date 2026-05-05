@@ -2,10 +2,11 @@
 # Copyright (c) 2026 WrapSec. All rights reserved.
 # WrapSec v1.0 | AI Security Gateway - https://wrapsec.com
 
+import logging
 import time
+import uuid
 import hashlib
 from fastapi import APIRouter, Request, Depends
-from fastapi.concurrency import run_in_threadpool
 from fastapi.responses import JSONResponse
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -36,7 +37,12 @@ def _mode_str(value) -> str:
     return str(value).split(".")[-1].lower()
 
 
-def _build_response(decision, debug: bool = False) -> dict:
+def _build_response(
+    decision,
+    debug: bool = False,
+    block_threshold: float | None = None,
+    sanitize_threshold: float | None = None,
+) -> dict:
     response = {
         "trace_id":              str(decision.trace_id),
         "decision":              decision.decision.value,
@@ -62,10 +68,13 @@ def _build_response(decision, debug: bool = False) -> dict:
         response["output"] = decision.output
 
     if debug and decision.layer_scores:
+        _bt = block_threshold    if block_threshold    is not None else settings.block_threshold
+        _st = sanitize_threshold if sanitize_threshold is not None else settings.sanitize_threshold
+
         def layer_decision(score: float) -> str:
-            if score >= settings.block_threshold:
+            if score >= _bt:
                 return DecisionType.BLOCK.value
-            if score >= settings.sanitize_threshold:
+            if score >= _st:
                 return DecisionType.SANITIZE.value
             return DecisionType.ALLOW.value
 
@@ -114,7 +123,7 @@ async def ai_request(
     # Trial key restrictions — enforced after auth, key_type is available here
     key_type = getattr(request.state, "key_type", "live")
     if key_type == "trial":
-        # Input size cap — stricter than the global 8000 char limit
+        # Input size cap — stricter than the global max_input_chars limit
         if len(body.input) > settings.trial_max_input_chars:
             from errors.exceptions import ValidationError
             raise ValidationError(
@@ -209,8 +218,7 @@ async def ai_request(
     toxicity_block_threshold    = toxicity_policy.get("block_threshold",    None)
     toxicity_sanitize_threshold = toxicity_policy.get("sanitize_threshold", None)
 
-    result = await run_in_threadpool(
-        _gateway.process,
+    result = await _gateway.process(
         incoming,
         block_threshold,
         sanitize_threshold,
@@ -298,7 +306,9 @@ async def ai_request(
 
     response = _build_response(
         result.decision,
-        debug=body.options.debug and getattr(request.state, "is_admin", False)
+        debug               = body.options.debug and getattr(request.state, "is_admin", False),
+        block_threshold     = block_threshold,
+        sanitize_threshold  = sanitize_threshold,
     )
 
     await set_cached_result(body.input, det_mode_str, exe_mode_str, response)
@@ -338,7 +348,6 @@ async def get_request(
     app_name  = None
     if record.dept_id:
         try:
-            import uuid
             from db.repositories.department import DepartmentRepository
             dept_repo = DepartmentRepository(db)
             dept      = await dept_repo.get_by_id(uuid.UUID(record.dept_id))
@@ -347,7 +356,6 @@ async def get_request(
             pass
     if record.app_id:
         try:
-            import uuid
             from db.repositories.application import ApplicationRepository
             app_repo = ApplicationRepository(db)
             app      = await app_repo.get_by_id(uuid.UUID(record.app_id))
@@ -433,9 +441,8 @@ async def get_request(
                     "output_flags":          pi.output_flags,
                 }
         except Exception as exc:
-            import logging
             logging.getLogger("wrapsec.ai").error(
-                f"Failed to join proxy_interactions for trace_id={trace_id}: {exc}"
+                "Failed to join proxy_interactions for trace_id=%s: %s", trace_id, exc
             )
 
     return JSONResponse(content=response)

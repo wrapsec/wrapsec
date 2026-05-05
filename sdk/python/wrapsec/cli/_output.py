@@ -67,7 +67,7 @@ def format_scan_result_human(result: ScanResult, quiet: bool) -> None:
 
     click.secho(f"Decision:   {result.decision}", fg=color, bold=True)
     click.echo(f"Reason:     {result.primary_reason}")
-    click.echo(f"Confidence: {round(result.confidence, 2)} ({result.confidence_band})")
+    click.echo(f"Confidence: {round(result.confidence, 1)} ({result.confidence_band})")
     click.echo(f"Trace ID:   {result.trace_id}")
 
     if result.threats:

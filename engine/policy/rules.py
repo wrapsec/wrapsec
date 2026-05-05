@@ -39,8 +39,10 @@ class PolicyRules:
     def from_settings(cls) -> "PolicyRules":
         from config.settings import get_settings
         s = get_settings()
-        return cls(
+        rules = cls(
             block_threshold       = s.block_threshold,
             sanitize_threshold    = s.sanitize_threshold,
             llm_trigger_threshold = s.llm_trigger_threshold,
         )
+        rules.validate()
+        return rules

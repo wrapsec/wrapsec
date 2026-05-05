@@ -5,14 +5,14 @@
 from sqlalchemy.ext.asyncio import create_async_engine, async_sessionmaker, AsyncSession
 from config.settings import get_settings
 
-settings = get_settings()
+_settings = get_settings()
 
 engine = create_async_engine(
-    settings.database_url,
-    pool_size     = settings.db_pool_size,
-    max_overflow  = settings.db_max_overflow,
+    _settings.database_url,
+    pool_size     = _settings.db_pool_size,
+    max_overflow  = _settings.db_max_overflow,
     pool_pre_ping = True,
-    echo          = settings.debug,
+    echo          = _settings.debug,
 )
 
 AsyncSessionFactory = async_sessionmaker(
@@ -33,7 +33,14 @@ async def create_tables() -> None:
         await conn.run_sync(Base.metadata.create_all)
 
 
+async def dispose_engine() -> None:
+    """Dispose the connection pool on application shutdown to release all connections."""
+    await engine.dispose()
+
+
 async def drop_tables() -> None:
+    if _settings.environment == "production":
+        raise RuntimeError("drop_tables() must never be called in production.")
     from db.models import Base
     async with engine.begin() as conn:
         await conn.run_sync(Base.metadata.drop_all)

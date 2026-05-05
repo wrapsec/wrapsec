@@ -2,6 +2,7 @@
 # Copyright (c) 2026 WrapSec. All rights reserved.
 # WrapSec v1.0 | AI Security Gateway - https://wrapsec.com
 
+import asyncio
 import time
 import hashlib
 import logging
@@ -24,8 +25,7 @@ from engine.policy.engine import PolicyEngine
 from engine.policy.rules import PolicyRules
 from config.settings import get_settings
 
-logger   = logging.getLogger("wrapsec.gateway")
-settings = get_settings()
+logger = logging.getLogger("wrapsec.gateway")
 
 
 @dataclass
@@ -61,10 +61,9 @@ class GatewayService:
         self._policy_engine  = PolicyEngine()
 
     def _hash_input(self, text: str) -> str:
-        return "sha256:" + hashlib.sha256(text.encode()).hexdigest()[:16] + "..."
+        return "sha256:" + hashlib.sha256(text.encode()).hexdigest()
 
-    def _call_llm(self, text: str, model: str, llm_settings: dict | None = None) -> str:
-        import asyncio
+    async def _call_llm_async(self, text: str, model: str, llm_settings: dict | None = None) -> str:
         from clients import get_llm_client
 
         client = get_llm_client(llm_settings=llm_settings)
@@ -75,16 +74,11 @@ class GatewayService:
         )
 
         try:
-            loop     = asyncio.new_event_loop()
-            response = loop.run_until_complete(
-                client.complete(
-                    system_prompt = system_prompt,
-                    user_prompt   = text,
-                    model         = model,
-                )
+            response = await client.complete(
+                system_prompt = system_prompt,
+                user_prompt   = text,
+                model         = model,
             )
-            loop.close()
-
             if response.content:
                 return response.content
             return "[LLM returned empty response]"
@@ -93,7 +87,7 @@ class GatewayService:
             logger.error(f"LLM call failed: {e}")
             return "[LLM unavailable]"
 
-    def process(
+    async def process(
         self,
         request:                        IncomingRequest,
         block_threshold:                float | None = None,
@@ -107,11 +101,15 @@ class GatewayService:
         llm_enabled:                    bool = True,
         llm_settings:                   dict | None = None,
     ) -> GatewayResult:
-        start = time.perf_counter()
+        start     = time.perf_counter()
+        _settings = get_settings()
 
         # Use provided settings or fall back to config defaults
-        block_threshold    = block_threshold    or settings.block_threshold
-        sanitize_threshold = sanitize_threshold or settings.sanitize_threshold
+        # Use is-None check — 0.0 is a valid threshold and must not fall back
+        if block_threshold is None:
+            block_threshold = _settings.block_threshold
+        if sanitize_threshold is None:
+            sanitize_threshold = _settings.sanitize_threshold
 
         try:
 
@@ -119,18 +117,28 @@ class GatewayService:
             input_result    = self._input_guard.inspect(request.input)
             effective_input = input_result.sanitized_text or request.input
 
-            # ── Step 2: Rule detection ────────────────────────
+            # ── Step 2: Rule detection (CPU-bound → thread) ──
             detection_failed = False
             try:
-                rule_result = self._rule_detector.detect(effective_input) if rule_enabled else DetectionResult.clean("rule_detector")
+                if rule_enabled:
+                    rule_result = await asyncio.to_thread(
+                        self._rule_detector.detect, effective_input
+                    )
+                else:
+                    rule_result = DetectionResult.clean("rule_detector")
             except Exception as e:
                 logger.error(f"Rule detector failed: {e} trace_id={request.trace_id}")
                 rule_result      = DetectionResult.clean("rule_detector")
                 detection_failed = True
 
-            # ── Step 3: ML detection ──────────────────────────
+            # ── Step 3: ML detection (CPU-bound → thread) ────
             try:
-                ml_result = self._ml_detector.detect(effective_input) if ml_enabled else DetectionResult.clean("ml_detector")
+                if ml_enabled:
+                    ml_result = await asyncio.to_thread(
+                        self._ml_detector.detect, effective_input
+                    )
+                else:
+                    ml_result = DetectionResult.clean("ml_detector")
             except Exception as e:
                 logger.error(f"ML detector failed: {e} trace_id={request.trace_id}")
                 ml_result        = DetectionResult.clean("ml_detector")
@@ -140,7 +148,7 @@ class GatewayService:
             # Toxicity signal is extracted from ML result — no new inference
             input_result = self._input_guard.inspect_toxicity(input_result, ml_result)
 
-            # ── Step 4: LLM detection (conditional) ───────────
+            # ── Step 4: LLM detection (async I/O → direct await)
             # Only invoke LLM detector if:
             # - detection_mode is FULL
             # - any score exceeds the trigger threshold
@@ -154,14 +162,14 @@ class GatewayService:
             if (
                 llm_enabled
                 and request.detection_mode == DetectionMode.FULL
-                and pre_score >= settings.llm_trigger_threshold
+                and pre_score >= _settings.llm_trigger_threshold
             ):
                 logger.debug(
                     f"LLM detector triggered — pre_score={pre_score:.2f} "
                     f"trace_id={request.trace_id}"
                 )
                 try:
-                    llm_result = self._llm_detector.detect(effective_input)
+                    llm_result = await self._llm_detector.detect_async(effective_input)
                 except Exception as e:
                     logger.error(f"LLM detector failed: {e} trace_id={request.trace_id}")
                     llm_result       = DetectionResult.clean("llm_detector")
@@ -205,9 +213,9 @@ class GatewayService:
             ):
                 llm_invoked   = True
                 prompt        = sanitized_input or effective_input
-                raw_output    = self._call_llm(
+                raw_output    = await self._call_llm_async(
                     prompt,
-                    request.model or (llm_settings or {}).get("model") or settings.llm_model,
+                    request.model or (llm_settings or {}).get("model") or _settings.llm_model,
                     llm_settings=llm_settings,
                 )
 
@@ -232,15 +240,10 @@ class GatewayService:
             _tox_bt = toxicity_block_threshold    if toxicity_block_threshold    is not None else block_threshold
             _tox_st = toxicity_sanitize_threshold if toxicity_sanitize_threshold is not None else sanitize_threshold
 
-            pii_guardrail_triggered = (
-                scoring.pii_score >= _pii_bt or
-                scoring.pii_score >= _pii_st
-            )
+            pii_guardrail_triggered = scoring.pii_score >= _pii_st
             toxicity_guardrail_triggered = (
-                not pii_guardrail_triggered and (
-                    scoring.toxicity_score >= _tox_bt or
-                    scoring.toxicity_score >= _tox_st
-                )
+                not pii_guardrail_triggered and
+                scoring.toxicity_score >= _tox_st
             )
             guardrail_triggered = pii_guardrail_triggered or toxicity_guardrail_triggered
 
@@ -262,16 +265,18 @@ class GatewayService:
             # Compute confidence score
             from engine.scoring.confidence import compute_confidence
             confidence, confidence_band = compute_confidence(
-                rule_score          = scoring.rule_score,
-                ml_score            = scoring.ml_score,
-                llm_score           = scoring.llm_score,
-                pii_score           = scoring.pii_score,
-                rule_enabled        = rule_enabled,
-                ml_enabled          = ml_enabled,
-                llm_invoked         = llm_invoked,
-                guardrail_triggered = guardrail_triggered,
-                block_threshold     = block_threshold,
-                sanitize_threshold  = sanitize_threshold,
+                rule_score                   = scoring.rule_score,
+                ml_score                     = scoring.ml_score,
+                llm_score                    = scoring.llm_score,
+                pii_score                    = scoring.pii_score,
+                rule_enabled                 = rule_enabled,
+                ml_enabled                   = ml_enabled,
+                llm_invoked                  = llm_invoked,
+                guardrail_triggered          = guardrail_triggered,
+                block_threshold              = block_threshold,
+                sanitize_threshold           = sanitize_threshold,
+                toxicity_score               = scoring.toxicity_score,
+                toxicity_guardrail_triggered = toxicity_guardrail_triggered,
             )
 
             gateway_decision = GatewayDecision(

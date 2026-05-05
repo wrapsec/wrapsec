@@ -2,6 +2,7 @@
 # Copyright (c) 2026 WrapSec. All rights reserved.
 # WrapSec v1.0 | AI Security Gateway - https://wrapsec.com
 
+import hashlib
 import os
 import pickle
 import logging
@@ -22,7 +23,9 @@ LABEL_MAP = {
     6: ThreatCategory.TOXICITY,
 }
 
-MODEL_PATH = Path("models/ml_detector.pkl")
+_REPO_ROOT      = Path(__file__).resolve().parent.parent.parent
+MODEL_PATH      = _REPO_ROOT / "models" / "ml_detector.pkl"
+MODEL_HASH_PATH = _REPO_ROOT / "models" / "ml_detector.pkl.sha256"
 
 
 class MLDetector(BaseDetector):
@@ -31,6 +34,12 @@ class MLDetector(BaseDetector):
     Migrated from ai-security-gateway prototype.
     Falls back to clean result if model not found.
     """
+
+    _class_ready: bool = False  # set to True when any instance loads the model
+
+    @classmethod
+    def is_model_loaded(cls) -> bool:
+        return cls._class_ready
 
     def __init__(self):
         self._model    = None
@@ -45,12 +54,33 @@ class MLDetector(BaseDetector):
             )
             return
         try:
-            with open(MODEL_PATH, "rb") as f:
-                self._model = pickle.load(f)
-            self._ready = True
-            logger.info(f"ML model loaded from {MODEL_PATH}")
+            raw = MODEL_PATH.read_bytes()
+
+            # Integrity check — refuse to unpickle if hash file exists and mismatches.
+            # pickle.load() executes arbitrary code; a tampered model is an RCE vector.
+            if MODEL_HASH_PATH.exists():
+                expected = MODEL_HASH_PATH.read_text().strip().lower()
+                actual   = hashlib.sha256(raw).hexdigest().lower()
+                if actual != expected:
+                    logger.error(
+                        "ML model integrity check FAILED — "
+                        "expected=%s actual=%s path=%s — refusing to load",
+                        expected[:16] + "...", actual[:16] + "...", MODEL_PATH,
+                    )
+                    return
+            else:
+                logger.warning(
+                    "No integrity file at %s — ML model loaded WITHOUT hash verification. "
+                    "Generate it with: sha256sum %s > %s",
+                    MODEL_HASH_PATH, MODEL_PATH, MODEL_HASH_PATH,
+                )
+
+            self._model             = pickle.loads(raw)
+            self._ready             = True
+            MLDetector._class_ready = True
+            logger.info("ML model loaded from %s", MODEL_PATH)
         except Exception as e:
-            logger.error(f"Failed to load ML model: {e}")
+            logger.error("Failed to load ML model: %s", e)
 
     @property
     def name(self) -> str:

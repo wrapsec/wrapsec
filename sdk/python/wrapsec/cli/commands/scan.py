@@ -22,7 +22,7 @@ logger = logging.getLogger('wrapsec.cli.scan')
 
 from wrapsec.client import Client
 from wrapsec.config.loader import load_config
-from wrapsec.core.validation import normalize_text, validate_input, warn_if_dense
+from wrapsec.core.validation import MAX_INPUT_CHARS, normalize_text, validate_input, warn_if_dense
 from wrapsec.exceptions import WrapSecError
 from wrapsec.cli._output import (
     format_scan_result_human,
@@ -33,8 +33,6 @@ from wrapsec.cli._output import (
     scan_result_to_dict,
 )
 from wrapsec.cli._spinner import Spinner, should_show_spinner
-
-MAX_INPUT_CHARS = 8000
 
 
 @click.command()

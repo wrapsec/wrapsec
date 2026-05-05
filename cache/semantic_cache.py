@@ -6,10 +6,8 @@ import json
 import hashlib
 import logging
 from cache.redis_client import get_redis
-from config.settings import get_settings
 
-logger   = logging.getLogger("wrapsec.cache")
-settings = get_settings()
+logger = logging.getLogger("wrapsec.cache")
 
 CACHE_PREFIX  = "prompt_cache:"
 CACHE_TTL     = 3600  # 1 hour
@@ -18,7 +16,9 @@ CACHE_TTL     = 3600  # 1 hour
 def _cache_key(text: str, detection_mode: str, execution_mode: str = "scan_only") -> str:
     """
     Generate a deterministic cache key from prompt + detection mode + execution mode.
-    Same prompt + same modes = same result.
+    Input is lowercased before hashing — case variants ("Hello" vs "hello") share
+    a cache entry. Only ALLOW results are cached, so the security impact is limited
+    to identical treatment of case-only variants of clean inputs.
     """
     content = f"{detection_mode}:{execution_mode}:{text.strip().lower()}"
     digest  = hashlib.sha256(content.encode()).hexdigest()

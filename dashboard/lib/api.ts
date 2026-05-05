@@ -545,7 +545,7 @@ export async function getTenant() {
     slug:          string
     name:          string
     description:   string | null
-    global_policy: Record<string, any>
+    global_policy?: Record<string, any>
     contact_email: string | null
     is_active:     boolean
     created_at:    string
@@ -562,7 +562,7 @@ export async function updateTenant(data: {
     id:            string
     name:          string
     description:   string | null
-    global_policy: Record<string, any>
+    global_policy?: Record<string, any>
     contact_email: string | null
   }>("/v1/admin/tenant", {
     method: "PUT",

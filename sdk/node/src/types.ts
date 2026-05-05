@@ -109,11 +109,12 @@ export interface ScanOptions {
 // ── audit list options ─────────────────────────────────────────────────────
 
 export interface AuditListOptions {
-  decision?:  string
+  decision?:  "ALLOW" | "BLOCK" | "SANITIZE"
   reason?:    string
   fromDate?:  string
   toDate?:    string
   limit?:     number
+  offset?:    number
   timeout?:   number
 }
 
