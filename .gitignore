@@ -210,3 +210,5 @@ test.db
 
 # Dashboard lib folder must be tracked
 !dashboard/lib/
+
+backups/
