@@ -28,30 +28,32 @@ setup_logging()
 
 async def bootstrap_admin() -> None:
     """
-    Creates the first admin user if the users table is empty for the default tenant.
+    Creates the first admin user if ADMIN_EMAIL and ADMIN_PASSWORD are set in
+    .env AND the users table is empty. Skips silently if either var is unset —
+    in that case the dashboard /setup page handles first-user creation.
+
     Runs on every startup — skips silently if users already exist.
     Non-fatal — system starts even if bootstrap fails.
-
-    Sets force_password_change = True — enforced at middleware level.
-    Admin must change password on first login before accessing anything.
-
-    Production safety: logs ERROR + prints to stderr if default password detected.
-    Change ADMIN_PASSWORD in .env before first production startup.
     """
     import logging
-    import sys
 
     logger = logging.getLogger("wrapsec.bootstrap")
 
     try:
+        _settings = get_settings()
+
+        # Skip if env vars not configured — /setup page handles first-user creation
+        if not _settings.admin_email or not _settings.admin_password:
+            logger.info("bootstrap skipped — ADMIN_EMAIL/ADMIN_PASSWORD not set; "
+                        "use the dashboard /setup page to create the first admin user")
+            return
+
         from db.session import AsyncSessionFactory
         from db.repositories.tenant import TenantRepository
         from db.repositories.user import UserRepository
         from services.auth.password import (
             hash_password, normalize_email, validate_password_strength,
         )
-
-        _settings = get_settings()
 
         async with AsyncSessionFactory() as db:
             tenant = await TenantRepository(db).get_default()
@@ -81,30 +83,7 @@ async def bootstrap_admin() -> None:
             })
             await db.commit()
 
-            # Production safety check — warn loudly if default password unchanged
-            DEFAULT_PASSWORD = "ChangeMe!OnFirstLogin"
-            if (_settings.environment == "production"
-                    and _settings.admin_password == DEFAULT_PASSWORD):
-                warning_msg = (
-                    "\n"
-                    "╔══════════════════════════════════════════════════════════════╗\n"
-                    "║  ⚠  WRAPSEC SECURITY WARNING                                 ║\n"
-                    "║  Default ADMIN_PASSWORD detected in production environment.  ║\n"
-                    "║  Change ADMIN_PASSWORD in .env IMMEDIATELY.                  ║\n"
-                    "║  Do not allow any user to log in until this is changed.      ║\n"
-                    "╚══════════════════════════════════════════════════════════════╝\n"
-                )
-                print(warning_msg, file=sys.stderr, flush=True)
-                logger.error(
-                    "bootstrap SECURITY_RISK default_admin_password_in_production "
-                    "— change ADMIN_PASSWORD in .env immediately"
-                )
-
-            logger.info("bootstrap admin_created email=%s", email)
-            logger.warning(
-                "bootstrap CHANGE_PASSWORD — force_password_change=True is set. "
-                "Admin must change password on first login."
-            )
+            logger.info("bootstrap admin_created email=%s force_password_change=True", email)
 
     except Exception as e:
         logger.error("bootstrap failed: %s", e)

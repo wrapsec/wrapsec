@@ -102,6 +102,25 @@ async function request<T>(
   return response.json()
 }
 
+// ── Setup (unauthenticated — first-run only) ──────────────────
+export async function getSetupStatus(): Promise<{ initialized: boolean }> {
+  const res = await fetch("/api/proxy/v1/setup/status")
+  if (!res.ok) return { initialized: true } // fail safe — don't redirect to setup on error
+  return res.json()
+}
+
+export async function completeSetup(email: string, password: string): Promise<void> {
+  const res = await fetch("/api/proxy/v1/setup", {
+    method:  "POST",
+    headers: { "Content-Type": "application/json" },
+    body:    JSON.stringify({ email, password }),
+  })
+  if (!res.ok) {
+    const data = await res.json().catch(() => ({}))
+    throw new Error(data?.detail?.[0]?.msg || data?.error?.message || `Error ${res.status}`)
+  }
+}
+
 // ── Gateway ───────────────────────────────────────────────────
 export async function scanRequest(
   body: AIRequest

@@ -3,9 +3,10 @@
 // WrapSec v1.0 | AI Security Gateway - https://wrapsec.com
 "use client"
 
-import { useState } from "react"
+import { useState, useEffect } from "react"
 import { useRouter } from "next/navigation"
 import { loginWithApiKey, loginWithCredentials, AuthError } from "@/lib/auth"
+import { getSetupStatus } from "@/lib/api"
 
 type Tab = "credentials" | "apikey"
 
@@ -35,6 +36,12 @@ function LogoMark({ size = 48 }: { size?: number }) {
 
 export default function LoginPage() {
   const router = useRouter()
+
+  useEffect(() => {
+    getSetupStatus().then(({ initialized }) => {
+      if (!initialized) router.replace("/setup")
+    })
+  }, [router])
 
   const [tab,      setTab]      = useState<Tab>("credentials")
   const [email,    setEmail]    = useState("")

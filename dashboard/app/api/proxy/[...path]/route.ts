@@ -20,13 +20,20 @@ const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000"
  * JWT wins if both present (required for admin write endpoints).
  * Returns 401 JSON if neither cookie is present.
  */
+// Paths that are forwarded without requiring auth cookies
+const PUBLIC_PROXY_PATHS = ["/v1/setup", "/v1/setup/status"]
+
 async function handler(request: NextRequest) {
   try {
     const cookieStore = await cookies()
     const apiKey      = cookieStore.get("wrapsec_api_key")?.value
     const jwtToken    = cookieStore.get("wrapsec_jwt")?.value
 
-    if (!apiKey && !jwtToken) {
+    const url     = new URL(request.url)
+    const path    = url.pathname.replace(/^\/api\/proxy/, "")
+    const isPublic = PUBLIC_PROXY_PATHS.some(p => path === p || path.startsWith(p + "/"))
+
+    if (!isPublic && !apiKey && !jwtToken) {
       return NextResponse.json(
         { error: { code: "UNAUTHORIZED", message: "Not authenticated" } },
         { status: 401 }
@@ -34,13 +41,14 @@ async function handler(request: NextRequest) {
     }
 
     // JWT wins if both present — required for admin write endpoints
+    // Public paths may have no credentials at all — send empty auth headers
     const authHeaders: Record<string, string> = jwtToken
       ? { "Authorization": `Bearer ${jwtToken}` }
-      : { "x-api-key": apiKey! }
+      : apiKey
+        ? { "x-api-key": apiKey }
+        : {}
 
-    // Extract path after /api/proxy
-    const url    = new URL(request.url)
-    const path   = url.pathname.replace(/^\/api\/proxy/, "")
+    // path already extracted above for auth check
     const search = url.search
     const target = `${API_BASE_URL}${path}${search}`
 

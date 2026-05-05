@@ -25,13 +25,14 @@ import sys
 import time
 import requests
 
+import os as _os
 BASE_URL         = "http://127.0.0.1:8000"
-ADMIN_KEY        = "wrapsec_admin_key"
-PURCHASE_KEY     = "wsk_live_siudfvbDrPkGPry-XYn_kXo167GLXE6Bf3WsDWqV3AM"
-FINANCE_KEY      = "wsk_live_VKyMV0WBPUFGFkU21bin_b_9DGOd0in2Xah4WH5fCso"
-TRIAL_KEY        = "wsk_trial_-HIzae8Zpwg8TT1CVll6EYon0HtuZJ-4X8g7U6XUnEk"
-PURCHASE_DEPT_ID = "4111d663-47e3-4632-bf92-46a6b24a92f8"
-FINANCE_DEPT_ID  = "d79ad4d5-67b6-45f7-8d07-91d1c6045c1c"
+ADMIN_KEY        = _os.environ.get("WRAPSEC_ADMIN_KEY",        "")
+PURCHASE_KEY     = _os.environ.get("WRAPSEC_PURCHASE_KEY",     "")
+FINANCE_KEY      = _os.environ.get("WRAPSEC_FINANCE_KEY",      "")
+TRIAL_KEY        = _os.environ.get("WRAPSEC_TRIAL_KEY",        "")
+PURCHASE_DEPT_ID = _os.environ.get("WRAPSEC_PURCHASE_DEPT_ID", "")
+FINANCE_DEPT_ID  = _os.environ.get("WRAPSEC_FINANCE_DEPT_ID",  "")
 
 passed = 0
 failed = 0

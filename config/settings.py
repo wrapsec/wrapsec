@@ -39,13 +39,13 @@ class Settings(BaseSettings):
     jwt_access_token_expire_minutes: int = 30
     jwt_refresh_token_expire_days:   int = 30
 
-    # ── Bootstrap first admin ─────────────────────────────────
-    # Used once on first startup when the users table is empty.
-    # force_password_change=True is set automatically — enforced at middleware level.
-    # In production: change ADMIN_PASSWORD in .env before first startup.
-    # bootstrap_admin() will warn loudly (stderr + ERROR log) if default is detected.
-    admin_email:    str = Field(default="admin@localhost")
-    admin_password: str = Field(default="ChangeMe!OnFirstLogin")
+    # ── Bootstrap first admin (optional) ─────────────────────────────────────
+    # If both are set, bootstrap creates the admin user automatically on first
+    # startup (scripted / infrastructure-as-code deploys).
+    # If either is unset (default), bootstrap is skipped — the dashboard /setup
+    # page handles first-user creation interactively.
+    admin_email:    str | None = Field(default=None)
+    admin_password: str | None = Field(default=None)
 
     # ── Account lockout (Redis TTL) ───────────────────────────
     # After AUTH_MAX_FAILED_ATTEMPTS consecutive failures the account is locked

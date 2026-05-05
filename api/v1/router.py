@@ -7,7 +7,7 @@ from api.v1.endpoints import (
     health, ai, audit, settings, keys,
     departments, applications, tenant,
     proxy_settings, proxy, proxy_interactions,
-    auth,
+    auth, setup,
 )
 from api.v1.endpoints.admin import users
 
@@ -25,6 +25,9 @@ router.include_router(proxy_settings.router,      prefix="/v1/settings",        
 router.include_router(proxy.router,               prefix="/v1",                    tags=["Proxy"])
 router.include_router(proxy_interactions.router,  prefix="/v1/proxy",              tags=["Proxy"])
 
-# ── JWT Auth (new) ─────────────────────────────────────────────────────────────
+# ── JWT Auth ───────────────────────────────────────────────────────────────────
 router.include_router(auth.router,                prefix="/v1/auth",               tags=["Auth"])
 router.include_router(users.router,               prefix="/v1/admin/users",        tags=["Users"])
+
+# ── First-run setup ────────────────────────────────────────────────────────────
+router.include_router(setup.router,               prefix="/v1/setup",              tags=["Setup"])

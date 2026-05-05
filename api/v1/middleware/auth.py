@@ -35,6 +35,8 @@ PUBLIC_PATHS = {
     "/openapi.json",
     "/v1/auth/login",    # login is public — no auth required
     "/v1/auth/refresh",  # refresh uses httpOnly cookie — no Bearer required
+    "/v1/setup",         # first-run setup — public, self-disables after first user created
+    "/v1/setup/status",  # initialization check — public
 }
 
 # Paths where middleware must NOT log SESSION_EXPIRED

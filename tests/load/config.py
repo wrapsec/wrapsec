@@ -13,14 +13,22 @@ Edit this file before running any test.
 BASE_URL = "http://127.0.0.1:8000"
 
 # ── Keys ──────────────────────────────────────────────────────────────────────
-ADMIN_KEY    = "wrapsec_admin_key"
-PURCHASE_KEY = "wsk_live_siudfvbDrPkGPry-XYn_kXo167GLXE6Bf3WsDWqV3AM"
-FINANCE_KEY  = "wsk_live_VKyMV0WBPUFGFkU21bin_b_9DGOd0in2Xah4WH5fCso"
-TRIAL_KEY    = "wsk_trial_-HIzae8Zpwg8TT1CVll6EYon0HtuZJ-4X8g7U6XUnEk"
+# Set these via environment variables before running load tests.
+# Example:
+#   export WRAPSEC_ADMIN_KEY=your_admin_key
+#   export WRAPSEC_PURCHASE_KEY=wsk_live_...
+#   export WRAPSEC_FINANCE_KEY=wsk_live_...
+#   export WRAPSEC_TRIAL_KEY=wsk_trial_...
+import os as _os
+ADMIN_KEY    = _os.environ.get("WRAPSEC_ADMIN_KEY",    "")
+PURCHASE_KEY = _os.environ.get("WRAPSEC_PURCHASE_KEY", "")
+FINANCE_KEY  = _os.environ.get("WRAPSEC_FINANCE_KEY",  "")
+TRIAL_KEY    = _os.environ.get("WRAPSEC_TRIAL_KEY",    "")
 
 # ── Departments ───────────────────────────────────────────────────────────────
-PURCHASE_DEPT_ID = "4111d663-47e3-4632-bf92-46a6b24a92f8"
-FINANCE_DEPT_ID  = "d79ad4d5-67b6-45f7-8d07-91d1c6045c1c"
+# Set to the department UUIDs from your WrapSec instance.
+PURCHASE_DEPT_ID = _os.environ.get("WRAPSEC_PURCHASE_DEPT_ID", "")
+FINANCE_DEPT_ID  = _os.environ.get("WRAPSEC_FINANCE_DEPT_ID",  "")
 
 # ── Performance thresholds ────────────────────────────────────────────────────
 # These are PASS/FAIL gates — tests fail if breached

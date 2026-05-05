@@ -27,8 +27,9 @@ import time
 import requests
 import sys
 
+import os as _os
 BASE_URL     = "http://127.0.0.1:8000"
-PURCHASE_KEY = "wsk_live_siudfvbDrPkGPry-XYn_kXo167GLXE6Bf3WsDWqV3AM"
+PURCHASE_KEY = _os.environ.get("WRAPSEC_PURCHASE_KEY", "")
 SAMPLES      = 50
 WARMUP       = 5
 
