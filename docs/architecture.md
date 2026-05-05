@@ -2,9 +2,9 @@
 
 > This document builds on [Core Concepts](core_concepts.md) as the canonical behavior definition.
 
-Version: 1.2 — Security & Isolation  
+Version: 1.0  
 Status: Implemented  
-Last updated: April 2026
+Last updated: May 2026
 
 ---
 
@@ -550,31 +550,32 @@ All metric labels are validated against allowlists (`_safe()`) before use — no
    assert key.tenant_id == dept.tenant_id
    Failure → 401 + security log
 
-5. Bearer JWT auth
-   Not yet implemented — returns 401 UNAUTHORIZED
-   JWT support planned for Phase 2 (user table + login endpoint)
+5. Bearer JWT auth (alternative to step 3 — mutually exclusive)
+   HS256 access tokens, 30 min expiry, audience=wrapsec-dashboard
+   Validates: signature, expiry, type=access, ver==users.token_version
+   tenant_id cross-validated against DB value on every request
 
 6. Policy resolution
    resolve_policy(tenant_id, dept_id, app_id)
    Returns (policy_dict, policy_source)
 
-6. Threshold extraction (decoupled)
+7. Threshold extraction (decoupled)
    detection_bt  = policy["thresholds"]["block"]
    detection_st  = policy["thresholds"]["sanitize"]
    pii_bt        = policy["guardrails"]["pii"]["block_threshold"]
    pii_st        = policy["guardrails"]["pii"]["sanitize_threshold"]
 
-7. Gateway processing
+8. Gateway processing
    Per-detector try/catch → sets detection_failed=True on any failure
    PolicyEngine receives all 4 thresholds as separate parameters
 
-8. Primary reason (strict order)
+9. Primary reason (strict order)
    if detection_failed → SYSTEM_ERROR
    elif guardrail      → PII_GUARDRAIL_BLOCK/SANITIZE
    elif max_score > 0  → RULE/ML/LLM_DETECTOR
    else                → NO_THREAT_DETECTED
 
-9. Confidence
+10. Confidence
    SYSTEM_ERROR paths   → 0.0 (LOW) always
    Guardrail paths      → tiered 0.70–0.95
    Detection paths      → scaled inverse variance
@@ -635,6 +636,8 @@ Only caches non-5xx responses
 ```
 Gateway (2):         POST /v1/ai/request · GET /v1/ai/requests/{trace_id}
 Proxy (1):           POST /v1/chat/completions
+Auth (5):            POST /v1/auth/login · /v1/auth/refresh · /v1/auth/logout
+                     GET /v1/auth/me · POST /v1/auth/change-password
 Audit (4):           GET  /v1/audit/logs · stats · attribution · export
 Settings (9):        GET/PUT /v1/settings/thresholds · layers · llm · retention · storage
                      GET/PUT/DELETE /v1/settings/proxy · GET /v1/settings/proxy/health
@@ -642,30 +645,35 @@ API Keys (5):        POST/GET/PUT/DELETE /v1/keys · GET /v1/keys/{key_id}
 Tenant (2):          GET/PUT /v1/admin/tenant
 Departments (7):     CRUD + /policy + /stats
 Applications (6):    CRUD + /policy
+Admin Users (5):     GET/POST /v1/admin/users · GET/PATCH/DELETE /v1/admin/users/{id}
+                     POST /v1/admin/users/{id}/toggle-active
 Health (4):          GET /health · /health/ready · /health/live · /health/config
 Metrics (1):         GET /metrics
 Proxy Internal (2):  GET /v1/proxy/interactions · /v1/proxy/interactions/{trace_id}
-Total: 43 endpoints
+Total: 53 endpoints
 ```
 
 ---
 
-## Implementation Status V1.1
+## Implementation Status
+
+### Implemented
 
 ```
 ✅ Rule, ML, LLM detectors with per-detector try/catch
+✅ Toxicity guardrail — independent thresholds, reads ML label 6, ~0ms additional latency
+✅ PII guardrail (22+ entity types, input + output)
+✅ Guardrail-first enforcement — PII → Toxicity → Detection pipeline
+✅ Guardrail thresholds DECOUPLED from detection thresholds
 ✅ detection_failed flag — SYSTEM_ERROR always distinct from NO_THREAT_DETECTED
 ✅ All failure paths: confidence=0.0, band=LOW, primary_reason=SYSTEM_ERROR
 ✅ Input: 8000 char limit + ceil(len/2)>4000 token heuristic → 422
-✅ PII guardrail (22+ types, input + output)
-✅ Guardrail-first enforcement
-✅ Guardrail thresholds DECOUPLED from detection thresholds
 ✅ risk_score = rule*0.40 + ml*0.30 + llm*0.30 (PII excluded)
 ✅ Primary reason — 7 values, strict priority order
 ✅ Confidence: scaled inverse variance + tiered guardrail + failure=0.0
 ✅ decision_version — "v1.0"
 ✅ sanitization_applied — explicit boolean
-✅ Idempotency-Key (60s TTL, 409 on conflict)
+✅ Idempotency-Key (60s TTL, 409 on conflict, scoped per API key)
 ✅ ULID trace IDs
 ✅ Rate limiting per API key, X-RateLimit-* headers
 ✅ Audit log retention configurable via Settings UI (DB)
@@ -677,46 +685,39 @@ Total: 43 endpoints
 ✅ Dual write — proxy_interactions + audit_logs (FK linked)
 ✅ Unified requests view — GET /v1/ai/requests/:trace_id joins both tables
 ✅ Configurable storage modes — full | masked | none
-✅ Proxy text retention worker — scripts/cleanup_audit_logs.py
-✅ 43 API endpoints
-✅ Next.js 14 dashboard (12 pages)
-✅ 148 unit + integration tests passing
-```
-
-### V1.2 — Completed
-
-```
-✅ Bearer JWT placeholder removed — returns 401
+✅ Background retention worker — APScheduler, daily 02:00 UTC
+✅ Severity classification — CRITICAL/HIGH/MEDIUM/LOW stored in DB
 ✅ trace_id lookup dept-scoped — cross-dept returns 404
 ✅ All audit endpoints dept-scoped
-✅ Idempotency scoped per API key
-✅ Severity classification — CRITICAL/HIGH/MEDIUM/LOW stored in DB
-✅ audit_logs.threats → JSONB
-✅ api_keys CHECK constraint — non-admin must have tenant+dept
 ✅ Composite indexes — tenant+dept+time, severity+time, key+time
+✅ JWT authentication — HS256 access tokens (30 min), refresh token rotation, token versioning
+✅ Dashboard session hardening — 15 min inactivity timeout, silent refresh, isLoggingOut guard
+✅ TRUSTED_PROXY_IPS — configurable trusted reverse proxy IPs for X-Forwarded-For
+✅ METRICS_TOKEN — optional bearer token authentication for GET /metrics
+✅ Admin user management endpoints — CRUD + toggle-active, ADMIN role required
+✅ Node.js SDK — full parity with Python SDK, Express/Fastify middleware included
+✅ 53 API endpoints
+✅ Next.js dashboard
 ```
 
-### V1.2 — Pending
+### Planned
 
 ```
 → Per-model token counting with tiktoken (replaces heuristic)
 → Application-level policy overrides (placeholder active)
 → API key rotation with grace period
-→ Toxicity guardrail (independent thresholds)
 → Cursor-based pagination
-→ Background retention worker (replaces manual script)
 → Per-key storage mode override
 → Demo safety restrictions (rate limit, input size cap, proxy disable)
 → DigitalOcean deployment (domain ready, plan: Groq instead of Ollama)
 ```
 
-### V2.0 — Future
+### Future
 
 ```
 → WildGuard over-refusal / under-refusal detection (behavior_flag)
 → Output evaluation engine (output_flags)
 → Security Events feed and alerting
-→ JWT + SSO (attribution_verified=true)
 → Role-based policy overrides
 → Human review queue for LOW confidence
 → SaaS multi-tenancy
@@ -733,7 +734,7 @@ Total: 43 endpoints
 |---|---|---|
 | `x-api-key: wsk_live_...` | ✅ Active | Standard key — scoped to dept/app |
 | `x-api-key: <admin_key>` | ✅ Active | Admin key — full access, no dept scope |
-| `Authorization: Bearer` | ❌ Returns 401 | JWT not yet implemented (Phase 2) |
+| `Authorization: Bearer <jwt>` | ✅ Active | Dashboard users — HS256, 30 min access tokens |
 
 ### Request State Identity
 
@@ -803,7 +804,7 @@ The `_GUARDRAIL_BLOCK` suffix pattern covers all current and future guardrail ty
 | Proxy text storage | Configurable mode (full/masked/none) + retention TTL | ✅ Implemented |
 | Provider API keys | AES-256-GCM encrypted at rest, never returned in API | ✅ Implemented |
 | audit_logs vs proxy_interactions | Separate tables, FK linked, unified via GET /v1/ai/requests | ✅ Implemented |
-| Bearer JWT placeholder | Removed — returns 401 until Phase 2 JWT implemented | ✅ Fixed |
+| Bearer JWT auth | Fully implemented — HS256, refresh rotation, token versioning | ✅ Implemented |
 | Cross-dept trace_id leak | Scoped by dept_id — cross-dept returns 404 | ✅ Fixed |
 | Audit endpoints unscoped | All audit endpoints enforce dept_id from request.state | ✅ Fixed |
 | Severity classification | CRITICAL/HIGH/MEDIUM/LOW — stored in DB, SIEM-ready | ✅ Implemented |
@@ -812,4 +813,4 @@ The `_GUARDRAIL_BLOCK` suffix pattern covers all current and future guardrail ty
 
 ---
 
-*Version: 1.2 — Security & Isolation · April 2026*
+*Version: 1.0 · May 2026*

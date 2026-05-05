@@ -17,7 +17,15 @@ from __future__ import annotations
 
 import logging
 import uuid
+from importlib.metadata import version as _pkg_version
 from typing import Any
+
+import httpx
+
+try:
+    _SDK_VERSION = _pkg_version("wrapsec-python")
+except Exception:
+    _SDK_VERSION = "0.1.0"
 
 import requests
 import requests.exceptions
@@ -47,7 +55,7 @@ def build_headers(api_key: str) -> dict[str, str]:
         "x-api-key":        api_key,
         "Idempotency-Key":  str(uuid.uuid4()),
         "Content-Type":     "application/json",
-        "User-Agent":       "wrapsec-python/0.1.0",
+        "User-Agent":       f"wrapsec-python/{_SDK_VERSION}",
     }
 
 
@@ -91,6 +99,9 @@ def map_response_error(
     if response_data:
         err = response_data.get("error", {})
         error_detail = err.get("message", "") if isinstance(err, dict) else ""
+        # FastAPI returns {"detail": "..."} for unhandled 404s — surface that too
+        if not error_detail and isinstance(response_data.get("detail"), str):
+            error_detail = response_data["detail"]
 
     if status_code in (401, 403):
         msg = (
@@ -101,11 +112,8 @@ def map_response_error(
         return WrapSecAuthError(msg, status_code=status_code, response=response_data)
 
     if status_code == 404:
-        return WrapSecError(
-            "Endpoint not found. Check your base_url or run wrapsec doctor.",
-            status_code=status_code,
-            response=response_data,
-        )
+        msg = error_detail or "Not found. Check your base_url or run wrapsec doctor."
+        return WrapSecError(msg, status_code=status_code, response=response_data)
 
     if status_code == 413:
         return WrapSecError(
@@ -135,10 +143,7 @@ def map_response_error(
     # Bug #5 fix: never include raw response text in the error message.
     # raw_text could be an HTML error page containing internal server paths,
     # stack traces, or infrastructure details. Log it internally instead.
-    import logging as _logging
-    _logging.getLogger("wrapsec.http").debug(
-        "Unexpected HTTP %d raw response: %s", status_code, raw_text[:500]
-    )
+    logger.debug("Unexpected HTTP %d raw response: %s", status_code, raw_text[:500])
     return WrapSecError(
         f"Unexpected HTTP {status_code}{': ' + error_detail if error_detail else ''}",
         status_code=status_code,
@@ -217,8 +222,6 @@ async def execute_request_async(
 
     Spec: Section 3 (core/http.py — shared by sync and async clients)
     """
-    import httpx
-
     try:
         async with httpx.AsyncClient(timeout=timeout) as client:
             resp = await client.request(

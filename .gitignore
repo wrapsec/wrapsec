@@ -212,3 +212,26 @@ test.db
 !dashboard/lib/
 
 backups/
+
+# Internal docs (not for public repo)
+docs/internal/
+
+# SQLite test databases
+*.db
+test_auth.db
+
+# Soak / load test artifacts
+soak_report.html
+soak_results_*.csv
+tests/load/results/
+
+# ML training data and logs
+ml/data/raw/
+models/training_dataset.csv
+models/training.log
+
+# Dashboard build output
+dashboard/.next/
+
+# Node SDK build output
+sdk/node/dist/

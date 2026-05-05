@@ -8,14 +8,13 @@ import logging
 from fastapi import Request
 from starlette.middleware.base import BaseHTTPMiddleware
 from starlette.responses import JSONResponse, Response
+from cache.redis_client import get_redis
+from config.settings import get_settings
 
 logger = logging.getLogger("wrapsec.idempotency")
 
 # Paths that support idempotency
 IDEMPOTENCY_PATHS = {"/v1/ai/request"}
-
-# TTL for idempotency cache in seconds
-IDEMPOTENCY_TTL = 60
 
 
 class IdempotencyMiddleware(BaseHTTPMiddleware):
@@ -27,7 +26,7 @@ class IdempotencyMiddleware(BaseHTTPMiddleware):
       Repeat request → return cached response immediately
 
     Cache key: SHA-256(idempotency_key + body_hash)
-    TTL:       60 seconds
+    TTL:       idempotency_window_secs (default 60s, configurable via settings)
     Storage:   Redis
 
     Prevents duplicate BLOCK/SANITIZE decisions on client retries.
@@ -52,7 +51,7 @@ class IdempotencyMiddleware(BaseHTTPMiddleware):
 
         # Read body for hashing
         body      = await request.body()
-        body_hash = hashlib.sha256(body).hexdigest()[:16]
+        body_hash = hashlib.sha256(body).hexdigest()
 
         # Scope idempotency to the authenticated API key.
         # Without this, two different keys using the same Idempotency-Key
@@ -65,13 +64,12 @@ class IdempotencyMiddleware(BaseHTTPMiddleware):
         response_key = f"idempotency:{idem_hash}:resp"
 
         try:
-            from cache.redis_client import get_redis
             redis = get_redis()
 
             # Atomically claim this idempotency slot before processing.
             # SET NX ensures only one concurrent request can claim the key —
             # eliminates the TOCTOU race between GET and later SET.
-            claimed = await redis.set(hash_key, body_hash, nx=True, ex=IDEMPOTENCY_TTL)
+            claimed = await redis.set(hash_key, body_hash, nx=True, ex=get_settings().idempotency_window_secs)
 
             if not claimed:
                 # Key exists — check for conflict or cached replay
@@ -129,7 +127,6 @@ class IdempotencyMiddleware(BaseHTTPMiddleware):
         # Only cache successful responses — not 5xx errors
         if response.status_code < 500:
             try:
-                from cache.redis_client import get_redis
                 redis = get_redis()
 
                 # Consume body iterator to read response
@@ -141,7 +138,7 @@ class IdempotencyMiddleware(BaseHTTPMiddleware):
 
                 # hash_key was set atomically before processing via SET NX.
                 # Only store the response — no hash_key race possible here.
-                await redis.setex(response_key, IDEMPOTENCY_TTL, json.dumps({
+                await redis.setex(response_key, get_settings().idempotency_window_secs, json.dumps({
                     "body":        response_data,
                     "status_code": response.status_code,
                 }))
@@ -149,7 +146,7 @@ class IdempotencyMiddleware(BaseHTTPMiddleware):
                 logger.debug(
                     f"Idempotency cached — "
                     f"key={idempotency_key[:12]}... "
-                    f"ttl={IDEMPOTENCY_TTL}s"
+                    f"ttl={get_settings().idempotency_window_secs}s"
                 )
 
                 # Reconstruct response — body iterator was consumed

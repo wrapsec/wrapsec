@@ -2,10 +2,10 @@
 
 > CLI behavior follows [Core Concepts](core_concepts.md) for decision semantics and SYSTEM_ERROR handling.
 
-Version: 0.1.1  
-Last updated: April 2026
+Version: 1.0  
+Last updated: May 2026
 
-> **Status:** SDK v0.1.1 — installation from source only. PyPI publication (`pip install wrapsec-python`) is pending.
+> **Status:** Installation from source only. PyPI publication (`pip install wrapsec-python`) is pending.
 
 ---
 
@@ -15,7 +15,6 @@ Last updated: April 2026
 # Development (local repo)
 pip install -e ./sdk/python
 
-# PyPI (when published — not yet available)
 # pip install wrapsec-python
 ```
 
@@ -60,7 +59,7 @@ Exit codes apply to all commands and all output modes (`--quiet`, `--json`).
 ## Global Options
 
 ```bash
-wrapsec --version    # Show CLI version (0.1.1)
+wrapsec --version    # Show CLI version (1.0)
 wrapsec --help       # Show help
 ```
 
@@ -196,9 +195,9 @@ WrapSec Doctor
    LLM detector:      enabled
 
 6. Version Compatibility
-   CLI version:   0.1.0
+   CLI version:   1.0
    Expected API:  v1
-   API version:   1.0.0    # major compatibility version (v1) — not the feature version shown in docs
+   API version:   1.0.0
    ✔ Compatible (1.0.0)
 
 ✔ All checks passed — WrapSec CLI is ready.
@@ -423,6 +422,7 @@ wrapsec audit list [OPTIONS]
 | `--from DATE` | From date (YYYY-MM-DD) |
 | `--to DATE` | To date (YYYY-MM-DD) |
 | `--limit INT` | Records to return (default 20, max 100) |
+| `--offset INT` | Records to skip (for pagination) |
 | `--json` | Pure JSON output |
 
 ```bash
@@ -646,22 +646,6 @@ wrapsec config clear --force
 
 These actions belong in the dashboard, where every change is authenticated, audited, and attributable. The CLI authenticates exclusively with API keys — JWT auth is not supported.
 
-## Planned CLI Additions (v2)
-
-When JWT authentication is added to the CLI, the following command group is planned:
-
-```
-wrapsec users list                              List all users for the tenant
-wrapsec users create --email --role --dept      Create a new user
-wrapsec users deactivate USER_ID                Deactivate a user account
-wrapsec users reset-password USER_ID            Reset a user's password
-```
-
-These commands require ADMIN role and will use JWT auth (`wrapsec login`).
-Not available in v1 — use the dashboard for user management.
-
----
-
 ## Known Behaviour Notes
 
 ```
@@ -696,4 +680,4 @@ batch on Windows (PowerShell)
 ---
 
 *WrapSec CLI Command Reference*  
-*Version 0.1.1 — April 2026*
+*Version 1.0 — May 2026*

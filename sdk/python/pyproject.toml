@@ -4,24 +4,32 @@ build-backend = "hatchling.build"
 
 [project]
 name        = "wrapsec-python"
-version     = "0.1.0"
+version     = "1.0.0"
 description = "WrapSec Python SDK and CLI — AI Security Gateway client"
 readme      = "README.md"
 requires-python = ">=3.10"
 license     = { text = "MIT" }
 
+# Core SDK dependencies only — no CLI deps here
 dependencies = [
-    "click>=8.1",
     "requests>=2.31",
     "httpx>=0.27",
+]
+
+# Optional: install CLI dependencies with: pip install wrapsec-python[cli]
+# This keeps the SDK lightweight for consumers who only use the Python client
+[project.optional-dependencies]
+cli = [
+    "click>=8.1",
 ]
 
 [project.scripts]
 wrapsec = "wrapsec.cli:cli"
 
 [project.urls]
-Homepage   = "https://github.com/kbajish/wrapsec"
+Homepage   = "https://wrapsec.com"
 Repository = "https://github.com/kbajish/wrapsec"
+Changelog  = "https://github.com/kbajish/wrapsec/blob/main/sdk/python/CHANGELOG.md"
 
 [tool.hatch.build.targets.wheel]
 packages = ["wrapsec"]

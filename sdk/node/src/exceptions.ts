@@ -86,7 +86,7 @@ export class WrapSecBlockError extends WrapSecError {
     const rawReason  = String((result as any)?.primaryReason ?? "unknown")
     const rawTraceId = String((result as any)?.traceId       ?? "unknown")
     const reason     = rawReason.slice(0, 64).replace(/[^A-Z0-9_]/g, "")  // UPPER_SNAKE_CASE only
-    const traceId    = rawTraceId.slice(0, 32).replace(/[^a-z0-9_]/g, "") // lowercase alphanumeric + _
+    const traceId    = rawTraceId.slice(0, 64).replace(/[^a-zA-Z0-9_-]/g, "") // alphanumeric + _ and -
     super(
       `Input blocked by WrapSec security policy (reason: ${reason}, trace: ${traceId})`
     )

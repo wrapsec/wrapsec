@@ -3,6 +3,7 @@
 # WrapSec v1.0 | AI Security Gateway - https://wrapsec.com
 
 import logging
+import re
 from engine.detection.base import BaseDetector, DetectionResult
 from domain.enums import ThreatCategory
 from config.settings import get_settings
@@ -49,26 +50,7 @@ class LLMDetector(BaseDetector):
     def name(self) -> str:
         return "llm_detector"
 
-    def detect(self, text: str) -> DetectionResult:
-        try:
-            provider = settings.llm_provider.lower()
-
-            if provider == "ollama":
-                return self._detect_ollama(text)
-            elif provider == "groq":
-                return self._detect_groq(text)
-            elif provider == "openai":
-                return self._detect_openai(text)
-            else:
-                logger.warning(f"Unknown LLM provider: {provider}")
-                return DetectionResult.clean(self.name)
-
-        except Exception as e:
-            logger.warning(f"LLMDetector failed: {e}")
-            return DetectionResult.clean(self.name)
-
     def _parse_response(self, raw: str) -> DetectionResult:
-        import re
         try:
             category_match   = re.search(r"CATEGORY:\s*(\w+)", raw, re.IGNORECASE)
             confidence_match = re.search(r"CONFIDENCE:\s*([0-9.]+)", raw, re.IGNORECASE)
@@ -99,23 +81,19 @@ class LLMDetector(BaseDetector):
             logger.warning(f"LLMDetector parse failed: {e}")
             return DetectionResult.clean(self.name)
 
-    def detect(self, text: str) -> DetectionResult:
+    async def detect_async(self, text: str) -> DetectionResult:
+        """Async entrypoint — awaits the LLM client directly, no new event loop."""
         try:
-            import asyncio
             from clients import get_llm_client
 
-            client = get_llm_client()
-
-            loop     = asyncio.new_event_loop()
-            response = loop.run_until_complete(
-                client.complete(
-                    system_prompt = SYSTEM_PROMPT,
-                    user_prompt   = f"Analyse this input:\n\n{text}",
-                    temperature   = 0.0,
-                    max_tokens    = 200,
-                )
+            client   = get_llm_client()
+            from config.settings import get_settings
+            response = await client.complete(
+                system_prompt = SYSTEM_PROMPT,
+                user_prompt   = f"Analyse this input:\n\n{text}",
+                temperature   = 0.0,
+                max_tokens    = get_settings().llm_detection_max_tokens,
             )
-            loop.close()
 
             if not response.content:
                 return DetectionResult.clean(self.name)
@@ -125,3 +103,11 @@ class LLMDetector(BaseDetector):
         except Exception as e:
             logger.warning(f"LLMDetector failed: {e}")
             return DetectionResult.clean(self.name)
+
+    def detect(self, text: str) -> DetectionResult:
+        """Sync shim kept for any legacy callers — runs detect_async in a new loop."""
+        import asyncio
+        loop     = asyncio.new_event_loop()
+        result   = loop.run_until_complete(self.detect_async(text))
+        loop.close()
+        return result

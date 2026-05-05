@@ -34,7 +34,14 @@ import type {
 /** Single constant — the ONLY place /v1 is defined in this SDK. Spec §6.5 */
 const BASE_PATH        = "/v1"
 const DEFAULT_BASE_URL = "http://localhost:8000"
-const SDK_VERSION      = "0.1.0"
+const SDK_VERSION: string = (() => {
+  try {
+    // eslint-disable-next-line @typescript-eslint/no-require-imports
+    return (require("../package.json") as { version: string }).version
+  } catch {
+    return "0.1.0"
+  }
+})()
 
 // ── Retry ──────────────────────────────────────────────────────────────────
 
@@ -63,7 +70,7 @@ async function withRetry<T>(
         const attempt = i + 1
         const total   = BACKOFF_SCHEDULE.length
         if (attempt < total) {
-          // retry ${attempt + 1}/${total - 1} — debug logging intentionally omitted
+          // attempt ${attempt}/${total} failed — will retry after backoff
         }
         // Continue to next attempt
       } else {
@@ -82,9 +89,10 @@ async function withRetry<T>(
 
 function buildHeaders(apiKey: string): Record<string, string> {
   return {
-    "x-api-key":       apiKey,
-    "Content-Type":    "application/json",
-    "User-Agent":      `wrapsec-node/${SDK_VERSION}`,
+    "x-api-key":        apiKey,
+    "Content-Type":     "application/json",
+    "User-Agent":       `wrapsec-node/${SDK_VERSION}`,
+    "Idempotency-Key":  crypto.randomUUID(),  // #1 match Python SDK behavior
   }
 }
 
@@ -106,7 +114,11 @@ function mapResponseError(
   statusCode:   number,
   responseData: unknown,
 ): WrapSecError {
-  const errorMsg = (responseData as any)?.error?.message ?? ""
+  // Prefer structured {"error": {"message": "..."}} — fall back to FastAPI's {"detail": "..."}
+  const errorMsg: string =
+    (responseData as any)?.error?.message ??
+    (typeof (responseData as any)?.detail === "string" ? (responseData as any).detail : "") ??
+    ""
 
   if (statusCode === 401) {
     return new WrapSecAuthError(
@@ -124,7 +136,7 @@ function mapResponseError(
   }
   if (statusCode === 404) {
     return new WrapSecError(
-      "Endpoint not found. Check your baseUrl.",
+      errorMsg || "Not found. Check your baseUrl or run wrapsec doctor.",
       statusCode,
       responseData,
     )
@@ -232,7 +244,12 @@ function camelizeKeys(obj: Record<string, unknown>): Record<string, unknown> {
   const out: Record<string, unknown> = Object.create(null)
   for (const [k, v] of Object.entries(obj)) {
     if (BLOCKED_KEYS.has(k)) continue   // #3 prototype pollution guard
-    out[toCamel(k)] = v
+    const camelKey = toCamel(k)
+    if (v !== null && typeof v === "object" && !Array.isArray(v)) {
+      out[camelKey] = camelizeKeys(v as Record<string, unknown>)
+    } else {
+      out[camelKey] = v
+    }
   }
   return out
 }
@@ -371,12 +388,11 @@ export class WrapSec {
     body?:   unknown,
     params?: Record<string, string>,
   ): Promise<unknown> {
-    const apiKey  = this.requireApiKey()
-    const headers = buildHeaders(apiKey)
-    const url     = this.url(path)
+    const apiKey = this.requireApiKey()
+    const url    = this.url(path)
 
     return withRetry(
-      () => executeRequest(method, url, headers, timeout, body, params),
+      () => executeRequest(method, url, buildHeaders(apiKey), timeout, body, params),
       `${method.toUpperCase()} ${path}`,
     )
   }
@@ -390,7 +406,7 @@ export class WrapSec {
    * Spec: Section 4, Section 8
    */
   async scan(text: string, options: ScanOptions = {}): Promise<ScanResult> {
-    const { mode = "fast", user = "sdk-nodejs", timeout } = options
+    const { mode = "fast", user = "sdk", timeout } = options
 
     if (!text || typeof text !== "string") {
       throw new WrapSecError("text must be a non-empty string")
@@ -401,12 +417,21 @@ export class WrapSec {
     if (timeout !== undefined && (typeof timeout !== "number" || timeout < 1 || !Number.isFinite(timeout))) {
       throw new WrapSecError("timeout must be a positive finite number")
     }
+    // #2 — runtime mode validation. TypeScript types are not runtime guards —
+    // callers can pass arbitrary strings with a cast. Validate explicitly to
+    // return a clear error instead of a cryptic 422 from the API.
+    const _VALID_MODES = ["fast", "full"] as const
+    if (!_VALID_MODES.includes(mode as any)) {
+      throw new WrapSecError(
+        `mode must be one of ${JSON.stringify(_VALID_MODES)}, got ${JSON.stringify(mode)}`
+      )
+    }
 
     const t    = this.resolveTimeout(timeout)
     const data = await this.request("POST", "/ai/request", t, {
       input:          text,
       detection_mode: mode,
-      metadata:       { source: "wrapsec-node/0.1.0", user_id: user },
+      metadata:       { source: `wrapsec-node/${SDK_VERSION}`, user_id: user },
     })
 
     return makeScanResult(data as Record<string, unknown>)
@@ -441,9 +466,10 @@ export class WrapSec {
    * Spec: Section 13.2 (audit list)
    */
   async auditList(options: AuditListOptions = {}): Promise<AuditLog[]> {
-    const { decision, reason, fromDate, toDate, limit = 20, timeout } = options
+    const { decision, reason, fromDate, toDate, limit = 20, offset = 0, timeout } = options
     const params: Record<string, string> = {
-      limit: String(Math.min(limit, 100)),
+      limit:  String(Math.min(limit, 100)),
+      offset: String(Math.max(offset, 0)),
     }
     if (decision) params["decision"]       = decision
     if (reason)   params["primary_reason"] = reason
@@ -524,14 +550,15 @@ export class WrapSec {
 
   /**
    * Check if the API is reachable (/health/live). No auth required.
-   * Uses a fixed 5s timeout — not configurable.
+   * Returns false on any error — never throws.
    *
    * Spec: Section 13.2 (ping)
    */
-  async healthLive(): Promise<boolean> {
+  async healthLive(timeout?: number): Promise<boolean> {
+    const t = resolveTimeout(timeout, this._timeout, 5) * 1000
     try {
       const resp = await fetch(`${this._baseUrl}/health/live`, {
-        signal: AbortSignal.timeout(5000),
+        signal: AbortSignal.timeout(t),
       })
       return resp.ok
     } catch {
@@ -541,13 +568,48 @@ export class WrapSec {
 
   /**
    * Check full service health (/health/ready). Auth required.
-   * Fixed 5s timeout.
+   * Retried on transient failures via withRetry().
    *
    * Spec: Section 13.2 (doctor)
    */
-  async healthReady(): Promise<Record<string, unknown>> {
-    const apiKey  = this.requireApiKey()
-    const headers = buildHeaders(apiKey)
-    return executeRequest("GET", `${this._baseUrl}/health/ready`, headers, 5) as any
+  async healthReady(timeout?: number): Promise<Record<string, unknown>> {
+    const apiKey = this.requireApiKey()
+    const t      = resolveTimeout(timeout, this._timeout, 5)
+    return withRetry(
+      () => {
+        const headers = buildHeaders(apiKey)
+        return executeRequest("GET", `${this._baseUrl}/health/ready`, headers, t) as Promise<Record<string, unknown>>
+      },
+      "GET /health/ready",
+    ) as Promise<Record<string, unknown>>
+  }
+
+  /**
+   * Retrieve active gateway configuration (/health/config). Auth required.
+   * Equivalent to Python SDK health_config().
+   *
+   * Spec: Section 13.2 (settings get)
+   */
+  async healthConfig(timeout?: number): Promise<Record<string, unknown>> {
+    const apiKey = this.requireApiKey()
+    const t      = resolveTimeout(timeout, this._timeout, 5)
+    return withRetry(
+      () => {
+        const headers = buildHeaders(apiKey)
+        return executeRequest("GET", `${this._baseUrl}/health/config`, headers, t) as Promise<Record<string, unknown>>
+      },
+      "GET /health/config",
+    ) as Promise<Record<string, unknown>>
+  }
+
+  /**
+   * Normalize text before scanning: collapse whitespace, strip leading/trailing
+   * whitespace, and normalize Unicode to NFC.
+   *
+   * Equivalent to Python SDK normalize_text(). Pass the result to scan().
+   */
+  static normalizeText(text: string): string {
+    if (typeof text !== "string") throw new WrapSecError("text must be a string")
+    return text.normalize("NFC").replace(/\s+/g, " ").trim()
   }
 }

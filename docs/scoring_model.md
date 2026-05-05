@@ -412,10 +412,13 @@ primary_reason  = "SYSTEM_ERROR"
 
 ## 9. Implementation Status
 
-### V1.0 — Fully Implemented
+### Implemented
 
 ```
 ✅ Rule, ML, LLM detectors with per-detector try/catch
+✅ Toxicity guardrail — independent thresholds, reads ML label 6, ~0ms additional latency
+   primary_reason values: TOXICITY_GUARDRAIL_BLOCK / TOXICITY_GUARDRAIL_SANITIZE
+   Priority: PII (highest) → Toxicity → Detection pipeline
 ✅ detection_failed flag — SYSTEM_ERROR vs NO_THREAT_DETECTED never confused
 ✅ Input limit: 8000 chars + ceil(len/2) > 4000 token heuristic → 422
 ✅ PII guardrail (22+ entity types, input + output)
@@ -434,20 +437,18 @@ primary_reason  = "SYSTEM_ERROR"
 ✅ Policy resolution: system → tenant → department
 ```
 
-### V1.2 — Planned
+### Planned
 
 ```
 → Per-model token counting with tiktoken (replaces heuristic)
 → Application-level policy overrides
-→ Toxicity guardrail layer (independent thresholds)
 → Per-layer latency in debug mode
 → ML model improvement (3000+ samples)
 ```
 
-### V2.0 — Future
+### Future
 
 ```
-→ JWT + SSO (attribution_verified=true)
 → Confidence-driven adaptive thresholds
 → Human review queue for LOW confidence
 → Model retraining pipeline
@@ -457,4 +458,4 @@ primary_reason  = "SYSTEM_ERROR"
 
 > **Secure by default · Explainable by design · Auditable by architecture**
 
-*Version: 1.1 — April 2026*
+*Version: 1.0 — May 2026*

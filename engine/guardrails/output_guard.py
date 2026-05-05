@@ -6,16 +6,9 @@ import logging
 from dataclasses import dataclass, field
 from engine.guardrails.pii.detector import PIIDetector
 from engine.guardrails.pii.redactor import PIIRedactor
+from config.settings import get_settings
 
 logger = logging.getLogger("wrapsec.engine")
-
-# Output PII thresholds.
-# BLOCK is set conservatively high -- only triggered for severe, unambiguous PII
-# patterns in the response (e.g. full SSN + credit card together).
-# SANITIZE is triggered for any detected PII entity.
-# These will become configurable policy settings in V2.
-OUTPUT_BLOCK_THRESHOLD     = 0.95
-OUTPUT_SANITIZE_THRESHOLD  = 0.01   # any PII detected triggers SANITIZE
 
 
 @dataclass
@@ -58,9 +51,9 @@ class OutputGuard:
     In proxy mode, returns a full ALLOW/BLOCK/SANITIZE decision.
     In scan-only mode, existing callers use only was_sanitized and sanitized_text.
 
-    Decision logic:
-      pii_score >= OUTPUT_BLOCK_THRESHOLD    -> BLOCK    (severe PII, response not returned)
-      pii_score >= OUTPUT_SANITIZE_THRESHOLD -> SANITIZE (PII redacted, response returned)
+    Decision logic (thresholds from settings — OUTPUT_BLOCK_THRESHOLD / OUTPUT_SANITIZE_THRESHOLD):
+      pii_score >= output_block_threshold    -> BLOCK    (severe PII, response not returned)
+      pii_score >= output_sanitize_threshold -> SANITIZE (PII redacted, response returned)
       otherwise                              -> ALLOW    (clean, response returned as-is)
 
     Failure behaviour (fail-closed for output):
@@ -87,14 +80,15 @@ class OutputGuard:
             )
 
         try:
+            settings   = get_settings()
             pii_result = self._detector.detect(text)
             pii_score  = pii_result.score if pii_result else 0.0
 
             # BLOCK -- severe PII pattern, response must not reach client
-            if pii_score >= OUTPUT_BLOCK_THRESHOLD:
+            if pii_score >= settings.output_block_threshold:
                 logger.warning(
                     f"OutputGuard BLOCK -- pii_score={pii_score:.3f} "
-                    f"exceeds block threshold={OUTPUT_BLOCK_THRESHOLD}"
+                    f"exceeds block threshold={settings.output_block_threshold}"
                 )
                 return OutputGuardResult(
                     text           = text,
@@ -108,8 +102,8 @@ class OutputGuard:
                     confidence     = pii_score,
                 )
 
-            # No PII detected -- return as-is
-            if not pii_result.triggered:
+            # Below sanitize threshold -- return as-is
+            if pii_score < settings.output_sanitize_threshold:
                 return OutputGuardResult(
                     text           = text,
                     sanitized_text = None,

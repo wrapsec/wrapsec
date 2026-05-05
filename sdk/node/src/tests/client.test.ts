@@ -24,7 +24,7 @@ import {
 import type { ScanResult } from "../types"
 
 const BASE_URL = process.env.WRAPSEC_BASE_URL  || "http://localhost:8000"
-const API_KEY  = process.env.WRAPSEC_TEST_API_KEY || "wrapsec_admin_key"
+const API_KEY  = process.env.WRAPSEC_TEST_API_KEY || "wrapsec_admin_key_wrapsec_admin_key"
 
 // ── Helpers ────────────────────────────────────────────────────────────────
 
@@ -204,8 +204,6 @@ describe("scan()", () => {
     assert.ok(result.decision)
   })
 
-})
-
   it("throws on negative timeout", async () => {
     const client = makeClient()
     await assert.rejects(
@@ -221,6 +219,8 @@ describe("scan()", () => {
       (err: any) => err instanceof WrapSecError && /timeout/.test(err.message),
     )
   })
+
+})
 
 // ── batch() tests ──────────────────────────────────────────────────────────
 

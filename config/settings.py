@@ -19,12 +19,21 @@ class Settings(BaseSettings):
     api_host:        str = "0.0.0.0"
     api_port:        int = 8000
     api_workers:     int = 1
+    # Explicit CORS origins for credential-bearing requests (dashboard).
+    # Empty list disables credentialed CORS entirely.
+    # Never use ["*"] with allow_credentials — browsers reject this.
+    cors_allowed_origins: list[str] = Field(default_factory=list)
 
     # ── Security ──────────────────────────────────────────────
     secret_key:      str = Field(..., min_length=32)
     jwt_algorithm:   str = "HS256"
-    jwt_expiry_mins: int = 60          # legacy — kept for any existing references
-    admin_api_key:   str = Field(...)
+    admin_api_key:   str = Field(..., min_length=32)
+    # Comma-separated list of trusted reverse proxy IPs or CIDRs.
+    # x-forwarded-for is only trusted when the direct connection IP
+    # matches one of these entries. Leave empty (default) to always
+    # use the direct connection IP — safe when not behind a proxy.
+    # Example: TRUSTED_PROXY_IPS=10.0.0.1,172.16.0.0/12
+    trusted_proxy_ips: str = Field(default="")
 
     # ── JWT (dashboard auth) ──────────────────────────────────
     jwt_access_token_expire_minutes: int = 30
@@ -63,28 +72,37 @@ class Settings(BaseSettings):
     audit_retention_days:    int  = 30  # days to keep audit logs in DB
 
     # ── Detection Engine ──────────────────────────────────────
-    default_detection_mode:  str   = "fast"
-    default_execution_mode:  str   = "scan_only"
-    block_threshold:         float = 0.7
-    sanitize_threshold:      float = 0.4
-    llm_trigger_threshold:   float = 0.2
+    default_detection_mode:    str   = "fast"
+    default_execution_mode:    str   = "scan_only"
+    block_threshold:           float = 0.7
+    sanitize_threshold:        float = 0.4
+    llm_trigger_threshold:     float = 0.2
+    # Maximum input size for live keys (trial keys use trial_max_input_chars)
+    max_input_chars:           int   = 8000
+    # Output guardrail PII thresholds
+    output_block_threshold:    float = 0.95
+    output_sanitize_threshold: float = 0.01
 
     # ── LLM Provider ──────────────────────────────────────────
-    llm_provider:    str = Field(default="ollama")  # ollama | openai | groq
-    llm_model:       str = Field(default="llama3.2")
-    llm_base_url:    str = Field(default="http://localhost:11434")
-    openai_api_key:  str = Field(default="")
-    groq_api_key:    str = Field(default="")
-    llm_timeout:     int = 30
+    llm_provider:             str = Field(default="ollama")  # ollama | openai | groq
+    llm_model:                str = Field(default="llama3.2")
+    llm_base_url:             str = Field(default="http://localhost:11434")
+    openai_api_key:           str = Field(default="")
+    groq_api_key:             str = Field(default="")
+    llm_timeout:              int = 30
+    llm_detection_max_tokens: int = 200
 
     # ── Idempotency ───────────────────────────────────────────
     idempotency_window_secs: int = 60
 
     # ── Observability ─────────────────────────────────────────
-    log_level:               str  = "INFO"
-    log_format:              str  = "json"
-    prometheus_enabled:      bool = True
-    prometheus_port:         int  = 9090
+    log_level:               str       = "INFO"
+    log_format:              str       = "json"
+    prometheus_enabled:      bool      = True
+    prometheus_port:         int       = 9090
+    # Bearer token for /metrics endpoint. If unset, falls back to admin_api_key.
+    # Set METRICS_TOKEN in .env to use a dedicated scraping credential.
+    metrics_token:           str | None = Field(default=None)
 
     # ── Background retention worker ───────────────────────────────────────────
     # APScheduler runs cleanup daily at the configured time (UTC)
@@ -111,6 +129,7 @@ class Settings(BaseSettings):
         env_file         = ".env"
         env_file_encoding = "utf-8"
         case_sensitive   = False
+        extra            = "ignore"
 
     def validate_thresholds(self) -> None:
         if self.block_threshold <= self.sanitize_threshold:
