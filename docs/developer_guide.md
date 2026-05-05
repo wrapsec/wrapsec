@@ -1,7 +1,7 @@
 # WrapSec Developer Guide
 
 *For engineers maintaining or extending the WrapSec codebase.*
-*Last updated: April 2026*
+*Last updated: May 2026*
 
 ---
 
@@ -13,6 +13,7 @@ api/                    FastAPI application
     endpoints/          Route handlers
       admin/            User management (users.py)
       auth.py           JWT auth endpoints
+      setup.py          First-run setup endpoints (public, self-disables)
       ai.py             Scan-only gateway
       proxy.py          Proxy mode
       audit.py          Audit log endpoints
@@ -657,8 +658,11 @@ These rules must be followed in all new code. Violation creates real production 
 | `SECRET_KEY` | — | HMAC secret for JWT signing — must be changed before production |
 | `ACCESS_TOKEN_EXPIRE_MINUTES` | `30` | JWT access token lifetime |
 | `REFRESH_TOKEN_EXPIRE_DAYS` | `30` | Refresh token lifetime |
+| `ADMIN_API_KEY` | — | Master admin API key — used for CLI access and `/metrics` fallback auth |
+| `ADMIN_EMAIL` | *(unset)* | Optional — if set alongside `ADMIN_PASSWORD`, bootstrap creates first admin on startup. Leave unset to use the dashboard `/setup` page instead |
+| `ADMIN_PASSWORD` | *(unset)* | Optional — see `ADMIN_EMAIL`. Must meet password strength requirements if set |
 | `TRUSTED_PROXY_IPS` | `""` | Comma-separated IPs trusted to set `X-Forwarded-For` (e.g. `127.0.0.1,10.0.0.1`) |
-| `METRICS_TOKEN` | `""` | If set, `GET /metrics` requires `Authorization: Bearer <token>` |
+| `METRICS_TOKEN` | `""` | If set, `GET /metrics` requires `Authorization: Bearer <token>`. Falls back to `ADMIN_API_KEY` if unset |
 | `DATA_STORAGE_MODE` | `masked` | `full` / `masked` / `none` — controls proxy text persistence |
 | `DATA_RETENTION_DAYS` | `30` | Audit log retention in days (min 7, max 3650) |
 | `DATA_RETENTION_DAYS_PROXY` | `7` | Proxy interaction text retention in days |
@@ -667,6 +671,17 @@ These rules must be followed in all new code. Violation creates real production 
 | `RETENTION_WORKER_MINUTE` | `0` | UTC minute for daily cleanup |
 | `LOCKOUT_MAX_ATTEMPTS` | `5` | Failed login attempts before lockout |
 | `LOCKOUT_DURATION_SECONDS` | `900` | Lockout duration (15 min) |
+
+**Load test env vars** — required when running `tests/load/` scripts:
+
+| Variable | Description |
+|---|---|
+| `WRAPSEC_ADMIN_KEY` | Admin API key for load test setup calls |
+| `WRAPSEC_PURCHASE_KEY` | Live API key for purchase department tests |
+| `WRAPSEC_FINANCE_KEY` | Live API key for finance department tests |
+| `WRAPSEC_TRIAL_KEY` | Trial API key for trial-tier tests |
+| `WRAPSEC_PURCHASE_DEPT_ID` | UUID of purchase department in test instance |
+| `WRAPSEC_FINANCE_DEPT_ID` | UUID of finance department in test instance |
 
 ---
 

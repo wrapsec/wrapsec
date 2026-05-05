@@ -195,6 +195,43 @@ Security and proxy errors additionally include a `wrapsec` key:
 
 ---
 
+## Setup Endpoints
+
+### GET /v1/setup/status
+
+Returns whether the system has been initialized. Used by the dashboard to determine whether to redirect to `/setup` on first visit. Redis-cached after initialization — no DB load on subsequent calls.
+
+**Auth:** Public.
+
+**Response:**
+```json
+{"initialized": true}
+```
+
+---
+
+### POST /v1/setup
+
+Creates the first admin user. Only succeeds when no users exist. Returns `404` once initialized — permanently self-disabled after first use.
+
+**Auth:** Public.
+
+**Request:**
+```json
+{"email": "admin@example.com", "password": "YourPassword1!"}
+```
+
+**Response `201`:**
+```json
+{"message": "Setup complete. You can now sign in."}
+```
+
+**Response `404`:** System already initialized.
+
+**Response `422`:** Validation error — weak password or invalid email.
+
+---
+
 ## Auth Endpoints
 
 ### POST /v1/auth/login
@@ -1651,6 +1688,17 @@ SYSTEM_ERROR = detectors failed (exception, timeout, internal error)
 ---
 
 ## Changelog
+
+### V1.6 (May 2026) — First-run Setup + Hardening
+
+- `GET /v1/setup/status` — initialization check, Redis-cached after first use
+- `POST /v1/setup` — creates first admin user on fresh install, permanently self-disables after use
+- `ADMIN_EMAIL` / `ADMIN_PASSWORD` are now optional — setup page is the primary first-run flow
+- `/metrics` endpoint now requires `Authorization: Bearer <token>` (METRICS_TOKEN or ADMIN_API_KEY)
+- CORS `allow_credentials` only enabled when `CORS_ALLOWED_ORIGINS` is explicitly configured
+- All hardcoded detection thresholds moved to `config/settings.py` (configurable via env vars)
+
+---
 
 ### V1.5 (May 2026) — Session Hardening + Auth Observability
 

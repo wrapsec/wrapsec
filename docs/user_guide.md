@@ -17,11 +17,13 @@ You interact with WrapSec through this dashboard. Your applications interact wit
 
 Open the dashboard at `http://your-host:3000`.
 
+**First-time setup:** On a fresh installation with no users, the dashboard redirects to `/setup` automatically. Enter your email and password to create the first admin account. The setup page is permanently disabled after this — it cannot be accessed again once any user exists.
+
 On the login page you have two options:
 
-**Email / Password** — for dashboard users. Enter your email and password. On first login you will be required to change your password before accessing anything else.
+**Email / Password** — the primary login method for all dashboard users. Enter your email and password. If your account was created by an admin, you will be required to change your password on first login before accessing anything else.
 
-**API Key** — for initial setup only, using the hardcoded admin key. This gives read-only access to settings, audit logs, and scan endpoints. **API key sessions cannot modify settings, manage users, manage keys, or change any configuration** — all write operations require an ADMIN account login via Email / Password. Once user accounts are set up, use Email / Password for day-to-day access.
+**API Key** — gives read-only access to settings, audit logs, and scan endpoints. **API key sessions cannot modify settings, manage users, manage keys, or change any configuration** — all write operations require an ADMIN account login via Email / Password.
 
 If your account has been locked after too many failed attempts, wait 15 minutes and try again.
 

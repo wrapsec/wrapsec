@@ -695,7 +695,9 @@ Total: 53 endpoints
 ✅ TRUSTED_PROXY_IPS — configurable trusted reverse proxy IPs for X-Forwarded-For
 ✅ METRICS_TOKEN — optional bearer token authentication for GET /metrics
 ✅ Admin user management endpoints — CRUD + toggle-active, ADMIN role required
-✅ Node.js SDK — full parity with Python SDK, Express/Fastify middleware included
+✅ Node.js SDK v1.0.0 — full parity with Python SDK, Express/Fastify middleware included
+✅ Python SDK v1.0.0 — typed client, async client, CLI (`wrapsec scan`, `wrapsec doctor`)
+✅ First-run setup page — `/setup` creates first admin on fresh install, self-disables after use
 ✅ 53 API endpoints
 ✅ Next.js dashboard
 ```
@@ -708,8 +710,6 @@ Total: 53 endpoints
 → API key rotation with grace period
 → Cursor-based pagination
 → Per-key storage mode override
-→ Demo safety restrictions (rate limit, input size cap, proxy disable)
-→ DigitalOcean deployment (domain ready, plan: Groq instead of Ollama)
 ```
 
 ### Future
