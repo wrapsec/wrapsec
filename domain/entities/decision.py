@@ -11,17 +11,19 @@ from domain.value_objects.trace_id import TraceId
 
 @dataclass
 class LayerScores:
-    rule_score: float = 0.0
-    ml_score:   float = 0.0
-    llm_score:  float = 0.0
-    pii_score:  float = 0.0
+    rule_score:     float = 0.0
+    ml_score:       float = 0.0
+    llm_score:      float = 0.0
+    pii_score:      float = 0.0
+    toxicity_score: float = 0.0
 
     def as_dict(self) -> dict:
         return {
-            "rule_score": self.rule_score,
-            "ml_score":   self.ml_score,
-            "llm_score":  self.llm_score,
-            "pii_score":  self.pii_score,
+            "rule_score":     self.rule_score,
+            "ml_score":       self.ml_score,
+            "llm_score":      self.llm_score,
+            "pii_score":      self.pii_score,
+            "toxicity_score": self.toxicity_score,
         }
 
 

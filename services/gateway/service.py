@@ -227,10 +227,11 @@ class GatewayService:
             latency_ms = (time.perf_counter() - start) * 1000
 
             layer_scores = LayerScores(
-                rule_score = scoring.rule_score,
-                ml_score   = scoring.ml_score,
-                llm_score  = scoring.llm_score,
-                pii_score  = scoring.pii_score,
+                rule_score     = scoring.rule_score,
+                ml_score       = scoring.ml_score,
+                llm_score      = scoring.llm_score,
+                pii_score      = scoring.pii_score,
+                toxicity_score = scoring.toxicity_score,
             )
 
             # Compute primary reason

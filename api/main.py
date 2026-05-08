@@ -26,6 +26,35 @@ from api.v1.middleware.idempotency import IdempotencyMiddleware
 setup_logging()
 
 
+async def seed_default_tenant() -> None:
+    """
+    Ensures a default tenant exists. Required for fresh Docker deployments
+    before the /setup page or bootstrap_admin can create users.
+    Idempotent — skips silently if the tenant already exists.
+    """
+    import logging
+    logger = logging.getLogger("wrapsec.seed")
+    try:
+        from db.session import AsyncSessionFactory
+        from db.repositories.tenant import TenantRepository
+        from db.models import TenantModel
+        async with AsyncSessionFactory() as db:
+            repo   = TenantRepository(db)
+            tenant = await repo.get_default()
+            if not tenant:
+                db.add(TenantModel(
+                    slug          = "default",
+                    name          = "Default",
+                    description   = "Default tenant",
+                    global_policy = {},
+                    is_active     = True,
+                ))
+                await db.commit()
+                logger.info("seed default tenant created")
+    except Exception as e:
+        logger.error("seed default tenant failed: %s", e)
+
+
 async def bootstrap_admin() -> None:
     """
     Creates the first admin user if ADMIN_EMAIL and ADMIN_PASSWORD are set in
@@ -101,6 +130,7 @@ async def lifespan(app: FastAPI):
         await create_tables()
         redis_ok = await ping()
         await start_scheduler()
+        await seed_default_tenant()      # ensure default tenant exists (fresh deploy)
         await bootstrap_admin()          # create first admin if users table is empty
         print(f"Starting {_settings.app_name} v{_settings.app_version}")
         print(f"Environment: {_settings.environment}")

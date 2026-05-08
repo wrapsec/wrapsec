@@ -15,7 +15,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from starlette.responses import StreamingResponse
 from api.v1.dependencies.db import get_db
 from db.repositories.audit import AuditRepository
-from db.models import AuditLogModel
+from db.models import AuditLogModel, DepartmentModel, ApplicationModel, ProxyInteractionModel
 
 router = APIRouter()
 
@@ -29,12 +29,21 @@ def _parse_dt(value: str | None) -> datetime | None:
         return None
 
 
-def _format_item(item) -> dict:
+def _format_item(
+    item,
+    dept_names:  dict,
+    app_names:   dict,
+    proxy_map:   dict,
+) -> dict:
+    proxy = proxy_map.get(str(item.proxy_interaction_id)) if item.proxy_interaction_id else None
     return {
         "trace_id":              item.trace_id,
         "timestamp":             item.created_at.isoformat(),
         "tenant_id":             item.tenant_id,
         "decision":              item.decision,
+        "output_decision":       proxy.output_decision if proxy else None,
+        "provider":              proxy.provider        if proxy else None,
+        "model":                 proxy.model           if proxy else None,
         "primary_reason":        item.primary_reason,
         "risk_score":            item.risk_score,
         "confidence":            item.confidence,
@@ -46,7 +55,9 @@ def _format_item(item) -> dict:
         "latency_ms":            item.latency_ms,
         "key_id":                item.key_id,
         "dept_id":               item.dept_id,
+        "dept_name":             dept_names.get(item.dept_id),
         "app_id":                item.app_id,
+        "app_name":              app_names.get(item.app_id),
         "user_id":               item.user_id,
         "source":                item.source,
         "ip_address":            item.ip_address,
@@ -59,6 +70,55 @@ def _format_item(item) -> dict:
             primary_reason = item.primary_reason,
         ),
     }
+
+
+async def _enrich(
+    db:    AsyncSession,
+    items: list,
+) -> tuple[dict, dict, dict]:
+    """
+    Batch-resolve dept names, app names, and proxy interaction data
+    for a paginated result set. Three PK-indexed lookups on small ID sets.
+    IDs come from already tenant-scoped audit rows — no cross-tenant leakage.
+    """
+    from sqlalchemy import cast, String
+
+    dept_ids  = list({i.dept_id  for i in items if i.dept_id})
+    app_ids   = list({i.app_id   for i in items if i.app_id})
+    proxy_ids = list({str(i.proxy_interaction_id) for i in items if i.proxy_interaction_id})
+
+    dept_names: dict[str, str] = {}
+    app_names:  dict[str, str] = {}
+    proxy_map:  dict           = {}
+
+    if dept_ids:
+        rows = (await db.execute(
+            select(DepartmentModel.id, DepartmentModel.name).where(
+                cast(DepartmentModel.id, String).in_(dept_ids)
+            )
+        )).fetchall()
+        dept_names = {str(r.id): r.name for r in rows}
+
+    if app_ids:
+        rows = (await db.execute(
+            select(ApplicationModel.id, ApplicationModel.name).where(
+                cast(ApplicationModel.id, String).in_(app_ids)
+            )
+        )).fetchall()
+        app_names = {str(r.id): r.name for r in rows}
+
+    if proxy_ids:
+        rows = (await db.execute(
+            select(
+                ProxyInteractionModel.id,
+                ProxyInteractionModel.output_decision,
+                ProxyInteractionModel.provider,
+                ProxyInteractionModel.model,
+            ).where(cast(ProxyInteractionModel.id, String).in_(proxy_ids))
+        )).fetchall()
+        proxy_map = {str(r.id): r for r in rows}
+
+    return dept_names, app_names, proxy_map
 
 
 @router.get("/logs")
@@ -119,9 +179,11 @@ async def get_audit_logs(
         offset          = offset,
     )
 
+    dept_names, app_names, proxy_map = await _enrich(db, items)
+
     return JSONResponse(content={
         "total": total,
-        "items": [_format_item(i) for i in items],
+        "items": [_format_item(i, dept_names, app_names, proxy_map) for i in items],
     })
 
 

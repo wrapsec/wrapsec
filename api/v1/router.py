@@ -6,7 +6,7 @@ from fastapi import APIRouter
 from api.v1.endpoints import (
     health, ai, audit, settings, keys,
     departments, applications, tenant,
-    proxy_settings, proxy, proxy_interactions,
+    proxy_settings, proxy,
     auth, setup,
 )
 from api.v1.endpoints.admin import users
@@ -23,7 +23,6 @@ router.include_router(departments.router,         prefix="/v1/admin/departments"
 router.include_router(applications.router,        prefix="/v1/admin/applications", tags=["Applications"])
 router.include_router(proxy_settings.router,      prefix="/v1/settings",           tags=["Proxy"])
 router.include_router(proxy.router,               prefix="/v1",                    tags=["Proxy"])
-router.include_router(proxy_interactions.router,  prefix="/v1/proxy",              tags=["Proxy"])
 
 # ── JWT Auth ───────────────────────────────────────────────────────────────────
 router.include_router(auth.router,                prefix="/v1/auth",               tags=["Auth"])

@@ -2,9 +2,9 @@
 # Copyright (c) 2026 WrapSec. All rights reserved.
 # WrapSec v1.0 | AI Security Gateway - https://wrapsec.com
 
-import json
 from datetime import datetime
-from sqlalchemy import select, func, text, case
+from sqlalchemy import select, func, case, cast
+from sqlalchemy.dialects.postgresql import JSONB
 from sqlalchemy.ext.asyncio import AsyncSession
 from db.models import AuditLogModel
 from db.repositories.base import BaseRepository
@@ -86,9 +86,8 @@ class AuditRepository(BaseRepository):
         if decision:
             query = query.where(AuditLogModel.decision == decision.upper())
         if threat_category:
-            val = json.dumps([threat_category.upper()])
             query = query.where(
-                text("threats::jsonb @> :val::jsonb").bindparams(val=val)
+                cast(AuditLogModel.threats, JSONB).contains([threat_category.upper()])
             )
         if from_dt:
             query = query.where(AuditLogModel.created_at >= from_dt)

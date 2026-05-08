@@ -243,6 +243,8 @@ async def ai_request(
         guardrail_scores = {
             "pii": result.decision.layer_scores.pii_score,
         }
+        if result.decision.layer_scores.toxicity_score > 0.0:
+            guardrail_scores["toxicity"] = result.decision.layer_scores.toxicity_score
 
     source = (
         (body.metadata.source if body.metadata and body.metadata.source else None)
