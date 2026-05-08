@@ -1,4 +1,4 @@
-.PHONY: run test build up down migrate seed lint format
+.PHONY: run test build up down seed lint format
 
 run:
 	uvicorn api.main:app --reload --host 0.0.0.0 --port 8000
@@ -23,12 +23,6 @@ up-dev:
 
 logs:
 	docker compose -f infrastructure/docker/docker-compose.yml logs -f
-
-migrate:
-	alembic upgrade head
-
-rollback:
-	alembic downgrade -1
 
 seed:
 	python scripts/seed_data.py

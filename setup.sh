@@ -61,9 +61,13 @@ until $COMPOSE exec -T postgres pg_isready -U wrapsec -q 2>/dev/null; do
     sleep 1
 done
 
-# ── Migrations ────────────────────────────────────────────────────────────────
-info "Running database migrations..."
-PYTHONPATH=$(pwd) "$VENV/bin/alembic" upgrade head
+# ── Create tables ─────────────────────────────────────────────────────────────
+info "Creating database tables..."
+PYTHONPATH=$(pwd) "$PY" - <<'EOF'
+import asyncio
+from db.session import create_tables
+asyncio.run(create_tables())
+EOF
 
 # ── Done ──────────────────────────────────────────────────────────────────────
 echo ""
