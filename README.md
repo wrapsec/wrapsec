@@ -2,6 +2,15 @@
   <img src="https://raw.githubusercontent.com/wrapsec/wrapsec/main/dashboard/public/wrapsec-logo.svg" alt="WrapSec" width="120" />
 </p>
 
+<p align="center">
+  <img src="https://img.shields.io/badge/version-1.0.0-7B2BF9" alt="version" />
+  <img src="https://img.shields.io/badge/license-MIT-CD00FF" alt="license" />
+  <img src="https://img.shields.io/badge/python-3.10%2B-00E1FF" alt="python" />
+  <img src="https://img.shields.io/badge/node-18%2B-00B1FF" alt="node" />
+  <img src="https://img.shields.io/badge/PyPI-wrapsec--python-7B2BF9" alt="pypi" />
+  <img src="https://img.shields.io/badge/npm-wrapsec--node-CD00FF" alt="npm" />
+</p>
+
 # WrapSec
 
 WrapSec is a production-grade AI security gateway and enforcement layer that protects applications interacting with LLMs.
