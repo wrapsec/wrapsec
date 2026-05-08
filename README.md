@@ -1,3 +1,7 @@
+<p align="center">
+  <img src="https://raw.githubusercontent.com/wrapsec/wrapsec/main/dashboard/public/wrapsec-logo.svg" alt="WrapSec" width="120" />
+</p>
+
 # WrapSec
 
 WrapSec is a production-grade AI security gateway and enforcement layer that protects applications interacting with LLMs.
