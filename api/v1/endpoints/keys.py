@@ -28,7 +28,7 @@ def _hash_key(api_key: str) -> str:
 
 
 def generate_api_key(key_type: str = "live") -> str:
-    prefix = "wwsk_trial_" if key_type == "trial" else "wwsk_live_"
+    prefix = "wsk_trial_" if key_type == "trial" else "wsk_live_"
     return prefix + secrets.token_urlsafe(32)
 
 

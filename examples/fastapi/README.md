@@ -40,7 +40,7 @@ or when you need the full scan result in your business logic.
 ```bash
 pip install -e ./sdk/python fastapi uvicorn
 
-export WRAPSEC_API_KEY=wwsk_live_...
+export WRAPSEC_API_KEY=wsk_live_...
 export WRAPSEC_BASE_URL=http://localhost:8000   # always set in production
 ```
 

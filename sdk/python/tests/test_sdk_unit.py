@@ -69,7 +69,7 @@ SANITIZE_RESPONSE = {
 
 
 def make_client() -> Client:
-    return Client(api_key="wwsk_live_testkey1234567890123456789012", base_url="http://localhost:8000")
+    return Client(api_key="wsk_live_testkey1234567890123456789012", base_url="http://localhost:8000")
 
 
 # ── Client constructor ───────────────────────────────────────────────────────
@@ -82,11 +82,11 @@ class TestClientConstructor:
 
     def test_raises_on_timeout_zero(self):
         with pytest.raises(ValueError, match="timeout"):
-            Client(api_key="wwsk_live_test1234567890123456789012", timeout=0)
+            Client(api_key="wsk_live_test1234567890123456789012", timeout=0)
 
     def test_raises_on_negative_timeout(self):
         with pytest.raises(ValueError, match="timeout"):
-            Client(api_key="wwsk_live_test1234567890123456789012", timeout=-1)
+            Client(api_key="wsk_live_test1234567890123456789012", timeout=-1)
 
     def test_raises_auth_error_when_no_api_key(self):
         # Construct client with no api_key and no env var
@@ -288,24 +288,24 @@ class TestValidation:
 class TestConfigSchema:
 
     def test_valid_api_key_accepted(self):
-        val = validate_config_value("api_key", "wwsk_live_" + "x" * 28)
-        assert val == "wwsk_live_" + "x" * 28
+        val = validate_config_value("api_key", "wsk_live_" + "x" * 28)
+        assert val == "wsk_live_" + "x" * 28
 
     def test_trial_key_accepted(self):
-        val = validate_config_value("api_key", "wwsk_trial_" + "x" * 27)
-        assert val == "wwsk_trial_" + "x" * 27
+        val = validate_config_value("api_key", "wsk_trial_" + "x" * 27)
+        assert val == "wsk_trial_" + "x" * 27
 
     def test_admin_key_accepted(self):
         val = validate_config_value("api_key", "wrapsec_admin_key_long_enough_xx")
         assert "wrapsec_" in str(val)
 
     def test_bad_prefix_raises(self):
-        with pytest.raises(ValueError, match="wwsk_live_"):
+        with pytest.raises(ValueError, match="wsk_live_"):
             validate_config_value("api_key", "sk_test_something")
 
     def test_too_short_raises(self):
         with pytest.raises(ValueError, match="short"):
-            validate_config_value("api_key", "wwsk_live_short")
+            validate_config_value("api_key", "wsk_live_short")
 
     def test_valid_base_url(self):
         val = validate_config_value("base_url", "https://wrapsec.internal:8000")
@@ -347,13 +347,13 @@ class TestMaskApiKey:
         assert mask_api_key("short") == "****"
 
     def test_normal_key_partially_masked(self):
-        result = mask_api_key("wwsk_live_abcdefghij1234")
+        result = mask_api_key("wsk_live_abcdefghij1234")
         assert result.startswith("sk_liv")
         assert "****" in result
         assert result.endswith("1234")
 
     def test_raw_key_not_in_output(self):
-        key = "wwsk_live_secretsecretkey9999"
+        key = "wsk_live_secretsecretkey9999"
         result = mask_api_key(key)
         assert "secretsecret" not in result
 
@@ -459,7 +459,7 @@ class TestHealthLiveTimeout:
 # ── SDK-32: AsyncClient tests ─────────────────────────────────────────────────
 
 def make_async_client() -> AsyncClient:
-    return AsyncClient(api_key="wwsk_live_testkey1234567890123456789012", base_url="http://localhost:8000")
+    return AsyncClient(api_key="wsk_live_testkey1234567890123456789012", base_url="http://localhost:8000")
 
 
 class TestAsyncClient:
@@ -470,11 +470,11 @@ class TestAsyncClient:
 
     def test_raises_on_timeout_zero(self):
         with pytest.raises(ValueError, match="timeout"):
-            AsyncClient(api_key="wwsk_live_test1234567890123456789012", timeout=0)
+            AsyncClient(api_key="wsk_live_test1234567890123456789012", timeout=0)
 
     def test_raises_on_negative_timeout(self):
         with pytest.raises(ValueError, match="timeout"):
-            AsyncClient(api_key="wwsk_live_test1234567890123456789012", timeout=-1)
+            AsyncClient(api_key="wsk_live_test1234567890123456789012", timeout=-1)
 
     def test_scan_allow(self):
         client = make_async_client()
@@ -528,6 +528,6 @@ class TestAsyncClient:
 
     def test_context_manager(self):
         async def _test():
-            async with AsyncClient(api_key="wwsk_live_testkey1234567890123456789012") as c:
+            async with AsyncClient(api_key="wsk_live_testkey1234567890123456789012") as c:
                 assert c is not None
         asyncio.run(_test())

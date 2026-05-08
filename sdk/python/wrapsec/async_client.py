@@ -47,7 +47,7 @@ class AsyncClient:
     Usage:
         import wrapsec
 
-        async with wrapsec.AsyncClient(api_key="wwsk_live_...") as client:
+        async with wrapsec.AsyncClient(api_key="wsk_live_...") as client:
             result = await client.scan("user input here")
             print(result.decision)
 

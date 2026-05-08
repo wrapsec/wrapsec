@@ -23,9 +23,9 @@ Used by applications and services. Three key types:
 
 **Admin key** — full access. All endpoints. No dept scoping.
 
-**Standard key** (`wwsk_live_...`) — scoped to the department/application the key belongs to. `tenant_id` is always derived from the key — never from request body.
+**Standard key** (`wsk_live_...`) — scoped to the department/application the key belongs to. `tenant_id` is always derived from the key — never from request body.
 
-**Trial key** (`wwsk_trial_...`) — restricted for demos.
+**Trial key** (`wsk_trial_...`) — restricted for demos.
 - Input cap: 500 characters
 - Rate limit: 10 req/min (enforced at endpoint level)
 - Proxy mode: disabled — returns `403 trial_proxy_disabled`
@@ -631,7 +631,7 @@ Retrieve a stored request by trace ID. For proxy requests, joins `proxy_interact
     "app_name":            "Code Assistant",
     "source":              "code-assistant",
     "user_id":             "user_123",
-    "key_id":              "key:wwsk_live_eng_...",
+    "key_id":              "key:wsk_live_eng_...",
     "ip_address":          "10.0.0.1",
     "user_agent":          "Mozilla/5.0...",
     "attribution_verified": false
@@ -697,7 +697,7 @@ client = OpenAI(api_key="sk-openai-...", base_url="https://api.openai.com/v1")
 response = client.chat.completions.create(model="gpt-4o", messages=[...])
 
 # After — point at WrapSec
-client = OpenAI(api_key="wwsk_live_...", base_url="http://localhost:8000/v1")
+client = OpenAI(api_key="wsk_live_...", base_url="http://localhost:8000/v1")
 response = client.chat.completions.create(model="openai/gpt-4o", messages=[...])
 ```
 
@@ -1273,7 +1273,7 @@ Provide `app_id` for app-scoped keys (dept and tenant derived from app). Provide
 {
   "key_id":    "key_abc123",
   "name":      "Production Key",
-  "api_key":   "wwsk_live_XXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX",
+  "api_key":   "wsk_live_XXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX",
   "key_type":  "live",
   "app_id":    null,
   "dept_id":   "4111d663-...",
@@ -1367,7 +1367,7 @@ Generates a new key secret while preserving all metadata. The old key remains va
 ```json
 {
   "new_key_id":           "key_def456",
-  "new_api_key":          "wwsk_live_YYYYYYYYYYYYYYYYYYYYYYY",
+  "new_api_key":          "wsk_live_YYYYYYYYYYYYYYYYYYYYYYY",
   "old_key_id":           "key_abc123",
   "old_expires_at":       "2026-04-25T11:00:00",
   "grace_period_minutes": 60,
@@ -1812,7 +1812,7 @@ Note: `account_inactive` is the `auth_events.failure_reason` value when `is_acti
 
 - Dept scoping on all audit endpoints and `GET /v1/ai/requests/{trace_id}`
 - `severity` field in `audit_logs` — CRITICAL / HIGH / MEDIUM / LOW
-- Trial keys (`wwsk_trial_...`) — 500 char input cap, 10 req/min, proxy disabled
+- Trial keys (`wsk_trial_...`) — 500 char input cap, 10 req/min, proxy disabled
 - `POST /v1/keys/{key_id}/rotate` — grace period key rotation
 - `GET/PUT /v1/settings/rate_limit` — DB-backed live key rate limit
 - Application-level policy overrides wired into resolution chain

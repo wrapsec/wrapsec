@@ -73,7 +73,7 @@ Proxy interaction text is stored according to `DATA_STORAGE_MODE`: `full` (store
 
 ```
 Calling Application
-        │  x-api-key: wwsk_live_...
+        │  x-api-key: wsk_live_...
         │  POST /v1/ai/request
         ▼
 WrapSec API (FastAPI, port 8000)
@@ -102,7 +102,7 @@ WrapSec API (FastAPI, port 8000)
 
 ```
 Calling Application
-        │  x-api-key: wwsk_live_...
+        │  x-api-key: wsk_live_...
         │  POST /v1/chat/completions
         │  model: "openai/gpt-4o" | "ollama/gemma3:4b"
         ▼
@@ -224,17 +224,17 @@ tenant (root)
 │     │     policy_override:
 │     │       thresholds.block           = 0.5   (detection only)
 │     │       guardrails.pii.block       = 0.6   (PII — independent)
-│     │     → Finance Bot:  wwsk_live_fin_...
-│     │     → ERP System:   wwsk_live_erp_...
+│     │     → Finance Bot:  wsk_live_fin_...
+│     │     → ERP System:   wsk_live_erp_...
 │     ├── HR
 │     │     policy_override:
 │     │       thresholds.block           = 0.5
 │     │       detection.llm_enabled      = false
-│     │     → HR System:    wwsk_live_hr_...
+│     │     → HR System:    wsk_live_hr_...
 │     └── Engineering
 │           policy_override:
 │             thresholds.block           = 0.75
-│           → Code Assistant: wwsk_live_eng_...
+│           → Code Assistant: wsk_live_eng_...
 ```
 
 ---
@@ -542,7 +542,7 @@ All metric labels are validated against allowlists (`_safe()`) before use — no
 3. Auth middleware
    SHA-256(api_key) → look up api_keys by hash → validate not revoked
    Load key.app_id, key.dept_id, key.tenant_id, key.key_type
-   Accepted prefixes: wwsk_live_ (standard), wwsk_trial_ (restricted), admin key
+   Accepted prefixes: wsk_live_ (standard), wsk_trial_ (restricted), admin key
    Sets request.state.key_type — used by endpoints for trial restrictions
 
 4. Entity validation
@@ -732,7 +732,7 @@ Total: 53 endpoints
 
 | Auth method | Status | Notes |
 |---|---|---|
-| `x-api-key: wwsk_live_...` | ✅ Active | Standard key — scoped to dept/app |
+| `x-api-key: wsk_live_...` | ✅ Active | Standard key — scoped to dept/app |
 | `x-api-key: <admin_key>` | ✅ Active | Admin key — full access, no dept scope |
 | `Authorization: Bearer <jwt>` | ✅ Active | Dashboard users — HS256, 30 min access tokens |
 

@@ -53,7 +53,7 @@ class Client:
     Usage:
         import wrapsec
 
-        client = wrapsec.Client(api_key="wwsk_live_...")
+        client = wrapsec.Client(api_key="wsk_live_...")
         result = client.scan("user input here")
         print(result.decision)   # "ALLOW" | "BLOCK" | "SANITIZE"
 
@@ -72,7 +72,7 @@ class Client:
         """
         Initialise the client.
 
-        api_key:  WrapSec API key (wwsk_live_...).
+        api_key:  WrapSec API key (wsk_live_...).
                   Falls back to WRAPSEC_API_KEY env var or config file.
         base_url: WrapSec API base URL.
                   Defaults to http://localhost:8000 (development only).

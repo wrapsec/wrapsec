@@ -70,7 +70,7 @@ tenant
     ├── policy_override  (independent thresholds per dept)
     └── applications
         ├── policy_override
-        └── api_keys     (wwsk_live_ | wwsk_trial_)
+        └── api_keys     (wsk_live_ | wsk_trial_)
 ```
 
 Policy resolution: system defaults → DB settings → department override → application override. Each layer deep-merges - null fields inherit from the layer above.
@@ -100,7 +100,7 @@ Full API reference: `docs/api.md`
 ```bash
 pip install -e sdk/python/
 
-wrapsec config set api_key wwsk_live_...
+wrapsec config set api_key wsk_live_...
 wrapsec config set base_url http://your-wrapsec-host:8000
 
 wrapsec scan "user input"
@@ -163,7 +163,7 @@ WrapSec is an OpenAI-compatible drop-in for proxy mode:
 from openai import OpenAI
 
 client = OpenAI(
-    api_key  = "wwsk_live_your_wrapsec_key",
+    api_key  = "wsk_live_your_wrapsec_key",
     base_url = "http://your-wrapsec-host:8000/v1",
 )
 

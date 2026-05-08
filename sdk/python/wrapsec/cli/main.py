@@ -56,7 +56,7 @@ def cli(ctx: click.Context) -> None:
 
     \b
     Quick start:
-      wrapsec config set api_key wwsk_live_...
+      wrapsec config set api_key wsk_live_...
       wrapsec scan "hello world"
       wrapsec doctor
     """

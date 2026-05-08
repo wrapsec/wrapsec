@@ -260,7 +260,7 @@ class AuthMiddleware(BaseHTTPMiddleware):
         if hmac.compare_digest(api_key, get_settings().admin_api_key or ""):
             return await self._authenticate_admin_key(request, call_next)
 
-        if api_key.startswith("wwsk_live_") or api_key.startswith("wwsk_trial_"):
+        if api_key.startswith("wsk_live_") or api_key.startswith("wsk_trial_"):
             key_record = await self._get_standard_key(api_key)
             if key_record:
                 request.state.principal_type = "api_key"

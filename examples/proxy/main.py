@@ -16,7 +16,7 @@ The only changes from a standard OpenAI SDK integration:
 Setup:
   pip install -e ./sdk/python openai fastapi uvicorn httpx
 
-  export WRAPSEC_API_KEY=wwsk_live_...
+  export WRAPSEC_API_KEY=wsk_live_...
   export WRAPSEC_BASE_URL=http://localhost:8000
   export LLM_MODEL=openai/gpt-4o-mini   # must match configured provider
 """
@@ -38,7 +38,7 @@ WRAPSEC_BASE_URL = os.environ.get("WRAPSEC_BASE_URL", "http://localhost:8000")
 LLM_MODEL        = os.environ.get("LLM_MODEL", "openai/gpt-4o-mini")
 
 if not WRAPSEC_API_KEY:
-    raise RuntimeError("WRAPSEC_API_KEY not set. Set it with: export WRAPSEC_API_KEY=wwsk_live_...")
+    raise RuntimeError("WRAPSEC_API_KEY not set. Set it with: export WRAPSEC_API_KEY=wsk_live_...")
 
 # Point the OpenAI client at WrapSec — only change from standard integration
 client = OpenAI(

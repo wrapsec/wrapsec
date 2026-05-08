@@ -35,7 +35,7 @@ def config() -> None:
 
     \b
     Allowed keys:
-      api_key   Your WrapSec API key (must start with wwsk_live_)
+      api_key   Your WrapSec API key (must start with wsk_live_)
       base_url  WrapSec API base URL (default: http://localhost:8000)
       timeout   Request timeout in seconds, min 1 (default: 30)
 
@@ -61,7 +61,7 @@ def config_set(key: str, value: str) -> None:
 
     \b
     Examples:
-      wrapsec config set api_key wwsk_live_abc123
+      wrapsec config set api_key wsk_live_abc123
       wrapsec config set base_url http://localhost:8000
       wrapsec config set timeout 60
     """
@@ -104,7 +104,7 @@ def config_get() -> None:
     if not cfg.api_key:
         click.echo("")
         click.echo("No API key set. Run:")
-        click.echo("  wrapsec config set api_key wwsk_live_...")
+        click.echo("  wrapsec config set api_key wsk_live_...")
 
 
 @config.command("clear")

@@ -31,11 +31,11 @@ DEFAULTS: dict[str, object] = {
 TIMEOUT_MIN = 1
 
 # Fix #3 — API key minimum length.
-# "wwsk_live_" is 8 chars. A real key must have at least 20 additional chars
+# "wsk_live_" is 8 chars. A real key must have at least 20 additional chars
 # of random entropy after the prefix to be meaningful.
-# "wwsk_trial_" is 9 chars — same rule applies.
+# "wsk_trial_" is 9 chars — same rule applies.
 _API_KEY_MIN_TOTAL_LEN = 32
-_VALID_API_KEY_PREFIXES = ("wwsk_live_", "wwsk_trial_", "wrapsec_")
+_VALID_API_KEY_PREFIXES = ("wsk_live_", "wsk_trial_", "wrapsec_")
 
 
 @dataclass
@@ -99,18 +99,18 @@ def validate_config_value(key: str, value: str) -> str | int:
 
     if key == "api_key":
         # Fix #3 — validate prefix AND minimum length.
-        # Previous check only validated prefix — "wwsk_live_" alone (8 chars) would pass.
+        # Previous check only validated prefix — "wsk_live_" alone (8 chars) would pass.
         # A real WrapSec key has significant random entropy after the prefix.
         # Minimum total length of 32 chars rejects obvious misconfiguration
         # (typos, truncated keys, placeholder values) before the first API call.
         #
         # Accepted prefixes:
-        #   wwsk_live_   — production live keys
-        #   wwsk_trial_  — trial/demo keys
+        #   wsk_live_   — production live keys
+        #   wsk_trial_  — trial/demo keys
         #   wrapsec_   — hardcoded admin key (development only)
         if not any(value.startswith(p) for p in _VALID_API_KEY_PREFIXES):
             raise ValueError(
-                f"api_key must start with 'wwsk_live_', 'wwsk_trial_', or 'wrapsec_'. "
+                f"api_key must start with 'wsk_live_', 'wsk_trial_', or 'wrapsec_'. "
                 f"Got: {value[:12]!r}..."
             )
         if len(value) < _API_KEY_MIN_TOTAL_LEN:

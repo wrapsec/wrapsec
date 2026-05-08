@@ -357,7 +357,7 @@ export class WrapSec {
     // #10 — warn on obviously invalid key formats at construction time
     if (this._apiKey && typeof this._apiKey === "string") {
       const k = this._apiKey
-      if (!k.startsWith("wwsk_live_") && !k.startsWith("wwsk_trial_") && k !== "wrapsec_admin_key") {
+      if (!k.startsWith("wsk_live_") && !k.startsWith("wsk_trial_") && k !== "wrapsec_admin_key") {
         // Not an error — admin keys and custom setups may differ. Log only.
         // Do not throw — constructor must not fail on valid non-standard keys.
       }

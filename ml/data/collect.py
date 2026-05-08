@@ -404,7 +404,7 @@ def _curated_pii() -> list[Sample]:
         "Two factor backup codes: 12345 67890 23456 for Google account",
         "Recovery phrase: apple mango banana cherry grape lemon tree house",
         "Security question answer: mothers maiden name is Smith",
-        "API key: wwsk_live_abcdefghijklmnopqrstuvwxyz123456",
+        "API key: wsk_live_abcdefghijklmnopqrstuvwxyz123456",
         "AWS access key AKIAIOSFODNN7EXAMPLE secret wJalrXUtnFEMI",
         "GitHub token ghp_abcdefghijklmnopqrstuvwxyz1234567890",
         "Database password: Str0ngP@ss! host: db.internal port: 5432",

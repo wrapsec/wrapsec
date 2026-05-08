@@ -29,7 +29,7 @@ def _get_client() -> Client:
     if not cfg.api_key:
         print_error(
             "No API key configured.\n"
-            "Run: wrapsec config set api_key wwsk_live_..."
+            "Run: wrapsec config set api_key wsk_live_..."
         )
         sys.exit(1)
     return Client(api_key=cfg.api_key, base_url=cfg.base_url, timeout=cfg.timeout)
