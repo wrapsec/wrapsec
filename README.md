@@ -213,27 +213,36 @@ These metrics enable real-time monitoring of threat activity, latency, and syste
 
 ## Running Locally
 
-This setup runs the full WrapSec stack locally for development and testing.
+Everything runs in Docker. Nothing is installed on the host except Docker itself.
 
 ```bash
-# Infrastructure
-docker compose -f infrastructure/docker/docker-compose.yml up -d postgres redis
-
-# API
-export PYTHONPATH=$(pwd)
-uvicorn api.main:app --reload --host 0.0.0.0 --port 8000
-
-# Dashboard
-cd dashboard && npm run dev
+git clone https://github.com/wrapsec/wrapsec.git
+cd wrapsec
+./setup.sh
 ```
 
-Tests:
+That's it. `setup.sh` builds images, starts all services, and waits for the API to be healthy.
+
+| Service | URL |
+|---|---|
+| Dashboard | http://localhost:3000 |
+| API (via Nginx) | http://localhost:80/api |
+| API (direct) | http://localhost:8000 |
+| Grafana | http://localhost:3001 |
 
 ```bash
-export TESTING=true
-export PYTHONPATH=$(pwd)
-pytest tests/unit tests/integration -v
+./setup.sh --build   # rebuild images after code changes
+./setup.sh --down    # stop all containers
 ```
+
+**Tests:**
+
+```bash
+docker compose -f infrastructure/docker/docker-compose.yml exec api \
+  pytest tests/unit tests/integration -v
+```
+
+**Production deployment:** see `docs/deployment.md`
 
 
 ## Documentation

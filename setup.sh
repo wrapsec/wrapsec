@@ -1,81 +1,78 @@
 #!/usr/bin/env bash
-# WrapSec — local development setup
+# WrapSec — setup and start the full stack
+#
+# Runs everything in Docker: API, Dashboard, Nginx, Postgres, Redis,
+# Prometheus, Grafana. Nothing is installed on the host except Docker.
+#
+# Usage:
+#   ./setup.sh          — first-time setup and start
+#   ./setup.sh --build  — force rebuild images (after code changes)
+#   ./setup.sh --down   — stop and remove all containers
+#
 set -euo pipefail
 
 COMPOSE="docker compose -f infrastructure/docker/docker-compose.yml"
-VENV=".venv"
 
-# ── Colours ──────────────────────────────────────────────────────────────────
-GREEN="\033[0;32m"; YELLOW="\033[1;33m"; RED="\033[0;31m"; NC="\033[0m"
-info()    { echo -e "${GREEN}[setup]${NC} $*"; }
-warn()    { echo -e "${YELLOW}[warn]${NC}  $*"; }
-die()     { echo -e "${RED}[error]${NC} $*" >&2; exit 1; }
+# ── Colours ───────────────────────────────────────────────────────────────────
+GREEN="\033[0;32m"; YELLOW="\033[1;33m"; RED="\033[0;31m"; CYAN="\033[0;36m"; NC="\033[0m"
+info()  { echo -e "${GREEN}[wrapsec]${NC} $*"; }
+warn()  { echo -e "${YELLOW}[warn]${NC}   $*"; }
+die()   { echo -e "${RED}[error]${NC}  $*" >&2; exit 1; }
+
+# ── Flags ─────────────────────────────────────────────────────────────────────
+BUILD_FLAG=""
+for arg in "$@"; do
+    case $arg in
+        --build) BUILD_FLAG="--build" ;;
+        --down)
+            info "Stopping all containers..."
+            $COMPOSE down
+            exit 0
+            ;;
+    esac
+done
 
 # ── Prerequisites ─────────────────────────────────────────────────────────────
-command -v python3 >/dev/null 2>&1 || die "python3 not found"
-command -v docker  >/dev/null 2>&1 || die "docker not found"
-docker info >/dev/null 2>&1        || die "Docker daemon is not running"
-
-PYTHON_MINOR=$(python3 -c "import sys; print(sys.version_info.minor)")
-[ "$PYTHON_MINOR" -ge 10 ] || die "Python 3.10+ required (found 3.${PYTHON_MINOR})"
-
-# ── Virtual environment ───────────────────────────────────────────────────────
-if [ ! -d "$VENV" ]; then
-    info "Creating virtual environment at $VENV..."
-    python3 -m venv "$VENV"
-else
-    info "Virtual environment already exists, skipping"
-fi
-
-PY="$VENV/bin/python"
-PIP="$VENV/bin/pip"
+command -v docker >/dev/null 2>&1 || die "Docker not found — install from https://docs.docker.com/get-docker/"
+docker info >/dev/null 2>&1       || die "Docker daemon is not running"
 
 # ── .env ──────────────────────────────────────────────────────────────────────
 if [ ! -f .env ]; then
     cp .env.example .env
-    SECRET=$("$PY" -c "import secrets; print(secrets.token_hex(32))")
+    # Generate a random SECRET_KEY (no host Python dependency — use /dev/urandom)
+    SECRET=$(cat /dev/urandom | tr -dc 'a-f0-9' | fold -w 64 | head -n 1)
     sed -i "s/your-secret-key-minimum-32-characters-here/${SECRET}/" .env
-    warn ".env created from .env.example — review before production use"
+    warn ".env created from .env.example — review settings before use"
+    warn "For production deployment, see: docs/deployment.md"
 else
-    info ".env already exists, skipping"
+    info ".env found"
 fi
 
-# ── Python dependencies ───────────────────────────────────────────────────────
-info "Installing Python dependencies..."
-"$PIP" install -r requirements.txt -q
+# ── Build and start ───────────────────────────────────────────────────────────
+info "Building and starting WrapSec stack..."
+$COMPOSE up -d --build $BUILD_FLAG
 
-# ── ML model ──────────────────────────────────────────────────────────────────
-if [ ! -f models/ml_detector.pkl ]; then
-    info "Training demo ML model (offline, ~10s)..."
-    PYTHONPATH=$(pwd) "$PY" scripts/train_ml_model.py --offline
-else
-    info "ML model already exists, skipping training"
-fi
-
-# ── Infrastructure ────────────────────────────────────────────────────────────
-info "Starting PostgreSQL and Redis..."
-$COMPOSE up -d postgres redis
-
-info "Waiting for PostgreSQL to be ready..."
-until $COMPOSE exec -T postgres pg_isready -U wrapsec -q 2>/dev/null; do
-    sleep 1
+# ── Wait for API ──────────────────────────────────────────────────────────────
+info "Waiting for API to be ready..."
+RETRIES=30
+until curl -sf http://localhost:8000/health >/dev/null 2>&1; do
+    RETRIES=$((RETRIES - 1))
+    [ $RETRIES -eq 0 ] && die "API did not become healthy in time. Check logs: docker compose -f infrastructure/docker/docker-compose.yml logs api"
+    sleep 2
 done
-
-# ── Create tables ─────────────────────────────────────────────────────────────
-info "Creating database tables..."
-PYTHONPATH=$(pwd) "$PY" - <<'EOF'
-import asyncio
-from db.session import create_tables
-asyncio.run(create_tables())
-EOF
 
 # ── Done ──────────────────────────────────────────────────────────────────────
 echo ""
-echo -e "${GREEN}Setup complete.${NC}"
+echo -e "${GREEN}WrapSec is running.${NC}"
 echo ""
-echo "  Activate venv:    source $VENV/bin/activate"
-echo "  Start API:        PYTHONPATH=\$(pwd) uvicorn api.main:app --reload --port 8000"
-echo "  Start dashboard:  cd dashboard && npm run dev"
-echo "  Full stack:       docker compose -f infrastructure/docker/docker-compose.yml up -d"
-echo "  Run tests:        PYTHONPATH=\$(pwd) TESTING=true pytest tests/unit tests/integration -v"
+echo -e "  ${CYAN}Dashboard:${NC}   http://localhost:3000"
+echo -e "  ${CYAN}API:${NC}         http://localhost:80/api   (via Nginx)"
+echo -e "  ${CYAN}API direct:${NC}  http://localhost:8000     (bypass Nginx)"
+echo -e "  ${CYAN}Grafana:${NC}     http://localhost:3001     (admin / changeme)"
+echo ""
+echo -e "  ${CYAN}View logs:${NC}   docker compose -f infrastructure/docker/docker-compose.yml logs -f"
+echo -e "  ${CYAN}Stop:${NC}        ./setup.sh --down"
+echo -e "  ${CYAN}Rebuild:${NC}     ./setup.sh --build"
+echo ""
+echo -e "  ${CYAN}Run tests:${NC}   docker compose -f infrastructure/docker/docker-compose.yml exec api pytest tests/unit tests/integration -v"
 echo ""
