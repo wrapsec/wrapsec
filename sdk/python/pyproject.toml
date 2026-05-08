@@ -28,8 +28,8 @@ wrapsec = "wrapsec.cli:cli"
 
 [project.urls]
 Homepage   = "https://wrapsec.com"
-Repository = "https://github.com/kbajish/wrapsec"
-Changelog  = "https://github.com/kbajish/wrapsec/blob/main/sdk/python/CHANGELOG.md"
+Repository = "https://github.com/wrapsec/wrapsec"
+Changelog  = "https://github.com/wrapsec/wrapsec/blob/main/sdk/python/CHANGELOG.md"
 
 [tool.hatch.build.targets.wheel]
 packages = ["wrapsec"]
