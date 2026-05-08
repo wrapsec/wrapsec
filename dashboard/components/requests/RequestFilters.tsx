@@ -69,25 +69,30 @@ function FilterChip({ label, onRemove }: { label: string; onRemove: () => void }
 
 interface RequestFiltersProps {
   traceId: string; decision: string; threatCategory: string
-  executionMode: string; from: string; to: string
+  executionMode: string; deptId: string; from: string; to: string
   sortBy: string; sortOrder: string
+  departments: { id: string; name: string }[]
   onTraceId: (v: string) => void; onDecision: (v: string) => void
   onThreat: (v: string) => void; onExecutionMode: (v: string) => void
+  onDeptId: (v: string) => void
   onFrom: (v: string) => void; onTo: (v: string) => void
   onSortBy: (v: string) => void; onSortOrder: (v: string) => void
 }
 
 export function RequestFilters({
-  traceId, decision, threatCategory, executionMode, from, to, sortBy, sortOrder,
-  onTraceId, onDecision, onThreat, onExecutionMode, onFrom, onTo, onSortBy, onSortOrder,
+  traceId, decision, threatCategory, executionMode, deptId, from, to, sortBy, sortOrder,
+  departments,
+  onTraceId, onDecision, onThreat, onExecutionMode, onDeptId, onFrom, onTo, onSortBy, onSortOrder,
 }: RequestFiltersProps) {
-  const hasFilters   = !!(decision || threatCategory || executionMode || from || to)
+  const deptName     = departments.find(d => d.id === deptId)?.name
+  const hasFilters   = !!(decision || threatCategory || executionMode || deptId || from || to)
   const hasDateError = !!(from && to && from > to)
 
   const chips = [
     decision       && { label: decision,                           clear: () => onDecision("") },
     threatCategory && { label: threatCategory.replace(/_/g, " "), clear: () => onThreat("") },
     executionMode  && { label: executionMode.replace(/_/g, " "),  clear: () => onExecutionMode("") },
+    deptId         && { label: deptName ?? deptId,                clear: () => onDeptId("") },
     (from || to)   && { label: `${from || "…"} → ${to || "…"}`,  clear: () => { onFrom(""); onTo("") } },
   ].filter(Boolean) as { label: string; clear: () => void }[]
 
@@ -150,6 +155,14 @@ export function RequestFilters({
             { value: "proxy",     label: "Proxy"     },
           ]}
         />
+        {departments.length > 0 && (
+          <FilterSelect value={deptId} onChange={onDeptId} width={148}
+            options={[
+              { value: "", label: "Department" },
+              ...departments.map(d => ({ value: d.id, label: d.name })),
+            ]}
+          />
+        )}
 
         <VDivider />
 
@@ -231,7 +244,7 @@ export function RequestFilters({
           <>
             <VDivider />
             <button
-              onClick={() => { onDecision(""); onThreat(""); onExecutionMode(""); onFrom(""); onTo("") }}
+              onClick={() => { onDecision(""); onThreat(""); onExecutionMode(""); onDeptId(""); onFrom(""); onTo("") }}
               style={{
                 fontSize: "11px", fontWeight: 500, color: "#9ca3af",
                 background: "none", border: "none", cursor: "pointer",

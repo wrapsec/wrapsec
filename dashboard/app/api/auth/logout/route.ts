@@ -4,7 +4,8 @@
 import { NextRequest, NextResponse } from "next/server"
 import { cookies } from "next/headers"
 
-const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000"
+const API_BASE_URL  = process.env.API_URL || process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000"
+const COOKIE_SECURE = process.env.COOKIE_SECURE === "true"
 
 /**
  * POST /api/auth/logout
@@ -52,7 +53,7 @@ export async function POST(request: NextRequest) {
   // Clear all auth cookies — always, regardless of backend response
   const cookieOpts = {
     httpOnly: true,
-    secure:   process.env.NODE_ENV === "production",
+    secure:   COOKIE_SECURE,
     sameSite: "strict" as const,
     maxAge:   0,
     path:     "/",

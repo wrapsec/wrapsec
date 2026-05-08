@@ -25,6 +25,7 @@ import type { NextRequest } from "next/server"
 
 const PUBLIC_PATHS = [
   "/login",
+  "/setup",
   "/change-password",
   "/_next",
   "/favicon.ico",

@@ -3,7 +3,8 @@
 // WrapSec v1.0 | AI Security Gateway - https://wrapsec.com
 import { NextRequest, NextResponse } from "next/server"
 
-const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000"
+const API_BASE_URL  = process.env.API_URL || process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000"
+const COOKIE_SECURE = process.env.COOKIE_SECURE === "true"
 
 /**
  * POST /api/auth/refresh
@@ -45,7 +46,7 @@ export async function POST(request: NextRequest) {
   // Update access token cookie
   res.cookies.set("wrapsec_jwt", data.access_token, {
     httpOnly: true,
-    secure:   process.env.NODE_ENV === "production",
+    secure:   COOKIE_SECURE,
     sameSite: "strict",
     maxAge:   data.expires_in || 1800,
     path:     "/",
@@ -55,7 +56,7 @@ export async function POST(request: NextRequest) {
   // Middleware reads this server-side via request.cookies; JS never needs it.
   res.cookies.set("wrapsec_session", "jwt", {
     httpOnly: true,
-    secure:   process.env.NODE_ENV === "production",
+    secure:   COOKIE_SECURE,
     sameSite: "strict",
     maxAge:   data.expires_in || 1800,
     path:     "/",

@@ -14,7 +14,7 @@ import { PageSpinner } from "@/components/ui/Spinner"
 import { RequestDetailModal } from "@/components/requests/RequestDetail"
 import { PAGE_SIZE } from "@/lib/constants"
 import { VALID_DECISIONS, VALID_THREATS, VALID_EXEC_MODES } from "@/lib/constants"
-import { getAuditLogs, exportAuditLogs } from "@/lib/api"
+import { getAuditLogs, exportAuditLogs, getDepartments } from "@/lib/api"
 
 function RequestsPageInner() {
   const searchParams = useSearchParams()
@@ -33,6 +33,7 @@ function RequestsPageInner() {
   const [executionMode,    setExecutionMode]     = useState(() => sanitise(searchParams.get("mode"),     [...VALID_EXEC_MODES]))
   const [from,             setFrom]             = useState(() => sanitiseDate(searchParams.get("from")))
   const [to,               setTo]               = useState(() => sanitiseDate(searchParams.get("to")))
+  const [deptId,           setDeptId]           = useState("")
   const [sortBy,           setSortBy]           = useState("created_at")
   const [sortOrder,        setSortOrder]        = useState<"asc" | "desc">("desc")
   const [offset,           setOffset]           = useState(0)
@@ -46,13 +47,17 @@ function RequestsPageInner() {
 
   const isValidDateRange = !from || !to || from <= to
 
+  const { data: deptsData } = useSWR("departments", getDepartments)
+  const departments = (deptsData?.departments ?? []).map(d => ({ id: d.id, name: d.name }))
+
   const { data, isLoading } = useSWR(
-    ["audit-logs", traceIdDebounced, decision, threatCategory, executionMode, from, to, sortBy, sortOrder, offset],
+    ["audit-logs", traceIdDebounced, decision, threatCategory, executionMode, deptId, from, to, sortBy, sortOrder, offset],
     () => getAuditLogs({
       trace_id:        traceIdDebounced  || undefined,
       decision:        (decision as any) || undefined,
       threat_category: (threatCategory as any) || undefined,
       execution_mode:  (executionMode as any) || undefined,
+      dept_id:         deptId            || undefined,
       from: from && isValidDateRange
         ? (from.includes("T") ? from : `${from}T00:00:00`)
         : undefined,
@@ -104,12 +109,14 @@ function RequestsPageInner() {
           <RequestFilters
             traceId={traceId}         decision={decision}
             threatCategory={threatCategory} executionMode={executionMode}
+            deptId={deptId}           departments={departments}
             from={from}               to={to}
             sortBy={sortBy}           sortOrder={sortOrder}
             onTraceId={setTraceId}
             onDecision={v  => { setDecision(v);       setOffset(0) }}
             onThreat={v    => { setThreatCategory(v); setOffset(0) }}
             onExecutionMode={v => { setExecutionMode(v); setOffset(0) }}
+            onDeptId={v    => { setDeptId(v);         setOffset(0) }}
             onFrom={v      => { setFrom(v);           setOffset(0) }}
             onTo={v        => { setTo(v);             setOffset(0) }}
             onSortBy={v    => { setSortBy(v);         setOffset(0) }}

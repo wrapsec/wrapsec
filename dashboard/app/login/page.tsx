@@ -210,26 +210,6 @@ export default function LoginPage() {
             Access the WrapSec dashboard
           </p>
 
-          {/* Tabs */}
-          <div style={{
-            display: "flex", gap: "2px", padding: "3px",
-            background: "rgba(255,255,255,0.06)", borderRadius: "9px",
-            marginBottom: "24px",
-          }}>
-            {(["credentials", "apikey"] as Tab[]).map(t => (
-              <button key={t} onClick={() => { setTab(t); setError(null) }} style={{
-                flex: 1, padding: "7px 0", fontSize: "12px", fontWeight: 500,
-                border: "none", cursor: "pointer", borderRadius: "7px",
-                transition: "all 0.15s",
-                background: tab === t ? "rgba(103,15,239,0.50)" : "transparent",
-                color: tab === t ? "#fff" : "rgba(255,255,255,0.40)",
-                boxShadow: tab === t ? "0 1px 4px rgba(0,0,0,0.3)" : "none",
-              }}>
-                {t === "credentials" ? "Email / Password" : "API Key"}
-              </button>
-            ))}
-          </div>
-
           {error && (
             <div style={{
               marginBottom: "16px", padding: "10px 14px",
@@ -337,8 +317,37 @@ export default function LoginPage() {
             </div>
           )}
 
-          <p style={{ fontSize: "11px", color: "rgba(255,255,255,0.20)", marginTop: "32px", textAlign: "center" }}>
-            WrapSec v1.0 · AI Security Gateway
+          <div style={{ marginTop: "24px", textAlign: "center" }}>
+            {tab === "credentials" ? (
+              <button
+                onClick={() => { setTab("apikey"); setError(null) }}
+                style={{
+                  background: "none", border: "none", cursor: "pointer",
+                  fontSize: "12px", color: "rgba(255,255,255,0.35)",
+                  padding: 0, textDecoration: "underline", textUnderlineOffset: "2px",
+                }}
+                onMouseEnter={e => (e.currentTarget.style.color = "rgba(255,255,255,0.65)")}
+                onMouseLeave={e => (e.currentTarget.style.color = "rgba(255,255,255,0.35)")}
+              >
+                Sign in with API Key instead
+              </button>
+            ) : (
+              <button
+                onClick={() => { setTab("credentials"); setError(null) }}
+                style={{
+                  background: "none", border: "none", cursor: "pointer",
+                  fontSize: "12px", color: "rgba(255,255,255,0.35)",
+                  padding: 0, textDecoration: "underline", textUnderlineOffset: "2px",
+                }}
+                onMouseEnter={e => (e.currentTarget.style.color = "rgba(255,255,255,0.65)")}
+                onMouseLeave={e => (e.currentTarget.style.color = "rgba(255,255,255,0.35)")}
+              >
+                Sign in with Email / Password instead
+              </button>
+            )}
+          </div>
+          <p style={{ fontSize: "11px", color: "rgba(255,255,255,0.15)", marginTop: "16px", textAlign: "center" }}>
+            WrapSec · AI Security Gateway
           </p>
         </div>
       </div>

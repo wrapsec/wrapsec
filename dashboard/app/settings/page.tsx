@@ -106,6 +106,7 @@ export default function SettingsPage() {
           {layers && (
             <LayerToggles
               layers={layers}
+              llmTrigger={llm?.llm_trigger ?? 0.3}
               onUpdated={(l) => mutateL(l, false)}
             />
           )}
@@ -144,14 +145,6 @@ export default function SettingsPage() {
           <CardHeader
             title="Proxy Provider"
             subtitle="Configure the LLM provider for proxy mode (POST /v1/chat/completions)"
-            action={
-              <a
-                href="/settings/proxy-interactions"
-                className="text-xs text-blue-700 hover:underline"
-              >
-                View interactions
-              </a>
-            }
           />
           <ProxySettingsForm
             config={proxy ?? null}

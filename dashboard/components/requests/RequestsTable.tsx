@@ -20,6 +20,28 @@ function ModeBadge({ label, active }: { label: string; active: boolean }) {
   )
 }
 
+const SEVERITY_STYLE: Record<string, { color: string; bg: string; border: string }> = {
+  CRITICAL: { color: "#dc2626", bg: "rgba(220,38,38,0.08)",  border: "rgba(220,38,38,0.20)"  },
+  HIGH:     { color: "#d97706", bg: "rgba(217,119,6,0.08)",  border: "rgba(217,119,6,0.20)"  },
+  MEDIUM:   { color: "#2563eb", bg: "rgba(37,99,235,0.08)",  border: "rgba(37,99,235,0.20)"  },
+  LOW:      { color: "#6b7280", bg: "rgba(107,114,128,0.08)", border: "rgba(107,114,128,0.20)" },
+}
+
+function SeverityBadge({ severity }: { severity: string | null }) {
+  if (!severity) return <span style={{ fontSize: "12px", color: "#d1d5db" }}>—</span>
+  const s = SEVERITY_STYLE[severity] ?? SEVERITY_STYLE.LOW
+  return (
+    <span style={{
+      display: "inline-flex", alignItems: "center",
+      padding: "2px 7px", borderRadius: "4px",
+      fontSize: "11px", fontWeight: 600,
+      background: s.bg, border: `1px solid ${s.border}`, color: s.color,
+    }}>
+      {severity}
+    </span>
+  )
+}
+
 const TH: React.CSSProperties = {
   textAlign: "left", padding: "10px 16px",
   fontSize: "10px", fontWeight: 700,
@@ -28,6 +50,11 @@ const TH: React.CSSProperties = {
   borderBottom: "1px solid #f3f4f6",
   background: "#fafafa",
 }
+
+const HEADERS = [
+  "Trace ID", "Severity", "Decision", "Dept / App",
+  "Threats", "Detection", "Execution", "Latency", "Time",
+]
 
 export function RequestsTable({ items, onSelect }: {
   items:    AuditLogItem[]
@@ -38,15 +65,13 @@ export function RequestsTable({ items, onSelect }: {
       <table style={{ width: "100%", borderCollapse: "collapse" }}>
         <thead>
           <tr>
-            {["Trace ID", "Decision", "Threats", "Detection", "Execution", "Latency", "Time"].map(h => (
-              <th key={h} style={TH}>{h}</th>
-            ))}
+            {HEADERS.map(h => <th key={h} style={TH}>{h}</th>)}
           </tr>
         </thead>
         <tbody>
           {items.length === 0 ? (
             <tr>
-              <td colSpan={7} style={{ padding: "48px 16px", textAlign: "center", fontSize: "13px", color: "#9ca3af" }}>
+              <td colSpan={HEADERS.length} style={{ padding: "48px 16px", textAlign: "center", fontSize: "13px", color: "#9ca3af" }}>
                 No requests found
               </td>
             </tr>
@@ -65,7 +90,36 @@ export function RequestsTable({ items, onSelect }: {
                 {item.trace_id}
               </td>
               <td style={{ padding: "10px 16px" }}>
-                <DecisionBadge decision={item.decision} size="sm" />
+                <SeverityBadge severity={item.severity} />
+              </td>
+              <td style={{ padding: "10px 16px" }}>
+                {item.output_decision && item.output_decision !== item.decision ? (
+                  <div style={{ display: "flex", alignItems: "center", gap: "4px" }}>
+                    <DecisionBadge decision={item.decision} size="sm" />
+                    <span style={{ fontSize: "10px", color: "#9ca3af" }}>→</span>
+                    <DecisionBadge decision={item.output_decision} size="sm" />
+                  </div>
+                ) : (
+                  <DecisionBadge decision={item.decision} size="sm" />
+                )}
+              </td>
+              <td style={{ padding: "10px 16px" }}>
+                {(item.dept_name || item.app_name) ? (
+                  <div style={{ display: "flex", flexDirection: "column", gap: "1px" }}>
+                    {item.dept_name && (
+                      <span style={{ fontSize: "12px", color: "#374151", fontWeight: 500 }}>
+                        {item.dept_name}
+                      </span>
+                    )}
+                    {item.app_name && (
+                      <span style={{ fontSize: "11px", color: "#9ca3af" }}>
+                        {item.app_name}
+                      </span>
+                    )}
+                  </div>
+                ) : (
+                  <span style={{ fontSize: "12px", color: "#d1d5db" }}>—</span>
+                )}
               </td>
               <td style={{ padding: "10px 16px" }}>
                 {item.threats.length === 0

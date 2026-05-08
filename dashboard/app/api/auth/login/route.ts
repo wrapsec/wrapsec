@@ -3,7 +3,8 @@
 // WrapSec v1.0 | AI Security Gateway - https://wrapsec.com
 import { NextRequest, NextResponse } from "next/server"
 
-const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000"
+const API_BASE_URL  = process.env.API_URL || process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000"
+const COOKIE_SECURE = process.env.COOKIE_SECURE === "true"
 
 /**
  * POST /api/auth/login
@@ -45,7 +46,7 @@ export async function POST(request: NextRequest) {
     const res = NextResponse.json({ success: true, auth_type: "api_key" })
     res.cookies.set("wrapsec_api_key", apiKey, {
       httpOnly: true,
-      secure:   process.env.NODE_ENV === "production",
+      secure:   COOKIE_SECURE,
       sameSite: "strict",
       maxAge:   60 * 60 * 8,   // 8 hours
       path:     "/",
@@ -82,7 +83,7 @@ export async function POST(request: NextRequest) {
 
     res.cookies.set("wrapsec_jwt", data.access_token, {
       httpOnly: true,
-      secure:   process.env.NODE_ENV === "production",
+      secure:   COOKIE_SECURE,
       sameSite: "strict",
       maxAge:   data.expires_in || 1800,   // match token expiry (30 min)
       path:     "/",
@@ -91,7 +92,7 @@ export async function POST(request: NextRequest) {
     // Session indicator — httpOnly, used by middleware for route protection only
     res.cookies.set("wrapsec_session", "jwt", {
       httpOnly: true,
-      secure:   process.env.NODE_ENV === "production",
+      secure:   COOKIE_SECURE,
       sameSite: "strict",
       maxAge:   data.expires_in || 1800,
       path:     "/",

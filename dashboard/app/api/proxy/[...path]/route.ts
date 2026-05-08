@@ -4,7 +4,7 @@
 import { NextRequest, NextResponse } from "next/server"
 import { cookies } from "next/headers"
 
-const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000"
+const API_BASE_URL = process.env.API_URL || process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000"
 
 /**
  * Catch-all proxy route.
@@ -21,7 +21,7 @@ const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000"
  * Returns 401 JSON if neither cookie is present.
  */
 // Paths that are forwarded without requiring auth cookies
-const PUBLIC_PROXY_PATHS = ["/v1/setup", "/v1/setup/status"]
+const PUBLIC_PROXY_PATHS = ["/v1/setup", "/v1/setup/status", "/health"]
 
 async function handler(request: NextRequest) {
   try {
