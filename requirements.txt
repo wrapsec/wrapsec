@@ -35,10 +35,13 @@ typing_extensions==4.15.0
 uvicorn==0.44.0
 aiosqlite==0.21.1
 
-# ── JWT + Auth (added for JWT/RBAC implementation) ────────────────────────────
-PyJWT==2.10.1                 # JWT encoding/decoding — HS256 now, RS256/ES256 ready for V2
+# ── JWT + Auth ────────────────────────────────────────────────────────────────
+PyJWT==2.10.1                 # JWT encoding/decoding
 passlib[bcrypt]==1.7.4        # password hashing — bcrypt backend
-bcrypt==3.2.2                 # passlib bcrypt backend
+bcrypt==4.0.1                 # passlib compat pin — bcrypt>=4.1 breaks passlib 1.7.4
 python-multipart==0.0.20      # FastAPI form parsing — required for login endpoint
 APScheduler==3.11.2           # background retention worker
 email-validator==2.3.0
+
+# ── Cryptography ──────────────────────────────────────────────────────────────
+cryptography==44.0.3          # AES-256-GCM encryption for proxy provider API keys
