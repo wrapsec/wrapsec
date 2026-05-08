@@ -287,9 +287,10 @@ function makeScanResult(data: Record<string, unknown>): ScanResult {
     threats:        Array.isArray(d["threats"]) ? (d["threats"] as string[]) : [],
     // latency_ms is nested in processing in the scan response (not top-level)
     latencyMs:      Number(processing?.["latencyMs"] ?? d["latencyMs"] ?? 0),
-    executionMode:  String(processing?.["executionMode"] ?? d["executionMode"] ?? "scan_only"),
-    sanitizedInput: d["sanitizedInput"] != null ? String(d["sanitizedInput"]) : undefined,
-    output:         d["output"] != null ? String(d["output"]) : undefined,
+    executionMode:        String(processing?.["executionMode"] ?? d["executionMode"] ?? "scan_only"),
+    sanitizationApplied:  Boolean(d["sanitizationApplied"] ?? false),
+    sanitizedInput:       d["sanitizedInput"] != null ? String(d["sanitizedInput"]) : undefined,
+    output:               d["output"] != null ? String(d["output"]) : undefined,
   }
 
   return {

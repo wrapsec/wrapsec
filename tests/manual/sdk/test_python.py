@@ -24,7 +24,7 @@ sys.path.insert(0, os.path.join(os.path.dirname(__file__), "../../../sdk/python"
 
 import wrapsec
 from wrapsec import Client, AsyncClient
-from wrapsec.exceptions import WrapSecError, WrapSecAuthError, WrapSecNotFoundError
+from wrapsec.exceptions import WrapSecError, WrapSecAuthError
 
 # ── Config ────────────────────────────────────────────────────────────────────
 
@@ -186,23 +186,21 @@ def test_sync_client() -> None:
 
     if BLOCK_TRACE:
         record = client.get_request(BLOCK_TRACE)
-        assert_eq("trace_id matches",            record.trace_id, BLOCK_TRACE)
-        assert_eq("decision is BLOCK",           record.decision, "BLOCK")
-        assert_not_none("risk_score present",    record.risk_score)
-        assert_not_none("confidence present",    record.confidence)
-        assert_not_none("input_length present",  record.input_length)
-        assert_not_none("primary_reason present", record.primary_reason)
+        assert_eq("trace_id matches",            record.get("trace_id"), BLOCK_TRACE)
+        assert_eq("decision is BLOCK",           record.get("decision"), "BLOCK")
+        assert_not_none("risk_score present",    record.get("risk_score"))
+        assert_not_none("confidence present",    record.get("confidence"))
+        assert_not_none("input_length present",  record.get("input_length"))
+        assert_not_none("primary_reason present", record.get("primary_reason"))
     else:
         skipped("get_request()", "no block trace_id from earlier tests")
 
     # ------------------------------------------------------------------
-    section("Python SDK - sync Client.get_request() - not found raises WrapSecNotFoundError")
+    section("Python SDK - sync Client.get_request() - not found raises WrapSecError")
 
     try:
         client.get_request("req_doesnotexist0000")
-        failed("unknown trace_id raises WrapSecNotFoundError", "no exception raised")
-    except WrapSecNotFoundError:
-        passed("unknown trace_id raises WrapSecNotFoundError")
+        failed("unknown trace_id raises WrapSecError", "no exception raised")
     except WrapSecError as e:
         passed(f"unknown trace_id raises WrapSecError ({type(e).__name__})")
 

@@ -53,6 +53,8 @@ export interface ScanResult {
   latencyMs:       number
   /** "scan_only" (default) or "proxy" */
   executionMode:   string
+  /** True when input was sanitized (PII redacted). Same as decision === "SANITIZE" */
+  sanitizationApplied: boolean
   /** Redacted input. Only present when decision === "SANITIZE" */
   sanitizedInput?: string
   /** LLM output. Only present when executionMode === "proxy" */

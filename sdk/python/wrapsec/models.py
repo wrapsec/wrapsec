@@ -37,30 +37,32 @@ class ScanResult:
     trace_id:        str
     threats:         list[str]
     latency_ms:      float
-    risk_score:      float       = 0.0
-    execution_mode:  str         = "scan_only"
-    sanitized_input: str | None  = None
-    output:          str | None  = None
+    risk_score:            float       = 0.0
+    execution_mode:        str         = "scan_only"
+    sanitization_applied:  bool        = False
+    sanitized_input:       str | None  = None
+    output:                str | None  = None
 
     @classmethod
     def from_dict(cls, data: dict[str, Any]) -> "ScanResult":
         processing = data.get("processing") or {}
         return cls(
-            decision        = data["decision"],
-            primary_reason  = data["primary_reason"],
-            risk_score      = float(data.get("risk_score", 0.0)),
-            confidence      = float(data.get("confidence", 0.0)),
-            confidence_band = data.get("confidence_band", "LOW"),
-            trace_id        = data.get("trace_id", ""),
-            threats         = data.get("threats") or [],
-            latency_ms      = float(
+            decision             = data["decision"],
+            primary_reason       = data["primary_reason"],
+            risk_score           = float(data.get("risk_score", 0.0)),
+            confidence           = float(data.get("confidence", 0.0)),
+            confidence_band      = data.get("confidence_band", "LOW"),
+            trace_id             = data.get("trace_id", ""),
+            threats              = data.get("threats") or [],
+            latency_ms           = float(
                 data["latency_ms"]
                 if data.get("latency_ms") is not None
                 else processing.get("latency_ms", 0.0)
             ),
-            execution_mode  = processing.get("execution_mode", "scan_only"),
-            sanitized_input = data.get("sanitized_input"),
-            output          = data.get("output"),
+            execution_mode       = processing.get("execution_mode", "scan_only"),
+            sanitization_applied = bool(data.get("sanitization_applied", False)),
+            sanitized_input      = data.get("sanitized_input"),
+            output               = data.get("output"),
         )
 
     @property

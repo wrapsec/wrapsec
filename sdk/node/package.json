@@ -30,7 +30,9 @@
     "dist/middleware/fastify.js",
     "dist/middleware/fastify.d.ts",
     "dist/middleware/fastify.d.ts.map",
-    "README.md"
+    "README.md",
+    "LICENSE",
+    "CHANGELOG.md"
   ],
   "exports": {
     ".": {
