@@ -33,7 +33,7 @@ tomli==2.4.1
 typing-inspection==0.4.2
 typing_extensions==4.15.0
 uvicorn==0.44.0
-aiosqlite==0.21.1
+aiosqlite==0.21.0
 
 # ── JWT + Auth ────────────────────────────────────────────────────────────────
 PyJWT==2.10.1                 # JWT encoding/decoding
