@@ -59,7 +59,7 @@ npm install wrapsec-node
 
 ## Configuration
 
-Create an API key in the WrapSec dashboard under **API Keys**. Keys are prefixed `wsk_live_` for production or `wsk_trial_` for demos.
+Create an API key in the WrapSec dashboard under **API Keys**. Keys are prefixed `wwsk_live_` for production or `wwsk_trial_` for demos.
 
 ```typescript
 import WrapSec from 'wrapsec-node'
@@ -73,7 +73,7 @@ const client = new WrapSec({
 
 | Option | Type | Default | Description |
 |---|---|---|---|
-| `apiKey` | string | `WRAPSEC_API_KEY` env var | API key (`wsk_live_...`). Required. |
+| `apiKey` | string | `WRAPSEC_API_KEY` env var | API key (`wwsk_live_...`). Required. |
 | `baseUrl` | string | `WRAPSEC_BASE_URL` env var | WrapSec API base URL. Always set explicitly in production. Defaults to `http://localhost:8000` (dev only). |
 | `timeout` | number | `30` | Default request timeout in seconds. Minimum 1. Override per-call. |
 

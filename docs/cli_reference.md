@@ -27,7 +27,7 @@ pip install -e ./sdk/python
 pip install -e ./sdk/python
 
 # Configure
-wrapsec config set api_key wsk_live_...
+wrapsec config set api_key wwsk_live_...
 wrapsec config set base_url http://localhost:8000
 
 # Verify
@@ -76,7 +76,7 @@ Config file is created with `chmod 600` on Unix.
 ### `wrapsec config set KEY VALUE`
 
 ```bash
-wrapsec config set api_key wsk_live_...
+wrapsec config set api_key wwsk_live_...
 wrapsec config set base_url http://localhost:8000
 wrapsec config set timeout 30
 ```
@@ -85,14 +85,14 @@ wrapsec config set timeout 30
 
 | Key | Description | Validation |
 |---|---|---|
-| `api_key` | WrapSec API key | Must start with `wsk_live_` |
+| `api_key` | WrapSec API key | Must start with `wwsk_live_` |
 | `base_url` | Gateway URL | Must start with `http://` or `https://` |
 | `timeout` | Request timeout in seconds | Integer, minimum 1 |
 
 Invalid values are rejected immediately:
 
 ```
-❌ api_key must start with 'wsk_live_', got 'invalid_key'...   exit 1
+❌ api_key must start with 'wwsk_live_', got 'invalid_key'...   exit 1
 ❌ timeout must be at least 1 second, got 0                   exit 1
 ❌ base_url must start with http:// or https://, got 'not-a-url'  exit 1
 ```
@@ -125,7 +125,7 @@ wrapsec config clear --force   # skip confirmation (CI use)
 Environment variables take the highest priority over config file and defaults:
 
 ```bash
-export WRAPSEC_API_KEY=wsk_live_...
+export WRAPSEC_API_KEY=wwsk_live_...
 export WRAPSEC_BASE_URL=https://wrapsec.internal:8000
 export WRAPSEC_TIMEOUT=30
 ```
@@ -599,7 +599,7 @@ cat results.jsonl | jq .decision
 HEALTHCHECK CMD wrapsec ping || exit 1
 
 # CI environment (no config file needed)
-export WRAPSEC_API_KEY=wsk_live_...
+export WRAPSEC_API_KEY=wwsk_live_...
 export WRAPSEC_BASE_URL=https://wrapsec.internal:8000
 wrapsec scan --quiet "text"
 

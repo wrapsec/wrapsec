@@ -22,7 +22,7 @@
 // ── Client config ──────────────────────────────────────────────────────────
 
 export interface WrapSecConfig {
-  /** WrapSec API key (wsk_live_... or wsk_trial_...). Falls back to WRAPSEC_API_KEY env var. */
+  /** WrapSec API key (wwsk_live_... or wwsk_trial_...). Falls back to WRAPSEC_API_KEY env var. */
   apiKey?:  string
   /** WrapSec API base URL. Defaults to http://localhost:8000 (dev only). Always set in prod. */
   baseUrl?: string

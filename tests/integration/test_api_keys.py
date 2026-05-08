@@ -15,7 +15,7 @@ async def test_create_key(client, admin_jwt_headers):
     assert response.status_code == 201
     data = response.json()
     assert data["name"] == "test-system"
-    assert data["api_key"].startswith("wsk_live_")
+    assert data["api_key"].startswith("wwsk_live_")
     assert "key_id" in data
     assert "created_at" in data
 

@@ -81,7 +81,7 @@ def admin_headers():
 
 @pytest.fixture
 def standard_headers():
-    return {"x-api-key": "wsk_live_test_standard_key"}
+    return {"x-api-key": "wwsk_live_test_standard_key"}
 
 
 # ── Redis helpers ─────────────────────────────────────────────────────────────

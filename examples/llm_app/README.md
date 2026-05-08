@@ -66,7 +66,7 @@ export OPENAI_MODEL=gpt-4o-mini
 ```bash
 pip install -e ./sdk/python fastapi uvicorn httpx
 
-export WRAPSEC_API_KEY=wsk_live_...
+export WRAPSEC_API_KEY=wwsk_live_...
 export WRAPSEC_BASE_URL=http://localhost:8000
 
 # Detection mode: fast (rule+ML, ~5ms) or full (rule+ML+LLM, ~100-500ms)

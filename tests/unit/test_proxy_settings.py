@@ -85,7 +85,7 @@ def mock_config():
     """A mock ProxyProviderConfigModel instance."""
     from datetime import datetime
     config = MagicMock()
-    config.key_id               = "wsk_live_testkey"
+    config.key_id               = "wwsk_live_testkey"
     config.provider             = "openai"
     config.base_url             = "https://api.openai.com/v1"
     config.provider_api_key_enc = encrypt("sk-openai-test1234567890", settings.secret_key)

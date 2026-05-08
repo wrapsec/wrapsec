@@ -137,7 +137,7 @@ def batch(
     if not cfg.api_key:
         print_error(
             "No API key configured.\n"
-            "Run: wrapsec config set api_key wsk_live_..."
+            "Run: wrapsec config set api_key wwsk_live_..."
         )
         sys.exit(1)
 

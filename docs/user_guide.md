@@ -124,9 +124,9 @@ Navigate to **API Keys** under Configuration.
 
 ### Key types
 
-**Live keys** (`wsk_live_...`) — standard production keys. Full access within their department or application scope.
+**Live keys** (`wwsk_live_...`) — standard production keys. Full access within their department or application scope.
 
-**Trial keys** (`wsk_trial_...`) — restricted keys for demos. Input limited to 500 characters, rate limited to 10 requests per minute, proxy mode disabled.
+**Trial keys** (`wwsk_trial_...`) — restricted keys for demos. Input limited to 500 characters, rate limited to 10 requests per minute, proxy mode disabled.
 
 ### Creating a key
 

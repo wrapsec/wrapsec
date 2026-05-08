@@ -11,11 +11,11 @@ paths = [
     "tests/unit/.*",
 ]
 regexes = [
-    "wsk_live_test",
-    "wsk_live_testkey",
-    "wsk_live_abcdef",
-    "wsk_live_secret",
-    "wsk_live_testkey123",
+    "wwsk_live_test",
+    "wwsk_live_testkey",
+    "wwsk_live_abcdef",
+    "wwsk_live_secret",
+    "wwsk_live_testkey123",
 ]
 
 [[allowlists]]
@@ -28,11 +28,11 @@ paths = [
 regexes = [
     "your-admin-key",
     "wrapsec_admin_key",
-    "wsk_live_fin_\\.\\.\\.",
-    "wsk_live_your_key",
-    "wsk_live_fin_abc123",
-    "wsk_live_PTyW8LaBq5opGiz7\\.\\.\\.",
-    "wsk_live_\\.\\.\\.",
+    "wwsk_live_fin_\\.\\.\\.",
+    "wwsk_live_your_key",
+    "wwsk_live_fin_abc123",
+    "wwsk_live_PTyW8LaBq5opGiz7\\.\\.\\.",
+    "wwsk_live_\\.\\.\\.",
     "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9\\.\\.\\.",
 ]
 

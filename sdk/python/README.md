@@ -61,13 +61,13 @@ pip install -e sdk/python/          # local development
 
 ## Configuration
 
-Create an API key in the WrapSec dashboard under **API Keys**. Keys are prefixed `wsk_live_` for production or `wsk_trial_` for demos.
+Create an API key in the WrapSec dashboard under **API Keys**. Keys are prefixed `wwsk_live_` for production or `wwsk_trial_` for demos.
 
 ```python
 import wrapsec
 
 client = wrapsec.Client(
-    api_key  = "wsk_live_...",               # or set WRAPSEC_API_KEY env var
+    api_key  = "wwsk_live_...",               # or set WRAPSEC_API_KEY env var
     base_url = "https://wrapsec.internal:8000",  # always set in production
     timeout  = 30,                           # seconds, default 30
 )
@@ -85,7 +85,7 @@ client = wrapsec.Client(
 
 | Parameter | Type | Default | Description |
 |---|---|---|---|
-| `api_key` | str | `WRAPSEC_API_KEY` env var | API key (`wsk_live_...`). Required. |
+| `api_key` | str | `WRAPSEC_API_KEY` env var | API key (`wwsk_live_...`). Required. |
 | `base_url` | str | `WRAPSEC_BASE_URL` env var | WrapSec API base URL. Always set explicitly in production. |
 | `timeout` | int | `30` | Default request timeout in seconds. Minimum 1. Override per-call. |
 
@@ -416,7 +416,7 @@ The WrapSec CLI is included with the Python SDK. It is the recommended tool for 
 
 ```bash
 # Configure once
-wrapsec config set api_key wsk_live_...
+wrapsec config set api_key wwsk_live_...
 wrapsec config set base_url http://localhost:8000
 
 # Verify connectivity

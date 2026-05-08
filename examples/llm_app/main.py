@@ -20,7 +20,7 @@ Architecture:
 Setup:
   pip install -e ./sdk/python fastapi uvicorn httpx
 
-  export WRAPSEC_API_KEY=wsk_live_...
+  export WRAPSEC_API_KEY=wwsk_live_...
   export WRAPSEC_BASE_URL=http://localhost:8000
   export WRAPSEC_DETECTION_MODE=fast
   export LLM_PROVIDER=ollama

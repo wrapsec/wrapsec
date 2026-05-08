@@ -107,7 +107,7 @@ def doctor() -> None:
         click.secho(f"   API key:      {mask_api_key(cfg.api_key)} [{source}]", fg="green")
     else:
         click.secho("   API key:      ✗ not set", fg="red")
-        click.echo("   Run: wrapsec config set api_key wsk_live_...")
+        click.echo("   Run: wrapsec config set api_key wwsk_live_...")
         all_ok = False
 
     url_source = get_config_source("base_url")

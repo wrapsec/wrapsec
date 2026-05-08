@@ -168,7 +168,7 @@ CURATED_FALLBACK = [
     ("Bank account 12345678 routing number 021000021",                     5),
     ("Password: mysecretpass123 for my account",                           5),
     ("My medical record number is MRN123456",                              5),
-    ("API key: wsk_live_abcdefghijklmnopqrstuvwxyz",                       5),
+    ("API key: wwsk_live_abcdefghijklmnopqrstuvwxyz",                       5),
     ("My home address is 123 Main Street New York NY 10001",               5),
     ("Driver license number DL1234567 state California",                   5),
     # TOXICITY

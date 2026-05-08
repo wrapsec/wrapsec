@@ -21,7 +21,7 @@ Pattern B — Explicit scan + decision handling
 Setup:
   pip install -e ./sdk/python fastapi uvicorn
 
-  export WRAPSEC_API_KEY=wsk_live_...
+  export WRAPSEC_API_KEY=wwsk_live_...
   export WRAPSEC_BASE_URL=http://localhost:8000
 
 Run:

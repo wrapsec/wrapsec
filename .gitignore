@@ -228,8 +228,10 @@ soak_report.html
 soak_results_*.csv
 tests/load/results/
 
-# ML training data and logs
+# ML training data, model binary, and logs
 ml/data/raw/
+models/ml_detector.pkl
+models/ml_detector.pkl.sha256
 models/training_dataset.csv
 models/training.log
 

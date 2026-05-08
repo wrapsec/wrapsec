@@ -24,8 +24,8 @@ locust --version
 curl http://127.0.0.1:8000/health/live
 
 # Both departments have valid keys (verified in session)
-# Purchase: wsk_live_siudfvbDrPkGPry-XYn_kXo167GLXE6Bf3WsDWqV3AM
-# Finance:  wsk_live_VKyMV0WBPUFGFkU21bin_b_9DGOd0in2Xah4WH5fCso
+# Purchase: wwsk_live_siudfvbDrPkGPry-XYn_kXo167GLXE6Bf3WsDWqV3AM
+# Finance:  wwsk_live_VKyMV0WBPUFGFkU21bin_b_9DGOd0in2Xah4WH5fCso
 ```
 
 ---

@@ -51,7 +51,7 @@ response = client.chat.completions.create(model="gpt-4o", messages=[...])
 
 # After
 client = OpenAI(
-    api_key  = "wsk_live_your_wrapsec_key",
+    api_key  = "wwsk_live_your_wrapsec_key",
     base_url = "http://localhost:8000/v1",
 )
 response = client.chat.completions.create(model="openai/gpt-4o", messages=[...])
@@ -66,7 +66,7 @@ response = client.chat.completions.create(model="openai/gpt-4o", messages=[...])
 
 ```bash
 curl -X PUT http://localhost:8000/v1/settings/proxy \
-  -H "x-api-key: wsk_live_..." \
+  -H "x-api-key: wwsk_live_..." \
   -H "Content-Type: application/json" \
   -d '{
     "provider":      "openai",
@@ -80,7 +80,7 @@ curl -X PUT http://localhost:8000/v1/settings/proxy \
 For Ollama:
 ```bash
 curl -X PUT http://localhost:8000/v1/settings/proxy \
-  -H "x-api-key: wsk_live_..." \
+  -H "x-api-key: wwsk_live_..." \
   -H "Content-Type: application/json" \
   -d '{
     "provider":      "ollama",
@@ -97,7 +97,7 @@ curl -X PUT http://localhost:8000/v1/settings/proxy \
 ```bash
 pip install -e ./sdk/python fastapi uvicorn httpx openai
 
-export WRAPSEC_API_KEY=wsk_live_...
+export WRAPSEC_API_KEY=wwsk_live_...
 export WRAPSEC_BASE_URL=http://localhost:8000
 export LLM_MODEL=openai/gpt-4o-mini   # or ollama/gemma3:4b
 ```

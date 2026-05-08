@@ -27,7 +27,7 @@ def _make_user_model(role="DEVELOPER", dept_id=None, tenant_id=None):
 
 def _make_api_key_model(tenant_id=None, dept_id=None):
     key = MagicMock()
-    key.key_id    = "wsk_live_testkey123"
+    key.key_id    = "wwsk_live_testkey123"
     key.tenant_id = tenant_id or uuid.uuid4()
     key.dept_id   = dept_id
     return key

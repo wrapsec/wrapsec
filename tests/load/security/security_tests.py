@@ -178,7 +178,7 @@ def test_rbac() -> None:
     # Invalid key rejected
     resp = requests.post(
         f"{BASE_URL}/v1/ai/request",
-        headers = {"x-api-key": "wsk_live_thisisafakekeyvalue123456789",
+        headers = {"x-api-key": "wwsk_live_thisisafakekeyvalue123456789",
                    "Content-Type": "application/json"},
         json    = {"input": "hello"},
         timeout = 5,

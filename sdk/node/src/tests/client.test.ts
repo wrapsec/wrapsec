@@ -43,7 +43,7 @@ describe("WrapSec constructor", () => {
 
   it("reads WRAPSEC_API_KEY env var when no apiKey provided", () => {
     const orig = process.env.WRAPSEC_API_KEY
-    process.env.WRAPSEC_API_KEY = "wsk_live_test"
+    process.env.WRAPSEC_API_KEY = "wwsk_live_test"
     const client = new WrapSec({ baseUrl: BASE_URL })
     assert.ok(client instanceof WrapSec)
     process.env.WRAPSEC_API_KEY = orig
@@ -181,7 +181,7 @@ describe("scan()", () => {
   })
 
   it("throws WrapSecAuthError on invalid API key", async () => {
-    const client = new WrapSec({ apiKey: "wsk_live_invalid_key", baseUrl: BASE_URL })
+    const client = new WrapSec({ apiKey: "wwsk_live_invalid_key", baseUrl: BASE_URL })
     await assert.rejects(
       () => client.scan("test"),
       (err: any) => err instanceof WrapSecAuthError,
@@ -569,7 +569,7 @@ describe("Retry behaviour", () => {
 
   it("WrapSecAuthError is NOT retried (propagates immediately)", async () => {
     const start  = Date.now()
-    const client = new WrapSec({ apiKey: "wsk_live_bad", baseUrl: BASE_URL })
+    const client = new WrapSec({ apiKey: "wwsk_live_bad", baseUrl: BASE_URL })
     await assert.rejects(
       () => client.scan("test"),
       (err: any) => err instanceof WrapSecAuthError,

@@ -143,9 +143,9 @@ def scan(
         print_error(
             "No API key configured.\n\n"
             "Set it with:\n"
-            "  wrapsec config set api_key wsk_live_...\n\n"
+            "  wrapsec config set api_key wwsk_live_...\n\n"
             "Or set the environment variable:\n"
-            "  export WRAPSEC_API_KEY=wsk_live_..."
+            "  export WRAPSEC_API_KEY=wwsk_live_..."
         )
         sys.exit(1)
 

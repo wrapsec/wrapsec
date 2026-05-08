@@ -9,14 +9,14 @@ POST /v1/chat/completions
 
 Developer change required:
     Before: client = OpenAI(api_key="sk-openai-...", base_url="https://api.openai.com/v1")
-    After:  client = OpenAI(api_key="wsk_live_...",   base_url="http://localhost:8000/v1")
+    After:  client = OpenAI(api_key="wwsk_live_...",   base_url="http://localhost:8000/v1")
     model:  "gpt-4o"  ->  "openai/gpt-4o"
 
 WrapSec enforces security on input and output.
 The provider API key is stored server-side -- the client only holds a WrapSec key.
 
 Request headers:
-    Authorization: Bearer wsk_live_...         required
+    Authorization: Bearer wwsk_live_...         required
     X-WrapSec-Mode: fast | full               optional, default: fast
     X-WrapSec-Scan-All-Messages: true|false   optional, default: false
     X-WrapSec-Inline-Meta: true|false         optional, default: false
