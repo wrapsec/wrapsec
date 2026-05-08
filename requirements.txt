@@ -24,6 +24,7 @@ pydantic-settings==2.13.1
 pydantic_core==2.41.5
 python-dotenv==1.2.2
 redis==7.4.0
+pandas==2.2.3
 scikit-learn==1.7.2
 scipy==1.15.3
 SQLAlchemy==2.0.49
