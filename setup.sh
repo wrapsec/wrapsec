@@ -168,7 +168,7 @@ else
     echo -e "  ${CYAN}Rebuild:${NC}     ./setup.sh --build"
     echo -e "  ${CYAN}Production:${NC}  ./setup.sh --prod"
     echo ""
-    echo -e "  ${CYAN}Run tests:${NC}   $COMPOSE_DEV exec api python -m pytest tests/unit tests/integration -v"
+    echo -e "  ${CYAN}Run tests:${NC}   $COMPOSE_DEV exec api python -m pytest -v"
     echo ""
 
 fi
