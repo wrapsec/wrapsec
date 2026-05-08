@@ -144,14 +144,8 @@ else
         info ".env found"
     fi
 
-    # Build on first run or when --build passed
-    if [ -n "$BUILD_FLAG" ] || ! docker image inspect docker-api >/dev/null 2>&1; then
-        info "Building images and starting WrapSec (dev)..."
-        $COMPOSE_DEV up -d --build
-    else
-        info "Starting WrapSec stack (dev)..."
-        $COMPOSE_DEV up -d
-    fi
+    info "Building images and starting WrapSec (dev)..."
+    $COMPOSE_DEV up -d --build $BUILD_FLAG
 
     info "Waiting for API to be ready..."
     RETRIES=30
