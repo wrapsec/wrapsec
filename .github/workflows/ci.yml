@@ -1,0 +1,55 @@
+name: Tests
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+jobs:
+  test:
+    runs-on: ubuntu-22.04
+
+    services:
+      postgres:
+        image: postgres:15
+        env:
+          POSTGRES_DB: wrapsec_test
+          POSTGRES_USER: wrapsec
+          POSTGRES_PASSWORD: ci_password
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+
+      redis:
+        image: redis:7-alpine
+        options: >-
+          --health-cmd "redis-cli ping"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.10"
+
+      - name: Install dependencies
+        run: pip install -r requirements.txt -r requirements-dev.txt
+
+      - name: Run tests
+        run: pytest tests/ -v
+        env:
+          TESTING: "true"
+          PYTHONPATH: ${{ github.workspace }}
+          DATABASE_URL: postgresql+asyncpg://wrapsec:ci_password@localhost:5432/wrapsec_test
+          REDIS_URL: redis://localhost:6379/0
+          SECRET_KEY: ci_secret_key_for_testing_minimum_32_characters_long
+          ADMIN_API_KEY: ci_admin_api_key_for_testing_minimum_32_chars_x
+          ADMIN_EMAIL: admin@example.com
+          ADMIN_PASSWORD: ci_admin_password
+          ENVIRONMENT: testing
