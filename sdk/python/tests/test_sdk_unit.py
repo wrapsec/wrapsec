@@ -348,7 +348,7 @@ class TestMaskApiKey:
 
     def test_normal_key_partially_masked(self):
         result = mask_api_key("wsk_live_abcdefghij1234")
-        assert result.startswith("sk_liv")
+        assert result.startswith("wsk_li")
         assert "****" in result
         assert result.endswith("1234")
 
