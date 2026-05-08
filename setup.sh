@@ -49,8 +49,14 @@ else
 fi
 
 # ── Build and start ───────────────────────────────────────────────────────────
-info "Building and starting WrapSec stack..."
-$COMPOSE up -d --build $BUILD_FLAG
+# Build on first run (images don't exist yet) or when --build is passed
+if [ -n "$BUILD_FLAG" ] || ! docker image inspect docker-api >/dev/null 2>&1; then
+    info "Building images and starting WrapSec stack..."
+    $COMPOSE up -d --build
+else
+    info "Starting WrapSec stack (use --build to rebuild images)..."
+    $COMPOSE up -d
+fi
 
 # ── Wait for API ──────────────────────────────────────────────────────────────
 info "Waiting for API to be ready..."
