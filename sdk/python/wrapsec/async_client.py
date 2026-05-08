@@ -122,40 +122,103 @@ class AsyncClient:
 
     async def scan(
         self,
-        text:    str,
-        mode:    str = "fast",
-        user:    str = "sdk",
-        timeout: int | None = None,
+        text:           str,
+        mode:           str = "fast",
+        execution_mode: str = "scan_only",
+        model:          str | None = None,
+        user:           str = "sdk",
+        timeout:        int | None = None,
     ) -> ScanResult:
         """
         Scan a single input for security risks. Async version.
         See Client.scan() for full documentation.
         """
-        # Validate mode client-side — mirrors client.py
         _VALID_MODES = ("fast", "full")
         if mode not in _VALID_MODES:
+            raise ValueError(f"mode must be one of {_VALID_MODES}, got {mode!r}")
+
+        _VALID_EXECUTION_MODES = ("scan_only", "proxy")
+        if execution_mode not in _VALID_EXECUTION_MODES:
             raise ValueError(
-                f"mode must be one of {_VALID_MODES}, got {mode!r}"
+                f"execution_mode must be one of {_VALID_EXECUTION_MODES}, got {execution_mode!r}"
             )
+        if execution_mode == "proxy" and not model:
+            raise ValueError("model is required when execution_mode='proxy'")
 
         text = normalize_text(text)
         text = validate_input(text)
         t    = self._resolve_timeout(timeout)
 
-        data = await self._request(
-            method  = "POST",
-            path    = "/ai/request",
-            timeout = t,
-            json    = {
-                "input":          text,
-                "detection_mode": mode,
-                "metadata": {
-                    "source":  "wrapsec-python",
-                    "user_id": user,
-                },
+        body: dict[str, Any] = {
+            "input":          text,
+            "detection_mode": mode,
+            "execution_mode": execution_mode,
+            "metadata": {
+                "source":  "wrapsec-python",
+                "user_id": user,
             },
-        )
+        }
+        if model:
+            body["model"] = model
+
+        data = await self._request(method="POST", path="/ai/request", timeout=t, json=body)
         return ScanResult.from_dict(data)
+
+    async def get_request(self, trace_id: str, timeout: int | None = None) -> dict[str, Any]:
+        """
+        Retrieve the full audit record for a single request by trace ID.
+        Includes proxy enrichment data when execution_mode is "proxy".
+        Scoped to the caller's dept/tenant — 404 if out of scope.
+
+        Returns a raw dict (structure varies by execution_mode).
+        """
+        return await self._request(
+            "GET", f"/ai/requests/{trace_id}",
+            self._resolve_timeout(timeout),
+        )
+
+    async def audit_export(
+        self,
+        decision:        str | None = None,
+        primary_reason:  str | None = None,
+        confidence_band: str | None = None,
+        from_date:       str | None = None,
+        to_date:         str | None = None,
+        dept_id:         str | None = None,
+        app_id:          str | None = None,
+        limit:           int = 1000,
+        timeout:         int | None = None,
+    ) -> bytes:
+        """
+        Export audit logs as CSV bytes for compliance reporting (up to 10,000 rows).
+        Scope is bounded by the API key used — non-admin keys are limited to their dept.
+
+        Returns raw CSV bytes. Write to a file or decode as needed:
+            data = await client.audit_export()
+            Path("audit.csv").write_bytes(data)
+        """
+        api_key = self._require_api_key()
+        params: dict[str, str] = {"limit": str(min(limit, 10000))}
+        if decision:        params["decision"]        = decision
+        if primary_reason:  params["primary_reason"]  = primary_reason
+        if confidence_band: params["confidence_band"] = confidence_band
+        if from_date:       params["from"]            = from_date
+        if to_date:         params["to"]              = to_date
+        if dept_id:         params["dept_id"]         = dept_id
+        if app_id:          params["app_id"]          = app_id
+
+        t   = self._resolve_timeout(timeout)
+        url = self._url("/audit/export")
+        async with httpx.AsyncClient(timeout=t) as c:
+            resp = await c.get(url, headers=build_headers(api_key), params=params)
+        if resp.is_success:
+            return resp.content
+        response_data = None
+        try:
+            response_data = resp.json()
+        except Exception:
+            pass
+        raise map_response_error(resp.status_code, response_data)
 
     async def batch(
         self,
@@ -178,19 +241,21 @@ class AsyncClient:
 
     async def audit_list(
         self,
-        decision:  str | None = None,
-        reason:    str | None = None,
-        from_date: str | None = None,
-        to_date:   str | None = None,
-        limit:     int = 20,
-        offset:    int = 0,
-        timeout:   int | None = None,
+        decision:       str | None = None,
+        reason:         str | None = None,
+        execution_mode: str | None = None,
+        from_date:      str | None = None,
+        to_date:        str | None = None,
+        limit:          int = 20,
+        offset:         int = 0,
+        timeout:        int | None = None,
     ) -> list[AuditLog]:
         params: dict[str, str] = {"limit": str(min(limit, 100)), "offset": str(max(offset, 0))}
-        if decision:  params["decision"] = decision
-        if reason:    params["primary_reason"] = reason
-        if from_date: params["from"]     = from_date
-        if to_date:   params["to"]       = to_date
+        if decision:        params["decision"]        = decision
+        if reason:          params["primary_reason"]  = reason
+        if execution_mode:  params["execution_mode"]  = execution_mode
+        if from_date:       params["from"]            = from_date
+        if to_date:         params["to"]              = to_date
 
         data = await self._request("GET", "/audit/logs", self._resolve_timeout(timeout), params=params)
         return [AuditLog.from_dict(item) for item in data.get("items", data.get("logs", []))]

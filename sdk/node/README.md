@@ -109,12 +109,12 @@ if (result.isBlocked) {
 }
 ```
 
-> ⚠️ **CRITICAL SECURITY RULE**
+> **CRITICAL SECURITY RULE**
 > If `result.isBlocked === true`, you **MUST NOT** forward the request to your LLM.
 > Bypassing this check defeats the purpose of WrapSec and exposes your system to
 > prompt injection and data exfiltration risks.
 
-> ⚠️ **BLOCK is a security decision, not an exception.**
+> **BLOCK is a security decision, not an exception.**
 > It must always be handled explicitly using `result.isBlocked`.
 > Do not use try/catch to handle BLOCK - it will never be caught there.
 > The SDK only throws on infrastructure failures (network, auth, server errors).
@@ -135,7 +135,9 @@ const result = await client.scan(text, options?)
 |---|---|---|---|
 | `text` | string | required | Input to scan. Max 64KB. |
 | `options.mode` | `"fast"` \| `"full"` | `"fast"` | `fast` uses rule + ML detectors (~5ms). `full` adds LLM semantic analysis (~100–500ms extra). |
-| `options.user` | string | `"sdk-nodejs"` | User ID for audit attribution. |
+| `options.executionMode` | `"scan_only"` \| `"proxy"` | `"scan_only"` | `scan_only` scans and returns the decision. `proxy` scans then forwards to the LLM provider on ALLOW/SANITIZE. |
+| `options.model` | string | — | LLM model identifier (e.g. `"openai/gpt-4o"`). Required when `executionMode` is `"proxy"`. |
+| `options.user` | string | `"sdk"` | User ID for audit attribution. |
 | `options.timeout` | number | client default | Per-request timeout in seconds. Overrides client default for this call only. |
 
 **ScanResult fields:**
@@ -144,16 +146,20 @@ const result = await client.scan(text, options?)
 |---|---|---|
 | `decision` | `"ALLOW"` \| `"BLOCK"` \| `"SANITIZE"` | Security verdict. Always check this. |
 | `primaryReason` | string | What triggered the decision. e.g. `RULE_DETECTOR`, `ML_DETECTOR`, `PII_GUARDRAIL_BLOCK` |
-| `confidence` | number | 0.0–1.0. Reflects agreement between detection layers, not probability of attack. A high confidence means multiple detectors agree - not that an attack is certain. |
+| `riskScore` | number | 0.0–1.0. The threshold value that drove the BLOCK/SANITIZE/ALLOW decision. |
+| `confidence` | number | 0.0–1.0. Detection model certainty. Distinct from `riskScore`. |
 | `confidenceBand` | `"HIGH"` \| `"MEDIUM"` \| `"LOW"` | HIGH ≥ 0.7, MEDIUM ≥ 0.4, LOW < 0.4 |
 | `traceId` | string | Unique request ID (`req_...`). Use for debugging and audit lookup. |
 | `threats` | string[] | Detected threat categories. |
 | `latencyMs` | number | Detection time in milliseconds. |
+| `executionMode` | string | `"scan_only"` or `"proxy"`. |
 | `sanitizedInput` | string \| undefined | Redacted input. Only present when `decision === "SANITIZE"`. |
+| `output` | string \| undefined | LLM response. Only present when `executionMode === "proxy"`. |
 | `isBlocked` | boolean | Shorthand for `decision === "BLOCK"` |
 | `isSanitized` | boolean | Shorthand for `decision === "SANITIZE"` |
 | `isAllowed` | boolean | Shorthand for `decision === "ALLOW"` |
 | `isSystemError` | boolean | True when `primaryReason === "SYSTEM_ERROR"`. Treat as failure - do not forward to LLM. |
+| `isProxy` | boolean | True when `executionMode === "proxy"`. |
 
 **Always log `traceId` in production systems.** It can be used to:
 - Look up the request in the WrapSec dashboard
@@ -166,10 +172,12 @@ const result = await client.scan(text, options?)
 | API field | SDK field |
 |---|---|
 | `primary_reason` | `primaryReason` |
+| `risk_score` | `riskScore` |
 | `confidence_band` | `confidenceBand` |
 | `trace_id` | `traceId` |
 | `sanitized_input` | `sanitizedInput` |
 | `latency_ms` | `latencyMs` |
+| `execution_mode` | `executionMode` |
 
 **Critical - SYSTEM_ERROR behaviour:**
 
@@ -221,7 +229,7 @@ Automatically scans the request body before your route handler runs.
 
 ```typescript
 import express from 'express'
-import { wrapSecMiddleware } from 'wrapsec-node/middleware'
+import { wrapSecMiddleware } from 'wrapsec-node/middleware/express'
 
 const app = express()
 app.use(express.json())
@@ -294,14 +302,18 @@ Audit APIs provide full visibility into all AI interactions for compliance, moni
 ```typescript
 // List recent requests - scoped to your API key's department
 const logs = await client.auditList({
-  decision:  'BLOCK',
-  fromDate:  '2026-05-01',
-  toDate:    '2026-05-31',
-  limit:     50,           // max 100
+  decision:      'BLOCK',
+  executionMode: 'scan_only',   // filter: scan_only | proxy
+  fromDate:      '2026-05-01',
+  toDate:        '2026-05-31',
+  limit:         50,            // max 100
 })
 
 // Get a specific request by trace ID
 const log = await client.auditGet('req_01kqjhz6rp4st13mwksvd77adv')
+
+// Get full request record by trace ID (includes proxy enrichment)
+const record = await client.getRequest('req_01kqjhz6rp4st13mwksvd77adv')
 
 // Aggregated statistics
 const stats = await client.auditStats({
@@ -311,9 +323,34 @@ const stats = await client.auditStats({
 console.log(stats.blockRate)        // 0.12
 console.log(stats.totalRequests)    // 4821
 console.log(stats.severityCounts)   // { CRITICAL: 12, HIGH: 45, MEDIUM: 89, LOW: 4675 }
+
+// Export audit records as a CSV buffer
+const csvBuffer = await client.auditExport({
+  decision:  'BLOCK',
+  fromDate:  '2026-05-01',
+  toDate:    '2026-05-31',
+  limit:     5000,
+})
+fs.writeFileSync('audit_export.csv', csvBuffer)
 ```
 
-**AuditLog fields:** `traceId`, `decision`, `primaryReason`, `confidence`, `confidenceBand`, `threats`, `latencyMs`, `inputLength`, `keyId`, `deptId`, `appId`, `userId`, `source`, `createdAt`
+**`getRequest(traceId, timeout?)`** — returns the full audit record for a single request. Scoped to the caller's department/tenant. Returns `Record<string, unknown>`.
+
+**`auditExport(options?)`** — exports audit records as a CSV `Buffer`. Options:
+
+| Option | Type | Default | Description |
+|---|---|---|---|
+| `decision` | `"ALLOW"` \| `"BLOCK"` \| `"SANITIZE"` | — | Filter by decision. |
+| `primaryReason` | string | — | Filter by reason string. |
+| `confidenceBand` | `"HIGH"` \| `"MEDIUM"` \| `"LOW"` | — | Filter by confidence band. |
+| `fromDate` | string | — | ISO date lower bound. |
+| `toDate` | string | — | ISO date upper bound. |
+| `deptId` | string | — | Filter by department ID. |
+| `appId` | string | — | Filter by application ID. |
+| `limit` | number | `1000` | Max rows to export (server cap: 10000). |
+| `timeout` | number | client default | Per-request timeout in seconds. |
+
+**AuditLog fields:** `traceId`, `createdAt`, `decision`, `primaryReason`, `riskScore`, `confidence`, `confidenceBand`, `threats`, `severity`, `latencyMs`, `inputLength`, `keyId`, `deptId`, `deptName`, `appId`, `appName`, `userId`, `source`, `ipAddress`, `tenantId`, `attributionVerified`, `detectionMode`, `executionMode`, `policySource`, `inputHash`, `outputDecision`, `provider`, `model`
 
 **AuditStats fields:** `totalRequests`, `blockCount`, `sanitizeCount`, `allowCount`, `blockRate`, `avgLatencyMs`, `p95LatencyMs`, `topThreats`, `severityCounts`
 
@@ -417,12 +454,12 @@ if (result.isBlocked) {
 
 | Error type | Retried? | Strategy |
 |---|---|---|
-| 5xx server error | ✅ Yes | 3 attempts: immediate, +1s, +2s |
-| Timeout | ✅ Yes | Same as above |
-| Connection failure | ✅ Yes | Same as above |
-| 401 / 403 | ❌ No | Permanent - fix your credentials |
-| 429 rate limit | ❌ No | Retrying worsens the situation |
-| 4xx client error | ❌ No | Permanent - fix your request |
+| 5xx server error | Yes | 3 attempts: immediate, +1s, +2s |
+| Timeout | Yes | Same as above |
+| Connection failure | Yes | Same as above |
+| 401 / 403 | No | Permanent - fix your credentials |
+| 429 rate limit | No | Retrying worsens the situation |
+| 4xx client error | No | Permanent - fix your request |
 
 After 3 failed attempts, `WrapSecSystemError` is thrown.
 
@@ -494,6 +531,8 @@ import WrapSec, {
   type ScanOptions,
   type AuditLog,
   type AuditStats,
+  type AuditListOptions,
+  type AuditExportOptions,
   type WrapSecConfig,
 } from 'wrapsec-node'
 ```
@@ -504,13 +543,13 @@ import WrapSec, {
 
 | | Python SDK | Node SDK |
 |---|---|---|
-| Sync client | ✅ | ❌ (JS is async by nature) |
-| Async client | ✅ | ✅ |
-| CLI | ✅ | ❌ |
-| Express middleware | ❌ | ✅ |
-| Fastify plugin | ❌ | ✅ |
+| Sync client | Yes | No (JS is async by nature) |
+| Async client | Yes | Yes |
+| CLI | Yes | No |
+| Express middleware | No | Yes |
+| Fastify plugin | No | Yes |
 | Field naming | `snake_case` | `camelCase` |
-| Config file | ✅ (`~/.wrapsec/config.toml`) | ❌ (env vars only) |
+| Config file | Yes (`~/.config/wrapsec/config.json`) | No (env vars only) |
 | HTTP library | `requests` / `httpx` | Native `fetch` (Node 18+) |
 
 Both SDKs share: identical error class names, identical retry strategy, identical timeout resolution, identical endpoint coverage.

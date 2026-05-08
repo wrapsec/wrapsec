@@ -118,12 +118,12 @@ else:
     forward_to_llm(user_input)
 ```
 
-> ⚠️ **CRITICAL SECURITY RULE**
+> **CRITICAL SECURITY RULE**
 > If `result.is_blocked is True`, you **MUST NOT** forward the request to your LLM.
 > Bypassing this check defeats the purpose of WrapSec and exposes your system to
 > prompt injection and data exfiltration risks.
 
-> ⚠️ **BLOCK is a security decision, not an exception.**
+> **BLOCK is a security decision, not an exception.**
 > It must always be handled explicitly using `result.is_blocked`.
 > Do not use try/except to handle BLOCK - it will never be raised there.
 > The SDK only raises exceptions on infrastructure failures (network, auth, server errors).
@@ -137,13 +137,15 @@ Scans a single input for security threats.
 **Maximum input size: 8000 characters per request.**
 
 ```python
-result = client.scan(text, mode="fast", user="sdk", timeout=None)
+result = client.scan(text, mode="fast", execution_mode="scan_only", model=None, user="sdk", timeout=None)
 ```
 
 | Parameter | Type | Default | Description |
 |---|---|---|---|
 | `text` | str | required | Input to scan. Max 8000 chars. |
 | `mode` | str | `"fast"` | `"fast"` uses rule + ML detectors (~5ms). `"full"` adds LLM semantic analysis (~100–500ms extra). |
+| `execution_mode` | str | `"scan_only"` | `"scan_only"` scans and returns the decision. `"proxy"` scans then forwards to the LLM provider on ALLOW/SANITIZE. |
+| `model` | str \| None | `None` | LLM model identifier (e.g. `"openai/gpt-4o"`). Required when `execution_mode="proxy"`. |
 | `user` | str | `"sdk"` | User ID for audit attribution. |
 | `timeout` | int \| None | client default | Per-request timeout in seconds. Overrides client default for this call only. |
 
@@ -153,16 +155,20 @@ result = client.scan(text, mode="fast", user="sdk", timeout=None)
 |---|---|---|
 | `decision` | str | `"ALLOW"`, `"BLOCK"`, or `"SANITIZE"`. Always check this. |
 | `primary_reason` | str | What triggered the decision. e.g. `RULE_DETECTOR`, `ML_DETECTOR`, `PII_GUARDRAIL_BLOCK` |
-| `confidence` | float | 0.0–1.0. Reflects agreement between detection layers, not probability of attack. |
+| `risk_score` | float | 0.0–1.0. The threshold value that drove the BLOCK/SANITIZE/ALLOW decision. |
+| `confidence` | float | 0.0–1.0. Detection model certainty. Distinct from `risk_score`. |
 | `confidence_band` | str | `"HIGH"` (≥0.7), `"MEDIUM"` (≥0.4), `"LOW"` (<0.4) |
 | `trace_id` | str | Unique request ID (`req_...`). Use for debugging and audit lookup. |
 | `threats` | list[str] | Detected threat categories. |
 | `latency_ms` | float | Detection time in milliseconds. |
+| `execution_mode` | str | `"scan_only"` or `"proxy"`. |
 | `sanitized_input` | str \| None | Redacted input. Only present when `decision == "SANITIZE"`. |
+| `output` | str \| None | LLM response. Only present when `execution_mode == "proxy"`. |
 | `is_blocked` | bool | Shorthand for `decision == "BLOCK"` |
 | `is_sanitized` | bool | Shorthand for `decision == "SANITIZE"` |
 | `is_allowed` | bool | Shorthand for `decision == "ALLOW"` |
 | `is_system_error` | bool | True when `primary_reason == "SYSTEM_ERROR"`. Treat as failure - do not forward to LLM. |
+| `is_proxy` | bool | True when `execution_mode == "proxy"`. |
 
 **Always log `trace_id` in production systems.** It can be used to:
 - Look up the request in the WrapSec dashboard
@@ -274,24 +280,54 @@ Audit APIs provide full visibility into all AI interactions for compliance, moni
 ```python
 # List recent requests - scoped to your API key's department
 logs = client.audit_list(
-    decision  = "BLOCK",              # filter: ALLOW | BLOCK | SANITIZE
-    reason    = "RULE_DETECTOR",      # filter by primary_reason
-    from_date = "2026-05-01",         # ISO date
-    to_date   = "2026-05-31",
-    limit     = 50,                   # max 100
+    decision       = "BLOCK",         # filter: ALLOW | BLOCK | SANITIZE
+    reason         = "RULE_DETECTOR", # filter by primary_reason
+    execution_mode = "scan_only",     # filter: scan_only | proxy
+    from_date      = "2026-05-01",    # ISO date
+    to_date        = "2026-05-31",
+    limit          = 50,              # max 100
 )
 
 # Get a specific request by trace ID
 log = client.audit_get("req_01knzhh8...")
+
+# Get a request record by trace ID (full record including proxy enrichment)
+record = client.get_request("req_01knzhh8...")
 
 # Aggregated statistics
 stats = client.audit_stats(from_date="2026-05-01", to_date="2026-05-31")
 print(stats.block_rate)        # 0.12
 print(stats.total_requests)    # 4821
 print(stats.severity_counts)   # {"CRITICAL": 12, "HIGH": 45, "MEDIUM": 89, "LOW": 4675}
+
+# Export audit records as CSV bytes
+csv_data = client.audit_export(
+    decision       = "BLOCK",
+    from_date      = "2026-05-01",
+    to_date        = "2026-05-31",
+    limit          = 5000,
+)
+with open("audit_export.csv", "wb") as f:
+    f.write(csv_data)
 ```
 
-**AuditLog fields:** `trace_id`, `decision`, `primary_reason`, `confidence`, `confidence_band`, `threats`, `latency_ms`, `input_length`, `key_id`, `dept_id`, `app_id`, `user_id`, `source`, `created_at`
+**`get_request(trace_id, timeout=None)`** — returns the full audit record for a single request by trace ID. Scoped to the caller's department/tenant. Returns a `dict`.
+
+**`audit_export(...)`** — exports audit records as CSV bytes. Returns `bytes`. Parameters:
+
+| Parameter | Type | Default | Description |
+|---|---|---|---|
+| `decision` | str \| None | `None` | Filter: `ALLOW`, `BLOCK`, or `SANITIZE`. |
+| `primary_reason` | str \| None | `None` | Filter by reason string. |
+| `confidence_band` | str \| None | `None` | `"HIGH"`, `"MEDIUM"`, or `"LOW"`. |
+| `from_date` | str \| None | `None` | ISO date lower bound. |
+| `to_date` | str \| None | `None` | ISO date upper bound. |
+| `dept_id` | str \| None | `None` | Filter by department ID. |
+| `app_id` | str \| None | `None` | Filter by application ID. |
+| `limit` | int | `1000` | Max rows to export (server cap: 10000). |
+| `timeout` | int \| None | client default | Per-request timeout in seconds. |
+
+**AuditLog fields:** `trace_id`, `created_at`, `decision`, `primary_reason`, `risk_score`, `confidence`, `confidence_band`, `threats`, `severity`, `latency_ms`, `input_length`, `key_id`, `dept_id`, `dept_name`, `app_id`, `app_name`, `user_id`, `source`, `ip_address`, `tenant_id`, `attribution_verified`, `detection_mode`, `execution_mode`, `policy_source`, `input_hash`, `output_decision`, `provider`, `model`
 
 **AuditStats fields:** `total_requests`, `block_count`, `sanitize_count`, `allow_count`, `block_rate`, `avg_latency_ms`, `p95_latency_ms`, `top_threats`, `severity_counts`
 
@@ -395,12 +431,12 @@ if result.is_blocked:
 
 | Error type | Retried? | Strategy |
 |---|---|---|
-| 5xx server error | ✅ Yes | 3 attempts: immediate, +1s, +2s |
-| Timeout | ✅ Yes | Same as above |
-| Connection failure | ✅ Yes | Same as above |
-| 401 / 403 | ❌ No | Permanent - fix your credentials |
-| 429 rate limit | ❌ No | Retrying worsens the situation |
-| 4xx client error | ❌ No | Permanent - fix your request |
+| 5xx server error | Yes | 3 attempts: immediate, +1s, +2s |
+| Timeout | Yes | Same as above |
+| Connection failure | Yes | Same as above |
+| 401 / 403 | No | Permanent - fix your credentials |
+| 429 rate limit | No | Retrying worsens the situation |
+| 4xx client error | No | Permanent - fix your request |
 
 After 3 failed attempts, `WrapSecSystemError` is raised.
 
@@ -555,12 +591,12 @@ Internal modules (`core/`, `config/`, `cli/`) are not public API and may change 
 
 | | Python SDK | Node SDK |
 |---|---|---|
-| Sync client | ✅ | ❌ (JS is async by nature) |
-| Async client | ✅ | ✅ |
-| CLI | ✅ | ❌ |
-| Express/Fastify middleware | ❌ | ✅ |
+| Sync client | Yes | No (JS is async by nature) |
+| Async client | Yes | Yes |
+| CLI | Yes | No |
+| Express/Fastify middleware | No | Yes |
 | Field naming | `snake_case` | `camelCase` |
-| Config file | ✅ (`~/.config/wrapsec/config.json`) | ❌ (env vars only) |
+| Config file | Yes (`~/.config/wrapsec/config.json`) | No (env vars only) |
 | HTTP library | `requests` / `httpx` | Native `fetch` (Node 18+) |
 
 Both SDKs share: identical error class names, identical retry strategy, identical timeout resolution, identical endpoint coverage.

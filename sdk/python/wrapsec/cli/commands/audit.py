@@ -47,6 +47,9 @@ def audit() -> None:
 @audit.command("list")
 @click.option("--decision",  default=None, type=click.Choice(["BLOCK", "SANITIZE", "ALLOW"]))
 @click.option("--reason",    default=None, help="Filter by primary_reason.")
+@click.option("--mode",      "execution_mode", default=None,
+              type=click.Choice(["scan_only", "proxy"]),
+              help="Filter by execution mode.")
 @click.option("--from",      "from_date",  default=None, help="From date (YYYY-MM-DD).")
 @click.option("--to",        "to_date",    default=None, help="To date (YYYY-MM-DD).")
 @click.option("--limit",     default=20,   show_default=True, type=click.IntRange(1, 100),
@@ -55,13 +58,14 @@ def audit() -> None:
               help="Number of records to skip (for pagination).")
 @click.option("--json",      "json_output", is_flag=True, help="Pure JSON output.")
 def audit_list(
-    decision:    str | None,
-    reason:      str | None,
-    from_date:   str | None,
-    to_date:     str | None,
-    limit:       int,
-    offset:      int,
-    json_output: bool,
+    decision:       str | None,
+    reason:         str | None,
+    execution_mode: str | None,
+    from_date:      str | None,
+    to_date:        str | None,
+    limit:          int,
+    offset:         int,
+    json_output:    bool,
 ) -> None:
     """List recent audit log entries.
 
@@ -70,6 +74,7 @@ def audit_list(
       wrapsec audit list
       wrapsec audit list --decision BLOCK --limit 50
       wrapsec audit list --reason SYSTEM_ERROR
+      wrapsec audit list --mode proxy --limit 10
       wrapsec audit list --from 2026-04-01 --to 2026-04-16
       wrapsec audit list --offset 100 --limit 50
       wrapsec audit list --json | jq .[].trace_id
@@ -77,12 +82,13 @@ def audit_list(
     client = _get_client()
     try:
         logs = client.audit_list(
-            decision  = decision,
-            reason    = reason,
-            from_date = from_date,
-            to_date   = to_date,
-            limit     = limit,
-            offset    = offset,
+            decision       = decision,
+            reason         = reason,
+            execution_mode = execution_mode,
+            from_date      = from_date,
+            to_date        = to_date,
+            limit          = limit,
+            offset         = offset,
         )
     except WrapSecError as e:
         print_error(str(e))
@@ -93,10 +99,14 @@ def audit_list(
             "trace_id":       log.trace_id,
             "decision":       log.decision,
             "primary_reason": log.primary_reason,
+            "risk_score":     log.risk_score,
             "confidence":     log.confidence,
             "confidence_band":log.confidence_band,
             "threats":        log.threats,
             "latency_ms":     log.latency_ms,
+            "execution_mode": log.execution_mode,
+            "severity":       log.severity,
+            "tenant_id":      log.tenant_id,
             "key_id":         log.key_id,
             "dept_id":        log.dept_id,
             "app_id":         log.app_id,
@@ -113,20 +123,22 @@ def audit_list(
     # Human-readable table
     click.echo(
         f"{'TRACE ID':<32}  {'DECISION':<10}  {'REASON':<30}  "
-        f"{'CONF':<5}  {'BAND':<6}  {'SOURCE':<18}  CREATED"
+        f"{'CONF':<5}  {'BAND':<6}  {'MODE':<10}  {'SOURCE':<18}  CREATED"
     )
-    click.echo("-" * 120)
+    click.echo("-" * 130)
     for log in logs:
         color   = {"BLOCK": "red", "SANITIZE": "yellow", "ALLOW": "green"}.get(log.decision)
         reason  = (log.primary_reason or "—")[:30]
         source  = (log.source or "—")[:18]
+        mode    = (log.execution_mode or "—")[:10]
         created = str(log.created_at)[:19] if log.created_at else "—"
         click.secho(
             f"{log.trace_id:<32}  "
             f"{log.decision:<10}  "
             f"{reason:<30}  "
-            f"{round(log.confidence, 1):<4.1f}  "
-            f"{log.confidence_band or '—':<5}  "
+            f"{round(log.confidence, 2):<4.2f}  "
+            f"{log.confidence_band or '—':<6}  "
+            f"{mode:<10}  "
             f"{source:<18}  "
             f"{created}",
             fg=color,
@@ -156,11 +168,15 @@ def audit_get(trace_id: str, json_output: bool) -> None:
             "trace_id":        log.trace_id,
             "decision":        log.decision,
             "primary_reason":  log.primary_reason,
+            "risk_score":      log.risk_score,
             "confidence":      log.confidence,
             "confidence_band": log.confidence_band,
             "threats":         log.threats,
+            "severity":        log.severity,
             "latency_ms":      log.latency_ms,
             "input_length":    log.input_length,
+            "execution_mode":  log.execution_mode,
+            "tenant_id":       log.tenant_id,
             "key_id":          log.key_id,
             "dept_id":         log.dept_id,
             "app_id":          log.app_id,
@@ -173,13 +189,17 @@ def audit_get(trace_id: str, json_output: bool) -> None:
     color = {"BLOCK": "red", "SANITIZE": "yellow", "ALLOW": "green"}.get(log.decision)
     click.secho(f"Decision:       {log.decision}", fg=color, bold=True)
     click.echo(f"Reason:         {log.primary_reason}")
-    click.echo(f"Confidence:     {round(log.confidence, 1)} ({log.confidence_band})")
+    click.echo(f"Confidence:     {round(log.confidence, 2):.2f} ({log.confidence_band})")
     click.echo(f"Trace ID:       {log.trace_id}")
     click.echo(f"Latency:        {log.latency_ms:.1f}ms")
     click.echo(f"Input length:   {log.input_length} chars")
     click.echo(f"Created:        {log.created_at}")
     if log.threats:
         click.echo(f"Threats:        {', '.join(log.threats)}")
+    if log.severity:
+        click.echo(f"Severity:       {log.severity}")
+    if log.execution_mode:
+        click.echo(f"Mode:           {log.execution_mode}")
     if log.key_id:
         click.echo(f"Key ID:         {log.key_id}")
     if log.dept_id:

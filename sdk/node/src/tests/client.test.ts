@@ -580,3 +580,206 @@ describe("Retry behaviour", () => {
   })
 
 })
+
+// ── scan() executionMode validation ───────────────────────────────────────
+
+describe("scan() executionMode validation", () => {
+
+  it("throws WrapSecError on invalid executionMode", async () => {
+    const client = makeClient()
+    await assert.rejects(
+      () => client.scan("test", { executionMode: "stream" as any }),
+      (err: any) => err instanceof WrapSecError && /executionMode/.test(err.message),
+    )
+  })
+
+  it("throws WrapSecError on proxy without model", async () => {
+    const client = makeClient()
+    await assert.rejects(
+      () => client.scan("test", { executionMode: "proxy" }),
+      (err: any) => err instanceof WrapSecError && /model/.test(err.message),
+    )
+  })
+
+  it("accepts scan_only without model", async () => {
+    const client = makeClient()
+    const result = await client.scan("hello", { executionMode: "scan_only" })
+    assert.ok(result.decision)
+  })
+
+  it("scan_only result has executionMode set", async () => {
+    const client = makeClient()
+    const result = await client.scan("hello")
+    assert.equal(typeof result.executionMode, "string")
+    assert.ok(result.executionMode === "scan_only" || result.executionMode === "proxy")
+  })
+
+  it("isProxy is false for scan_only", async () => {
+    const client = makeClient()
+    const result = await client.scan("hello")
+    if (result.executionMode === "scan_only") {
+      assert.equal(result.isProxy, false)
+    }
+  })
+
+})
+
+// ── ScanResult new fields ──────────────────────────────────────────────────
+
+describe("ScanResult new fields", () => {
+
+  it("riskScore is a number", async () => {
+    const client = makeClient()
+    const result = await client.scan("hello world")
+    assert.equal(typeof result.riskScore, "number")
+    assert.ok(result.riskScore >= 0 && result.riskScore <= 1)
+  })
+
+  it("riskScore is distinct from confidence", async () => {
+    const client = makeClient()
+    const result = await client.scan("hello world") as any
+    assert.ok("riskScore"  in result)
+    assert.ok("confidence" in result)
+  })
+
+  it("output is undefined for scan_only", async () => {
+    const client = makeClient()
+    const result = await client.scan("hello")
+    if (result.executionMode === "scan_only") {
+      assert.equal(result.output, undefined)
+    }
+  })
+
+})
+
+// ── auditList() executionMode filter ──────────────────────────────────────
+
+describe("auditList() executionMode filter", () => {
+
+  it("accepts executionMode filter scan_only", async () => {
+    const client = makeClient()
+    const logs   = await client.auditList({ executionMode: "scan_only", limit: 2 })
+    assert.ok(Array.isArray(logs))
+    // All returned logs should be scan_only if any
+    logs.forEach(l => {
+      if (l.executionMode) assert.equal(l.executionMode, "scan_only")
+    })
+  })
+
+  it("accepts executionMode filter proxy", async () => {
+    const client = makeClient()
+    const logs   = await client.auditList({ executionMode: "proxy", limit: 2 })
+    assert.ok(Array.isArray(logs))
+  })
+
+})
+
+// ── AuditLog new fields ────────────────────────────────────────────────────
+
+describe("AuditLog new fields", () => {
+
+  it("riskScore and confidence are both present and separate", async () => {
+    const client = makeClient()
+    const logs   = await client.auditList({ limit: 1 })
+    if (logs.length > 0) {
+      const log = logs[0]
+      assert.equal(typeof log.riskScore,  "number")
+      assert.equal(typeof log.confidence, "number")
+      // They must be present as separate fields, never substituted
+      assert.ok("riskScore"  in log)
+      assert.ok("confidence" in log)
+    }
+  })
+
+  it("severity field is present", async () => {
+    const client = makeClient()
+    const logs   = await client.auditList({ limit: 1 })
+    if (logs.length > 0) {
+      // severity is string | null
+      assert.ok("severity" in logs[0])
+    }
+  })
+
+  it("attributionVerified is a boolean", async () => {
+    const client = makeClient()
+    const logs   = await client.auditList({ limit: 1 })
+    if (logs.length > 0) {
+      assert.equal(typeof logs[0].attributionVerified, "boolean")
+    }
+  })
+
+  it("executionMode field is present on audit log", async () => {
+    const client = makeClient()
+    const logs   = await client.auditList({ limit: 1 })
+    if (logs.length > 0) {
+      assert.ok("executionMode" in logs[0])
+    }
+  })
+
+})
+
+// ── getRequest() ───────────────────────────────────────────────────────────
+
+describe("getRequest()", () => {
+
+  it("retrieves full request detail by traceId", async () => {
+    const client = makeClient()
+    const result = await client.scan("get request test")
+    await new Promise(r => setTimeout(r, 200))
+    const detail = await client.getRequest(result.traceId)
+    assert.ok(typeof detail === "object")
+    assert.equal(detail["traceId"], result.traceId)
+  })
+
+  it("throws WrapSecError for empty traceId", async () => {
+    const client = makeClient()
+    await assert.rejects(
+      () => client.getRequest(""),
+      (err: any) => err instanceof WrapSecError && /traceId/.test(err.message),
+    )
+  })
+
+  it("throws WrapSecError for non-existent traceId", async () => {
+    const client = makeClient()
+    await assert.rejects(
+      () => client.getRequest("req_nonexistent_xyz"),
+      (err: any) => err instanceof WrapSecError,
+    )
+  })
+
+})
+
+// ── auditExport() ──────────────────────────────────────────────────────────
+
+describe("auditExport()", () => {
+
+  it("returns a Buffer", async () => {
+    const client = makeClient()
+    const csv    = await client.auditExport({ limit: 10 })
+    assert.ok(Buffer.isBuffer(csv))
+    assert.ok(csv.length > 0)
+  })
+
+  it("CSV contains expected header row", async () => {
+    const client = makeClient()
+    const csv    = await client.auditExport({ limit: 5 })
+    const text   = csv.toString("utf8")
+    assert.ok(text.includes("trace_id"), "CSV must have trace_id column")
+    assert.ok(text.includes("decision"),  "CSV must have decision column")
+  })
+
+  it("respects decision filter", async () => {
+    const client = makeClient()
+    const csv    = await client.auditExport({ decision: "BLOCK", limit: 5 })
+    assert.ok(Buffer.isBuffer(csv))
+  })
+
+  it("throws WrapSecAuthError with invalid key", async () => {
+    const client = new WrapSec({ apiKey: "wsk_live_invalid", baseUrl: BASE_URL })
+    await assert.rejects(
+      () => client.auditExport(),
+      (err: any) => err instanceof WrapSecAuthError,
+    )
+  })
+
+})

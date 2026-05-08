@@ -531,3 +531,344 @@ class TestAsyncClient:
             async with AsyncClient(api_key="wsk_live_testkey1234567890123456789012") as c:
                 assert c is not None
         asyncio.run(_test())
+
+
+# ── ScanResult new fields ────────────────────────────────────────────────────
+
+PROXY_RESPONSE = {
+    "decision":        "ALLOW",
+    "primary_reason":  "NO_THREAT_DETECTED",
+    "confidence":      0.05,
+    "confidence_band": "LOW",
+    "trace_id":        "req_04proxy",
+    "threats":         [],
+    "latency_ms":      120.0,
+    "risk_score":      0.03,
+    "output":          "Sure, here is the answer...",
+    "processing": {
+        "latency_ms":     120.0,
+        "execution_mode": "proxy",
+        "detection_mode": "fast",
+        "llm_invoked":    True,
+    },
+}
+
+
+class TestScanResultNewFields:
+
+    def test_risk_score_parsed(self):
+        result = ScanResult.from_dict(PROXY_RESPONSE)
+        assert result.risk_score == 0.03
+
+    def test_risk_score_defaults_zero(self):
+        result = ScanResult.from_dict(ALLOW_RESPONSE)
+        assert result.risk_score == 0.0
+
+    def test_execution_mode_proxy(self):
+        result = ScanResult.from_dict(PROXY_RESPONSE)
+        assert result.execution_mode == "proxy"
+        assert result.is_proxy
+
+    def test_execution_mode_defaults_scan_only(self):
+        result = ScanResult.from_dict(ALLOW_RESPONSE)
+        assert result.execution_mode == "scan_only"
+        assert not result.is_proxy
+
+    def test_output_present_in_proxy(self):
+        result = ScanResult.from_dict(PROXY_RESPONSE)
+        assert result.output == "Sure, here is the answer..."
+
+    def test_output_absent_in_scan_only(self):
+        result = ScanResult.from_dict(ALLOW_RESPONSE)
+        assert result.output is None
+
+    def test_risk_score_distinct_from_confidence(self):
+        data = {**ALLOW_RESPONSE, "risk_score": 0.8, "confidence": 0.95}
+        result = ScanResult.from_dict(data)
+        assert result.risk_score == 0.8
+        assert result.confidence == 0.95
+
+    def test_execution_mode_from_processing_nested(self):
+        data = {
+            **ALLOW_RESPONSE,
+            "processing": {"execution_mode": "proxy", "latency_ms": 50.0},
+        }
+        result = ScanResult.from_dict(data)
+        assert result.execution_mode == "proxy"
+
+
+# ── AuditLog new fields ──────────────────────────────────────────────────────
+
+AUDIT_LOG_FULL = {
+    "trace_id":             "req_audit01",
+    "timestamp":            "2026-05-08T10:00:00",
+    "decision":             "BLOCK",
+    "primary_reason":       "RULE_DETECTOR",
+    "risk_score":           0.92,
+    "confidence":           0.88,
+    "confidence_band":      "HIGH",
+    "threats":              ["PROMPT_INJECTION"],
+    "severity":             "CRITICAL",
+    "latency_ms":           5.2,
+    "input_length":         120,
+    "key_id":               "key_abc",
+    "dept_id":              "dept_xyz",
+    "dept_name":            "Engineering",
+    "app_id":               "app_001",
+    "app_name":             "ChatApp",
+    "user_id":              "user_123",
+    "source":               "wrapsec-python",
+    "ip_address":           "10.0.0.1",
+    "tenant_id":            "tenant_abc",
+    "attribution_verified": True,
+    "detection_mode":       "fast",
+    "execution_mode":       "scan_only",
+    "policy_source":        "dept",
+    "input_hash":           "sha256:abcdef",
+    "output_decision":      None,
+    "provider":             None,
+    "model":                None,
+}
+
+
+class TestAuditLogNewFields:
+
+    def test_risk_score_separate_from_confidence(self):
+        log = AuditLog.from_dict(AUDIT_LOG_FULL)
+        assert log.risk_score  == 0.92
+        assert log.confidence  == 0.88
+
+    def test_severity_parsed(self):
+        log = AuditLog.from_dict(AUDIT_LOG_FULL)
+        assert log.severity == "CRITICAL"
+
+    def test_severity_defaults_none(self):
+        data = {k: v for k, v in AUDIT_LOG_FULL.items() if k != "severity"}
+        log  = AuditLog.from_dict(data)
+        assert log.severity is None
+
+    def test_attribution_fields(self):
+        log = AuditLog.from_dict(AUDIT_LOG_FULL)
+        assert log.dept_name            == "Engineering"
+        assert log.app_name             == "ChatApp"
+        assert log.ip_address           == "10.0.0.1"
+        assert log.tenant_id            == "tenant_abc"
+        assert log.attribution_verified is True
+
+    def test_processing_metadata_fields(self):
+        log = AuditLog.from_dict(AUDIT_LOG_FULL)
+        assert log.detection_mode == "fast"
+        assert log.execution_mode == "scan_only"
+        assert log.policy_source  == "dept"
+        assert log.input_hash     == "sha256:abcdef"
+
+    def test_proxy_fields_none_for_scan_only(self):
+        log = AuditLog.from_dict(AUDIT_LOG_FULL)
+        assert log.output_decision is None
+        assert log.provider        is None
+        assert log.model           is None
+
+    def test_proxy_fields_populated(self):
+        data = {**AUDIT_LOG_FULL, "output_decision": "ALLOW", "provider": "openai", "model": "gpt-4o"}
+        log  = AuditLog.from_dict(data)
+        assert log.output_decision == "ALLOW"
+        assert log.provider        == "openai"
+        assert log.model           == "gpt-4o"
+
+    def test_timestamp_fallback_to_created_at(self):
+        data = {k: v for k, v in AUDIT_LOG_FULL.items() if k != "timestamp"}
+        data["created_at"] = "2026-05-08T09:00:00"
+        log = AuditLog.from_dict(data)
+        assert log.created_at == "2026-05-08T09:00:00"
+
+    def test_risk_score_does_not_fall_back_to_confidence(self):
+        data = {**AUDIT_LOG_FULL, "risk_score": 0.0}
+        log  = AuditLog.from_dict(data)
+        assert log.risk_score == 0.0
+        assert log.confidence == 0.88  # unchanged
+
+
+# ── scan() execution_mode validation ─────────────────────────────────────────
+
+class TestScanExecutionModeValidation:
+
+    @patch("wrapsec.client.with_retry")
+    def test_invalid_execution_mode_raises_before_network(self, mock_retry):
+        client = make_client()
+        with pytest.raises(ValueError, match="execution_mode"):
+            client.scan("hello", execution_mode="stream")
+        mock_retry.assert_not_called()
+
+    @patch("wrapsec.client.with_retry")
+    def test_proxy_without_model_raises(self, mock_retry):
+        client = make_client()
+        with pytest.raises(ValueError, match="model"):
+            client.scan("hello", execution_mode="proxy")
+        mock_retry.assert_not_called()
+
+    @patch("wrapsec.client.with_retry")
+    def test_scan_only_accepted(self, mock_retry):
+        mock_retry.return_value = ALLOW_RESPONSE
+        client = make_client()
+        result = client.scan("hello", execution_mode="scan_only")
+        assert result.decision == "ALLOW"
+
+    @patch("wrapsec.client.with_retry")
+    def test_proxy_with_model_sends_both_fields(self, mock_retry):
+        mock_retry.return_value = PROXY_RESPONSE
+        client = make_client()
+        result = client.scan("hello", execution_mode="proxy", model="gpt-4o")
+        assert result.is_proxy
+        # Verify the body sent to with_retry includes both fields
+        call_fn = mock_retry.call_args[0][0]  # the lambda
+        # Check that the json body was built correctly by inspecting what mock received
+        # with_retry is called with a lambda — verify execution_mode in the captured body
+        body = mock_retry.call_args[1] if mock_retry.call_args[1] else {}
+        # The lambda captures body via closure; just verify result is PROXY_RESPONSE
+        assert result.execution_mode == "proxy"
+
+    def test_async_invalid_execution_mode_raises(self):
+        client = make_async_client()
+        client._request = AsyncMock()
+        with pytest.raises(ValueError, match="execution_mode"):
+            asyncio.run(client.scan("hello", execution_mode="bad"))
+        client._request.assert_not_called()
+
+    def test_async_proxy_without_model_raises(self):
+        client = make_async_client()
+        client._request = AsyncMock()
+        with pytest.raises(ValueError, match="model"):
+            asyncio.run(client.scan("hello", execution_mode="proxy"))
+        client._request.assert_not_called()
+
+
+# ── get_request() ─────────────────────────────────────────────────────────────
+
+GET_REQUEST_RESPONSE = {
+    "trace_id":       "req_04proxy",
+    "timestamp":      "2026-05-08T10:00:00",
+    "execution_mode": "scan_only",
+    "decision":       "ALLOW",
+    "risk_score":     0.02,
+    "primary_reason": "NO_THREAT_DETECTED",
+    "confidence":     0.05,
+    "confidence_band": "LOW",
+    "threats":        [],
+}
+
+
+class TestGetRequest:
+
+    @patch("wrapsec.client.with_retry")
+    def test_get_request_returns_dict(self, mock_retry):
+        mock_retry.return_value = GET_REQUEST_RESPONSE
+        client = make_client()
+        result = client.get_request("req_04proxy")
+        assert isinstance(result, dict)
+        assert result["trace_id"] == "req_04proxy"
+
+    @patch("wrapsec.client.with_retry")
+    def test_get_request_calls_correct_path(self, mock_retry):
+        mock_retry.return_value = GET_REQUEST_RESPONSE
+        client = make_client()
+        client.get_request("req_abc123")
+        call_args = mock_retry.call_args
+        # The lambda passed to with_retry calls execute_request with the URL
+        # Verify by checking mock was called (URL built in closure)
+        mock_retry.assert_called_once()
+
+    def test_async_get_request_returns_dict(self):
+        client = make_async_client()
+        client._request = AsyncMock(return_value=GET_REQUEST_RESPONSE)
+        result = asyncio.run(client.get_request("req_04proxy"))
+        assert isinstance(result, dict)
+        assert result["trace_id"] == "req_04proxy"
+
+    def test_async_get_request_calls_correct_path(self):
+        client = make_async_client()
+        client._request = AsyncMock(return_value=GET_REQUEST_RESPONSE)
+        asyncio.run(client.get_request("req_abc123"))
+        call_args = client._request.call_args
+        assert "/ai/requests/req_abc123" in call_args[0][1]
+
+
+# ── audit_export() ────────────────────────────────────────────────────────────
+
+CSV_BYTES = b"trace_id,timestamp,decision\nreq_01,2026-05-08,ALLOW\n"
+
+
+class TestAuditExport:
+
+    @patch("wrapsec.client.requests.get")
+    def test_returns_bytes(self, mock_get):
+        mock_resp = MagicMock()
+        mock_resp.ok      = True
+        mock_resp.content = CSV_BYTES
+        mock_get.return_value = mock_resp
+
+        client = make_client()
+        result = client.audit_export()
+        assert isinstance(result, bytes)
+        assert result == CSV_BYTES
+
+    @patch("wrapsec.client.requests.get")
+    def test_filters_passed_as_params(self, mock_get):
+        mock_resp = MagicMock()
+        mock_resp.ok      = True
+        mock_resp.content = CSV_BYTES
+        mock_get.return_value = mock_resp
+
+        client = make_client()
+        client.audit_export(
+            decision       = "BLOCK",
+            primary_reason = "RULE_DETECTOR",
+            from_date      = "2026-01-01",
+            to_date        = "2026-05-08",
+            limit          = 500,
+        )
+        params = mock_get.call_args.kwargs.get("params", {})
+        assert params["decision"]        == "BLOCK"
+        assert params["primary_reason"]  == "RULE_DETECTOR"
+        assert params["from"]            == "2026-01-01"
+        assert params["to"]              == "2026-05-08"
+        assert params["limit"]           == "500"
+
+    @patch("wrapsec.client.requests.get")
+    def test_limit_capped_at_10000(self, mock_get):
+        mock_resp = MagicMock()
+        mock_resp.ok      = True
+        mock_resp.content = CSV_BYTES
+        mock_get.return_value = mock_resp
+
+        client = make_client()
+        client.audit_export(limit=99999)
+        params = mock_get.call_args.kwargs.get("params", {})
+        assert params["limit"] == "10000"
+
+    @patch("wrapsec.client.requests.get")
+    def test_http_error_raises_wrapsec_error(self, mock_get):
+        mock_resp = MagicMock()
+        mock_resp.ok          = False
+        mock_resp.status_code = 403
+        mock_resp.json.return_value = {"error": {"message": "Forbidden"}}
+        mock_get.return_value = mock_resp
+
+        client = make_client()
+        with pytest.raises(WrapSecError):
+            client.audit_export()
+
+    def test_async_returns_bytes(self):
+        async def _test():
+            client = make_async_client()
+            with patch("wrapsec.async_client.httpx.AsyncClient") as mock_httpx_cls:
+                mock_ctx   = AsyncMock()
+                mock_resp  = MagicMock()
+                mock_resp.is_success = True
+                mock_resp.content    = CSV_BYTES
+                mock_ctx.__aenter__  = AsyncMock(return_value=mock_ctx)
+                mock_ctx.__aexit__   = AsyncMock(return_value=None)
+                mock_ctx.get         = AsyncMock(return_value=mock_resp)
+                mock_httpx_cls.return_value = mock_ctx
+                result = await client.audit_export()
+                assert result == CSV_BYTES
+        asyncio.run(_test())

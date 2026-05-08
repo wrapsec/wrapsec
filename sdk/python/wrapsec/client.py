@@ -147,54 +147,119 @@ class Client:
 
     def scan(
         self,
-        text:    str,
-        mode:    str = "fast",
-        user:    str = "sdk",
-        timeout: int | None = None,
+        text:           str,
+        mode:           str = "fast",
+        execution_mode: str = "scan_only",
+        model:          str | None = None,
+        user:           str = "sdk",
+        timeout:        int | None = None,
     ) -> ScanResult:
         """
         Scan a single input for security risks.
 
-        text:    The prompt or user input to scan. Max 8000 chars.
-        mode:    "fast" (default) or "full" (adds LLM analysis, ~100-500ms extra).
-        user:    User ID for audit attribution. Defaults to "sdk".
-                 CLI overrides this with the --user flag or "cli".
-        timeout: Per-request timeout in seconds (min 1).
-                 Overrides client default for this call only.
+        text:           The prompt or user input to scan. Max 8000 chars.
+        mode:           "fast" (default) or "full" (adds LLM analysis, ~100-500ms extra).
+        execution_mode: "scan_only" (default) or "proxy" (scan + forward to LLM provider).
+        model:          LLM model identifier — required when execution_mode="proxy".
+        user:           User ID for audit attribution. Defaults to "sdk".
+                        CLI overrides this with the --user flag or "cli".
+        timeout:        Per-request timeout in seconds (min 1).
+                        Overrides client default for this call only.
 
         Returns ScanResult. BLOCK is not an exception — check result.decision.
 
         Spec: Section 4, Section 8 (WrapSecBlockError not raised automatically)
         """
-        # Fix #6 — validate mode client-side before making any API call.
-        # The CLI uses click.Choice() which catches bad values, but the SDK
-        # is called directly by developers who may pass arbitrary strings.
-        # Sending an invalid mode to the API wastes a network round-trip
-        # and returns a cryptic 422 error instead of a clear local message.
         _VALID_MODES = ("fast", "full")
         if mode not in _VALID_MODES:
+            raise ValueError(f"mode must be one of {_VALID_MODES}, got {mode!r}")
+
+        _VALID_EXECUTION_MODES = ("scan_only", "proxy")
+        if execution_mode not in _VALID_EXECUTION_MODES:
             raise ValueError(
-                f"mode must be one of {_VALID_MODES}, got {mode!r}"
+                f"execution_mode must be one of {_VALID_EXECUTION_MODES}, got {execution_mode!r}"
             )
+        if execution_mode == "proxy" and not model:
+            raise ValueError("model is required when execution_mode='proxy'")
 
         text = normalize_text(text)
         text = validate_input(text)
         t    = self._resolve_timeout(timeout)
 
-        data = self._request(
-            method  = "POST",
-            path    = "/ai/request",
-            timeout = t,
-            json    = {
-                "input":          text,
-                "detection_mode": mode,
-                "metadata": {
-                    "source":  "wrapsec-python",
-                    "user_id": user,
-                },
+        body: dict[str, Any] = {
+            "input":          text,
+            "detection_mode": mode,
+            "execution_mode": execution_mode,
+            "metadata": {
+                "source":  "wrapsec-python",
+                "user_id": user,
             },
-        )
+        }
+        if model:
+            body["model"] = model
+
+        data = self._request(method="POST", path="/ai/request", timeout=t, json=body)
         return ScanResult.from_dict(data)
+
+    def get_request(self, trace_id: str, timeout: int | None = None) -> dict[str, Any]:
+        """
+        Retrieve the full audit record for a single request by trace ID.
+        Includes proxy enrichment data when execution_mode is "proxy".
+        Scoped to the caller's dept/tenant — 404 if out of scope.
+
+        Returns a raw dict (structure varies by execution_mode).
+        """
+        return self._request(
+            "GET", f"/ai/requests/{trace_id}",
+            self._resolve_timeout(timeout),
+        )
+
+    def audit_export(
+        self,
+        decision:        str | None = None,
+        primary_reason:  str | None = None,
+        confidence_band: str | None = None,
+        from_date:       str | None = None,
+        to_date:         str | None = None,
+        dept_id:         str | None = None,
+        app_id:          str | None = None,
+        limit:           int = 1000,
+        timeout:         int | None = None,
+    ) -> bytes:
+        """
+        Export audit logs as CSV bytes for compliance reporting (up to 10,000 rows).
+        Scope is bounded by the API key used — non-admin keys are limited to their dept.
+
+        Returns raw CSV bytes. Write to a file or decode as needed:
+            data = client.audit_export()
+            Path("audit.csv").write_bytes(data)
+        """
+        api_key = self._require_api_key()
+        params: dict[str, str] = {"limit": str(min(limit, 10000))}
+        if decision:        params["decision"]        = decision
+        if primary_reason:  params["primary_reason"]  = primary_reason
+        if confidence_band: params["confidence_band"] = confidence_band
+        if from_date:       params["from"]            = from_date
+        if to_date:         params["to"]              = to_date
+        if dept_id:         params["dept_id"]         = dept_id
+        if app_id:          params["app_id"]          = app_id
+
+        t    = self._resolve_timeout(timeout)
+        url  = self._url("/audit/export")
+        resp = requests.get(
+            url,
+            headers = build_headers(api_key),
+            params  = params,
+            timeout = t,
+        )
+        if resp.ok:
+            return resp.content
+        response_data = None
+        try:
+            response_data = resp.json()
+        except Exception:
+            pass
+        raise map_response_error(resp.status_code, response_data)
 
     def batch(
         self,
@@ -223,13 +288,14 @@ class Client:
 
     def audit_list(
         self,
-        decision:  str | None = None,
-        reason:    str | None = None,
-        from_date: str | None = None,
-        to_date:   str | None = None,
-        limit:     int = 20,
-        offset:    int = 0,
-        timeout:   int | None = None,
+        decision:       str | None = None,
+        reason:         str | None = None,
+        execution_mode: str | None = None,
+        from_date:      str | None = None,
+        to_date:        str | None = None,
+        limit:          int = 20,
+        offset:         int = 0,
+        timeout:        int | None = None,
     ) -> list[AuditLog]:
         """
         List recent audit log entries. Read-only.
@@ -238,10 +304,11 @@ class Client:
         Spec: Section 13.2 (wrapsec audit list)
         """
         params: dict[str, str] = {"limit": str(min(limit, 100)), "offset": str(max(offset, 0))}
-        if decision:  params["decision"]        = decision
-        if reason:    params["primary_reason"]  = reason
-        if from_date: params["from"]            = from_date
-        if to_date:   params["to"]              = to_date
+        if decision:        params["decision"]        = decision
+        if reason:          params["primary_reason"]  = reason
+        if execution_mode:  params["execution_mode"]  = execution_mode
+        if from_date:       params["from"]            = from_date
+        if to_date:         params["to"]              = to_date
 
         data = self._request("GET", "/audit/logs", self._resolve_timeout(timeout), params=params)
         return [AuditLog.from_dict(item) for item in data.get("items", data.get("logs", []))]

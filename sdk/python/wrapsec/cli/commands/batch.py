@@ -251,7 +251,7 @@ def batch(
                     )
                     click.secho(
                         f"[{processed:>4}] {result.decision:<8} "
-                        f"{round(result.confidence, 1):.1f}  "
+                        f"{round(result.confidence, 2):.2f}  "
                         f"{result.trace_id}  "
                         f"{text[:60]}{'...' if len(text) > 60 else ''}",
                         fg=color,

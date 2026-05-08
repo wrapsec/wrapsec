@@ -30,6 +30,7 @@ export type {
   AuditLog,
   AuditStats,
   AuditListOptions,
+  AuditExportOptions,
   ExpressMiddlewareOptions,
 } from "./types"
 

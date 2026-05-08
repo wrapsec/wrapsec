@@ -21,6 +21,7 @@ import {
   WrapSecSystemError,
 } from "./exceptions"
 import type {
+  AuditExportOptions,
   AuditListOptions,
   AuditLog,
   AuditStats,
@@ -39,7 +40,7 @@ const SDK_VERSION: string = (() => {
     // eslint-disable-next-line @typescript-eslint/no-require-imports
     return (require("../package.json") as { version: string }).version
   } catch {
-    return "0.1.0"
+    return "1.0.0"
   }
 })()
 
@@ -245,7 +246,14 @@ function camelizeKeys(obj: Record<string, unknown>): Record<string, unknown> {
   for (const [k, v] of Object.entries(obj)) {
     if (BLOCKED_KEYS.has(k)) continue   // #3 prototype pollution guard
     const camelKey = toCamel(k)
-    if (v !== null && typeof v === "object" && !Array.isArray(v)) {
+    if (Array.isArray(v)) {
+      // Recurse into arrays of objects — e.g. top_threats: [{category, count}]
+      out[camelKey] = v.map(item =>
+        item !== null && typeof item === "object" && !Array.isArray(item)
+          ? camelizeKeys(item as Record<string, unknown>)
+          : item
+      )
+    } else if (v !== null && typeof v === "object") {
       out[camelKey] = camelizeKeys(v as Record<string, unknown>)
     } else {
       out[camelKey] = v
@@ -266,19 +274,22 @@ function makeScanResult(data: Record<string, unknown>): ScanResult {
       `Unexpected decision value from API: ${JSON.stringify(decision).slice(0, 50)}`
     )
   }
+  // processing is a nested object — camelizeKeys recurses into it, so keys are camelCase
+  const processing = d["processing"] as Record<string, unknown> | undefined
+
   const result = {
     decision,
     primaryReason:  String(d["primaryReason"]  ?? ""),
-    confidence:     Number(d["confidence"]     ?? 0),
-    confidenceBand: String(d["confidenceBand"] ?? "LOW"),
-    traceId:        String(d["traceId"]        ?? ""),
-    threats:        (d["threats"] as string[]) ?? [],
-    latencyMs:      Number(
-      d["latencyMs"] ??
-      (d["processing"] as any)?.["latency_ms"] ??
-      0
-    ),
-    sanitizedInput: d["sanitizedInput"] as string | undefined,
+    riskScore:      Number(d["riskScore"]       ?? 0),
+    confidence:     Number(d["confidence"]      ?? 0),
+    confidenceBand: String(d["confidenceBand"]  ?? "LOW"),
+    traceId:        String(d["traceId"]         ?? ""),
+    threats:        Array.isArray(d["threats"]) ? (d["threats"] as string[]) : [],
+    // latency_ms is nested in processing in the scan response (not top-level)
+    latencyMs:      Number(processing?.["latencyMs"] ?? d["latencyMs"] ?? 0),
+    executionMode:  String(processing?.["executionMode"] ?? d["executionMode"] ?? "scan_only"),
+    sanitizedInput: d["sanitizedInput"] != null ? String(d["sanitizedInput"]) : undefined,
+    output:         d["output"] != null ? String(d["output"]) : undefined,
   }
 
   return {
@@ -287,26 +298,53 @@ function makeScanResult(data: Record<string, unknown>): ScanResult {
     get isSanitized():   boolean { return result.decision === "SANITIZE" },
     get isAllowed():     boolean { return result.decision === "ALLOW" },
     get isSystemError(): boolean { return result.primaryReason === "SYSTEM_ERROR" },
+    get isProxy():       boolean { return result.executionMode === "proxy" },
   }
 }
 
 function makeAuditLog(data: Record<string, unknown>): AuditLog {
   const d = camelizeKeys(data)
   return {
-    traceId:        String(d["traceId"]       ?? ""),
-    decision:       String(d["decision"]      ?? ""),
-    primaryReason:  String(d["primaryReason"] ?? ""),
-    confidence:     Number(d["confidence"]    ?? d["riskScore"] ?? 0),
-    confidenceBand: String(d["confidenceBand"] ?? ""),
-    threats:        (d["threats"] as string[]) ?? [],
-    latencyMs:      Number(d["latencyMs"]     ?? 0),
-    inputLength:    Number(d["inputLength"]   ?? 0),
-    keyId:          (d["keyId"]   as string)  ?? null,
-    deptId:         (d["deptId"]  as string)  ?? null,
-    appId:          (d["appId"]   as string)  ?? null,
-    userId:         (d["userId"]  as string)  ?? null,
-    source:         (d["source"]  as string)  ?? null,
-    createdAt:      String(d["timestamp"] ?? d["createdAt"] ?? ""),
+    // Core identity
+    traceId:             String(d["traceId"]    ?? ""),
+    // API returns "timestamp" or "created_at"; both are camelized
+    createdAt:           String(d["timestamp"]  ?? d["createdAt"] ?? ""),
+
+    // Decision — risk_score and confidence are separate; never substitute one for the other
+    decision:            String(d["decision"]      ?? ""),
+    primaryReason:       String(d["primaryReason"] ?? ""),
+    riskScore:           Number(d["riskScore"]     ?? 0),
+    confidence:          Number(d["confidence"]    ?? 0),
+    confidenceBand:      String(d["confidenceBand"] ?? ""),
+    threats:             Array.isArray(d["threats"]) ? (d["threats"] as string[]) : [],
+    severity:            d["severity"] != null ? String(d["severity"]) : null,
+
+    // Performance
+    latencyMs:           Number(d["latencyMs"]   ?? 0),
+    inputLength:         Number(d["inputLength"] ?? 0),
+
+    // Attribution
+    keyId:               d["keyId"]    != null ? String(d["keyId"])    : null,
+    deptId:              d["deptId"]   != null ? String(d["deptId"])   : null,
+    deptName:            d["deptName"] != null ? String(d["deptName"]) : null,
+    appId:               d["appId"]    != null ? String(d["appId"])    : null,
+    appName:             d["appName"]  != null ? String(d["appName"])  : null,
+    userId:              d["userId"]   != null ? String(d["userId"])   : null,
+    source:              d["source"]   != null ? String(d["source"])   : null,
+    ipAddress:           d["ipAddress"]  != null ? String(d["ipAddress"])  : null,
+    tenantId:            d["tenantId"]   != null ? String(d["tenantId"])   : null,
+    attributionVerified: Boolean(d["attributionVerified"] ?? false),
+
+    // Processing metadata
+    detectionMode:       d["detectionMode"] != null ? String(d["detectionMode"]) : null,
+    executionMode:       d["executionMode"] != null ? String(d["executionMode"]) : null,
+    policySource:        d["policySource"]  != null ? String(d["policySource"])  : null,
+    inputHash:           d["inputHash"]     != null ? String(d["inputHash"])     : null,
+
+    // Proxy mode
+    outputDecision:      d["outputDecision"] != null ? String(d["outputDecision"]) : null,
+    provider:            d["provider"]       != null ? String(d["provider"])       : null,
+    model:               d["model"]          != null ? String(d["model"])          : null,
   }
 }
 
@@ -406,7 +444,7 @@ export class WrapSec {
    * Spec: Section 4, Section 8
    */
   async scan(text: string, options: ScanOptions = {}): Promise<ScanResult> {
-    const { mode = "fast", user = "sdk", timeout } = options
+    const { mode = "fast", executionMode = "scan_only", model, user = "sdk", timeout } = options
 
     if (!text || typeof text !== "string") {
       throw new WrapSecError("text must be a non-empty string")
@@ -417,23 +455,33 @@ export class WrapSec {
     if (timeout !== undefined && (typeof timeout !== "number" || timeout < 1 || !Number.isFinite(timeout))) {
       throw new WrapSecError("timeout must be a positive finite number")
     }
-    // #2 — runtime mode validation. TypeScript types are not runtime guards —
-    // callers can pass arbitrary strings with a cast. Validate explicitly to
-    // return a clear error instead of a cryptic 422 from the API.
+    // Runtime mode validation — TypeScript types are not runtime guards
     const _VALID_MODES = ["fast", "full"] as const
     if (!_VALID_MODES.includes(mode as any)) {
       throw new WrapSecError(
         `mode must be one of ${JSON.stringify(_VALID_MODES)}, got ${JSON.stringify(mode)}`
       )
     }
+    const _VALID_EXECUTION_MODES = ["scan_only", "proxy"] as const
+    if (!_VALID_EXECUTION_MODES.includes(executionMode as any)) {
+      throw new WrapSecError(
+        `executionMode must be one of ${JSON.stringify(_VALID_EXECUTION_MODES)}, got ${JSON.stringify(executionMode)}`
+      )
+    }
+    if (executionMode === "proxy" && !model) {
+      throw new WrapSecError("model is required when executionMode is 'proxy'")
+    }
 
     const t    = this.resolveTimeout(timeout)
-    const data = await this.request("POST", "/ai/request", t, {
+    const body: Record<string, unknown> = {
       input:          text,
       detection_mode: mode,
+      execution_mode: executionMode,
       metadata:       { source: `wrapsec-node/${SDK_VERSION}`, user_id: user },
-    })
+    }
+    if (model) body["model"] = model
 
+    const data = await this.request("POST", "/ai/request", t, body)
     return makeScanResult(data as Record<string, unknown>)
   }
 
@@ -466,15 +514,16 @@ export class WrapSec {
    * Spec: Section 13.2 (audit list)
    */
   async auditList(options: AuditListOptions = {}): Promise<AuditLog[]> {
-    const { decision, reason, fromDate, toDate, limit = 20, offset = 0, timeout } = options
+    const { decision, reason, executionMode, fromDate, toDate, limit = 20, offset = 0, timeout } = options
     const params: Record<string, string> = {
       limit:  String(Math.min(limit, 100)),
       offset: String(Math.max(offset, 0)),
     }
-    if (decision) params["decision"]       = decision
-    if (reason)   params["primary_reason"] = reason
-    if (fromDate) params["from"]           = fromDate
-    if (toDate)   params["to"]             = toDate
+    if (decision)       params["decision"]        = decision
+    if (reason)         params["primary_reason"]  = reason
+    if (executionMode)  params["execution_mode"]  = executionMode
+    if (fromDate)       params["from"]            = fromDate
+    if (toDate)         params["to"]              = toDate
 
     const t    = this.resolveTimeout(timeout)
     const data = await this.request("GET", "/audit/logs", t, undefined, params) as any
@@ -517,6 +566,81 @@ export class WrapSec {
     const t    = this.resolveTimeout(timeout)
     const data = await this.request("GET", "/audit/stats", t, undefined, params)
     return makeAuditStats(data as Record<string, unknown>)
+  }
+
+  /**
+   * Retrieve the full audit record for a single request by trace ID.
+   * Includes proxy enrichment when executionMode is "proxy".
+   * Scoped to the caller's dept/tenant — throws WrapSecError if out of scope.
+   *
+   * Returns a raw camelCased object (structure varies by executionMode).
+   */
+  async getRequest(traceId: string, timeout?: number): Promise<Record<string, unknown>> {
+    if (!traceId || typeof traceId !== "string" || traceId.trim().length === 0) {
+      throw new WrapSecError("traceId must be a non-empty string")
+    }
+    const t    = this.resolveTimeout(timeout)
+    const data = await this.request("GET", `/ai/requests/${traceId}`, t)
+    return camelizeKeys(data as Record<string, unknown>)
+  }
+
+  /**
+   * Export audit logs as CSV (up to 10,000 rows). Returns a Buffer of CSV bytes.
+   * Scope is bounded by the API key used.
+   *
+   *   const csv = await client.auditExport({ decision: "BLOCK" })
+   *   fs.writeFileSync("audit.csv", csv)
+   */
+  async auditExport(options: AuditExportOptions = {}): Promise<Buffer> {
+    const {
+      decision, primaryReason, confidenceBand,
+      fromDate, toDate, deptId, appId,
+      limit = 1000, timeout,
+    } = options
+
+    const apiKey = this.requireApiKey()
+    const params: Record<string, string> = {
+      limit: String(Math.min(limit, 10000)),
+    }
+    if (decision)        params["decision"]         = decision
+    if (primaryReason)   params["primary_reason"]   = primaryReason
+    if (confidenceBand)  params["confidence_band"]  = confidenceBand
+    if (fromDate)        params["from"]             = fromDate
+    if (toDate)          params["to"]               = toDate
+    if (deptId)          params["dept_id"]          = deptId
+    if (appId)           params["app_id"]           = appId
+
+    const t       = this.resolveTimeout(timeout)
+    const fullUrl = new URL(this.url("/audit/export"))
+    for (const [k, v] of Object.entries(params)) {
+      fullUrl.searchParams.set(k, v)
+    }
+
+    const controller = new AbortController()
+    const timer      = setTimeout(() => controller.abort(), t * 1000)
+
+    try {
+      const resp = await fetch(fullUrl.toString(), {
+        method:  "GET",
+        headers: buildHeaders(apiKey),
+        signal:  controller.signal,
+      })
+      if (resp.ok) {
+        return Buffer.from(await resp.arrayBuffer())
+      }
+      // Error path — attempt to parse JSON error body
+      let responseData: unknown = null
+      try { responseData = await resp.json() } catch { /* fall through */ }
+      throw mapResponseError(resp.status, responseData)
+    } catch (err) {
+      if ((err as any)?.name === "AbortError") {
+        throw new WrapSecSystemError(`Request timed out after ${t}s.`)
+      }
+      if (err instanceof WrapSecError) throw err
+      throw new WrapSecSystemError("Cannot reach WrapSec API. Check your network connection and baseUrl.")
+    } finally {
+      clearTimeout(timer)
+    }
   }
 
   /**

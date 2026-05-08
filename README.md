@@ -20,21 +20,30 @@ WrapSec supports two execution modes:
 
 ## Detection Pipeline
 
-The pipeline combines rule-based, machine learning, and optional LLM-based analysis to produce a final security decision. Every request passes through four independent layers:
+The pipeline combines rule-based, machine learning, and optional LLM-based analysis to produce a final security decision.
+
+**Input path (all requests):**
 
 ```
 Input
-  ├── InputGuard         PII detection, 22+ entity types, regex-based redaction
-  ├── RuleDetector       Regex and heuristic patterns, ~1ms
-  ├── MLDetector         TF-IDF + logistic regression, 7 labels, ~5ms
-  ├── ToxicityGuard      Reads ML toxicity label directly, independent threshold
-  ├── LLMDetector        Semantic analysis, full mode only, ~100–500ms additional
-  └── PolicyEngine       BLOCK / SANITIZE / ALLOW
+  |-- InputGuard          PII detection (22+ entity types), redaction if triggered
+  |-- RuleDetector        Regex and heuristic patterns, ~1ms
+  |-- MLDetector          TF-IDF + logistic regression, 7 labels, ~5ms
+  |   +-- ToxicityDetector    Extracts toxicity signal from ML output (no extra compute)
+  |-- LLMDetector         Semantic analysis, full mode only, ~100-500ms additional
+  +-- PolicyEngine        BLOCK / SANITIZE / ALLOW
 ```
 
-Detection risk score: `rule×0.40 + ml×0.30 + llm×0.30`
+**Output path (proxy mode only):**
 
-Guardrails (PII, toxicity) are architecturally separate from detection and operate independently. They can override detection decisions regardless of risk score. Guardrail thresholds are independent of detection thresholds.
+```
+LLM response
+  +-- OutputGuard         PII detection on LLM output, redaction or BLOCK if triggered
+```
+
+Detection risk score: `rule*0.40 + ml*0.30 + llm*0.30`
+
+Guardrails (PII, toxicity) are architecturally separate from the detection score. `ToxicityDetector` extracts its signal from the ML result but evaluates it against an independent threshold - toxicity cannot be diluted by averaging with other detector scores. Guardrails are evaluated first in the policy engine and can override any detection decision regardless of `risk_score`.
 
 
 ## Security Decisions
@@ -66,14 +75,14 @@ Guardrails (PII, toxicity) are architecturally separate from detection and opera
 
 ```
 tenant
-└── departments
-    ├── policy_override  (independent thresholds per dept)
-    └── applications
-        ├── policy_override
-        └── api_keys     (wsk_live_ | wsk_trial_)
+  departments
+    policy_override  (independent thresholds per dept)
+    applications
+      policy_override
+      api_keys     (wsk_live_ | wsk_trial_)
 ```
 
-Policy resolution: system defaults → DB settings → department override → application override. Each layer deep-merges - null fields inherit from the layer above.
+Policy resolution: system defaults -> DB settings -> department override -> application override. Each layer deep-merges - null fields inherit from the layer above.
 
 
 ## API
@@ -106,6 +115,7 @@ wrapsec config set base_url http://your-wrapsec-host:8000
 wrapsec scan "user input"
 wrapsec batch prompts.txt --summary
 wrapsec audit list --decision BLOCK
+wrapsec audit list --mode proxy
 ```
 
 ```python
@@ -116,6 +126,7 @@ client = wrapsec.Client(
     base_url = os.environ["WRAPSEC_BASE_URL"],
 )
 
+# Scan-only (default)
 result = client.scan("user input")
 
 if result.is_system_error:
@@ -126,6 +137,16 @@ if result.is_blocked:
     return
 
 input_to_forward = result.sanitized_input if result.is_sanitized else user_input
+
+# Proxy mode - WrapSec scans and forwards to the LLM, returns the response
+result = client.scan("user input", execution_mode="proxy", model="openai/gpt-4o")
+if result.is_proxy:
+    llm_response = result.output
+
+# Audit
+logs    = client.audit_list(decision="BLOCK", execution_mode="scan_only")
+record  = client.get_request("req_01knzhh8...")
+csv     = client.audit_export(decision="BLOCK", from_date="2026-05-01", limit=5000)
 ```
 
 SDK documentation: `sdk/python/README.md`
@@ -145,11 +166,26 @@ const client = new WrapSec({
   baseUrl: process.env.WRAPSEC_BASE_URL,
 })
 
+// Scan-only (default)
 const result = await client.scan(userInput)
 
 if (result.isBlocked) {
   // Do not forward to LLM
 }
+
+// Proxy mode
+const proxyResult = await client.scan(userInput, {
+  executionMode: 'proxy',
+  model: 'openai/gpt-4o',
+})
+if (proxyResult.isProxy) {
+  const llmResponse = proxyResult.output
+}
+
+// Audit
+const logs   = await client.auditList({ decision: 'BLOCK', executionMode: 'scan_only' })
+const record = await client.getRequest('req_01knzhh8...')
+const csv    = await client.auditExport({ decision: 'BLOCK', fromDate: '2026-05-01', limit: 5000 })
 ```
 
 Express and Fastify middleware included. SDK documentation: `sdk/node/README.md`
@@ -266,7 +302,7 @@ docker compose -f infrastructure/docker/docker-compose.yml exec api \
 - Set `DATA_STORAGE_MODE` to `masked` or `none` for regulated environments.
 - Change `SECRET_KEY` and Grafana default password before first deployment.
 - Set `TRUSTED_PROXY_IPS` to the IP(s) of your reverse proxy so `X-Forwarded-For` is trusted only from known sources.
-- Set `METRICS_TOKEN` to require bearer token authentication on `GET /metrics` — do not expose metrics unauthenticated.
+- Set `METRICS_TOKEN` to require bearer token authentication on `GET /metrics` - do not expose metrics unauthenticated.
 - Pin Grafana to 10.4.0 - Grafana 12 has dashboard provisioning issues.
 - Prometheus target changes from `host.docker.internal:8000` to `api:8000` in Docker deployment.
 - JWT department mismatch warnings (`auth_event=JWT_DEPT_MISMATCH`) must be routed to the security monitoring pipeline.

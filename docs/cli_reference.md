@@ -106,7 +106,7 @@ wrapsec config get
 ```
 Config file: C:\Users\...\AppData\Roaming\wrapsec\config.json
 
-  api_key     sk_liv****2fck    [config file]
+  api_key     wsk_li****2fck    [config file]
   base_url    http://localhost:8000    [config file]
   timeout     30    [config file]
 ```
@@ -172,7 +172,7 @@ WrapSec Doctor
 
 1. Configuration
    Config file:  C:\Users\...\AppData\Roaming\wrapsec\config.json
-   API key:      sk_liv****2fck [config file]
+   API key:      wsk_li****2fck [config file]
    Base URL:     http://localhost:8000 [config file]
    Timeout:      30s [config file]
 
@@ -221,11 +221,11 @@ wrapsec scan [TEXT] [OPTIONS]
 
 | Option | Default | Description |
 |---|---|---|
-| `--mode fast\|full` | `fast` | Detection mode. `full` enables LLM semantic analysis for deeper inspection of ambiguous inputs. Results may differ from fast mode. Latency increases by ~100–2300ms depending on LLM model. |
+| `--mode fast\|full`, `-m` | `fast` | Detection mode. `full` enables LLM semantic analysis for deeper inspection of ambiguous inputs. Results may differ from fast mode. Latency increases by ~100–2300ms depending on LLM model. |
 | `--timeout INT` | `30` | Request timeout in seconds (min 1) |
 | `--json` | off | Pure JSON output to stdout |
-| `--user TEXT` | `cli` | User ID for audit attribution — maps to `metadata.user_id` in the API request body |
-| `--quiet` | off | No stdout output — exit code only |
+| `--user TEXT`, `-u` | `cli` | User ID for audit attribution — maps to `metadata.user_id` in the API request body |
+| `--quiet`, `-q` | off | No stdout output — exit code only |
 
 ### Examples
 
@@ -414,16 +414,16 @@ Scope is bounded by the API key used.
 wrapsec audit list [OPTIONS]
 ```
 
-| Option | Description |
-|---|---|
-| `--decision BLOCK\|SANITIZE\|ALLOW` | Filter by decision |
-| `--reason TEXT` | Filter by primary_reason (e.g. `RULE_DETECTOR`, `PII_GUARDRAIL_SANITIZE`) |
-| `--mode scan_only\|proxy` | Filter by execution mode |
-| `--from DATE` | From date (YYYY-MM-DD) |
-| `--to DATE` | To date (YYYY-MM-DD) |
-| `--limit INT` | Records to return (default 20, max 100) |
-| `--offset INT` | Records to skip (for pagination) |
-| `--json` | Pure JSON output |
+| Option | Default | Description |
+|---|---|---|
+| `--decision BLOCK\|SANITIZE\|ALLOW` | all | Filter by decision |
+| `--reason TEXT` | all | Filter by primary_reason (e.g. `RULE_DETECTOR`, `PII_GUARDRAIL_SANITIZE`) |
+| `--mode scan_only\|proxy` | all | Filter by execution mode |
+| `--from DATE` | none | From date (YYYY-MM-DD) |
+| `--to DATE` | none | To date (YYYY-MM-DD) |
+| `--limit INT` | `20` | Records to return (max 100) |
+| `--offset INT` | `0` | Records to skip (for pagination) |
+| `--json` | off | Pure JSON output |
 
 ```bash
 wrapsec audit list --limit 5
@@ -441,10 +441,10 @@ wrapsec audit list --limit 2 --json
 
 **Output:**
 ```
-TRACE ID                          DECISION    REASON                 CONF   BAND  MODE       SOURCE          CREATED
-req_01kpbzwmrqqaf448mkz548g6q0    BLOCK       RULE_DETECTOR          0.75   HIGH  scan_only  wrapsec-python  2026-04-16T20:32:00
-req_01kpbzwjq7ytd0x0w9xz0h2znd    SANITIZE    PII_GUARDRAIL_SANITIZE 0.75   HIGH  proxy      wrapsec-python  2026-04-16T20:31:58
-req_01kpbzw1m8xp3xhwjb5s498z9c    ALLOW       NO_THREAT_DETECTED     1.00   HIGH  scan_only  wrapsec-python  2026-04-16T20:31:40
+TRACE ID                          DECISION    REASON                         CONF   BAND    MODE        SOURCE              CREATED
+req_01kpbzwmrqqaf448mkz548g6q0    BLOCK       RULE_DETECTOR                  0.75   HIGH    scan_only   wrapsec-python      2026-04-16T20:32:00
+req_01kpbzwjq7ytd0x0w9xz0h2znd    SANITIZE    PII_GUARDRAIL_SANITIZE         0.75   HIGH    proxy       wrapsec-python      2026-04-16T20:31:58
+req_01kpbzw1m8xp3xhwjb5s498z9c    ALLOW       NO_THREAT_DETECTED             1.00   HIGH    scan_only   wrapsec-python      2026-04-16T20:31:40
 ```
 
 ### `wrapsec audit get TRACE_ID`
@@ -464,6 +464,8 @@ Latency:        1.5ms
 Input length:   30 chars
 Created:        2026-04-16T20:32:00.294110
 Threats:        MALICIOUS_INTENT
+Severity:       HIGH
+Mode:           scan_only
 Key ID:         key_bc861e102a45
 Department:     7a576570-e175-4fdd-b9e9-e45615da6934
 User:           cli-batch
@@ -476,11 +478,15 @@ Source:         wrapsec-python
   "trace_id": "req_01kpbzwmrqqaf448mkz548g6q0",
   "decision": "BLOCK",
   "primary_reason": "RULE_DETECTOR",
+  "risk_score": 0.92,
   "confidence": 0.75,
   "confidence_band": "HIGH",
   "threats": ["MALICIOUS_INTENT"],
+  "severity": "HIGH",
   "latency_ms": 1.49,
   "input_length": 30,
+  "execution_mode": "scan_only",
+  "tenant_id": "tenant_abc",
   "key_id": "key_bc861e102a45",
   "dept_id": "7a576570-e175-4fdd-b9e9-e45615da6934",
   "app_id": null,
@@ -511,6 +517,11 @@ Sanitized:       26
 Allowed:         46
 Avg latency:     282.0ms
 P95 latency:     2309.1ms
+Severity:
+  CRITICAL          38
+  HIGH              63
+  MEDIUM            26
+  LOW               46
 Top threats:
   PROMPT_INJECTION    63
   PII                 38
@@ -518,6 +529,8 @@ Top threats:
   JAILBREAK            1
   DATA_EXFILTRATION    1
 ```
+
+Severity follows SIEM triage levels: CRITICAL (guardrail blocks or risk_score ≥ 0.9), HIGH (other blocks or SYSTEM_ERROR), MEDIUM (sanitized), LOW (allowed). The Severity section is omitted when all counts are zero.
 
 ---
 
@@ -550,6 +563,9 @@ LLM Configuration:
   Model:       llama3.2:latest
   Timeout:     38s
   LLM trigger: 0.2
+
+Rate Limit:
+  Live keys:   60 req/min (default)
 ```
 
 ---
@@ -658,7 +674,7 @@ latency_ms in scan output
   For a full proxy latency breakdown, use: wrapsec audit get <trace_id>
 
 confidence in human vs JSON output
-  Human output: rounded to 2 decimal places (e.g. 0.75).
+  Human output: rounded to 2 decimal places (e.g. 0.75). Applies to scan, batch, audit list, and audit get.
   JSON output: full precision as returned by the API (no forced rounding).
   Example: human shows 0.75, JSON may show 0.75 or 0.7500 depending on API response.
 
