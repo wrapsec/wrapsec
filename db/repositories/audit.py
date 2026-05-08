@@ -42,6 +42,24 @@ class AuditRepository(BaseRepository):
         )
         return result.scalar_one_or_none()
 
+    async def get_by_trace_id_tenant_scoped(
+        self,
+        trace_id:  str,
+        tenant_id: str,
+    ) -> AuditLogModel | None:
+        """
+        Tenant-scoped trace_id lookup. Used for non-admin keys with no dept_id
+        (tenant-level keys). Prevents cross-tenant leakage without requiring
+        a dept_id scope.
+        """
+        result = await self.session.execute(
+            select(AuditLogModel).where(
+                AuditLogModel.trace_id  == trace_id,
+                AuditLogModel.tenant_id == tenant_id,
+            )
+        )
+        return result.scalar_one_or_none()
+
     async def list(
         self,
         tenant_id:       str | None = None,

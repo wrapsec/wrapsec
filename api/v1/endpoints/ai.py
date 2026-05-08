@@ -13,6 +13,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from api.v1.schemas.request import AIRequestSchema
 from api.v1.dependencies.auth import get_current_principal
+from api.v1.dependencies.scope import get_scoped_audit_record
 from api.v1.dependencies.db import get_db
 from domain.entities.principal import Principal
 from db.repositories.audit import AuditRepository
@@ -332,15 +333,8 @@ async def get_request(
     including provider response, output decision, and execution status.
     404 if the record does not exist or is out of scope.
     """
-    repo    = AuditRepository(db)
-    dept_id = getattr(request.state, "dept_id", None)
-
-    # Admin keys have no dept_id — use unscoped lookup.
-    # All other keys use dept-scoped lookup to prevent cross-dept leakage.
-    if dept_id:
-        record = await repo.get_by_trace_id_scoped(trace_id, dept_id)
-    else:
-        record = await repo.get_by_trace_id(trace_id)
+    repo   = AuditRepository(db)
+    record = await get_scoped_audit_record(repo, trace_id, request)
 
     if not record:
         raise NotFoundError("request", trace_id)

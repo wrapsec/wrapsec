@@ -7,6 +7,7 @@ import io
 from datetime import datetime, timezone
 from fastapi import APIRouter, Query, Depends, Request
 from api.v1.dependencies.auth import get_current_principal
+from api.v1.dependencies.scope import get_audit_scope
 from domain.entities.principal import Principal
 from domain.value_objects.severity import compute_severity
 from fastapi.responses import JSONResponse
@@ -150,12 +151,9 @@ async def get_audit_logs(
     Non-admin keys are always scoped to their own dept_id and tenant_id — any
     dept_id/tenant_id query parameters from non-admin callers are ignored.
     """
-    is_admin = getattr(request.state, "is_admin", False)
-    # Non-admin keys are always scoped to their own dept.
-    # Ignore any dept_id query param from the caller — use identity from auth.
-    if not is_admin:
-        dept_id   = getattr(request.state, "dept_id",   None)
-        tenant_id = getattr(request.state, "tenant_id", None)
+    scope     = get_audit_scope(request)
+    tenant_id = scope.get("tenant_id", tenant_id)
+    dept_id   = scope.get("dept_id",   dept_id)
 
     repo = AuditRepository(db)
     total, items = await repo.list(
@@ -203,9 +201,8 @@ async def get_audit_stats(
     Non-admin keys are scoped to their own tenant_id.
     Returns zeroed stats (not 404) when no requests match the filters.
     """
-    is_admin = getattr(request.state, "is_admin", False)
-    if not is_admin:
-        tenant_id = getattr(request.state, "tenant_id", None)
+    scope     = get_audit_scope(request)
+    tenant_id = scope.get("tenant_id", tenant_id)
 
     repo  = AuditRepository(db)
     stats = await repo.get_stats(
@@ -216,8 +213,10 @@ async def get_audit_stats(
 
     # Fetch severity counts — direct query for SIEM-compatible dashboard metrics
     sev_where = []
-    if not is_admin and tenant_id:
+    if tenant_id:
         sev_where.append(AuditLogModel.tenant_id == tenant_id)
+    if scope.get("dept_id"):
+        sev_where.append(AuditLogModel.dept_id == scope["dept_id"])
     from_dt_parsed = _parse_dt(from_)
     to_dt_parsed   = _parse_dt(to)
     if from_dt_parsed:
@@ -296,17 +295,13 @@ async def get_attribution_report(
     and application. Useful for security review and capacity planning.
     Supports from/to date filtering (ISO format) for time-scoped reports.
     """
-    is_admin  = getattr(request.state, "is_admin", False)
-    tenant_id = None
-    if not is_admin:
-        dept_id   = getattr(request.state, "dept_id",   None)
-        tenant_id = getattr(request.state, "tenant_id", None)
+    scope = get_audit_scope(request)
+    if scope:
+        dept_id = scope.get("dept_id")  # non-admin: identity overrides query param
 
     base_where = []
-    # Non-admin keys are always scoped to their own tenant — prevents cross-tenant
-    # data exposure when a key has no dept_id association.
-    if not is_admin and tenant_id:
-        base_where.append(AuditLogModel.tenant_id == tenant_id)
+    if scope.get("tenant_id"):
+        base_where.append(AuditLogModel.tenant_id == scope["tenant_id"])
     if dept_id:
         base_where.append(AuditLogModel.dept_id == dept_id)
     if from_:
@@ -449,9 +444,9 @@ async def get_analytics(
     Advanced cross-department analytics with time-series trend data.
     Groups requests by time period with decision breakdowns.
     """
-    is_admin = getattr(request.state, "is_admin", False)
-    if not is_admin:
-        dept_id = getattr(request.state, "dept_id", None)
+    scope = get_audit_scope(request)
+    if scope:
+        dept_id = scope.get("dept_id")  # non-admin: identity overrides query param
 
     # Build base query
     stmt = select(
@@ -463,6 +458,8 @@ async def get_analytics(
     )
 
     # Apply filters — always scoped for non-admin keys
+    if scope.get("tenant_id"):
+        stmt = stmt.where(AuditLogModel.tenant_id == scope["tenant_id"])
     if dept_id:
         stmt = stmt.where(AuditLogModel.dept_id == dept_id)
     if from_date:
@@ -545,13 +542,13 @@ async def export_audit_logs(
     Non-admin keys are scoped to their own dept_id.
     Response is streamed as attachment: wrapsec_audit_export.csv.
     """
-    is_admin = getattr(request.state, "is_admin", False)
-    if not is_admin:
-        dept_id = getattr(request.state, "dept_id", None)
-
+    scope     = get_audit_scope(request)
+    tenant_id = scope.get("tenant_id")
+    dept_id   = scope.get("dept_id", dept_id)
 
     repo = AuditRepository(db)
     _, items = await repo.list(
+        tenant_id       = tenant_id,
         dept_id         = dept_id,
         app_id          = app_id,
         decision        = decision,
