@@ -112,3 +112,39 @@ def resolve_provider(
         f"Unsupported provider: {provider!r}. "
         f"Supported providers: {', '.join(sorted(SUPPORTED_PROVIDERS))}"
     )
+
+
+def resolve_provider_from_dict(
+    provider:    str,
+    config_dict: dict,
+) -> tuple[BaseProxyProvider, str | None]:
+    """
+    Return (provider_instance, api_key) from a plain dict (dept-level policy override).
+    api_key in config_dict must already be decrypted (policy resolver handles this).
+    """
+    api_key  = config_dict.get("api_key") or ""
+    base_url = config_dict.get("base_url", "")
+    timeout  = int(config_dict.get("timeout_seconds", 60))
+
+    if provider in ("openai", "custom"):
+        if provider == "openai" and not api_key:
+            raise ValueError(
+                "OpenAI provider requires an API key but none is configured "
+                "in the department proxy override."
+            )
+        return OpenAIProxyProvider(
+            api_key  = api_key,
+            base_url = base_url,
+            timeout  = timeout,
+        ), api_key or None
+
+    if provider == "ollama":
+        return OllamaProxyProvider(
+            base_url = base_url,
+            timeout  = timeout,
+        ), None
+
+    raise ValueError(
+        f"Unsupported provider: {provider!r}. "
+        f"Supported providers: {', '.join(sorted(SUPPORTED_PROVIDERS))}"
+    )

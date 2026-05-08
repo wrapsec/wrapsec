@@ -177,6 +177,30 @@ export function RequestDetailModal({ traceId, onClose }: RequestDetailModalProps
                 </div>
                 <div className="h-8 w-px bg-slate-200" />
                 <div>
+                  <p className="text-xs text-slate-500 mb-1">Severity</p>
+                  {(() => {
+                    const styles: Record<string, [string, string, string]> = {
+                      CRITICAL: ["#fef2f2", "#b91c1c", "#fecaca"],
+                      HIGH:     ["#fff7ed", "#c2410c", "#fed7aa"],
+                      MEDIUM:   ["#fffbeb", "#b45309", "#fde68a"],
+                      LOW:      ["#f0fdf4", "#15803d", "#bbf7d0"],
+                    }
+                    const [bg, color, border] = styles[detail.severity] ?? styles.LOW
+                    return (
+                      <span style={{
+                        display: "inline-flex", alignItems: "center",
+                        padding: "2px 8px", borderRadius: "4px",
+                        fontSize: "12px", fontWeight: 600,
+                        border: `1px solid ${border}`,
+                        backgroundColor: bg, color,
+                      }}>
+                        {detail.severity}
+                      </span>
+                    )
+                  })()}
+                </div>
+                <div className="h-8 w-px bg-slate-200" />
+                <div>
                   <p className="text-xs text-slate-500 mb-1">Risk score</p>
                   <p className="text-sm font-semibold text-slate-900">{formatScore(detail.risk_score)}</p>
                 </div>
@@ -266,20 +290,24 @@ export function RequestDetailModal({ traceId, onClose }: RequestDetailModalProps
                   Guardrail Layers
                 </p>
                 <div className="space-y-3">
-                  {Object.entries(detail.guardrail_scores || {}).map(([key, score]) => (
-                    <div key={key}>
-                      <div className="flex items-center justify-between mb-1.5">
-                        <div className="flex items-center gap-2">
-                          <span className="h-2 w-2 rounded-full bg-pink-500" />
-                          <span className="text-sm text-slate-700 capitalize">
-                            {key === "pii" ? "PII guardrail" : key}
-                          </span>
+                  {Object.entries(detail.guardrail_scores || {}).map(([key, score]) => {
+                    const label = key === "pii" ? "PII guardrail"
+                      : key === "toxicity" ? "Toxicity guardrail"
+                      : key
+                    const color = key === "toxicity" ? "#f97316" : "#ec4899"
+                    return (
+                      <div key={key}>
+                        <div className="flex items-center justify-between mb-1.5">
+                          <div className="flex items-center gap-2">
+                            <span className="h-2 w-2 rounded-full" style={{ backgroundColor: color }} />
+                            <span className="text-sm text-slate-700">{label}</span>
+                          </div>
+                          <span className="text-xs font-mono text-slate-600">{formatScore(score as number)}</span>
                         </div>
-                        <span className="text-xs font-mono text-slate-600">{formatScore(score as number)}</span>
+                        <ScoreBar score={score as number} color={color} />
                       </div>
-                      <ScoreBar score={score as number} color="#ec4899" />
-                    </div>
-                  ))}
+                    )
+                  })}
                   {Object.keys(detail.guardrail_scores || {}).length === 0 && (
                     <p className="text-sm text-slate-400">No guardrails triggered</p>
                   )}

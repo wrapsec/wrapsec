@@ -8,6 +8,7 @@ from db.repositories.tenant import TenantRepository
 from db.repositories.department import DepartmentRepository
 from db.repositories.application import ApplicationRepository
 from config.settings import get_settings
+from security.encryption import decrypt
 
 logger   = logging.getLogger("wrapsec.policy")
 settings = get_settings()
@@ -179,6 +180,17 @@ async def resolve_policy(
             SYSTEM_ERRORS.labels(execution_mode="unknown").inc()
         except Exception:
             pass
+
+    # Decrypt any api_key_enc fields that were merged in from dept/app overrides.
+    # api_key_enc is stored encrypted in policy_override; callers need plaintext api_key.
+    for section in ("llm", "proxy_provider"):
+        sec = policy.get(section)
+        if isinstance(sec, dict) and "api_key_enc" in sec:
+            enc = sec.pop("api_key_enc")
+            try:
+                sec["api_key"] = decrypt(enc, settings.secret_key)
+            except ValueError:
+                logger.warning("Failed to decrypt api_key_enc in policy section %r", section)
 
     # Validate final thresholds — DB or override values could be inconsistent
     block    = policy["thresholds"]["block"]

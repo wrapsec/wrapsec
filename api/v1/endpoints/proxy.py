@@ -57,7 +57,7 @@ from domain.enums import DetectionMode, ExecutionMode
 from domain.entities.request import IncomingRequest, RequestMetadata
 from domain.value_objects.trace_id import TraceId
 from engine.guardrails.output_guard import OutputGuard
-from engine.proxy.router import parse_model_string, resolve_provider
+from engine.proxy.router import parse_model_string, resolve_provider, resolve_provider_from_dict
 from observability.metrics import record_proxy_request, record_request
 from services.gateway.service import GatewayService
 from services.policy_resolver import resolve_policy
@@ -339,22 +339,31 @@ async def proxy_chat_completions(
             },
         )
 
-    # -- 2. Load proxy provider config --
+    # -- 2. Resolve policy (moved early — used for both detection and proxy fallback) --
+    policy, _ = await resolve_policy(
+        db        = db,
+        tenant_id = getattr(request.state, "tenant_id", None),
+        dept_id   = getattr(request.state, "dept_id",   None),
+        app_id    = getattr(request.state, "app_id",    None),
+    )
+
+    # -- 3. Load proxy provider config — per-key first, dept-level fallback --
     result = await db.execute(
         select(ProxyProviderConfigModel).where(
             ProxyProviderConfigModel.key_id == key_id
         )
     )
-    config = result.scalar_one_or_none()
+    config          = result.scalar_one_or_none()
+    dept_proxy_cfg  = policy.get("proxy_provider") if not config else None
 
-    if not config:
+    if not config and not dept_proxy_cfg:
         return JSONResponse(
             status_code=400,
             content={
                 "error": {
                     "message": (
-                        "No proxy provider configured for this API key. "
-                        "Configure a provider via PUT /v1/settings/proxy."
+                        "No proxy provider configured for this API key or department. "
+                        "Configure a provider via PUT /v1/settings/proxy or the department policy."
                     ),
                     "type":    "invalid_request_error",
                     "code":    "proxy_not_configured",
@@ -362,7 +371,7 @@ async def proxy_chat_completions(
             },
         )
 
-    # -- 3. Read WrapSec headers --
+    # -- 4. Read WrapSec request headers --
     scan_all = request.headers.get("X-WrapSec-Scan-All-Messages", "false").lower() == "true"
     mode     = request.headers.get("X-WrapSec-Mode", "fast").lower()
     inline   = request.headers.get("X-WrapSec-Inline-Meta", "false").lower() == "true"
@@ -370,7 +379,7 @@ async def proxy_chat_completions(
     if mode not in ("fast", "full"):
         mode = "fast"
 
-    # -- 4. Extract scan target --
+    # -- 5. Extract scan target --
     try:
         scan_input = _extract_scan_target(body.messages, scan_all)
     except ValueError as exc:
@@ -385,14 +394,7 @@ async def proxy_chat_completions(
             },
         )
 
-    # -- 5. Run detection pipeline --
-    policy, _ = await resolve_policy(
-        db        = db,
-        tenant_id = getattr(request.state, "tenant_id", None),
-        dept_id   = getattr(request.state, "dept_id",   None),
-        app_id    = getattr(request.state, "app_id",    None),
-    )
-
+    # -- 6. Run detection pipeline --
     incoming = IncomingRequest(
         input          = scan_input,
         detection_mode = DetectionMode(mode),
@@ -436,6 +438,8 @@ async def proxy_chat_completions(
         "llm":  gd.layer_scores.llm_score,
     } if gd.layer_scores else {}
     _grd_scores = {"pii": gd.layer_scores.pii_score} if gd.layer_scores else {}
+    if gd.layer_scores and gd.layer_scores.toxicity_score > 0.0:
+        _grd_scores["toxicity"] = gd.layer_scores.toxicity_score
 
     # -- 6. Handle input BLOCK --
     if input_decision == "BLOCK":
@@ -485,7 +489,10 @@ async def proxy_chat_completions(
 
     # -- 8. Resolve provider and forward request --
     try:
-        provider_instance, _ = resolve_provider(provider_name, config)
+        if config:
+            provider_instance, _ = resolve_provider(provider_name, config)
+        else:
+            provider_instance, _ = resolve_provider_from_dict(provider_name, dept_proxy_cfg)
     except ValueError as exc:
         total_ms = int((time.monotonic() - wall_start) * 1000)
         logger.error("Provider resolution failed trace_id=%s: %s", trace_id, exc)

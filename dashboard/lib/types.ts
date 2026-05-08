@@ -76,6 +76,9 @@ export interface AuditLogItem {
   timestamp:            string
   tenant_id:            string | null
   decision:             Decision
+  output_decision:      Decision | null
+  provider:             string | null
+  model:                string | null
   primary_reason:       string | null
   risk_score:           number
   confidence:           number | null
@@ -89,7 +92,9 @@ export interface AuditLogItem {
   severity:             "CRITICAL" | "HIGH" | "MEDIUM" | "LOW"
   key_id:               string | null
   dept_id:              string | null
+  dept_name:            string | null
   app_id:               string | null
+  app_name:             string | null
   user_id:              string | null
   source:               string | null
   ip_address:           string | null
@@ -140,12 +145,13 @@ export interface Layers {
 }
 
 export interface LLMSettings {
-  provider:    "ollama" | "openai" | "groq"
-  model:       string
-  base_url:    string
-  timeout:     number
-  llm_trigger: number
-  updated_at?: string
+  provider:       "ollama" | "openai" | "custom"
+  model:          string
+  base_url:       string
+  timeout:        number
+  llm_trigger:    number
+  api_key_masked: string | null
+  updated_at?:    string
 }
 
 // ── API Keys ──────────────────────────────────────────────────
@@ -216,8 +222,9 @@ export interface RequestDetail {
     llm:  number
   }
   guardrail_scores: {
-    pii:          number
-    [key: string]: number
+    pii?:      number
+    toxicity?: number
+    [key: string]: number | undefined
   }
   processing: Processing
   attribution: {
@@ -261,6 +268,7 @@ export interface RequestFilters {
   trace_id?:        string
   decision?:        Decision | ""
   threat_category?: ThreatCategory | ""
+  dept_id?:         string
   from?:            string
   to?:              string
   sort_by?:         string
@@ -271,6 +279,22 @@ export interface RequestFilters {
 }
 
 // ── Departments ───────────────────────────────────────────────
+export interface DeptLLMOverride {
+  provider?:       "openai" | "ollama" | "custom"
+  model?:          string
+  base_url?:       string
+  timeout?:        number
+  api_key_masked?: string | null
+}
+
+export interface DeptProxyOverride {
+  provider?:        "openai" | "ollama" | "custom"
+  base_url?:        string
+  default_model?:   string
+  timeout_seconds?: number
+  api_key_masked?:  string | null
+}
+
 export interface Department {
   id:              string
   tenant_id:       string
@@ -278,7 +302,9 @@ export interface Department {
   name:            string
   description:     string | null
   policy_override: {
-    thresholds?: { block?: number; sanitize?: number }
+    thresholds?:      { block?: number; sanitize?: number }
+    llm?:             DeptLLMOverride
+    proxy_provider?:  DeptProxyOverride
   } | null
   contact_email:   string | null
   is_active:       boolean
@@ -297,7 +323,11 @@ export interface Application {
   owner_email:         string | null
   environment:         string
   metadata:            Record<string, any> | null
-  policy_override:     Record<string, any> | null
+  policy_override:     {
+    thresholds?:     { block?: number; sanitize?: number }
+    llm?:            DeptLLMOverride
+    proxy_provider?: DeptProxyOverride
+  } | null
   rate_limit_override: number | null
   is_active:           boolean
   created_at:          string
@@ -320,52 +350,6 @@ export interface ProxyHealthResult {
   reachable:   boolean
   latency_ms?: number
   error?:      string
-}
-
-// ── Proxy Interactions ────────────────────────────────────────
-export type ExecutionStatus =
-  | "SUCCESS"
-  | "BLOCKED"
-  | "OUTPUT_BLOCKED"
-  | "FAILED"
-  | "TIMEOUT"
-
-export interface ProxyInteraction {
-  id:                    string
-  trace_id:              string
-  created_at:            string
-  key_id:                string | null
-  user_id:               string | null
-  input_decision:        Decision
-  input_primary_reason:  string
-  input_confidence:      number
-  input_threats:         string[]
-  input_attack_type:     string | null
-  provider:              string | null
-  model:                 string | null
-  provider_latency_ms:   number | null
-  execution_status:      ExecutionStatus
-  output_decision:       Decision | null
-  output_primary_reason: string | null
-  output_confidence:     number | null
-  output_threats:        string[]
-  behavior_flag:         string | null
-  output_flags:          string[] | null
-  total_latency_ms:      number
-}
-
-export interface ProxyInteractionDetail extends ProxyInteraction {
-  input_raw:        string | null
-  input_sanitized:  string | null
-  output_raw:       string | null
-  output_sanitized: string | null
-}
-
-export interface ProxyInteractionsResponse {
-  total:  number
-  limit:  number
-  offset: number
-  items:  ProxyInteraction[]
 }
 
 // ── Dashboard Users (JWT auth) ────────────────────────────────

@@ -19,8 +19,6 @@ import {
   Application,
   ProxyProviderConfig,
   ProxyHealthResult,
-  ProxyInteractionsResponse,
-  ProxyInteractionDetail,
   DashboardUser,
   DashboardUsersResponse,
 } from "./types"
@@ -152,6 +150,7 @@ export async function getAuditLogs(
   if (filters.sort_by)         params.set("sort_by",         filters.sort_by)
   if (filters.sort_order)      params.set("sort_order",      filters.sort_order)
   if (filters.execution_mode)  params.set("execution_mode",  filters.execution_mode)
+  if (filters.dept_id)         params.set("dept_id",         filters.dept_id)
 
   const qs = params.toString()
   return request<AuditLogsResponse>(`/v1/audit/logs${qs ? `?${qs}` : ""}`)
@@ -282,7 +281,7 @@ export async function getLLMSettings(): Promise<LLMSettings> {
 }
 
 export async function updateLLMSettings(
-  data: Partial<LLMSettings>
+  data: Partial<LLMSettings> & { api_key?: string }
 ): Promise<LLMSettings> {
   return request<LLMSettings>("/v1/settings/llm", {
     method: "PUT",
@@ -353,27 +352,6 @@ export async function deleteProxySettings(): Promise<void> {
 
 export async function getProxyHealth(): Promise<ProxyHealthResult> {
   return request<ProxyHealthResult>("/v1/settings/proxy/health")
-}
-
-// ── Proxy Interactions ────────────────────────────────────────
-export async function getProxyInteractions(params: {
-  limit?:            number
-  offset?:           number
-  execution_status?: string
-} = {}): Promise<ProxyInteractionsResponse> {
-  const p = new URLSearchParams()
-  if (params.limit)            p.set("limit",            String(params.limit))
-  if (params.offset)           p.set("offset",           String(params.offset))
-  if (params.execution_status) p.set("execution_status", params.execution_status)
-  return request<ProxyInteractionsResponse>(
-    `/v1/proxy/interactions${p.toString() ? `?${p}` : ""}`
-  )
-}
-
-export async function getProxyInteraction(
-  traceId: string
-): Promise<ProxyInteractionDetail> {
-  return request<ProxyInteractionDetail>(`/v1/proxy/interactions/${traceId}`)
 }
 
 // ── API Keys ──────────────────────────────────────────────────
@@ -478,6 +456,32 @@ export async function getDepartmentStats(id: string) {
   }>(`/v1/admin/departments/${id}/stats`)
 }
 
+export async function updateDeptLLMOverride(
+  id:   string,
+  data: {
+    provider?: string; model?: string; base_url?: string
+    timeout?: number;  api_key?: string; clear?: boolean
+  }
+) {
+  return request<Department>(`/v1/admin/departments/${id}/policy/llm`, {
+    method: "PATCH",
+    body:   JSON.stringify(data),
+  })
+}
+
+export async function updateDeptProxyOverride(
+  id:   string,
+  data: {
+    provider?: string; base_url?: string; default_model?: string
+    timeout_seconds?: number; api_key?: string; clear?: boolean
+  }
+) {
+  return request<Department>(`/v1/admin/departments/${id}/policy/proxy`, {
+    method: "PATCH",
+    body:   JSON.stringify(data),
+  })
+}
+
 // ── Applications ──────────────────────────────────────────────
 export async function getApplications() {
   return request<{ applications: Application[] }>("/v1/admin/applications")
@@ -555,6 +559,32 @@ export async function resetApplicationPolicy(id: string) {
     `/v1/admin/applications/${id}/policy`,
     { method: "DELETE" }
   )
+}
+
+export async function updateAppLLMOverride(
+  id:   string,
+  data: {
+    provider?: string; model?: string; base_url?: string
+    timeout?: number;  api_key?: string; clear?: boolean
+  }
+) {
+  return request<Application>(`/v1/admin/applications/${id}/policy/llm`, {
+    method: "PATCH",
+    body:   JSON.stringify(data),
+  })
+}
+
+export async function updateAppProxyOverride(
+  id:   string,
+  data: {
+    provider?: string; base_url?: string; default_model?: string
+    timeout_seconds?: number; api_key?: string; clear?: boolean
+  }
+) {
+  return request<Application>(`/v1/admin/applications/${id}/policy/proxy`, {
+    method: "PATCH",
+    body:   JSON.stringify(data),
+  })
 }
 
 // ── Tenant ────────────────────────────────────────────────────
@@ -646,11 +676,9 @@ export async function resetUserPassword(
   })
 }
 
-// ── Health — direct call, no auth needed ──────────────────────
+// ── Health — routed through Next.js proxy so it works in Docker ─
 export async function getHealth(): Promise<HealthReadyResponse> {
-  const response = await fetch(
-    `${process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000"}/health/ready`
-  )
+  const response = await fetch("/api/proxy/health/ready")
   return response.json()
 }
 

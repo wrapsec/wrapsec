@@ -84,9 +84,10 @@ class LLMDetector(BaseDetector):
     async def detect_async(self, text: str) -> DetectionResult:
         """Async entrypoint — awaits the LLM client directly, no new event loop."""
         try:
-            from clients import get_llm_client
+            from clients import get_llm_client, get_llm_settings_from_db
 
-            client   = get_llm_client()
+            db_settings = await get_llm_settings_from_db()
+            client      = get_llm_client(db_settings)
             from config.settings import get_settings
             response = await client.complete(
                 system_prompt = SYSTEM_PROMPT,

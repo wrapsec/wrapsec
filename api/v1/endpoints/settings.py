@@ -7,7 +7,7 @@ from datetime import datetime, timezone
 from urllib.parse import urlparse
 from fastapi import APIRouter, Depends, Request
 from fastapi.responses import JSONResponse
-from pydantic import BaseModel, model_validator, field_validator
+from pydantic import BaseModel, model_validator, field_validator, SecretStr
 from sqlalchemy.ext.asyncio import AsyncSession
 from api.v1.dependencies.db import get_db
 from api.v1.dependencies.auth import get_current_principal, require_admin
@@ -15,6 +15,7 @@ from cache.redis_client import get_redis
 from db.repositories.settings import SettingsRepository
 from config.settings import get_settings
 from errors.exceptions import ValidationError
+from security.encryption import encrypt, decrypt, mask
 
 router = APIRouter()
 
@@ -148,7 +149,8 @@ async def update_layers(
         "updated_at": datetime.now(timezone.utc).isoformat(),
     })
 
-LLM_KEY = "llm_settings"
+LLM_KEY         = "llm_settings"
+LLM_API_KEY_KEY = "llm_api_key_enc"
 
 _LLM_PRIVATE_NETS = [
     ipaddress.ip_network("127.0.0.0/8"),
@@ -187,11 +189,12 @@ def _default_llm() -> dict:
 
 
 class LLMSettingsSchema(BaseModel):
-    provider:    str   | None = None
-    model:       str   | None = None
-    base_url:    str   | None = None
-    timeout:     int   | None = None
-    llm_trigger: float | None = None
+    provider:    str       | None = None
+    model:       str       | None = None
+    base_url:    str       | None = None
+    timeout:     int       | None = None
+    llm_trigger: float     | None = None
+    api_key:     SecretStr | None = None
 
     @field_validator("base_url")
     @classmethod
@@ -207,8 +210,8 @@ class LLMSettingsSchema(BaseModel):
 
     @model_validator(mode="after")
     def validate_llm(self) -> "LLMSettingsSchema":
-        if self.provider and self.provider not in ("ollama", "openai", "groq"):
-            raise ValueError("provider must be ollama, openai, or groq")
+        if self.provider and self.provider not in ("ollama", "openai", "custom"):
+            raise ValueError("provider must be ollama, openai, or custom")
         if self.timeout is not None and self.timeout < 5:
             raise ValueError("timeout must be at least 5 seconds")
         if self.timeout is not None and self.timeout > 120:
@@ -224,10 +227,23 @@ async def get_llm_settings(
     db:        AsyncSession = Depends(get_db),
     _principal = Depends(get_current_principal),
 ):
-    """Returns the active LLM layer configuration (provider, model, base_url, timeout, llm_trigger threshold)."""
-    repo   = SettingsRepository(db)
-    stored = await repo.get(LLM_KEY)
-    return JSONResponse(content=stored or _default_llm())
+    """Returns the active LLM layer configuration. api_key is masked in the response — never plaintext."""
+    repo    = SettingsRepository(db)
+    stored  = await repo.get(LLM_KEY)
+    payload = dict(stored) if stored else _default_llm()
+
+    # Mask the stored API key — never return plaintext
+    api_key_masked = None
+    enc_record = await repo.get(LLM_API_KEY_KEY)
+    if enc_record and enc_record.get("enc"):
+        try:
+            plaintext      = decrypt(enc_record["enc"], get_settings().secret_key)
+            api_key_masked = mask(plaintext)
+        except ValueError:
+            api_key_masked = "****"
+
+    payload["api_key_masked"] = api_key_masked
+    return JSONResponse(content=payload)
 
 
 @router.put("/llm")
@@ -238,7 +254,8 @@ async def update_llm_settings(
 ):
     """
     Updates LLM layer settings. Merges with existing values.
-    Supported providers: ollama, openai, groq.
+    api_key is encrypted before storage — never stored or returned in plaintext.
+    Supported providers: ollama, openai, custom.
     Auth: JWT + ADMIN role required.
     """
     repo    = SettingsRepository(db)
@@ -251,11 +268,34 @@ async def update_llm_settings(
     if body.llm_trigger is not None: current["llm_trigger"] = body.llm_trigger
 
     await repo.set(LLM_KEY, current)
+
+    # Encrypt and store api_key separately — never in the main settings JSON
+    api_key_masked = None
+    if body.api_key is not None:
+        raw = body.api_key.get_secret_value().strip()
+        if raw:
+            enc = encrypt(raw, get_settings().secret_key)
+            await repo.set(LLM_API_KEY_KEY, {"enc": enc})
+            api_key_masked = mask(raw)
+        else:
+            # Empty string = clear the stored key
+            await repo.set(LLM_API_KEY_KEY, {})
+    else:
+        # api_key not provided — return existing masked key
+        enc_record = await repo.get(LLM_API_KEY_KEY)
+        if enc_record and enc_record.get("enc"):
+            try:
+                plaintext      = decrypt(enc_record["enc"], get_settings().secret_key)
+                api_key_masked = mask(plaintext)
+            except ValueError:
+                api_key_masked = "****"
+
     await db.commit()
 
     return JSONResponse(content={
         **current,
-        "updated_at": datetime.now(timezone.utc).isoformat(),
+        "api_key_masked": api_key_masked,
+        "updated_at":     datetime.now(timezone.utc).isoformat(),
     })
 
 RETENTION_KEY = "audit_retention"

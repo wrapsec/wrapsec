@@ -5,30 +5,55 @@
 import uuid
 from fastapi import APIRouter, Depends, Request
 from fastapi.responses import JSONResponse
+from pydantic import BaseModel, SecretStr, field_validator
 from sqlalchemy import func, select as sa_select
 from sqlalchemy.ext.asyncio import AsyncSession
 from api.v1.dependencies.auth import get_current_principal, require_admin
 from api.v1.dependencies.db import get_db
+from config.settings import get_settings
 from db.models import AuditLogModel
 from db.repositories.department import DepartmentRepository
 from domain.entities.principal import Principal
 from errors.exceptions import NotFoundError
-from pydantic import BaseModel
+from security.encryption import encrypt, decrypt, mask
 
 router = APIRouter()
+
+_ENCRYPTED_SECTIONS = ("llm", "proxy_provider")
+
+
+def _mask_policy_override(override: dict | None) -> dict | None:
+    """Strip api_key_enc from sensitive sections, replace with api_key_masked."""
+    if not override:
+        return override
+    result = {}
+    _s     = get_settings()
+    for k, v in override.items():
+        if k in _ENCRYPTED_SECTIONS and isinstance(v, dict):
+            section = dict(v)
+            enc     = section.pop("api_key_enc", None)
+            if enc:
+                try:
+                    section["api_key_masked"] = mask(decrypt(enc, _s.secret_key))
+                except ValueError:
+                    section["api_key_masked"] = "****"
+            result[k] = section
+        else:
+            result[k] = v
+    return result
 
 
 def _format(dept) -> dict:
     return {
-        "id":             str(dept.id),
-        "tenant_id":      str(dept.tenant_id),
-        "slug":           dept.slug,
-        "name":           dept.name,
-        "description":    dept.description,
-        "policy_override": dept.policy_override,
-        "contact_email":  dept.contact_email,
-        "is_active":      dept.is_active,
-        "created_at":     dept.created_at.isoformat(),
+        "id":              str(dept.id),
+        "tenant_id":       str(dept.tenant_id),
+        "slug":            dept.slug,
+        "name":            dept.name,
+        "description":     dept.description,
+        "policy_override": _mask_policy_override(dept.policy_override),
+        "contact_email":   dept.contact_email,
+        "is_active":       dept.is_active,
+        "created_at":      dept.created_at.isoformat(),
     }
 
 
@@ -46,6 +71,96 @@ class DepartmentUpdateSchema(BaseModel):
     policy_override: dict | None = None
     contact_email:   str | None = None
     is_active:       bool | None = None
+
+
+_VALID_PROVIDERS = {"openai", "ollama", "custom"}
+
+_BLOCKED_HOSTS   = frozenset({"localhost", "metadata.google.internal", "metadata.goog"})
+import ipaddress as _ip
+_PRIVATE_NETS    = [
+    _ip.ip_network("127.0.0.0/8"),  _ip.ip_network("10.0.0.0/8"),
+    _ip.ip_network("172.16.0.0/12"), _ip.ip_network("192.168.0.0/16"),
+    _ip.ip_network("169.254.0.0/16"), _ip.ip_network("0.0.0.0/8"),
+    _ip.ip_network("::1/128"),       _ip.ip_network("fc00::/7"),
+    _ip.ip_network("fe80::/10"),
+]
+
+
+def _validate_provider_url(v: str) -> str:
+    from urllib.parse import urlparse
+    v = v.rstrip("/")
+    if not v.startswith(("http://", "https://")):
+        raise ValueError("base_url must start with http:// or https://")
+    host = (urlparse(v).hostname or "").lower()
+    if host in _BLOCKED_HOSTS:
+        raise ValueError("base_url must not target private or internal addresses")
+    try:
+        addr = _ip.ip_address(host)
+        if any(addr in net for net in _PRIVATE_NETS):
+            raise ValueError("base_url must not target private or internal addresses")
+    except ValueError:
+        pass
+    return v
+
+
+class DeptLLMOverrideSchema(BaseModel):
+    provider: str       | None = None
+    model:    str       | None = None
+    base_url: str       | None = None
+    timeout:  int       | None = None
+    api_key:  SecretStr | None = None
+    clear:    bool = False
+
+    @field_validator("provider")
+    @classmethod
+    def validate_provider(cls, v: str | None) -> str | None:
+        if v is not None and v not in _VALID_PROVIDERS:
+            raise ValueError(f"provider must be one of: {', '.join(sorted(_VALID_PROVIDERS))}")
+        return v
+
+    @field_validator("base_url")
+    @classmethod
+    def validate_base_url(cls, v: str | None) -> str | None:
+        if v is None:
+            return v
+        return _validate_provider_url(v)
+
+    @field_validator("timeout")
+    @classmethod
+    def validate_timeout(cls, v: int | None) -> int | None:
+        if v is not None and not (5 <= v <= 120):
+            raise ValueError("timeout must be between 5 and 120 seconds")
+        return v
+
+
+class DeptProxyOverrideSchema(BaseModel):
+    provider:        str       | None = None
+    base_url:        str       | None = None
+    default_model:   str       | None = None
+    timeout_seconds: int       | None = None
+    api_key:         SecretStr | None = None
+    clear:           bool = False
+
+    @field_validator("provider")
+    @classmethod
+    def validate_provider(cls, v: str | None) -> str | None:
+        if v is not None and v not in _VALID_PROVIDERS:
+            raise ValueError(f"provider must be one of: {', '.join(sorted(_VALID_PROVIDERS))}")
+        return v
+
+    @field_validator("base_url")
+    @classmethod
+    def validate_base_url(cls, v: str | None) -> str | None:
+        if v is None:
+            return v
+        return _validate_provider_url(v)
+
+    @field_validator("timeout_seconds")
+    @classmethod
+    def validate_timeout(cls, v: int | None) -> int | None:
+        if v is not None and not (1 <= v <= 300):
+            raise ValueError("timeout_seconds must be between 1 and 300")
+        return v
 
 
 @router.post("")
@@ -196,11 +311,11 @@ async def get_department_policy(
     )
 
     return JSONResponse(content={
-        "dept_id":       dept_id,
-        "dept_name":     dept.name,
-        "policy_source": policy_source,
-        "override_set":  dept.policy_override is not None,
-        "policy_override": dept.policy_override,
+        "dept_id":         dept_id,
+        "dept_name":       dept.name,
+        "policy_source":   policy_source,
+        "override_set":    dept.policy_override is not None,
+        "policy_override": _mask_policy_override(dept.policy_override),
         "resolved_policy": policy,
     })
 
@@ -241,6 +356,102 @@ async def update_department(
     # are included — filtering "if v is not None" would silently drop them
     data = body.model_dump(exclude_unset=True)
     record = await repo.update(uuid.UUID(dept_id), data)
+    if not record:
+        raise NotFoundError("department", dept_id)
+    await db.commit()
+    return JSONResponse(content=_format(record))
+
+
+@router.patch("/{dept_id}/policy/llm")
+async def update_dept_llm_override(
+    dept_id:   str,
+    body:      DeptLLMOverrideSchema,
+    request:   Request,
+    db:        AsyncSession = Depends(get_db),
+    principal: Principal    = Depends(require_admin()),
+):
+    """
+    Set or clear the LLM detection override for a department.
+    When set, this dept's requests use the specified LLM provider/model/key for threat detection.
+    api_key is encrypted before storage — never stored or returned in plaintext.
+    Set clear=true to remove the override and inherit the global LLM configuration.
+    Auth: JWT + ADMIN role required.
+    """
+    repo     = DepartmentRepository(db)
+    existing = await repo.get_by_id(uuid.UUID(dept_id))
+    if not existing or str(existing.tenant_id) != request.state.tenant_id:
+        raise NotFoundError("department", dept_id)
+
+    override = dict(existing.policy_override or {})
+
+    if body.clear:
+        override.pop("llm", None)
+    else:
+        current = dict(override.get("llm") or {})
+        if body.provider    is not None: current["provider"] = body.provider
+        if body.model       is not None: current["model"]    = body.model
+        if body.base_url    is not None: current["base_url"] = body.base_url
+        if body.timeout     is not None: current["timeout"]  = body.timeout
+        if body.api_key is not None:
+            raw = body.api_key.get_secret_value().strip()
+            if raw:
+                current["api_key_enc"] = encrypt(raw, get_settings().secret_key)
+            else:
+                current.pop("api_key_enc", None)
+        if current:
+            override["llm"] = current
+
+    record = await repo.update(uuid.UUID(dept_id), {
+        "policy_override": override or None
+    })
+    if not record:
+        raise NotFoundError("department", dept_id)
+    await db.commit()
+    return JSONResponse(content=_format(record))
+
+
+@router.patch("/{dept_id}/policy/proxy")
+async def update_dept_proxy_override(
+    dept_id:   str,
+    body:      DeptProxyOverrideSchema,
+    request:   Request,
+    db:        AsyncSession = Depends(get_db),
+    principal: Principal    = Depends(require_admin()),
+):
+    """
+    Set or clear the proxy provider override for a department.
+    When set, proxy mode requests from this dept fall back to this provider if no
+    per-key proxy config exists. api_key encrypted before storage.
+    Set clear=true to remove the override and require per-key proxy configuration.
+    Auth: JWT + ADMIN role required.
+    """
+    repo     = DepartmentRepository(db)
+    existing = await repo.get_by_id(uuid.UUID(dept_id))
+    if not existing or str(existing.tenant_id) != request.state.tenant_id:
+        raise NotFoundError("department", dept_id)
+
+    override = dict(existing.policy_override or {})
+
+    if body.clear:
+        override.pop("proxy_provider", None)
+    else:
+        current = dict(override.get("proxy_provider") or {})
+        if body.provider        is not None: current["provider"]        = body.provider
+        if body.base_url        is not None: current["base_url"]        = body.base_url
+        if body.default_model   is not None: current["default_model"]   = body.default_model
+        if body.timeout_seconds is not None: current["timeout_seconds"] = body.timeout_seconds
+        if body.api_key is not None:
+            raw = body.api_key.get_secret_value().strip()
+            if raw:
+                current["api_key_enc"] = encrypt(raw, get_settings().secret_key)
+            else:
+                current.pop("api_key_enc", None)
+        if current:
+            override["proxy_provider"] = current
+
+    record = await repo.update(uuid.UUID(dept_id), {
+        "policy_override": override or None
+    })
     if not record:
         raise NotFoundError("department", dept_id)
     await db.commit()

@@ -10,17 +10,27 @@ from config.settings import get_settings
 
 logger = logging.getLogger("wrapsec.clients")
 
-OPENAI_API_URL = "https://api.openai.com/v1/chat/completions"
-
 
 class OpenAIClient(BaseLLMClient):
+    """OpenAI-compatible client. Handles openai, custom, and any OpenAI-compatible endpoint."""
 
     def __init__(self, llm_settings: dict | None = None):
         self._llm_settings = llm_settings or {}
 
     @property
     def provider(self) -> str:
-        return "openai"
+        return self._llm_settings.get("provider") or "openai"
+
+    def _resolve_api_key(self) -> str:
+        # DB-stored key takes precedence over env var
+        return self._llm_settings.get("api_key") or get_settings().openai_api_key
+
+    def _resolve_base_url(self) -> str:
+        return (
+            self._llm_settings.get("base_url")
+            or get_settings().llm_base_url
+            or "https://api.openai.com/v1"
+        )
 
     async def complete(
         self,
@@ -34,13 +44,15 @@ class OpenAIClient(BaseLLMClient):
         start          = time.perf_counter()
         resolved_model = model or self._llm_settings.get("model") or _settings.llm_model
         timeout        = self._llm_settings.get("timeout") or _settings.llm_timeout
+        base_url       = self._resolve_base_url()
+        api_key        = self._resolve_api_key()
 
         try:
             async with httpx.AsyncClient(timeout=timeout) as client:
                 response = await client.post(
-                    OPENAI_API_URL,
+                    f"{base_url}/chat/completions",
                     headers={
-                        "Authorization": f"Bearer {_settings.openai_api_key}",
+                        "Authorization": f"Bearer {api_key}",
                         "Content-Type":  "application/json",
                     },
                     json={
@@ -66,7 +78,7 @@ class OpenAIClient(BaseLLMClient):
                 )
 
         except Exception as e:
-            logger.error(f"OpenAI completion failed: {e}")
+            logger.error(f"OpenAI-compatible completion failed ({base_url}): {e}")
             return LLMResponse(
                 content    = "",
                 model      = resolved_model,
@@ -75,14 +87,15 @@ class OpenAIClient(BaseLLMClient):
             )
 
     async def is_available(self) -> bool:
-        _settings = get_settings()
-        if not _settings.openai_api_key:
+        base_url = self._resolve_base_url()
+        api_key  = self._resolve_api_key()
+        if not api_key:
             return False
         try:
             async with httpx.AsyncClient(timeout=5) as client:
                 response = await client.get(
-                    "https://api.openai.com/v1/models",
-                    headers={"Authorization": f"Bearer {_settings.openai_api_key}"},
+                    f"{base_url}/models",
+                    headers={"Authorization": f"Bearer {api_key}"},
                 )
                 return response.status_code == 200
         except Exception:
