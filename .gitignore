@@ -232,6 +232,7 @@ tests/load/results/
 ml/data/raw/
 models/ml_detector.pkl
 models/ml_detector.pkl.sha256
+models/ml_detector.sha256
 models/training_dataset.csv
 models/training.log
 

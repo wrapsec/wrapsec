@@ -62,7 +62,7 @@ from sklearn.model_selection import train_test_split
 _REPO_ROOT    = Path(__file__).resolve().parent.parent
 MODEL_DIR     = _REPO_ROOT / "models"
 MODEL_PATH    = MODEL_DIR / "ml_detector.pkl"
-MODEL_HASH    = MODEL_DIR / "ml_detector.sha256"
+MODEL_HASH    = MODEL_DIR / "ml_detector.pkl.sha256"
 DATASET_PATH  = MODEL_DIR / "training_dataset.csv"
 MODEL_DIR.mkdir(exist_ok=True)
 

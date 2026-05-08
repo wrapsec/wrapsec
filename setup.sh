@@ -61,7 +61,7 @@ fi
 # ── Wait for API ──────────────────────────────────────────────────────────────
 info "Waiting for API to be ready..."
 RETRIES=30
-until curl -sf http://localhost:8000/health >/dev/null 2>&1; do
+until curl -sf http://localhost/health >/dev/null 2>&1; do
     RETRIES=$((RETRIES - 1))
     [ $RETRIES -eq 0 ] && die "API did not become healthy in time. Check logs: docker compose -f infrastructure/docker/docker-compose.yml logs api"
     sleep 2
