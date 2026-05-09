@@ -17,6 +17,8 @@ jobs:
           POSTGRES_DB: wrapsec_test
           POSTGRES_USER: wrapsec
           POSTGRES_PASSWORD: ci_password
+        ports:
+          - 5432:5432
         options: >-
           --health-cmd pg_isready
           --health-interval 10s
@@ -25,6 +27,8 @@ jobs:
 
       redis:
         image: redis:7-alpine
+        ports:
+          - 6379:6379
         options: >-
           --health-cmd "redis-cli ping"
           --health-interval 10s
