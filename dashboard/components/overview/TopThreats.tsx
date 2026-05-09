@@ -31,7 +31,7 @@ export function TopThreats({ threats, from, to }: { threats: ThreatCount[]; from
       {threats.length === 0 ? (
         <p style={{ fontSize: "13px", color: "#9ca3af" }}>No threats detected</p>
       ) : (
-        <div style={{ overflowY: "auto", overflowX: "hidden", flex: 1, maxHeight: "220px" }}>
+        <div style={{ overflowY: "auto", overflowX: "hidden", flex: 1, maxHeight: "220px", paddingRight: "8px" }}>
           <div style={{ display: "flex", flexDirection: "column", gap: "12px" }}>
             {threats.map(t => {
             const color = THREAT_COLORS[t.category] ?? "#6b7280"
