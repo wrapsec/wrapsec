@@ -490,7 +490,7 @@ export default function OverviewPage() {
         {stats && (
           <div style={{ display: "grid", gridTemplateColumns: "1fr 1.6fr 0.9fr", gap: "16px", alignItems: "stretch" }}>
             <DonutChart stats={stats} />
-            <TopThreats threats={stats.top_threats} />
+            <TopThreats threats={stats.top_threats} from={from} to={to} />
             <LatencyCard stats={stats} byReason={byReason} />
           </div>
         )}

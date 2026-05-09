@@ -14,7 +14,7 @@ const THREAT_COLORS: Record<string, string> = {
   TOXICITY:          "#d97706",
 }
 
-export function TopThreats({ threats }: { threats: ThreatCount[] }) {
+export function TopThreats({ threats, from, to }: { threats: ThreatCount[]; from?: string; to?: string }) {
   const max = threats[0]?.count || 1
 
   return (
@@ -39,7 +39,7 @@ export function TopThreats({ threats }: { threats: ThreatCount[] }) {
             return (
               <Link
                 key={t.category}
-                href={`/requests?threat=${t.category}`}
+                href={`/requests?threat=${t.category}${from ? `&from=${from}` : ""}${to ? `&to=${to}` : ""}`}
                 style={{ display: "block", textDecoration: "none" }}
               >
                 <div
