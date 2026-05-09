@@ -21,7 +21,7 @@ export default function ApiKeysPage() {
   const [search,    setSearch]    = useState("")
   const { isJwt } = useAuthMode()
 
-  const { data, isLoading, mutate } = useSWR("api-keys", getApiKeys)
+  const { data, isLoading, mutate, error: fetchError } = useSWR("api-keys", getApiKeys)
 
   const handleRevoke = async (keyId: string) => {
     setRevoking(keyId)
@@ -80,6 +80,11 @@ export default function ApiKeysPage() {
           <div className="px-5 py-4">
             {isLoading ? (
               <PageSpinner />
+            ) : fetchError && !data ? (
+              <div className="py-10 text-center">
+                <p className="text-sm font-semibold text-red-600 mb-1">Failed to load API keys</p>
+                <p className="text-xs text-slate-400">{fetchError?.message ?? "An unexpected error occurred"}</p>
+              </div>
             ) : (
               <ApiKeyTable
                 keys={(data?.keys ?? []).filter((k) => {

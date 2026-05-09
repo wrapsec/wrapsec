@@ -501,8 +501,8 @@ export default function AnalyticsPage() {
     keepPreviousData:  false,
   }
 
-  const { data: stats,       isLoading: statsLoading } = useSWR(["analytics-stats",       from, to], () => getAuditStats({ from, to }),                 SWR_OPTS)
-  const { data: attribution, isLoading: attrLoading  } = useSWR(["analytics-attribution", from, to], () => getAttribution({ from, to }),                SWR_OPTS)
+  const { data: stats,       isLoading: statsLoading, error: statsError } = useSWR(["analytics-stats",       from, to], () => getAuditStats({ from, to }),                 SWR_OPTS)
+  const { data: attribution, isLoading: attrLoading                     } = useSWR(["analytics-attribution", from, to], () => getAttribution({ from, to }),                SWR_OPTS)
   const { data: analytics }                            = useSWR(["analytics-trend", groupBy, from, to], () => getAnalytics({ group_by: groupBy, from, to }), SWR_OPTS)
   const { data: depts } = useSWR("departments-list",  getDepartments)
   const { data: apps  } = useSWR("applications-list", getApplications)
@@ -515,6 +515,19 @@ export default function AnalyticsPage() {
 
   if ((statsLoading || attrLoading) && !stats) {
     return <Shell title="Analytics"><PageSpinner /></Shell>
+  }
+
+  if (statsError && !stats) {
+    return (
+      <Shell title="Analytics">
+        <div className="max-w-2xl">
+          <div className="bg-red-50 border border-red-200 rounded-xl p-5">
+            <p className="text-sm font-semibold text-red-700 mb-1">Failed to load analytics</p>
+            <p className="text-xs text-red-500">{statsError?.message ?? "An unexpected error occurred"}</p>
+          </div>
+        </div>
+      </Shell>
+    )
   }
 
   const byReason = attribution?.by_primary_reason ?? []

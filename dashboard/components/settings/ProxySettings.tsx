@@ -32,13 +32,14 @@ export function ProxySettingsForm({ config, onUpdated }: ProxySettingsFormProps)
   const [model,     setModel]     = useState(config?.default_model  ?? "gpt-4o")
   const [timeout,   setTimeout_]  = useState(config?.timeout_seconds ?? 60)
 
-  const [saving,    setSaving]    = useState(false)
-  const [saved,     setSaved]     = useState(false)
-  const [deleting,  setDeleting]  = useState(false)
-  const [testing,   setTesting]   = useState(false)
+  const [saving,         setSaving]         = useState(false)
+  const [saved,          setSaved]          = useState(false)
+  const [deleting,       setDeleting]       = useState(false)
+  const [testing,        setTesting]        = useState(false)
+  const [confirmDelete,  setConfirmDelete]  = useState(false)
   const { isJwt } = useAuthMode()
-  const [error,     setError]     = useState<string | null>(null)
-  const [health,    setHealth]    = useState<ProxyHealthResult | null>(null)
+  const [error,          setError]          = useState<string | null>(null)
+  const [health,         setHealth]         = useState<ProxyHealthResult | null>(null)
 
   const handleProviderChange = (p: string) => {
     setProvider(p as any)
@@ -72,7 +73,7 @@ export function ProxySettingsForm({ config, onUpdated }: ProxySettingsFormProps)
   }
 
   const handleDelete = async () => {
-    if (!confirm("Remove proxy provider configuration?")) return
+    setConfirmDelete(false)
     setDeleting(true)
     setError(null)
     try {
@@ -232,9 +233,27 @@ export function ProxySettingsForm({ config, onUpdated }: ProxySettingsFormProps)
           Test connection
         </Button>
         {config && (
-          <Button size="sm" variant="danger" onClick={handleDelete} loading={deleting}>
-            Remove
-          </Button>
+          confirmDelete ? (
+            <div className="flex items-center gap-2">
+              <span className="text-xs text-red-600 whitespace-nowrap">Remove proxy?</span>
+              <button
+                onClick={handleDelete}
+                className="text-xs font-medium text-red-600 hover:text-red-800 whitespace-nowrap"
+              >
+                Confirm
+              </button>
+              <button
+                onClick={() => setConfirmDelete(false)}
+                className="text-xs text-slate-500 hover:text-slate-700"
+              >
+                Cancel
+              </button>
+            </div>
+          ) : (
+            <Button size="sm" variant="danger" onClick={() => setConfirmDelete(true)} loading={deleting}>
+              Remove
+            </Button>
+          )
         )}
         {saved && <span className="text-xs text-green-600">Saved successfully</span>}
       </div>

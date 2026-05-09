@@ -7,6 +7,7 @@ import useSWR from "swr"
 import { useState } from "react"
 import Link from "next/link"
 import { Shell } from "@/components/layout/Shell"
+import { PageSpinner } from "@/components/ui/Spinner"
 import { TopThreats } from "@/components/overview/TopThreats"
 import { RecentRequests } from "@/components/overview/RecentRequests"
 import { RequestDetailModal } from "@/components/requests/RequestDetail"
@@ -432,7 +433,7 @@ export default function OverviewPage() {
     options:      ["24h", "7d", "30d"],
   })
 
-  const { data: stats,  isLoading: statsLoading } = useSWR(["overview-stats", from, to], () => getAuditStats({ from, to }),           { refreshInterval: POLL_INTERVAL })
+  const { data: stats,  isLoading: statsLoading, error: statsError } = useSWR(["overview-stats", from, to], () => getAuditStats({ from, to }),           { refreshInterval: POLL_INTERVAL })
   const { data: logs                            } = useSWR("overview-logs",              () => getAuditLogs({ limit: 10, offset: 0 }), { refreshInterval: POLL_INTERVAL })
   const { data: attribution                     } = useSWR("overview-attribution",        () => getAttribution(),                       { refreshInterval: POLL_INTERVAL })
   const { data: depts                           } = useSWR("overview-depts",              getDepartments,                               { refreshInterval: POLL_INTERVAL })
@@ -441,6 +442,23 @@ export default function OverviewPage() {
 
   const sev      = stats?.severity_counts  ?? { CRITICAL: 0, HIGH: 0, MEDIUM: 0, LOW: 0 }
   const byReason = attribution?.by_primary_reason ?? []
+
+  if (statsLoading && !stats) {
+    return <Shell title="Overview"><PageSpinner /></Shell>
+  }
+
+  if (statsError && !stats) {
+    return (
+      <Shell title="Overview">
+        <div className="max-w-2xl">
+          <div className="bg-red-50 border border-red-200 rounded-xl p-5">
+            <p className="text-sm font-semibold text-red-700 mb-1">Failed to load overview</p>
+            <p className="text-xs text-red-500">{statsError?.message ?? "An unexpected error occurred"}</p>
+          </div>
+        </div>
+      </Shell>
+    )
+  }
 
   return (
     <Shell title="Overview">

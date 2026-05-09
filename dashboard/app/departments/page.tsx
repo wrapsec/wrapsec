@@ -25,7 +25,7 @@ export default function DepartmentsPage() {
   const [confirmDeactivate, setConfirmDeactivate] = useState<string | null>(null)
   const { isJwt } = useAuthMode()
 
-  const { data, isLoading, mutate } = useSWR("departments", getDepartments)
+  const { data, isLoading, mutate, error: fetchError } = useSWR("departments", getDepartments)
 
   const handleCreate = async () => {
     if (!name || !slug) return
@@ -147,6 +147,11 @@ export default function DepartmentsPage() {
           {error && <p className="px-5 pb-2 text-xs text-red-600">{error}</p>}
           {isLoading ? (
             <PageSpinner />
+          ) : fetchError && !data ? (
+            <div className="px-5 py-10 text-center">
+              <p className="text-sm font-semibold text-red-600 mb-1">Failed to load departments</p>
+              <p className="text-xs text-slate-400">{fetchError?.message ?? "An unexpected error occurred"}</p>
+            </div>
           ) : (
             <table className="w-full text-sm">
               <thead>

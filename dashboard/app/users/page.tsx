@@ -375,7 +375,7 @@ export default function UsersPage() {
   const [search,     setSearch]     = useState("")
   const { isJwt } = useAuthMode()
 
-  const { data: usersData, isLoading, mutate } = useSWR("users", () => getUsers())
+  const { data: usersData, isLoading, mutate, error: fetchError } = useSWR("users", () => getUsers())
   const { data: deptsData } = useSWR("departments", getDepartments)
 
   const depts = (deptsData?.departments ?? []).map(d => ({ id: d.id, name: d.name }))
@@ -412,6 +412,11 @@ export default function UsersPage() {
           </div>
           {isLoading ? (
             <PageSpinner />
+          ) : fetchError && !usersData ? (
+            <div className="px-5 py-10 text-center">
+              <p className="text-sm font-semibold text-red-600 mb-1">Failed to load users</p>
+              <p className="text-xs text-slate-400">{fetchError?.message ?? "An unexpected error occurred"}</p>
+            </div>
           ) : (
             <table className="w-full text-sm">
               <thead>
