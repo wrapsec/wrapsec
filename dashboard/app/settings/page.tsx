@@ -77,15 +77,15 @@ export default function SettingsPage() {
 
         {/* Tab bar */}
         <div style={{
-          display: "flex", gap: "2px", marginBottom: "20px",
-          borderBottom: "1px solid #e5e7eb", overflowX: "auto",
+          display: "flex", flexWrap: "wrap", gap: "0",
+          borderBottom: "1px solid #e5e7eb", marginBottom: "20px",
         }}>
           {TABS.map(tab => (
             <button
               key={tab.id}
               onClick={() => setActiveTab(tab.id)}
               style={{
-                padding: "8px 16px",
+                padding: "8px 14px",
                 fontSize: "13px",
                 fontWeight: activeTab === tab.id ? 600 : 400,
                 color: activeTab === tab.id ? "#670FEF" : "#6b7280",
