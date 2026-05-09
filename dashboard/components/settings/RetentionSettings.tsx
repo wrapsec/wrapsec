@@ -108,7 +108,7 @@ export function RetentionSettingsForm({
                 const val = parseInt(e.target.value)
                 if (!isNaN(val)) setDays(val)
               }}
-              className="h-9 px-3 text-sm rounded-md border border-slate-200 bg-white text-slate-900 focus:outline-none focus:ring-2 focus:ring-blue-800 focus:border-blue-800"
+              className="h-9 px-3 text-sm rounded-md border border-slate-200 bg-white text-slate-900 focus:outline-none focus:ring-2 focus:ring-purple-700 focus:border-purple-700"
             />
             <p className="text-xs text-slate-400">
               Audit logs older than {days} days will be deleted. Min: 7, Max: 3650.

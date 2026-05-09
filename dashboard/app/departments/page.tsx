@@ -87,7 +87,7 @@ export default function DepartmentsPage() {
                   value={name}
                   onChange={(e) => setName(e.target.value)}
                   placeholder="Finance Department"
-                  className="h-9 px-3 text-sm rounded-md border border-slate-200 bg-white text-slate-900 placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-blue-800"
+                  className="h-9 px-3 text-sm rounded-md border border-slate-200 bg-white text-slate-900 placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-purple-700"
                 />
               </div>
               <div className="flex flex-col gap-1">
@@ -97,7 +97,7 @@ export default function DepartmentsPage() {
                   value={slug}
                   onChange={(e) => setSlug(e.target.value.toLowerCase().replace(/\s+/g, "-"))}
                   placeholder="finance"
-                  className="h-9 px-3 text-sm rounded-md border border-slate-200 bg-white text-slate-900 placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-blue-800"
+                  className="h-9 px-3 text-sm rounded-md border border-slate-200 bg-white text-slate-900 placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-purple-700"
                 />
               </div>
               <div className="flex flex-col gap-1">
@@ -107,7 +107,7 @@ export default function DepartmentsPage() {
                   value={description}
                   onChange={(e) => setDescription(e.target.value)}
                   placeholder="Finance division"
-                  className="h-9 px-3 text-sm rounded-md border border-slate-200 bg-white text-slate-900 placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-blue-800"
+                  className="h-9 px-3 text-sm rounded-md border border-slate-200 bg-white text-slate-900 placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-purple-700"
                 />
               </div>
               <div className="flex flex-col gap-1">
@@ -117,7 +117,7 @@ export default function DepartmentsPage() {
                   value={contact}
                   onChange={(e) => setContact(e.target.value)}
                   placeholder="finance@acme.com"
-                  className="h-9 px-3 text-sm rounded-md border border-slate-200 bg-white text-slate-900 placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-blue-800"
+                  className="h-9 px-3 text-sm rounded-md border border-slate-200 bg-white text-slate-900 placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-purple-700"
                 />
               </div>
             </div>

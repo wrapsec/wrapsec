@@ -109,7 +109,7 @@ export function ProxySettingsForm({ config, onUpdated }: ProxySettingsFormProps)
           <select
             value={provider}
             onChange={(e) => handleProviderChange(e.target.value)}
-            className="h-9 px-3 text-sm rounded-md border border-slate-200 bg-white text-slate-900 focus:outline-none focus:ring-2 focus:ring-blue-800 focus:border-blue-800"
+            className="h-9 px-3 text-sm rounded-md border border-slate-200 bg-white text-slate-900 focus:outline-none focus:ring-2 focus:ring-purple-700 focus:border-purple-700"
           >
             {PROVIDERS.map((p) => (
               <option key={p.value} value={p.value}>{p.label}</option>
@@ -128,7 +128,7 @@ export function ProxySettingsForm({ config, onUpdated }: ProxySettingsFormProps)
             value={model}
             onChange={(e) => setModel(e.target.value)}
             placeholder="gpt-4o"
-            className="h-9 px-3 text-sm rounded-md border border-slate-200 bg-white text-slate-900 placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-blue-800 focus:border-blue-800"
+            className="h-9 px-3 text-sm rounded-md border border-slate-200 bg-white text-slate-900 placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-purple-700 focus:border-purple-700"
           />
           <p className="text-xs text-slate-400">
             Model name used when client specifies provider/model format
@@ -143,7 +143,7 @@ export function ProxySettingsForm({ config, onUpdated }: ProxySettingsFormProps)
             value={baseUrl}
             onChange={(e) => setBaseUrl(e.target.value)}
             placeholder="https://api.openai.com/v1"
-            className="h-9 px-3 text-sm rounded-md border border-slate-200 bg-white text-slate-900 placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-blue-800 focus:border-blue-800"
+            className="h-9 px-3 text-sm rounded-md border border-slate-200 bg-white text-slate-900 placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-purple-700 focus:border-purple-700"
           />
           <p className="text-xs text-slate-400">
             Provider endpoint URL. For Groq: https://api.groq.com/openai/v1
@@ -166,7 +166,7 @@ export function ProxySettingsForm({ config, onUpdated }: ProxySettingsFormProps)
               value={apiKey}
               onChange={(e) => setApiKey(e.target.value)}
               placeholder={config?.api_key_masked ? "Leave blank to keep current key" : "sk-..."}
-              className="h-9 px-3 text-sm rounded-md border border-slate-200 bg-white text-slate-900 placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-blue-800 focus:border-blue-800"
+              className="h-9 px-3 text-sm rounded-md border border-slate-200 bg-white text-slate-900 placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-purple-700 focus:border-purple-700"
             />
             <p className="text-xs text-slate-400">
               Stored encrypted. Never returned in API responses. Masked after save.
@@ -183,7 +183,7 @@ export function ProxySettingsForm({ config, onUpdated }: ProxySettingsFormProps)
             max={300}
             value={timeout}
             onChange={(e) => { const v = parseInt(e.target.value); if (!isNaN(v)) setTimeout_(v) }}
-            className="h-9 px-3 text-sm rounded-md border border-slate-200 bg-white text-slate-900 focus:outline-none focus:ring-2 focus:ring-blue-800 focus:border-blue-800"
+            className="h-9 px-3 text-sm rounded-md border border-slate-200 bg-white text-slate-900 focus:outline-none focus:ring-2 focus:ring-purple-700 focus:border-purple-700"
           />
           <p className="text-xs text-slate-400">10 – 300 seconds</p>
         </div>

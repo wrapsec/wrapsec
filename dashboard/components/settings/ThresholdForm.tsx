@@ -61,7 +61,7 @@ export function ThresholdForm({ thresholds, onUpdated }: ThresholdFormProps) {
             min={0} max={1} step={0.05}
             value={block}
             onChange={(e) => setBlock(parseFloat(e.target.value))}
-            className="h-9 w-full px-3 text-sm rounded-md border border-slate-200 bg-white text-slate-900 focus:outline-none focus:ring-2 focus:ring-blue-800 focus:border-blue-800"
+            className="h-9 w-full px-3 text-sm rounded-md border border-slate-200 bg-white text-slate-900 focus:outline-none focus:ring-2 focus:ring-purple-700 focus:border-purple-700"
           />
           <p className="text-xs text-slate-400 mt-1">
             Requests with risk score ≥ {block} are blocked (min: 0.01, max: 1.0)
@@ -76,7 +76,7 @@ export function ThresholdForm({ thresholds, onUpdated }: ThresholdFormProps) {
             min={0} max={1} step={0.05}
             value={sanitize}
             onChange={(e) => setSanitize(parseFloat(e.target.value))}
-            className="h-9 w-full px-3 text-sm rounded-md border border-slate-200 bg-white text-slate-900 focus:outline-none focus:ring-2 focus:ring-blue-800 focus:border-blue-800"
+            className="h-9 w-full px-3 text-sm rounded-md border border-slate-200 bg-white text-slate-900 focus:outline-none focus:ring-2 focus:ring-purple-700 focus:border-purple-700"
           />
           <p className="text-xs text-slate-400 mt-1">
             Requests with risk score ≥ {sanitize} are sanitized (min: 0.0, max: 0.99)

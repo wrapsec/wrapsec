@@ -78,7 +78,7 @@ export function TenantSettingsForm({
             type="text"
             value={name}
             onChange={(e) => setName(e.target.value)}
-            className="h-9 px-3 text-sm rounded-md border border-slate-200 bg-white text-slate-900 focus:outline-none focus:ring-2 focus:ring-blue-800 focus:border-blue-800"
+            className="h-9 px-3 text-sm rounded-md border border-slate-200 bg-white text-slate-900 focus:outline-none focus:ring-2 focus:ring-purple-700 focus:border-purple-700"
           />
         </div>
         <div className="flex flex-col gap-1">
@@ -90,7 +90,7 @@ export function TenantSettingsForm({
             value={contact}
             onChange={(e) => setContact(e.target.value)}
             placeholder="admin@acme.com"
-            className="h-9 px-3 text-sm rounded-md border border-slate-200 bg-white text-slate-900 placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-blue-800 focus:border-blue-800"
+            className="h-9 px-3 text-sm rounded-md border border-slate-200 bg-white text-slate-900 placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-purple-700 focus:border-purple-700"
           />
         </div>
         <div className="flex flex-col gap-1 col-span-2">
@@ -102,7 +102,7 @@ export function TenantSettingsForm({
             value={description}
             onChange={(e) => setDescription(e.target.value)}
             placeholder="Single on-premise installation"
-            className="h-9 px-3 text-sm rounded-md border border-slate-200 bg-white text-slate-900 placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-blue-800 focus:border-blue-800"
+            className="h-9 px-3 text-sm rounded-md border border-slate-200 bg-white text-slate-900 placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-purple-700 focus:border-purple-700"
           />
         </div>
       </div>

@@ -66,7 +66,7 @@ export function CreateKeyModal({ onCreated, onClose }: CreateKeyModalProps) {
     }
   }
 
-  const selectClass = "h-9 w-full px-3 text-sm rounded-md border border-slate-200 bg-white text-slate-900 focus:outline-none focus:ring-2 focus:ring-blue-800"
+  const selectClass = "h-9 w-full px-3 text-sm rounded-md border border-slate-200 bg-white text-slate-900 focus:outline-none focus:ring-2 focus:ring-purple-700"
 
   return (
     <div className="fixed inset-0 bg-black/40 flex items-center justify-center z-50">

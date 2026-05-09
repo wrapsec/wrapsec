@@ -105,7 +105,7 @@ export function LayerToggles({ layers, llmTrigger, onUpdated }: LayerTogglesProp
             step={0.05}
             value={trigger}
             onChange={(e) => { const v = parseFloat(e.target.value); if (!isNaN(v)) setTrigger(v) }}
-            className="w-24 h-9 px-3 text-sm rounded-md border border-slate-200 bg-white text-slate-900 focus:outline-none focus:ring-2 focus:ring-blue-800 text-right"
+            className="w-24 h-9 px-3 text-sm rounded-md border border-slate-200 bg-white text-slate-900 focus:outline-none focus:ring-2 focus:ring-purple-700 text-right"
           />
         </div>
       </div>

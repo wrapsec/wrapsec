@@ -223,7 +223,7 @@ export default function ProfilePage() {
   )
 }
 
-const inputCls = "h-9 px-3 text-sm rounded-md border border-slate-200 bg-white text-slate-900 placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-blue-800 disabled:opacity-50 w-full"
+const inputCls = "h-9 px-3 text-sm rounded-md border border-slate-200 bg-white text-slate-900 placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-purple-700 disabled:opacity-50 w-full"
 
 function Field({ label, children }: { label: string; children: React.ReactNode }) {
   return (

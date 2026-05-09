@@ -88,7 +88,7 @@ export function LLMSettingsForm({ settings, onUpdated }: LLMSettingsFormProps) {
           <select
             value={provider}
             onChange={(e) => handleProviderChange(e.target.value as LLMSettings["provider"])}
-            className="h-9 px-3 text-sm rounded-md border border-slate-200 bg-white text-slate-900 focus:outline-none focus:ring-2 focus:ring-blue-800 focus:border-blue-800"
+            className="h-9 px-3 text-sm rounded-md border border-slate-200 bg-white text-slate-900 focus:outline-none focus:ring-2 focus:ring-purple-700 focus:border-purple-700"
           >
             {PROVIDERS.map((p) => (
               <option key={p.value} value={p.value}>{p.label}</option>
@@ -107,7 +107,7 @@ export function LLMSettingsForm({ settings, onUpdated }: LLMSettingsFormProps) {
             value={model}
             onChange={(e) => setModel(e.target.value)}
             placeholder="gpt-4o-mini"
-            className="h-9 px-3 text-sm rounded-md border border-slate-200 bg-white text-slate-900 placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-blue-800 focus:border-blue-800"
+            className="h-9 px-3 text-sm rounded-md border border-slate-200 bg-white text-slate-900 placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-purple-700 focus:border-purple-700"
           />
           <p className="text-xs text-slate-400">Model name for the selected provider</p>
         </div>
@@ -120,7 +120,7 @@ export function LLMSettingsForm({ settings, onUpdated }: LLMSettingsFormProps) {
             value={baseUrl}
             onChange={(e) => setBaseUrl(e.target.value)}
             placeholder={provider === "ollama" ? "http://ollama:11434" : "https://api.openai.com/v1"}
-            className="h-9 px-3 text-sm rounded-md border border-slate-200 bg-white text-slate-900 placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-blue-800 focus:border-blue-800"
+            className="h-9 px-3 text-sm rounded-md border border-slate-200 bg-white text-slate-900 placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-purple-700 focus:border-purple-700"
           />
           <p className="text-xs text-slate-400">
             {provider === "ollama"
@@ -147,7 +147,7 @@ export function LLMSettingsForm({ settings, onUpdated }: LLMSettingsFormProps) {
               value={apiKey}
               onChange={(e) => setApiKey(e.target.value)}
               placeholder={settings.api_key_masked ? "Leave blank to keep current key" : "sk-..."}
-              className="h-9 px-3 text-sm rounded-md border border-slate-200 bg-white text-slate-900 placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-blue-800 focus:border-blue-800"
+              className="h-9 px-3 text-sm rounded-md border border-slate-200 bg-white text-slate-900 placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-purple-700 focus:border-purple-700"
             />
             <p className="text-xs text-slate-400">
               Stored encrypted. Never returned in API responses. Masked after save.
@@ -165,7 +165,7 @@ export function LLMSettingsForm({ settings, onUpdated }: LLMSettingsFormProps) {
             max={120}
             value={timeout}
             onChange={(e) => { const v = parseInt(e.target.value); if (!isNaN(v)) setTimeout_(v) }}
-            className="h-9 px-3 text-sm rounded-md border border-slate-200 bg-white text-slate-900 focus:outline-none focus:ring-2 focus:ring-blue-800 focus:border-blue-800"
+            className="h-9 px-3 text-sm rounded-md border border-slate-200 bg-white text-slate-900 focus:outline-none focus:ring-2 focus:ring-purple-700 focus:border-purple-700"
           />
           <p className="text-xs text-slate-400">Request timeout (5 – 120 seconds)</p>
         </div>

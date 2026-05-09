@@ -18,7 +18,7 @@ export function Input({ label, error, hint, className, ...props }: InputProps) {
       <input
         className={cn(
           "h-9 px-3 text-sm rounded-md border bg-white text-slate-900 placeholder:text-slate-400",
-          "focus:outline-none focus:ring-2 focus:ring-blue-800 focus:ring-offset-0 focus:border-blue-800",
+          "focus:outline-none focus:ring-2 focus:ring-purple-700 focus:ring-offset-0 focus:border-purple-700",
           error
             ? "border-red-400 focus:ring-red-400"
             : "border-slate-200",
@@ -50,7 +50,7 @@ export function Select({ label, options, className, ...props }: SelectProps) {
       <select
         className={cn(
           "h-9 px-3 text-sm rounded-md border border-slate-200 bg-white text-slate-900",
-          "focus:outline-none focus:ring-2 focus:ring-blue-800 focus:border-blue-800",
+          "focus:outline-none focus:ring-2 focus:ring-purple-700 focus:border-purple-700",
           className
         )}
         {...props}

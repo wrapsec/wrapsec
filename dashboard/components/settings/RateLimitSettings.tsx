@@ -68,7 +68,7 @@ export function RateLimitSettingsForm({
                 const val = parseInt(e.target.value)
                 if (!isNaN(val)) setLimit(val)
               }}
-              className="h-9 px-3 text-sm rounded-md border border-slate-200 bg-white text-slate-900 focus:outline-none focus:ring-2 focus:ring-blue-800 focus:border-blue-800"
+              className="h-9 px-3 text-sm rounded-md border border-slate-200 bg-white text-slate-900 focus:outline-none focus:ring-2 focus:ring-purple-700 focus:border-purple-700"
             />
             <p className="text-xs text-slate-400">
               Applies to all <code className="font-mono bg-slate-100 px-1 rounded">wsk_live_</code> keys globally. Min: 1, Max: 10,000.

@@ -100,19 +100,19 @@ export default function ApplicationsPage() {
                 <label className="text-xs font-medium text-slate-700">Name *</label>
                 <input type="text" value={name} onChange={(e) => setName(e.target.value)}
                   placeholder="Finance Bot"
-                  className="h-9 px-3 text-sm rounded-md border border-slate-200 bg-white text-slate-900 placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-blue-800" />
+                  className="h-9 px-3 text-sm rounded-md border border-slate-200 bg-white text-slate-900 placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-purple-700" />
               </div>
               <div className="flex flex-col gap-1">
                 <label className="text-xs font-medium text-slate-700">Slug *</label>
                 <input type="text" value={slug}
                   onChange={(e) => setSlug(e.target.value.toLowerCase().replace(/\s+/g, "-"))}
                   placeholder="finance-bot"
-                  className="h-9 px-3 text-sm rounded-md border border-slate-200 bg-white text-slate-900 placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-blue-800" />
+                  className="h-9 px-3 text-sm rounded-md border border-slate-200 bg-white text-slate-900 placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-purple-700" />
               </div>
               <div className="flex flex-col gap-1">
                 <label className="text-xs font-medium text-slate-700">Department *</label>
                 <select value={deptId} onChange={(e) => setDeptId(e.target.value)}
-                  className="h-9 px-3 text-sm rounded-md border border-slate-200 bg-white text-slate-900 focus:outline-none focus:ring-2 focus:ring-blue-800">
+                  className="h-9 px-3 text-sm rounded-md border border-slate-200 bg-white text-slate-900 focus:outline-none focus:ring-2 focus:ring-purple-700">
                   <option value="">Select department</option>
                   {(deptData?.departments ?? []).map((d) => (
                     <option key={d.id} value={d.id}>{d.name}</option>
@@ -122,7 +122,7 @@ export default function ApplicationsPage() {
               <div className="flex flex-col gap-1">
                 <label className="text-xs font-medium text-slate-700">Environment</label>
                 <select value={environment} onChange={(e) => setEnvironment(e.target.value)}
-                  className="h-9 px-3 text-sm rounded-md border border-slate-200 bg-white text-slate-900 focus:outline-none focus:ring-2 focus:ring-blue-800">
+                  className="h-9 px-3 text-sm rounded-md border border-slate-200 bg-white text-slate-900 focus:outline-none focus:ring-2 focus:ring-purple-700">
                   <option value="production">Production</option>
                   <option value="staging">Staging</option>
                   <option value="development">Development</option>
@@ -132,19 +132,19 @@ export default function ApplicationsPage() {
                 <label className="text-xs font-medium text-slate-700">Owner name</label>
                 <input type="text" value={ownerName} onChange={(e) => setOwnerName(e.target.value)}
                   placeholder="John Smith"
-                  className="h-9 px-3 text-sm rounded-md border border-slate-200 bg-white text-slate-900 placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-blue-800" />
+                  className="h-9 px-3 text-sm rounded-md border border-slate-200 bg-white text-slate-900 placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-purple-700" />
               </div>
               <div className="flex flex-col gap-1">
                 <label className="text-xs font-medium text-slate-700">Owner email</label>
                 <input type="email" value={ownerEmail} onChange={(e) => setOwnerEmail(e.target.value)}
                   placeholder="john@acme.com"
-                  className="h-9 px-3 text-sm rounded-md border border-slate-200 bg-white text-slate-900 placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-blue-800" />
+                  className="h-9 px-3 text-sm rounded-md border border-slate-200 bg-white text-slate-900 placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-purple-700" />
               </div>
               <div className="flex flex-col gap-1 col-span-2">
                 <label className="text-xs font-medium text-slate-700">Description</label>
                 <input type="text" value={description} onChange={(e) => setDescription(e.target.value)}
                   placeholder="Finance automation system"
-                  className="h-9 px-3 text-sm rounded-md border border-slate-200 bg-white text-slate-900 placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-blue-800" />
+                  className="h-9 px-3 text-sm rounded-md border border-slate-200 bg-white text-slate-900 placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-purple-700" />
               </div>
             </div>
             {error && <p className="text-xs text-red-600 mt-3">{error}</p>}

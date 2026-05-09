@@ -7,7 +7,7 @@ import { useState } from "react"
 import { useAuthMode } from "@/hooks/useAuthMode"
 import useSWR from "swr"
 import { Shell } from "@/components/layout/Shell"
-import { Card, CardHeader } from "@/components/ui/Card"
+import { Card } from "@/components/ui/Card"
 import { Button, PlusIcon } from "@/components/ui/Button"
 import { ApiKeyTable } from "@/components/settings/ApiKeyTable"
 import { CreateKeyModal } from "@/components/settings/CreateKeyModal"
@@ -45,29 +45,30 @@ export default function ApiKeysPage() {
 
   return (
     <Shell title="API Keys">
-      <div>
-        <Card padding={false}>
-          <div className="flex items-center justify-between px-5 py-4 border-b border-slate-100">
-            <CardHeader
-              title="API Keys"
-              subtitle="Manage access credentials for WrapSec API"
-            />
-            {isJwt ? (
-              <Button size="sm" onClick={() => setShowModal(true)}>
-                <PlusIcon /> Create key
-              </Button>
-            ) : (
-              <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
-                <Button size="sm" disabled><PlusIcon /> Create key</Button>
-                <span style={{ fontSize: "11px", color: "#9ca3af" }}>
-                  Requires admin login —{" "}
-                  <a href="/login" style={{ color: "#670FEF", textDecoration: "underline" }}>sign in with email</a>
-                </span>
-              </div>
-            )}
-          </div>
+      <div className="space-y-4">
 
-          <div className="px-5 pt-4 pb-2">
+        {/* Description + primary action */}
+        <div className="flex items-center justify-between">
+          <p className="text-sm text-slate-500">
+            Manage access credentials for the WrapSec API.
+          </p>
+          {isJwt ? (
+            <Button size="sm" onClick={() => setShowModal(true)}>
+              <PlusIcon /> Create key
+            </Button>
+          ) : (
+            <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
+              <Button size="sm" disabled><PlusIcon /> Create key</Button>
+              <span style={{ fontSize: "11px", color: "#9ca3af" }}>
+                Requires admin login —{" "}
+                <a href="/login" style={{ color: "#670FEF", textDecoration: "underline" }}>sign in with email</a>
+              </span>
+            </div>
+          )}
+        </div>
+
+        <Card padding={false}>
+          <div className="px-5 py-3 border-b border-slate-100">
             <input
               type="text"
               value={search}
@@ -99,6 +100,7 @@ export default function ApiKeysPage() {
             )}
           </div>
         </Card>
+
       </div>
 
       {showModal && isJwt && (

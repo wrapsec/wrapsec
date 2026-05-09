@@ -33,7 +33,7 @@ export function ScannerInput({ onScan, loading }: ScannerInputProps) {
         onChange={(e) => setInput(e.target.value)}
         placeholder="Enter a prompt to analyse for security threats..."
         rows={5}
-        className="w-full px-4 py-3 text-sm rounded-lg border border-slate-200 bg-white text-slate-900 placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-blue-800 focus:border-blue-800 resize-none"
+        className="w-full px-4 py-3 text-sm rounded-lg border border-slate-200 bg-white text-slate-900 placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-purple-700 focus:border-purple-700 resize-none"
       />
       <div className="flex items-center justify-between">
         <div className="flex items-center gap-4">

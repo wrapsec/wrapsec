@@ -352,7 +352,7 @@ export default function ApplicationDetailPage() {
                     value={blockVal}
                     onChange={e => setBlockVal(e.target.value)}
                     placeholder={`e.g. 0.5 (dept: ${policyData?.resolved_policy?.thresholds?.block ?? "0.7"})`}
-                    className="h-9 px-3 text-sm rounded-md border border-slate-200 bg-white text-slate-900 placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-blue-800"
+                    className="h-9 px-3 text-sm rounded-md border border-slate-200 bg-white text-slate-900 placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-purple-700"
                   />
                   <p className="text-xs text-slate-400">Leave blank to inherit from {deptName}</p>
                 </div>
@@ -364,7 +364,7 @@ export default function ApplicationDetailPage() {
                     value={sanitizeVal}
                     onChange={e => setSanitizeVal(e.target.value)}
                     placeholder={`e.g. 0.3 (dept: ${policyData?.resolved_policy?.thresholds?.sanitize ?? "0.4"})`}
-                    className="h-9 px-3 text-sm rounded-md border border-slate-200 bg-white text-slate-900 placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-blue-800"
+                    className="h-9 px-3 text-sm rounded-md border border-slate-200 bg-white text-slate-900 placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-purple-700"
                   />
                   <p className="text-xs text-slate-400">Leave blank to inherit from {deptName}</p>
                 </div>
@@ -426,7 +426,7 @@ export default function ApplicationDetailPage() {
                 <div className="flex flex-col gap-1">
                   <label className="text-xs font-medium text-slate-700">Provider</label>
                   <select value={llmProvider} onChange={(e) => setLlmProvider(e.target.value)}
-                    className="h-9 px-3 text-sm rounded-md border border-slate-200 bg-white text-slate-900 focus:outline-none focus:ring-2 focus:ring-blue-800">
+                    className="h-9 px-3 text-sm rounded-md border border-slate-200 bg-white text-slate-900 focus:outline-none focus:ring-2 focus:ring-purple-700">
                     {PROVIDERS.map((p) => <option key={p.value} value={p.value}>{p.label}</option>)}
                   </select>
                 </div>
@@ -434,13 +434,13 @@ export default function ApplicationDetailPage() {
                   <label className="text-xs font-medium text-slate-700">Model</label>
                   <input type="text" value={llmModel} onChange={(e) => setLlmModel(e.target.value)}
                     placeholder="gpt-4o-mini"
-                    className="h-9 px-3 text-sm rounded-md border border-slate-200 bg-white text-slate-900 placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-blue-800" />
+                    className="h-9 px-3 text-sm rounded-md border border-slate-200 bg-white text-slate-900 placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-purple-700" />
                 </div>
                 <div className="flex flex-col gap-1 col-span-2">
                   <label className="text-xs font-medium text-slate-700">Base URL</label>
                   <input type="text" value={llmBaseUrl} onChange={(e) => setLlmBaseUrl(e.target.value)}
                     placeholder="https://api.openai.com/v1"
-                    className="h-9 px-3 text-sm rounded-md border border-slate-200 bg-white text-slate-900 placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-blue-800" />
+                    className="h-9 px-3 text-sm rounded-md border border-slate-200 bg-white text-slate-900 placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-purple-700" />
                 </div>
                 {llmProvider !== "ollama" && (
                   <div className="flex flex-col gap-1 col-span-2">
@@ -452,7 +452,7 @@ export default function ApplicationDetailPage() {
                     </label>
                     <input type="password" value={llmApiKey} onChange={(e) => setLlmApiKey(e.target.value)}
                       placeholder={app.policy_override?.llm?.api_key_masked ? "Leave blank to keep current key" : "sk-..."}
-                      className="h-9 px-3 text-sm rounded-md border border-slate-200 bg-white text-slate-900 placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-blue-800" />
+                      className="h-9 px-3 text-sm rounded-md border border-slate-200 bg-white text-slate-900 placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-purple-700" />
                     <p className="text-xs text-slate-400">Stored encrypted. Falls back to department key if blank.</p>
                   </div>
                 )}
@@ -460,7 +460,7 @@ export default function ApplicationDetailPage() {
                   <label className="text-xs font-medium text-slate-700">Timeout (seconds)</label>
                   <input type="number" min={5} max={120} value={llmTimeout} onChange={(e) => setLlmTimeout(e.target.value)}
                     placeholder="30"
-                    className="h-9 px-3 text-sm rounded-md border border-slate-200 bg-white text-slate-900 focus:outline-none focus:ring-2 focus:ring-blue-800" />
+                    className="h-9 px-3 text-sm rounded-md border border-slate-200 bg-white text-slate-900 focus:outline-none focus:ring-2 focus:ring-purple-700" />
                 </div>
               </div>
               {llmError && <p className="text-xs text-red-600">{llmError}</p>}
@@ -527,7 +527,7 @@ export default function ApplicationDetailPage() {
                 <div className="flex flex-col gap-1">
                   <label className="text-xs font-medium text-slate-700">Provider</label>
                   <select value={proxyProvider} onChange={(e) => setProxyProvider(e.target.value)}
-                    className="h-9 px-3 text-sm rounded-md border border-slate-200 bg-white text-slate-900 focus:outline-none focus:ring-2 focus:ring-blue-800">
+                    className="h-9 px-3 text-sm rounded-md border border-slate-200 bg-white text-slate-900 focus:outline-none focus:ring-2 focus:ring-purple-700">
                     {PROVIDERS.map((p) => <option key={p.value} value={p.value}>{p.label}</option>)}
                   </select>
                 </div>
@@ -535,13 +535,13 @@ export default function ApplicationDetailPage() {
                   <label className="text-xs font-medium text-slate-700">Default model</label>
                   <input type="text" value={proxyModel} onChange={(e) => setProxyModel(e.target.value)}
                     placeholder="gpt-4o"
-                    className="h-9 px-3 text-sm rounded-md border border-slate-200 bg-white text-slate-900 placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-blue-800" />
+                    className="h-9 px-3 text-sm rounded-md border border-slate-200 bg-white text-slate-900 placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-purple-700" />
                 </div>
                 <div className="flex flex-col gap-1 col-span-2">
                   <label className="text-xs font-medium text-slate-700">Base URL</label>
                   <input type="text" value={proxyBaseUrl} onChange={(e) => setProxyBaseUrl(e.target.value)}
                     placeholder="https://api.openai.com/v1"
-                    className="h-9 px-3 text-sm rounded-md border border-slate-200 bg-white text-slate-900 placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-blue-800" />
+                    className="h-9 px-3 text-sm rounded-md border border-slate-200 bg-white text-slate-900 placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-purple-700" />
                 </div>
                 {proxyProvider !== "ollama" && (
                   <div className="flex flex-col gap-1 col-span-2">
@@ -553,7 +553,7 @@ export default function ApplicationDetailPage() {
                     </label>
                     <input type="password" value={proxyApiKey} onChange={(e) => setProxyApiKey(e.target.value)}
                       placeholder={app.policy_override?.proxy_provider?.api_key_masked ? "Leave blank to keep current key" : "sk-..."}
-                      className="h-9 px-3 text-sm rounded-md border border-slate-200 bg-white text-slate-900 placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-blue-800" />
+                      className="h-9 px-3 text-sm rounded-md border border-slate-200 bg-white text-slate-900 placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-purple-700" />
                     <p className="text-xs text-slate-400">Stored encrypted. Masked after save.</p>
                   </div>
                 )}
@@ -561,7 +561,7 @@ export default function ApplicationDetailPage() {
                   <label className="text-xs font-medium text-slate-700">Timeout (seconds)</label>
                   <input type="number" min={1} max={300} value={proxyTimeout} onChange={(e) => setProxyTimeout(e.target.value)}
                     placeholder="60"
-                    className="h-9 px-3 text-sm rounded-md border border-slate-200 bg-white text-slate-900 focus:outline-none focus:ring-2 focus:ring-blue-800" />
+                    className="h-9 px-3 text-sm rounded-md border border-slate-200 bg-white text-slate-900 focus:outline-none focus:ring-2 focus:ring-purple-700" />
                 </div>
               </div>
               {proxyError && <p className="text-xs text-red-600">{proxyError}</p>}
