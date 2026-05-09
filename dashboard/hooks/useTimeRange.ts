@@ -4,40 +4,48 @@
 /**
  * useTimeRange — shared time range hook for Overview and Analytics pages.
  *
- * Encapsulates all time range state and from/to computation in one place.
- * No persistence by design — overview always opens at the default window,
- * showing current state rather than a stale previous selection.
+ * Supports preset ranges (24h, 7d, 30d, 90d) and a "custom" mode where
+ * the caller provides explicit YYYY-MM-DD from/to dates.
  *
- * To add persistence in future (Option 5 — server-side user preference):
- *   1. Replace useState with a storage-backed version here only
- *   2. Page code and hook return shape stay identical — no other changes needed
- *
- * Usage:
- *   const { range, setRange, from, to } = useTimeRange()
- *   const { range, setRange, from, to } = useTimeRange({ defaultRange: "7d", options: ["24h","7d","30d","90d"] })
+ * Custom date validation rules (enforced in the hook):
+ *   - Both dates must be non-empty, valid YYYY-MM-DD strings
+ *   - `customFrom` must be before `customTo`
+ *   - `customTo` cannot be in the future
+ *   When invalid, `from`/`to` fall back to the previous valid preset output.
  */
 
 import { useState, useMemo, useEffect } from "react"
 
-export type TimeRange = "24h" | "7d" | "30d" | "90d"
+export type TimeRange = "24h" | "7d" | "30d" | "90d" | "custom"
+
+const DATE_RE = /^\d{4}-\d{2}-\d{2}$/
+
+function isValidDate(s: string): boolean {
+  return DATE_RE.test(s) && !isNaN(new Date(s).getTime())
+}
 
 interface UseTimeRangeOptions {
-  defaultRange?: TimeRange
+  defaultRange?: Exclude<TimeRange, "custom">
   options?:      TimeRange[]
-  debounceMs?:   number   // default 300ms — prevents rapid switching from firing multiple requests
+  debounceMs?:   number
 }
 
 interface UseTimeRangeResult {
-  range:    TimeRange          // immediate — use for selector UI
-  setRange: (r: TimeRange) => void
-  options:  TimeRange[]
-  from:     string             // debounced — use for API calls
-  to:       string             // debounced — use for API calls
+  range:         TimeRange
+  setRange:      (r: TimeRange) => void
+  options:       TimeRange[]
+  from:          string             // debounced — use for API calls
+  to:            string             // debounced — use for API calls
+  customFrom:    string             // raw input value for date picker
+  customTo:      string             // raw input value for date picker
+  setCustomFrom: (v: string) => void
+  setCustomTo:   (v: string) => void
+  customError:   string | null      // validation message — show in UI when non-null
 }
 
 const DEFAULT_OPTIONS: TimeRange[] = ["24h", "7d", "30d"]
 
-function computeFromTo(range: TimeRange): { from: string; to: string } {
+function computeFromTo(range: Exclude<TimeRange, "custom">): { from: string; to: string } {
   const now  = new Date()
   const from = new Date(now)
 
@@ -54,6 +62,18 @@ function computeFromTo(range: TimeRange): { from: string; to: string } {
   }
 }
 
+function validateCustomRange(
+  from: string, to: string,
+): string | null {
+  if (!from || !to)              return "Both dates are required"
+  if (!isValidDate(from))        return "Invalid start date"
+  if (!isValidDate(to))          return "Invalid end date"
+  if (from >= to)                return "Start date must be before end date"
+  const today = new Date().toISOString().slice(0, 10)
+  if (to > today)                return "End date cannot be in the future"
+  return null
+}
+
 export function useTimeRange(opts: UseTimeRangeOptions = {}): UseTimeRangeResult {
   const {
     defaultRange = "24h",
@@ -64,14 +84,47 @@ export function useTimeRange(opts: UseTimeRangeOptions = {}): UseTimeRangeResult
   const [range,          setRange]          = useState<TimeRange>(defaultRange)
   const [debouncedRange, setDebouncedRange] = useState<TimeRange>(defaultRange)
 
-  // Debounce — only update debouncedRange after user stops switching
+  const [customFrom, setCustomFrom] = useState("")
+  const [customTo,   setCustomTo]   = useState("")
+  const [debouncedCustomFrom, setDebouncedCustomFrom] = useState("")
+  const [debouncedCustomTo,   setDebouncedCustomTo]   = useState("")
+
+  // Debounce preset range switching
   useEffect(() => {
     const timer = setTimeout(() => setDebouncedRange(range), debounceMs)
     return () => clearTimeout(timer)
   }, [range, debounceMs])
 
-  // from/to computed from debouncedRange — stable during rapid switching
-  const { from, to } = useMemo(() => computeFromTo(debouncedRange), [debouncedRange])
+  // Debounce custom date inputs separately
+  useEffect(() => {
+    const timer = setTimeout(() => {
+      setDebouncedCustomFrom(customFrom)
+      setDebouncedCustomTo(customTo)
+    }, debounceMs)
+    return () => clearTimeout(timer)
+  }, [customFrom, customTo, debounceMs])
 
-  return { range, setRange, options, from, to }
+  const customError = range === "custom" ? validateCustomRange(customFrom, customTo) : null
+
+  const { from, to } = useMemo(() => {
+    if (debouncedRange === "custom") {
+      const err = validateCustomRange(debouncedCustomFrom, debouncedCustomTo)
+      if (!err) {
+        return {
+          from: debouncedCustomFrom + "T00:00:00",
+          to:   debouncedCustomTo   + "T23:59:59",
+        }
+      }
+      // Fall back to 7d while custom is being filled in
+      return computeFromTo("7d")
+    }
+    return computeFromTo(debouncedRange as Exclude<TimeRange, "custom">)
+  }, [debouncedRange, debouncedCustomFrom, debouncedCustomTo])
+
+  return {
+    range, setRange, options, from, to,
+    customFrom, setCustomFrom,
+    customTo,   setCustomTo,
+    customError,
+  }
 }

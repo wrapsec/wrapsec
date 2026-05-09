@@ -14,16 +14,18 @@ import { getApplications, getDepartments, createApplication, deleteApplication }
 import Link from "next/link"
 
 export default function ApplicationsPage() {
-  const [showCreate,   setShowCreate]   = useState(false)
-  const [name,         setName]         = useState("")
-  const [slug,         setSlug]         = useState("")
-  const [deptId,       setDeptId]       = useState("")
-  const [description,  setDescription]  = useState("")
-  const [ownerName,    setOwnerName]    = useState("")
-  const [ownerEmail,   setOwnerEmail]   = useState("")
-  const [environment,  setEnvironment]  = useState("production")
-  const [saving,       setSaving]       = useState(false)
-  const [error,        setError]        = useState<string | null>(null)
+  const [showCreate,        setShowCreate]        = useState(false)
+  const [name,              setName]              = useState("")
+  const [slug,              setSlug]              = useState("")
+  const [deptId,            setDeptId]            = useState("")
+  const [description,       setDescription]       = useState("")
+  const [ownerName,         setOwnerName]         = useState("")
+  const [ownerEmail,        setOwnerEmail]        = useState("")
+  const [environment,       setEnvironment]       = useState("production")
+  const [saving,            setSaving]            = useState(false)
+  const [error,             setError]             = useState<string | null>(null)
+  const [search,            setSearch]            = useState("")
+  const [confirmDeactivate, setConfirmDeactivate] = useState<string | null>(null)
   const { isJwt } = useAuthMode()
 
   const { data,      isLoading, mutate } = useSWR("applications",  getApplications)
@@ -55,12 +57,12 @@ export default function ApplicationsPage() {
   }
 
   const handleDeactivate = async (id: string) => {
-    if (!confirm("Deactivate this application?")) return
+    setConfirmDeactivate(null)
     try {
       await deleteApplication(id)
       mutate()
     } catch (e: any) {
-      alert(e.message)
+      setError(e.message)
     }
   }
 
@@ -158,6 +160,17 @@ export default function ApplicationsPage() {
 
         {/* Applications table */}
         <Card padding={false}>
+          {/* Search bar */}
+          <div className="px-5 py-3 border-b border-slate-100">
+            <input
+              type="text"
+              value={search}
+              onChange={(e) => setSearch(e.target.value)}
+              placeholder="Search applications..."
+              className="h-8 w-full max-w-xs px-3 text-sm rounded-md border border-slate-200 bg-white text-slate-900 placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-purple-700"
+            />
+          </div>
+          {error && <p className="px-5 pb-2 text-xs text-red-600">{error}</p>}
           {isLoading ? (
             <PageSpinner />
           ) : (
@@ -181,7 +194,18 @@ export default function ApplicationsPage() {
                     </td>
                   </tr>
                 ) : (
-                  (data?.applications ?? []).map((app) => (
+                  (data?.applications ?? [])
+                    .filter((app) => {
+                      if (!search) return true
+                      const q = search.toLowerCase()
+                      return (
+                        app.name.toLowerCase().includes(q) ||
+                        app.slug.toLowerCase().includes(q) ||
+                        app.environment.toLowerCase().includes(q) ||
+                        (app.owner_name ?? "").toLowerCase().includes(q)
+                      )
+                    })
+                    .map((app) => (
                     <tr key={app.id} className="border-b border-slate-50 hover:bg-slate-50 transition-colors">
                       <td className="px-5 py-3">
                         <p className="font-medium text-slate-900">{app.name}</p>
@@ -213,12 +237,30 @@ export default function ApplicationsPage() {
                             Manage
                           </Link>
                           {isJwt && (
-                            <button
-                              onClick={() => handleDeactivate(app.id)}
-                              className="text-xs text-red-500 hover:text-red-700"
-                            >
-                              Deactivate
-                            </button>
+                            confirmDeactivate === app.id ? (
+                              <div className="flex items-center gap-2">
+                                <span className="text-xs text-red-600 whitespace-nowrap">Deactivate?</span>
+                                <button
+                                  onClick={() => handleDeactivate(app.id)}
+                                  className="text-xs font-medium text-red-600 hover:text-red-800"
+                                >
+                                  Confirm
+                                </button>
+                                <button
+                                  onClick={() => setConfirmDeactivate(null)}
+                                  className="text-xs text-slate-500 hover:text-slate-700"
+                                >
+                                  Cancel
+                                </button>
+                              </div>
+                            ) : (
+                              <button
+                                onClick={() => setConfirmDeactivate(app.id)}
+                                className="text-xs text-red-500 hover:text-red-700"
+                              >
+                                Deactivate
+                              </button>
+                            )
                           )}
                         </div>
                       </td>

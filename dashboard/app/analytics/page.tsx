@@ -485,9 +485,12 @@ function AttributionTable({ title, rows, emptyText }: {
 export default function AnalyticsPage() {
   const [groupBy,   setGroupBy]   = useState<"hour" | "day" | "week" | "month">("day")
 
-  const { range: timeRange, setRange: setTimeRange, options: timeRangeOptions, from, to } = useTimeRange({
+  const {
+    range: timeRange, setRange: setTimeRange, options: timeRangeOptions,
+    from, to, customFrom, customTo, setCustomFrom, setCustomTo, customError,
+  } = useTimeRange({
     defaultRange: "7d",
-    options:      ["24h", "7d", "30d", "90d"],
+    options:      ["24h", "7d", "30d", "90d", "custom"],
   })
 
   const ANALYTICS_REFRESH = 5 * 60 * 1000 // 5 minutes — historical data doesn't need live polling
@@ -534,19 +537,54 @@ export default function AnalyticsPage() {
               </svg>
             )}
           </div>
-          <div style={{ display: "flex", gap: "2px", background: "#f3f4f6", borderRadius: "7px", padding: "3px" }}>
-            {timeRangeOptions.map(r => (
-              <button key={r} onClick={() => setTimeRange(r)} style={{
-                fontSize: "12px", fontWeight: timeRange === r ? 600 : 400,
-                padding: "5px 12px", borderRadius: "5px", border: "none", cursor: "pointer",
-                background: timeRange === r ? "#fff" : "transparent",
-                color: timeRange === r ? "#111827" : "#6b7280",
-                boxShadow: timeRange === r ? "0 1px 3px rgba(0,0,0,0.10)" : "none",
-                transition: "all 0.15s",
-              }}>
-                {r}
-              </button>
-            ))}
+          <div style={{ display: "flex", flexDirection: "column", alignItems: "flex-end", gap: "6px" }}>
+            <div style={{ display: "flex", gap: "2px", background: "#f3f4f6", borderRadius: "7px", padding: "3px" }}>
+              {timeRangeOptions.map(r => (
+                <button key={r} onClick={() => setTimeRange(r)} style={{
+                  fontSize: "12px", fontWeight: timeRange === r ? 600 : 400,
+                  padding: "5px 12px", borderRadius: "5px", border: "none", cursor: "pointer",
+                  background: timeRange === r ? "#fff" : "transparent",
+                  color: timeRange === r ? "#111827" : "#6b7280",
+                  boxShadow: timeRange === r ? "0 1px 3px rgba(0,0,0,0.10)" : "none",
+                  transition: "all 0.15s",
+                }}>
+                  {r === "custom" ? "Custom" : r}
+                </button>
+              ))}
+            </div>
+
+            {/* Custom date pickers — shown only when "custom" is active */}
+            {timeRange === "custom" && (
+              <div style={{ display: "flex", alignItems: "center", gap: "6px" }}>
+                <input
+                  type="date"
+                  value={customFrom}
+                  max={new Date().toISOString().slice(0, 10)}
+                  onChange={(e) => setCustomFrom(e.target.value)}
+                  style={{
+                    fontSize: "12px", padding: "4px 8px", borderRadius: "5px",
+                    border: "1px solid #e5e7eb", background: "#fff", color: "#374151",
+                    outline: "none", cursor: "pointer",
+                  }}
+                />
+                <span style={{ fontSize: "12px", color: "#9ca3af" }}>to</span>
+                <input
+                  type="date"
+                  value={customTo}
+                  min={customFrom || undefined}
+                  max={new Date().toISOString().slice(0, 10)}
+                  onChange={(e) => setCustomTo(e.target.value)}
+                  style={{
+                    fontSize: "12px", padding: "4px 8px", borderRadius: "5px",
+                    border: "1px solid #e5e7eb", background: "#fff", color: "#374151",
+                    outline: "none", cursor: "pointer",
+                  }}
+                />
+                {customError && (
+                  <span style={{ fontSize: "11px", color: "#dc2626" }}>{customError}</span>
+                )}
+              </div>
+            )}
           </div>
         </div>
 

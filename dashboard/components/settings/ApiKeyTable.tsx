@@ -15,9 +15,10 @@ interface ApiKeyTableProps {
 }
 
 export function ApiKeyTable({ keys, onRevoke, onRotate, revoking, canWrite = true }: ApiKeyTableProps) {
-  const [rotating,   setRotating]   = useState<string | null>(null)
-  const [rotatedKey, setRotatedKey] = useState<{ newKey: string } | null>(null)
-  const [graceInput, setGraceInput] = useState<string | null>(null)
+  const [rotating,       setRotating]       = useState<string | null>(null)
+  const [rotatedKey,     setRotatedKey]     = useState<{ newKey: string } | null>(null)
+  const [graceInput,     setGraceInput]     = useState<string | null>(null)
+  const [confirmRevoke,  setConfirmRevoke]  = useState<string | null>(null)
 
   if (keys.length === 0) {
     return (
@@ -162,19 +163,39 @@ export function ApiKeyTable({ keys, onRevoke, onRotate, revoking, canWrite = tru
                         {rotating === key.key_id ? "Rotating..." : "Rotate"}
                       </button>}
 
-                      {/* Revoke — hidden for API key sessions */}
-                      {canWrite && <Button
-                        variant="danger"
-                        size="sm"
-                        loading={revoking === key.key_id}
-                        onClick={() => onRevoke(key.key_id)}
-                        title={inGrace
-                          ? "Immediately revokes this key — integrations still using it will stop working now"
-                          : "Revoke this key permanently"
-                        }
-                      >
-                        {inGrace ? "Force revoke" : "Revoke"}
-                      </Button>}
+                      {/* Revoke — hidden for API key sessions; two-step inline confirm */}
+                      {canWrite && (
+                        confirmRevoke === key.key_id ? (
+                          <div className="flex items-center gap-2">
+                            <span className="text-xs text-red-600 whitespace-nowrap">Revoke?</span>
+                            <button
+                              onClick={() => { setConfirmRevoke(null); onRevoke(key.key_id) }}
+                              className="text-xs font-medium text-red-600 hover:text-red-800 whitespace-nowrap"
+                            >
+                              Confirm
+                            </button>
+                            <button
+                              onClick={() => setConfirmRevoke(null)}
+                              className="text-xs text-slate-500 hover:text-slate-700"
+                            >
+                              Cancel
+                            </button>
+                          </div>
+                        ) : (
+                          <Button
+                            variant="danger"
+                            size="sm"
+                            loading={revoking === key.key_id}
+                            onClick={() => { setGraceInput(null); setConfirmRevoke(key.key_id) }}
+                            title={inGrace
+                              ? "Immediately revokes this key — integrations still using it will stop working now"
+                              : "Revoke this key permanently"
+                            }
+                          >
+                            {inGrace ? "Force revoke" : "Revoke"}
+                          </Button>
+                        )
+                      )}
                     </div>
                   </td>
                 </tr>

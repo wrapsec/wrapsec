@@ -14,13 +14,15 @@ import { getDepartments, createDepartment, deleteDepartment } from "@/lib/api"
 import Link from "next/link"
 
 export default function DepartmentsPage() {
-  const [showCreate, setShowCreate] = useState(false)
-  const [name,        setName]        = useState("")
-  const [slug,        setSlug]        = useState("")
-  const [description, setDescription] = useState("")
-  const [contact,     setContact]     = useState("")
-  const [saving,      setSaving]      = useState(false)
-  const [error,       setError]       = useState<string | null>(null)
+  const [showCreate,        setShowCreate]        = useState(false)
+  const [name,              setName]              = useState("")
+  const [slug,              setSlug]              = useState("")
+  const [description,       setDescription]       = useState("")
+  const [contact,           setContact]           = useState("")
+  const [saving,            setSaving]            = useState(false)
+  const [error,             setError]             = useState<string | null>(null)
+  const [search,            setSearch]            = useState("")
+  const [confirmDeactivate, setConfirmDeactivate] = useState<string | null>(null)
   const { isJwt } = useAuthMode()
 
   const { data, isLoading, mutate } = useSWR("departments", getDepartments)
@@ -42,12 +44,12 @@ export default function DepartmentsPage() {
   }
 
   const handleDeactivate = async (id: string) => {
-    if (!confirm("Deactivate this department?")) return
+    setConfirmDeactivate(null)
     try {
       await deleteDepartment(id)
       mutate()
     } catch (e: any) {
-      alert(e.message)
+      setError(e.message)
     }
   }
 
@@ -132,6 +134,17 @@ export default function DepartmentsPage() {
 
         {/* Departments table */}
         <Card padding={false}>
+          {/* Search bar */}
+          <div className="px-5 py-3 border-b border-slate-100">
+            <input
+              type="text"
+              value={search}
+              onChange={(e) => setSearch(e.target.value)}
+              placeholder="Search departments..."
+              className="h-8 w-full max-w-xs px-3 text-sm rounded-md border border-slate-200 bg-white text-slate-900 placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-purple-700"
+            />
+          </div>
+          {error && <p className="px-5 pb-2 text-xs text-red-600">{error}</p>}
           {isLoading ? (
             <PageSpinner />
           ) : (
@@ -155,7 +168,17 @@ export default function DepartmentsPage() {
                     </td>
                   </tr>
                 ) : (
-                  (data?.departments ?? []).map((dept) => (
+                  (data?.departments ?? [])
+                    .filter((dept) => {
+                      if (!search) return true
+                      const q = search.toLowerCase()
+                      return (
+                        dept.name.toLowerCase().includes(q) ||
+                        dept.slug.toLowerCase().includes(q) ||
+                        (dept.description ?? "").toLowerCase().includes(q)
+                      )
+                    })
+                    .map((dept) => (
                     <tr key={dept.id} className="border-b border-slate-50 hover:bg-slate-50 transition-colors">
                       <td className="px-5 py-3 font-medium text-slate-900">{dept.name}</td>
                       <td className="px-5 py-3 font-mono text-xs text-slate-500">{dept.slug}</td>
@@ -179,12 +202,30 @@ export default function DepartmentsPage() {
                             Manage
                           </Link>
                           {isJwt && dept.slug !== "default" && (
-                            <button
-                              onClick={() => handleDeactivate(dept.id)}
-                              className="text-xs text-red-500 hover:text-red-700"
-                            >
-                              Deactivate
-                            </button>
+                            confirmDeactivate === dept.id ? (
+                              <div className="flex items-center gap-2">
+                                <span className="text-xs text-red-600 whitespace-nowrap">Deactivate?</span>
+                                <button
+                                  onClick={() => handleDeactivate(dept.id)}
+                                  className="text-xs font-medium text-red-600 hover:text-red-800"
+                                >
+                                  Confirm
+                                </button>
+                                <button
+                                  onClick={() => setConfirmDeactivate(null)}
+                                  className="text-xs text-slate-500 hover:text-slate-700"
+                                >
+                                  Cancel
+                                </button>
+                              </div>
+                            ) : (
+                              <button
+                                onClick={() => setConfirmDeactivate(dept.id)}
+                                className="text-xs text-red-500 hover:text-red-700"
+                              >
+                                Deactivate
+                              </button>
+                            )
                           )}
                         </div>
                       </td>

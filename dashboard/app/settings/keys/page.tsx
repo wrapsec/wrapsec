@@ -18,12 +18,12 @@ import { ApiKeyCreated } from "@/lib/types"
 export default function ApiKeysPage() {
   const [showModal, setShowModal] = useState(false)
   const [revoking,  setRevoking]  = useState<string | null>(null)
+  const [search,    setSearch]    = useState("")
   const { isJwt } = useAuthMode()
 
   const { data, isLoading, mutate } = useSWR("api-keys", getApiKeys)
 
   const handleRevoke = async (keyId: string) => {
-    if (!confirm("Revoke this key? This cannot be undone.")) return
     setRevoking(keyId)
     try {
       await revokeApiKey(keyId)
@@ -67,12 +67,30 @@ export default function ApiKeysPage() {
             )}
           </div>
 
+          <div className="px-5 pt-4 pb-2">
+            <input
+              type="text"
+              value={search}
+              onChange={(e) => setSearch(e.target.value)}
+              placeholder="Search keys..."
+              className="h-8 w-full max-w-xs px-3 text-sm rounded-md border border-slate-200 bg-white text-slate-900 placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-purple-700"
+            />
+          </div>
           <div className="px-5 py-4">
             {isLoading ? (
               <PageSpinner />
             ) : (
               <ApiKeyTable
-                keys={data?.keys ?? []}
+                keys={(data?.keys ?? []).filter((k) => {
+                  if (!search) return true
+                  const q = search.toLowerCase()
+                  return (
+                    k.name.toLowerCase().includes(q) ||
+                    k.key_id.toLowerCase().includes(q) ||
+                    (k.dept_name ?? "").toLowerCase().includes(q) ||
+                    (k.app_name ?? "").toLowerCase().includes(q)
+                  )
+                })}
                 onRevoke={handleRevoke}
                 onRotate={handleRotate}
                 revoking={revoking}

@@ -360,6 +360,7 @@ function EditUserModal({
 export default function UsersPage() {
   const [showCreate, setShowCreate] = useState(false)
   const [editing,    setEditing]    = useState<DashboardUser | null>(null)
+  const [search,     setSearch]     = useState("")
   const { isJwt } = useAuthMode()
 
   const { data: usersData, isLoading, mutate } = useSWR("users", () => getUsers())
@@ -387,6 +388,16 @@ export default function UsersPage() {
         </div>
 
         <Card padding={false}>
+          {/* Search bar */}
+          <div className="px-5 py-3 border-b border-slate-100">
+            <input
+              type="text"
+              value={search}
+              onChange={(e) => setSearch(e.target.value)}
+              placeholder="Search users..."
+              className="h-8 w-full max-w-xs px-3 text-sm rounded-md border border-slate-200 bg-white text-slate-900 placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-purple-700"
+            />
+          </div>
           {isLoading ? (
             <PageSpinner />
           ) : (
@@ -410,7 +421,16 @@ export default function UsersPage() {
                     </td>
                   </tr>
                 ) : (
-                  (usersData?.users ?? []).map(user => (
+                  (usersData?.users ?? [])
+                    .filter((user) => {
+                      if (!search) return true
+                      const q = search.toLowerCase()
+                      return (
+                        user.email.toLowerCase().includes(q) ||
+                        user.role.toLowerCase().includes(q)
+                      )
+                    })
+                    .map(user => (
                     <tr key={user.id} className="border-b border-slate-50 hover:bg-slate-50 transition-colors">
                       <td className="px-5 py-3 font-medium text-slate-900">
                         {user.email}

@@ -16,6 +16,7 @@ import {
   updateDeptLLMOverride, updateDeptProxyOverride,
 } from "@/lib/api"
 import Link from "next/link"
+import { Breadcrumb } from "@/components/ui/Breadcrumb"
 
 const PROVIDERS = [
   { value: "openai", label: "OpenAI / OpenAI-compatible" },
@@ -44,6 +45,9 @@ export default function DepartmentDetailPage() {
   const [error,       setError]       = useState<string | null>(null)
 
   // LLM override form
+  const [confirmLlmClear,   setConfirmLlmClear]   = useState(false)
+  const [confirmProxyClear, setConfirmProxyClear] = useState(false)
+
   const [llmEditing,   setLlmEditing]   = useState(false)
   const [llmProvider,  setLlmProvider]  = useState("")
   const [llmModel,     setLlmModel]     = useState("")
@@ -136,7 +140,7 @@ export default function DepartmentDetailPage() {
   }
 
   const handleLlmClear = async () => {
-    if (!confirm("Remove LLM detection override? This department will use the global LLM configuration.")) return
+    setConfirmLlmClear(false)
     setLlmSaving(true)
     try {
       const updated = await updateDeptLLMOverride(id, { clear: true })
@@ -183,7 +187,7 @@ export default function DepartmentDetailPage() {
   }
 
   const handleProxyClear = async () => {
-    if (!confirm("Remove proxy provider override? API keys in this department will need their own proxy configuration.")) return
+    setConfirmProxyClear(false)
     setProxySaving(true)
     try {
       const updated = await updateDeptProxyOverride(id, { clear: true })
@@ -202,16 +206,10 @@ export default function DepartmentDetailPage() {
   return (
     <Shell title={dept.name}>
       <div className="max-w-2xl space-y-5">
-        {/* Back button */}
-        <Link
-          href="/departments"
-          className="inline-flex items-center gap-1.5 text-sm text-slate-500 hover:text-slate-900"
-        >
-          <svg className="h-4 w-4" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24">
-            <path strokeLinecap="round" strokeLinejoin="round" d="M15 19l-7-7 7-7" />
-          </svg>
-          Back to departments
-        </Link>
+        <Breadcrumb items={[
+          { label: "Departments", href: "/departments" },
+          { label: dept.name },
+        ]} />
 
         {/* Stats */}
         {stats && (
@@ -447,10 +445,21 @@ export default function DepartmentDetailPage() {
               <div className="flex items-center gap-3 flex-wrap">
                 <Button onClick={handleLlmSave} loading={llmSaving}>Save override</Button>
                 {dept.policy_override?.llm && (
-                  <Button variant="danger" onClick={handleLlmClear} loading={llmSaving}>Clear override</Button>
+                  confirmLlmClear ? (
+                    <div className="flex items-center gap-2">
+                      <span className="text-xs text-red-600">Remove override?</span>
+                      <Button variant="danger" size="sm" onClick={handleLlmClear} loading={llmSaving}>Confirm</Button>
+                      <button onClick={() => setConfirmLlmClear(false)}
+                        className="text-sm text-slate-500 hover:text-slate-700">Cancel</button>
+                    </div>
+                  ) : (
+                    <Button variant="danger" onClick={() => setConfirmLlmClear(true)}>Clear override</Button>
+                  )
                 )}
-                <button onClick={() => { setLlmEditing(false); setLlmError(null) }}
-                  className="text-sm text-slate-500 hover:text-slate-700">Cancel</button>
+                {!confirmLlmClear && (
+                  <button onClick={() => { setLlmEditing(false); setLlmError(null); setConfirmLlmClear(false) }}
+                    className="text-sm text-slate-500 hover:text-slate-700">Cancel</button>
+                )}
                 {llmSaved && <span className="text-xs text-green-600">Saved</span>}
               </div>
             </div>
@@ -542,10 +551,21 @@ export default function DepartmentDetailPage() {
               <div className="flex items-center gap-3 flex-wrap">
                 <Button onClick={handleProxySave} loading={proxySaving}>Save override</Button>
                 {dept.policy_override?.proxy_provider && (
-                  <Button variant="danger" onClick={handleProxyClear} loading={proxySaving}>Clear override</Button>
+                  confirmProxyClear ? (
+                    <div className="flex items-center gap-2">
+                      <span className="text-xs text-red-600">Remove override?</span>
+                      <Button variant="danger" size="sm" onClick={handleProxyClear} loading={proxySaving}>Confirm</Button>
+                      <button onClick={() => setConfirmProxyClear(false)}
+                        className="text-sm text-slate-500 hover:text-slate-700">Cancel</button>
+                    </div>
+                  ) : (
+                    <Button variant="danger" onClick={() => setConfirmProxyClear(true)}>Clear override</Button>
+                  )
                 )}
-                <button onClick={() => { setProxyEditing(false); setProxyError(null) }}
-                  className="text-sm text-slate-500 hover:text-slate-700">Cancel</button>
+                {!confirmProxyClear && (
+                  <button onClick={() => { setProxyEditing(false); setProxyError(null); setConfirmProxyClear(false) }}
+                    className="text-sm text-slate-500 hover:text-slate-700">Cancel</button>
+                )}
                 {proxySaved && <span className="text-xs text-green-600">Saved</span>}
               </div>
             </div>
