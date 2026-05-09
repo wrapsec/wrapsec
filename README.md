@@ -2,7 +2,7 @@
   <img src="https://raw.githubusercontent.com/wrapsec/wrapsec/main/dashboard/public/wrapsec-logo.svg" alt="WrapSec" width="120" />
 </p>
 
-<p align="center" /># WrapSec</p>
+<p align="center"># WrapSec</p>
 
 <p align="center">
   <img src="https://img.shields.io/badge/version-1.0.0-7B2BF9" alt="version" />
