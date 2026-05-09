@@ -62,7 +62,7 @@ function SecuritySummary({ stats, attribution }: { stats: AuditStatsResponse; at
       icon: "M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" },
     { label: "Toxicity Incidents",         value: num(toxCount),   sub: "Toxicity guardrail triggers",       accent: "#d97706",
       icon: "M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" },
-    { label: "Total Threat Detections",    value: num(totalThreats), sub: `${stats.top_threats.length} unique threat types`, accent: "#00B1FF",
+    { label: "Total Threat Detections",    value: num(totalThreats), sub: `${stats.top_threats?.length ?? 0} unique threat types`, accent: "#00B1FF",
       icon: "M9 12l2 2 4-4m5.618-4.016A11.955 11.955 0 0112 2.944a11.955 11.955 0 01-8.618 3.04A12.02 12.02 0 003 9c0 5.591 3.824 10.29 9 11.622 5.176-1.332 9-6.03 9-11.622 0-1.042-.133-2.052-.382-3.016z" },
   ]
 
@@ -255,17 +255,17 @@ function ThreatIntelligence({ stats }: { stats: AuditStatsResponse }) {
   return (
     <div style={CARD}>
       <p style={SECTION_LABEL}>Threat intelligence</p>
-      {stats.top_threats.length === 0 ? (
+      {(stats.top_threats?.length ?? 0) === 0 ? (
         <p style={{ fontSize: "13px", color: "#9ca3af" }}>No threats detected in this period</p>
       ) : (
         <table style={{ width: "100%", borderCollapse: "collapse" }}>
           <thead><tr>{["Threat category", "Severity", "Count", "Share"].map(h => <th key={h} style={TH}>{h}</th>)}</tr></thead>
           <tbody>
-            {stats.top_threats.map((t, i) => {
+            {(stats.top_threats ?? []).map((t, i) => {
               const meta  = THREAT_META[t.category] ?? { color: "#6b7280", level: "Low" }
               const share = t.count / total
               return (
-                <tr key={t.category} style={{ borderBottom: i < stats.top_threats.length - 1 ? "1px solid #f9fafb" : "none" }}>
+                <tr key={t.category} style={{ borderBottom: i < (stats.top_threats?.length ?? 0) - 1 ? "1px solid #f9fafb" : "none" }}>
                   <td style={{ padding: "9px 12px", fontSize: "12px", fontWeight: 500, color: "#374151" }}>
                     {THREAT_LABELS[t.category] || t.category}
                   </td>
@@ -590,8 +590,15 @@ export default function AnalyticsPage() {
 
         {stats && attribution && <SecuritySummary stats={stats} attribution={attribution} />}
 
-        {(analytics?.trend?.length ?? 0) > 0 && (
+        {(analytics?.trend?.length ?? 0) > 0 ? (
           <TrendChart data={analytics!.trend} groupBy={groupBy} onGroupByChange={setGroupBy} />
+        ) : analytics !== undefined && (
+          <div style={{ ...CARD, padding: "48px 24px", textAlign: "center" }}>
+            <p style={{ fontSize: "13px", fontWeight: 600, color: "#374151", margin: "0 0 4px 0" }}>No trend data</p>
+            <p style={{ fontSize: "12px", color: "#9ca3af", margin: 0 }}>
+              No requests recorded in this time window. Try a different range.
+            </p>
+          </div>
         )}
 
         <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "16px" }}>

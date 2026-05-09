@@ -39,6 +39,7 @@ function RequestsPageInner() {
   const [offset,           setOffset]           = useState(0)
   const [selectedId,       setSelectedId]       = useState<string | null>(null)
   const [exporting,        setExporting]        = useState(false)
+  const [exportError,      setExportError]      = useState<string | null>(null)
 
   useEffect(() => {
     const t = setTimeout(() => { setTraceIdDebounced(traceId); setOffset(0) }, 400)
@@ -50,7 +51,7 @@ function RequestsPageInner() {
   const { data: deptsData } = useSWR("departments", getDepartments)
   const departments = (deptsData?.departments ?? []).map(d => ({ id: d.id, name: d.name }))
 
-  const { data, isLoading } = useSWR(
+  const { data, isLoading, error: fetchError } = useSWR(
     ["audit-logs", traceIdDebounced, decision, threatCategory, executionMode, deptId, from, to, sortBy, sortOrder, offset],
     () => getAuditLogs({
       trace_id:        traceIdDebounced  || undefined,
@@ -74,6 +75,7 @@ function RequestsPageInner() {
 
   const handleExport = async () => {
     setExporting(true)
+    setExportError(null)
     try {
       const blob = await exportAuditLogs({
         decision:        decision       || undefined,
@@ -91,8 +93,8 @@ function RequestsPageInner() {
       a.download = `wrapsec_audit_${new Date().toISOString().slice(0, 10)}.csv`
       a.click()
       URL.revokeObjectURL(url)
-    } catch (e) {
-      console.error("Export failed", e)
+    } catch (e: any) {
+      setExportError(e?.message ?? "Export failed. Please try again.")
     } finally {
       setExporting(false)
     }
@@ -150,6 +152,13 @@ function RequestsPageInner() {
                 </span>
                 <span style={{ fontSize: "11px", color: "#9ca3af" }}>requests</span>
               </div>
+            )}
+
+            {/* Export error */}
+            {exportError && (
+              <span style={{ fontSize: "11px", color: "#dc2626", maxWidth: 180 }}>
+                {exportError}
+              </span>
             )}
 
             {/* Export button */}
@@ -213,6 +222,15 @@ function RequestsPageInner() {
         }}>
           {isLoading && !data ? (
             <PageSpinner />
+          ) : fetchError ? (
+            <div style={{ padding: "48px 24px", textAlign: "center" }}>
+              <p style={{ fontSize: "13px", fontWeight: 600, color: "#374151", marginBottom: "4px" }}>
+                Failed to load requests
+              </p>
+              <p style={{ fontSize: "12px", color: "#9ca3af" }}>
+                {fetchError?.message ?? "Unable to reach the API. Check your connection and try again."}
+              </p>
+            </div>
           ) : (
             <>
               <RequestsTable

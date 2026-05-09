@@ -10,7 +10,7 @@ import { PageSpinner } from "@/components/ui/Spinner"
 import { getHealth, getHealthConfig } from "@/lib/api"
 
 export default function SystemPage() {
-  const { data: health, isLoading: healthLoading } = useSWR(
+  const { data: health, isLoading: healthLoading, error: healthError } = useSWR(
     "health-ready",  getHealth,       { refreshInterval: 10000 }
   )
   const { data: config, isLoading: configLoading } = useSWR(
@@ -18,6 +18,21 @@ export default function SystemPage() {
   )
 
   if (healthLoading || configLoading) return <Shell title="System"><PageSpinner /></Shell>
+
+  if (healthError && !health) {
+    return (
+      <Shell title="System Status">
+        <div className="max-w-2xl">
+          <div className="bg-red-50 border border-red-200 rounded-xl p-5">
+            <p className="text-sm font-semibold text-red-700 mb-1">Unable to reach health endpoint</p>
+            <p className="text-xs text-red-500">
+              {healthError?.message ?? "The WrapSec API is not responding. Check that the service is running."}
+            </p>
+          </div>
+        </div>
+      </Shell>
+    )
+  }
 
   return (
     <Shell title="System Status">
