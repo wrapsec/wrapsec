@@ -174,8 +174,10 @@ export default function ApplicationsPage() {
               <tbody>
                 {(data?.applications ?? []).length === 0 ? (
                   <tr>
-                    <td colSpan={6} className="px-5 py-12 text-center text-sm text-slate-400">
-                      No applications found
+                    <td colSpan={6} className="px-5 py-14 text-center">
+                      <div style={{ fontSize: "20px", marginBottom: "8px" }}>📦</div>
+                      <div className="text-sm font-semibold text-slate-700 mb-1">No applications yet</div>
+                      <div className="text-xs text-slate-400">Register an application to scope API keys and apply per-app policy overrides</div>
                     </td>
                   </tr>
                 ) : (

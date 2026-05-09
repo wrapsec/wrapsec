@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: MIT
 // Copyright (c) 2026 WrapSec. All rights reserved.
 // WrapSec v1.0 | AI Security Gateway - https://wrapsec.com
+import Link from "next/link"
 import { ThreatCount } from "@/lib/types"
 import { formatThreat } from "@/lib/utils"
 
@@ -36,28 +37,37 @@ export function TopThreats({ threats }: { threats: ThreatCount[] }) {
             const color = THREAT_COLORS[t.category] ?? "#6b7280"
             const pct   = Math.round((t.count / max) * 100)
             return (
-              <div key={t.category}>
-                <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: "5px" }}>
-                  <div style={{ display: "flex", alignItems: "center", gap: "7px" }}>
-                    <div style={{ width: 8, height: 8, borderRadius: "50%", background: color, flexShrink: 0 }} />
-                    <span style={{ fontSize: "12px", fontWeight: 500, color: "#374151" }}>
-                      {formatThreat(t.category)}
+              <Link
+                key={t.category}
+                href={`/requests?threat=${t.category}`}
+                style={{ display: "block", textDecoration: "none" }}
+              >
+                <div
+                  style={{ borderRadius: "6px", padding: "4px 6px", margin: "-4px -6px" }}
+                  onMouseEnter={e => (e.currentTarget as HTMLElement).style.background = "#f9fafb"}
+                  onMouseLeave={e => (e.currentTarget as HTMLElement).style.background = ""}
+                >
+                  <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: "5px" }}>
+                    <div style={{ display: "flex", alignItems: "center", gap: "7px" }}>
+                      <div style={{ width: 8, height: 8, borderRadius: "50%", background: color, flexShrink: 0 }} />
+                      <span style={{ fontSize: "12px", fontWeight: 500, color: "#374151" }}>
+                        {formatThreat(t.category)}
+                      </span>
+                    </div>
+                    <span style={{ fontSize: "12px", fontFamily: "monospace", color: "#6b7280", flexShrink: 0, marginLeft: "12px" }}>
+                      {t.count.toLocaleString()}
                     </span>
                   </div>
-                  <span style={{ fontSize: "12px", fontFamily: "monospace", color: "#6b7280", flexShrink: 0, marginLeft: "12px" }}>
-                    {t.count.toLocaleString()}
-                  </span>
+                  <div style={{ height: "5px", background: "#f3f4f6", borderRadius: "3px", overflow: "hidden" }}>
+                    <div style={{
+                      height: "100%",
+                      width: `${Math.round(pct * 0.6)}%`,
+                      background: color,
+                      borderRadius: "3px",
+                    }} />
+                  </div>
                 </div>
-                {/* Bar constrained to 60% max width so it doesn't look like a loading bar */}
-                <div style={{ height: "5px", background: "#f3f4f6", borderRadius: "3px", overflow: "hidden" }}>
-                  <div style={{
-                    height: "100%",
-                    width: `${Math.round(pct * 0.6)}%`,
-                    background: color,
-                    borderRadius: "3px",
-                  }} />
-                </div>
-              </div>
+              </Link>
             )
           })}
           </div>

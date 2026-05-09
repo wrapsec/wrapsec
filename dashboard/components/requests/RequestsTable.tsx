@@ -71,8 +71,10 @@ export function RequestsTable({ items, onSelect }: {
         <tbody>
           {items.length === 0 ? (
             <tr>
-              <td colSpan={HEADERS.length} style={{ padding: "48px 16px", textAlign: "center", fontSize: "13px", color: "#9ca3af" }}>
-                No requests found
+              <td colSpan={HEADERS.length} style={{ padding: "56px 16px", textAlign: "center" }}>
+                <div style={{ fontSize: "20px", marginBottom: "8px" }}>🔍</div>
+                <div style={{ fontSize: "13px", fontWeight: 600, color: "#374151", marginBottom: "4px" }}>No requests found</div>
+                <div style={{ fontSize: "12px", color: "#9ca3af" }}>Try adjusting your filters or expanding the time range</div>
               </td>
             </tr>
           ) : items.map((item, i) => (

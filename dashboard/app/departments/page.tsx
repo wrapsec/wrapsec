@@ -148,8 +148,10 @@ export default function DepartmentsPage() {
               <tbody>
                 {(data?.departments ?? []).length === 0 ? (
                   <tr>
-                    <td colSpan={6} className="px-5 py-12 text-center text-sm text-slate-400">
-                      No departments found
+                    <td colSpan={6} className="px-5 py-14 text-center">
+                      <div style={{ fontSize: "20px", marginBottom: "8px" }}>🏢</div>
+                      <div className="text-sm font-semibold text-slate-700 mb-1">No departments yet</div>
+                      <div className="text-xs text-slate-400">Create a department to organise your API keys and policy overrides</div>
                     </td>
                   </tr>
                 ) : (

@@ -26,7 +26,21 @@ import {
   getStorageSettings,
 } from "@/lib/api"
 
+const TABS = [
+  { id: "organisation", label: "Organisation" },
+  { id: "thresholds",   label: "Thresholds" },
+  { id: "detection",    label: "Detection" },
+  { id: "rate-limits",  label: "Rate Limits" },
+  { id: "llm",          label: "LLM" },
+  { id: "proxy",        label: "Proxy" },
+  { id: "retention",    label: "Retention" },
+] as const
+
+type TabId = typeof TABS[number]["id"]
+
 export default function SettingsPage() {
+  const [activeTab, setActiveTab] = useState<TabId>("organisation")
+
   const { data: tenant,     isLoading: tenantLoading,     mutate: mutateN } =
     useSWR("tenant",       getTenant)
 
@@ -45,7 +59,6 @@ export default function SettingsPage() {
   const { data: rateLimit, mutate: mutateRL } = useSWR("rate-limit-settings", getRateLimitSettings)
   const { data: storage } = useSWR("storage-settings", getStorageSettings)
 
-  // Proxy config -- 404 is expected when not configured, treat as null
   const { data: proxy, mutate: mutateProxy } = useSWR(
     "proxy-settings",
     () => getProxySettings().catch((e) => {
@@ -60,117 +73,153 @@ export default function SettingsPage() {
 
   return (
     <Shell title="Settings">
-      <div className="max-w-2xl space-y-5">
+      <div className="max-w-2xl">
 
-        {/* Organisation */}
-        <Card>
-          <CardHeader
-            title="Organisation"
-            subtitle="Global settings for this WrapSec installation"
-          />
-          {tenant && (
-            <TenantSettingsForm
-              tenant={tenant}
-              onUpdated={(t) => mutateN(t, false)}
-              blockThreshold={thresholds?.block_threshold}
-              sanitizeThreshold={thresholds?.sanitize_threshold}
-              ruleEnabled={layers?.rule_enabled}
-              mlEnabled={layers?.ml_enabled}
-              llmEnabled={layers?.llm_enabled}
-              rateLimitPerMinute={rateLimit?.per_minute}
-              rateLimitSource={rateLimit?.source}
+        {/* Tab bar */}
+        <div style={{
+          display: "flex", gap: "2px", marginBottom: "20px",
+          borderBottom: "1px solid #e5e7eb", overflowX: "auto",
+        }}>
+          {TABS.map(tab => (
+            <button
+              key={tab.id}
+              onClick={() => setActiveTab(tab.id)}
+              style={{
+                padding: "8px 16px",
+                fontSize: "13px",
+                fontWeight: activeTab === tab.id ? 600 : 400,
+                color: activeTab === tab.id ? "#670FEF" : "#6b7280",
+                background: "none",
+                border: "none",
+                borderBottom: activeTab === tab.id ? "2px solid #670FEF" : "2px solid transparent",
+                marginBottom: "-1px",
+                cursor: "pointer",
+                whiteSpace: "nowrap",
+                transition: "color 0.15s",
+              }}
+            >
+              {tab.label}
+            </button>
+          ))}
+        </div>
+
+        {/* Tab panels */}
+        {activeTab === "organisation" && (
+          <Card>
+            <CardHeader
+              title="Organisation"
+              subtitle="Global settings for this WrapSec installation"
             />
-          )}
-        </Card>
+            {tenant && (
+              <TenantSettingsForm
+                tenant={tenant}
+                onUpdated={(t) => mutateN(t, false)}
+                blockThreshold={thresholds?.block_threshold}
+                sanitizeThreshold={thresholds?.sanitize_threshold}
+                ruleEnabled={layers?.rule_enabled}
+                mlEnabled={layers?.ml_enabled}
+                llmEnabled={layers?.llm_enabled}
+                rateLimitPerMinute={rateLimit?.per_minute}
+                rateLimitSource={rateLimit?.source}
+              />
+            )}
+          </Card>
+        )}
 
-        {/* Policy Thresholds */}
-        <Card>
-          <CardHeader
-            title="Policy Thresholds"
-            subtitle="Configure risk score thresholds for BLOCK and SANITIZE decisions"
-          />
-          {thresholds && (
-            <ThresholdForm
-              thresholds={thresholds}
-              onUpdated={(t) => mutateT(t, false)}
+        {activeTab === "thresholds" && (
+          <Card>
+            <CardHeader
+              title="Policy Thresholds"
+              subtitle="Configure risk score thresholds for BLOCK and SANITIZE decisions"
             />
-          )}
-        </Card>
+            {thresholds && (
+              <ThresholdForm
+                thresholds={thresholds}
+                onUpdated={(t) => mutateT(t, false)}
+              />
+            )}
+          </Card>
+        )}
 
-        {/* Detection Layers */}
-        <Card>
-          <CardHeader
-            title="Detection Layers"
-            subtitle="Enable or disable individual detection layers"
-          />
-          {layers && (
-            <LayerToggles
-              layers={layers}
-              llmTrigger={llm?.llm_trigger ?? 0.3}
-              onUpdated={(l) => mutateL(l, false)}
+        {activeTab === "detection" && (
+          <Card>
+            <CardHeader
+              title="Detection Layers"
+              subtitle="Enable or disable individual detection layers"
             />
-          )}
-        </Card>
+            {layers && (
+              <LayerToggles
+                layers={layers}
+                llmTrigger={llm?.llm_trigger ?? 0.3}
+                onUpdated={(l) => mutateL(l, false)}
+              />
+            )}
+          </Card>
+        )}
 
-        {/* Rate Limits */}
-        <Card>
-          <CardHeader
-            title="Rate Limits"
-            subtitle="Configure request rate limits for live and trial keys"
-          />
-          <RateLimitSettingsForm
-            perMinute={rateLimit?.per_minute ?? 60}
-            source={rateLimit?.source ?? "environment"}
-            trialLimit={10}
-            onUpdated={(perMinute, source) => mutateRL({ per_minute: perMinute, source }, false)}
-          />
-        </Card>
-
-        {/* LLM Configuration */}
-        <Card>
-          <CardHeader
-            title="LLM Configuration"
-            subtitle="Configure the LLM provider for semantic detection (Layer 3)"
-          />
-          {llm && (
-            <LLMSettingsForm
-              settings={llm}
-              onUpdated={(s) => mutateM(s, false)}
+        {activeTab === "rate-limits" && (
+          <Card>
+            <CardHeader
+              title="Rate Limits"
+              subtitle="Configure request rate limits for live and trial keys"
             />
-          )}
-        </Card>
-
-        {/* Proxy Provider -- AI Interaction Firewall */}
-        <Card>
-          <CardHeader
-            title="Proxy Provider"
-            subtitle="Configure the LLM provider for proxy mode (POST /v1/chat/completions)"
-          />
-          <ProxySettingsForm
-            config={proxy ?? null}
-            onUpdated={(c) => mutateProxy(c ?? undefined, false)}
-          />
-        </Card>
-
-        {/* Audit Log Retention */}
-        <Card>
-          <CardHeader
-            title="Audit Log Retention"
-            subtitle="Configure how long audit logs are kept in the database"
-          />
-          {retention && (
-            <RetentionSettingsForm
-              retentionDays={retention.retention_days}
-              source={retention.source}
-              proxyRetentionDays={storage?.retention_days_proxy ?? 7}
-              storageMode={storage?.storage_mode ?? "masked"}
-              onUpdated={(days) => mutateR(
-                { ...retention, retention_days: days },
-                false
-              )}
+            <RateLimitSettingsForm
+              perMinute={rateLimit?.per_minute ?? 60}
+              source={rateLimit?.source ?? "environment"}
+              trialLimit={10}
+              onUpdated={(perMinute, source) => mutateRL({ per_minute: perMinute, source }, false)}
             />
-          )}
-        </Card>
+          </Card>
+        )}
+
+        {activeTab === "llm" && (
+          <Card>
+            <CardHeader
+              title="LLM Configuration"
+              subtitle="Configure the LLM provider for semantic detection (Layer 3)"
+            />
+            {llm && (
+              <LLMSettingsForm
+                settings={llm}
+                onUpdated={(s) => mutateM(s, false)}
+              />
+            )}
+          </Card>
+        )}
+
+        {activeTab === "proxy" && (
+          <Card>
+            <CardHeader
+              title="Proxy Provider"
+              subtitle="Configure the LLM provider for proxy mode (POST /v1/chat/completions)"
+            />
+            <ProxySettingsForm
+              config={proxy ?? null}
+              onUpdated={(c) => mutateProxy(c ?? undefined, false)}
+            />
+          </Card>
+        )}
+
+        {activeTab === "retention" && (
+          <Card>
+            <CardHeader
+              title="Audit Log Retention"
+              subtitle="Configure how long audit logs are kept in the database"
+            />
+            {retention && (
+              <RetentionSettingsForm
+                retentionDays={retention.retention_days}
+                source={retention.source}
+                proxyRetentionDays={storage?.retention_days_proxy ?? 7}
+                storageMode={storage?.storage_mode ?? "masked"}
+                onUpdated={(days) => mutateR(
+                  { ...retention, retention_days: days },
+                  false
+                )}
+              />
+            )}
+          </Card>
+        )}
 
       </div>
     </Shell>

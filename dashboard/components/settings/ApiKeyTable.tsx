@@ -20,7 +20,13 @@ export function ApiKeyTable({ keys, onRevoke, onRotate, revoking, canWrite = tru
   const [graceInput, setGraceInput] = useState<string | null>(null)
 
   if (keys.length === 0) {
-    return <p className="text-sm text-slate-400 py-4">No API keys created yet.</p>
+    return (
+      <div style={{ padding: "48px 16px", textAlign: "center" }}>
+        <div style={{ fontSize: "20px", marginBottom: "8px" }}>🔑</div>
+        <div style={{ fontSize: "13px", fontWeight: 600, color: "#374151", marginBottom: "4px" }}>No API keys yet</div>
+        <div style={{ fontSize: "12px", color: "#9ca3af" }}>Create a key to start sending requests to the gateway</div>
+      </div>
+    )
   }
 
   const handleRotateConfirm = async (keyId: string, grace: number) => {

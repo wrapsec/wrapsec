@@ -157,12 +157,20 @@ export function CreateKeyModal({ onCreated, onClose }: CreateKeyModalProps) {
         ) : (
           <div className="space-y-4">
             <div className="p-3 bg-amber-50 border border-amber-200 rounded-lg">
-              <p className="text-xs font-medium text-amber-800 mb-1">
+              <p className="text-xs font-medium text-amber-800 mb-2">
                 Copy this key now — it will not be shown again
               </p>
-              <p className="font-mono text-xs text-amber-900 break-all">
-                {created.api_key}
-              </p>
+              <div className="flex items-center gap-2">
+                <p className="font-mono text-xs text-amber-900 break-all flex-1">
+                  {created.api_key}
+                </p>
+                <button
+                  onClick={() => navigator.clipboard.writeText(created.api_key)}
+                  className="shrink-0 text-xs font-medium text-amber-700 hover:text-amber-900 border border-amber-300 rounded px-2 py-1 bg-amber-100 hover:bg-amber-200 transition-colors"
+                >
+                  Copy
+                </button>
+              </div>
             </div>
             {/* Show scoping info */}
             <div className="grid grid-cols-2 gap-2 text-xs text-slate-500">
