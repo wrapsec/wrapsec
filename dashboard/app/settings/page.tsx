@@ -73,7 +73,7 @@ export default function SettingsPage() {
 
   return (
     <Shell title="Settings">
-      <div className="max-w-2xl">
+      <div>
 
         {/* Tab bar */}
         <div style={{
