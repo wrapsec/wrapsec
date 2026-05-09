@@ -3,7 +3,7 @@
 // WrapSec v1.0 | AI Security Gateway - https://wrapsec.com
 "use client"
 
-import { useState } from "react"
+import { useState, useEffect } from "react"
 import useSWR from "swr"
 import { Button } from "@/components/ui/Button"
 import { Input } from "@/components/ui/Input"
@@ -16,6 +16,12 @@ interface CreateKeyModalProps {
 }
 
 export function CreateKeyModal({ onCreated, onClose }: CreateKeyModalProps) {
+  useEffect(() => {
+    const handler = (e: KeyboardEvent) => { if (e.key === "Escape") onClose() }
+    document.addEventListener("keydown", handler)
+    return () => document.removeEventListener("keydown", handler)
+  }, [onClose])
+
   const [name,    setName]    = useState("")
   const [deptId,  setDeptId]  = useState("")
   const [appId,   setAppId]   = useState("")

@@ -3,7 +3,7 @@
 // WrapSec v1.0 | AI Security Gateway - https://wrapsec.com
 "use client"
 
-import { useState } from "react"
+import { useState, useEffect } from "react"
 import useSWR from "swr"
 import { Shell } from "@/components/layout/Shell"
 import { Card } from "@/components/ui/Card"
@@ -72,6 +72,12 @@ function CreateUserModal({
   onClose:   () => void
   onCreated: () => void
 }) {
+  useEffect(() => {
+    const handler = (e: KeyboardEvent) => { if (e.key === "Escape") onClose() }
+    document.addEventListener("keydown", handler)
+    return () => document.removeEventListener("keydown", handler)
+  }, [onClose])
+
   const [email,    setEmail]    = useState("")
   const [password, setPassword] = useState("")
   const [role,     setRole]     = useState("DEVELOPER")
@@ -183,6 +189,12 @@ function EditUserModal({
   onClose: () => void
   onSaved: () => void
 }) {
+  useEffect(() => {
+    const handler = (e: KeyboardEvent) => { if (e.key === "Escape") onClose() }
+    document.addEventListener("keydown", handler)
+    return () => document.removeEventListener("keydown", handler)
+  }, [onClose])
+
   const [role,     setRole]     = useState(user.role)
   const [deptId,   setDeptId]   = useState(user.dept_id ?? depts[0]?.id ?? "")
   const [saving,   setSaving]   = useState(false)

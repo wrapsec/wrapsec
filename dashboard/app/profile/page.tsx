@@ -27,6 +27,12 @@ interface UserProfile {
 // ── Change password modal ──────────────────────────────────────────────────────
 
 function ChangePasswordModal({ onClose }: { onClose: () => void }) {
+  useEffect(() => {
+    const handler = (e: KeyboardEvent) => { if (e.key === "Escape") onClose() }
+    document.addEventListener("keydown", handler)
+    return () => document.removeEventListener("keydown", handler)
+  }, [onClose])
+
   const [current, setCurrent] = useState("")
   const [next,    setNext]    = useState("")
   const [confirm, setConfirm] = useState("")

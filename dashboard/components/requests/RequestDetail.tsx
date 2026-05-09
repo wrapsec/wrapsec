@@ -116,6 +116,12 @@ export function RequestDetailModal({ traceId, onClose }: RequestDetailModalProps
     load()
   }, [traceId])
 
+  useEffect(() => {
+    const handler = (e: KeyboardEvent) => { if (e.key === "Escape") onClose() }
+    document.addEventListener("keydown", handler)
+    return () => document.removeEventListener("keydown", handler)
+  }, [onClose])
+
   return (
     <div className="fixed inset-0 bg-black/40 flex items-start justify-center z-50 p-6 overflow-y-auto">
       <div className="bg-white rounded-xl border border-slate-200 w-full max-w-2xl shadow-lg flex flex-col" style={{ maxHeight: "90vh" }}>
