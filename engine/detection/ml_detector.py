@@ -69,11 +69,13 @@ class MLDetector(BaseDetector):
                     )
                     return
             else:
-                logger.warning(
-                    "No integrity file at %s — ML model loaded WITHOUT hash verification. "
-                    "Generate it with: sha256sum %s > %s",
+                logger.error(
+                    "ML model integrity file not found at %s — refusing to load. "
+                    "pickle.loads without verification is an RCE vector. "
+                    "Generate the hash with: sha256sum %s > %s",
                     MODEL_HASH_PATH, MODEL_PATH, MODEL_HASH_PATH,
                 )
+                return
 
             self._model             = pickle.loads(raw)
             self._ready             = True

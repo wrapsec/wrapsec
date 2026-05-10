@@ -766,6 +766,7 @@ These rules must be followed in all new code. Violation creates real production 
 47. CSV export (`/v1/audit/export`) must never write raw `ip_address` or `user_id` — always hash IP (SHA-256, first 16 hex chars) and truncate user_id to 8 chars
 48. Every policy override change (department or application, any endpoint) must log a `POLICY_OVERRIDE_CHANGED` admin event — metadata must not include raw policy values or `api_key_enc` fields
 49. `cookie_secure` controls the `Secure` flag on the refresh token cookie — never derive it from `environment == "production"` or any other string comparison; always read from `settings.cookie_secure`
+50. ML model (`ml_detector.pkl`) must never be loaded via `pickle.loads` without a matching `.sha256` integrity file — absent hash file is treated the same as a failed hash check (model not loaded, not a warning)
 
 ---
 
@@ -773,10 +774,10 @@ These rules must be followed in all new code. Violation creates real production 
 
 | Variable | Default | Description |
 |---|---|---|
-| `SECRET_KEY` | — | HMAC secret for JWT signing — must be changed before production |
+| `SECRET_KEY` | — | HMAC secret for JWT signing. **Startup guard rejects the example placeholder** — server will not start until set to a real value. Generate: `python -c "import secrets; print(secrets.token_hex(32))"` |
 | `ACCESS_TOKEN_EXPIRE_MINUTES` | `30` | JWT access token lifetime |
 | `REFRESH_TOKEN_EXPIRE_DAYS` | `30` | Refresh token lifetime |
-| `ADMIN_API_KEY` | — | Master admin API key — used for CLI access and `/metrics` fallback auth |
+| `ADMIN_API_KEY` | — | Master admin API key. **Startup guard rejects the example placeholder** — server will not start until set to a real value. Generate: `python -c "import secrets; print('wsk_admin_' + secrets.token_hex(24))"` |
 | `ADMIN_EMAIL` | *(unset)* | Optional — if set alongside `ADMIN_PASSWORD`, bootstrap creates first admin on startup. Leave unset to use the dashboard `/setup` page instead |
 | `ADMIN_PASSWORD` | *(unset)* | Optional — see `ADMIN_EMAIL`. Must meet password strength requirements if set |
 | `TRUSTED_PROXY_IPS` | `""` | Comma-separated IPs trusted to set `X-Forwarded-For` (e.g. `127.0.0.1,10.0.0.1`) |
@@ -806,6 +807,48 @@ These rules must be followed in all new code. Violation creates real production 
 | `WRAPSEC_TRIAL_KEY` | Trial API key for trial-tier tests |
 | `WRAPSEC_PURCHASE_DEPT_ID` | UUID of purchase department in test instance |
 | `WRAPSEC_FINANCE_DEPT_ID` | UUID of finance department in test instance |
+
+---
+
+## Pre-Launch Security Checklist
+
+Items marked **[STARTUP GUARD]** are enforced by `validate_secrets()` at startup — the server will not start if they are not resolved.
+
+### Secrets
+
+**SECRET_KEY** — [STARTUP GUARD]
+- `.env.example` ships with placeholder `your-secret-key-minimum-32-characters-here`
+- Startup validation rejects this exact string
+- Generate a real secret: `python -c "import secrets; print(secrets.token_hex(32))"`
+
+**ADMIN_API_KEY** — [STARTUP GUARD]
+- `.env.example` ships with placeholder `your-admin-api-key-minimum-32-chars-here`
+- Startup validation rejects this exact string
+- Generate a real key: `python -c "import secrets; print('wsk_admin_' + secrets.token_hex(24))"`
+
+### Bootstrap admin (if using ADMIN_EMAIL / ADMIN_PASSWORD)
+
+- Bootstrap always sets `force_password_change=True` — the first login requires a password change
+- Do not reuse the same password across environments; even with force-change enforced, the window before rotation is exploitable
+- Preferred: leave `ADMIN_EMAIL`/`ADMIN_PASSWORD` unset and use the dashboard `/setup` page for first-user creation
+
+### ML model integrity
+
+- If `models/ml_detector.pkl` is present, `models/ml_detector.pkl.sha256` **must** also be present
+- Without the hash file, the server refuses to load the model — `pickle.loads` without verification is an RCE vector
+- Generate the hash file: `sha256sum models/ml_detector.pkl > models/ml_detector.pkl.sha256`
+- If deploying without a trained model, ensure the `.pkl` file is absent — the ML detector falls back cleanly
+
+### Cookie security
+
+- `COOKIE_SECURE=true` is the default — do not override this in staging or production
+- `COOKIE_SECURE=false` is only acceptable for local HTTP development
+
+### Metrics endpoint
+
+- Set a dedicated `METRICS_TOKEN` separate from `ADMIN_API_KEY`
+- Generate: `python -c "import secrets; print(secrets.token_hex(32))"`
+- If unset, `/metrics` falls back to `ADMIN_API_KEY` — a compromised scraper credential then also grants full admin API access
 
 ---
 

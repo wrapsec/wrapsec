@@ -152,9 +152,32 @@ class Settings(BaseSettings):
                 f"than sanitize_threshold ({self.sanitize_threshold})"
             )
 
+    def validate_secrets(self) -> None:
+        import os
+        if os.getenv("TESTING") == "true":
+            return
+
+        _SECRET_KEY_PLACEHOLDER  = "your-secret-key-minimum-32-characters-here"
+        _ADMIN_KEY_PLACEHOLDER   = "your-admin-api-key-minimum-32-chars-here"
+
+        if self.secret_key == _SECRET_KEY_PLACEHOLDER:
+            raise ValueError(
+                "SECRET_KEY is set to the example placeholder. "
+                "Generate a real secret: "
+                "python -c \"import secrets; print(secrets.token_hex(32))\""
+            )
+
+        if self.admin_api_key == _ADMIN_KEY_PLACEHOLDER:
+            raise ValueError(
+                "ADMIN_API_KEY is set to the example placeholder. "
+                "Generate a real key: "
+                "python -c \"import secrets; print('wsk_admin_' + secrets.token_hex(24))\""
+            )
+
 
 @lru_cache
 def get_settings() -> Settings:
     settings = Settings()
     settings.validate_thresholds()
+    settings.validate_secrets()
     return settings
