@@ -729,9 +729,11 @@ response = client.chat.completions.create(model="openai/gpt-4o", messages=[...])
 
 **WrapSec response headers:**
 
+`X-WrapSec-Trace-Id` is present on **every** response from this endpoint — including early error exits (invalid model format, trial key rejection, provider config errors). All other headers are present only when the request reached the detection pipeline.
+
 | Header | Description |
 |---|---|
-| `X-WrapSec-Trace-Id` | ULID trace ID |
+| `X-WrapSec-Trace-Id` | ULID trace ID — always present |
 | `X-WrapSec-Input-Decision` | `ALLOW` / `BLOCK` / `SANITIZE` |
 | `X-WrapSec-Input-Primary-Reason` | Primary reason for input decision |
 | `X-WrapSec-Input-Confidence` | Input confidence (0.0–1.0) |

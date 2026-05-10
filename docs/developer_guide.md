@@ -904,6 +904,14 @@ Items marked **[STARTUP GUARD]** are enforced by `validate_secrets()` at startup
 - Startup validation rejects this exact string
 - Generate a real secret: `python -c "import secrets; print(secrets.token_hex(32))"`
 
+**Rotating SECRET_KEY** has two consequences that require operator action:
+
+1. **All JWT sessions are immediately invalidated** — every `wrapsec_jwt` cookie signed with the old key becomes invalid. All logged-in dashboard users are forced to re-login on their next request. This is expected and safe.
+
+2. **Encrypted provider credentials become unreadable** — department and application proxy provider API keys are stored encrypted using `SECRET_KEY` (`api_key_enc` in `policy_override`). After rotation, decryption fails and any proxy call using a stored provider credential returns a 500 error. To restore proxy functionality: go to the dashboard → the affected Department or Application → Proxy Provider → re-enter the provider API key → Save. This re-encrypts it with the new `SECRET_KEY`.
+
+Treat `SECRET_KEY` rotation as a planned maintenance event — notify users of the forced logout and have provider keys ready to re-enter.
+
 **ADMIN_API_KEY** — [STARTUP GUARD]
 - `.env.example` ships with placeholder `your-admin-api-key-minimum-32-chars-here`
 - Startup validation rejects this exact string
