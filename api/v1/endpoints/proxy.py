@@ -322,6 +322,7 @@ async def proxy_chat_completions(
                     "code":    "trial_proxy_disabled",
                 }
             },
+            headers={"X-WrapSec-Trace-Id": trace_id},
         )
 
     # -- 1. Parse model string --
@@ -337,6 +338,7 @@ async def proxy_chat_completions(
                     "code":    "invalid_model_format",
                 }
             },
+            headers={"X-WrapSec-Trace-Id": trace_id},
         )
 
     # -- 2. Resolve policy (moved early — used for both detection and proxy fallback) --
@@ -501,6 +503,7 @@ async def proxy_chat_completions(
         return JSONResponse(
             status_code=500,
             content={"error": {"message": "Provider configuration error.", "type": "provider_error", "code": "provider_config_error"}},
+            headers={"X-WrapSec-Trace-Id": trace_id},
         )
 
     # Build kwargs from explicitly declared request fields only

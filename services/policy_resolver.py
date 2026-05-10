@@ -201,7 +201,16 @@ async def resolve_policy(
             try:
                 sec["api_key"] = decrypt(enc, settings.secret_key)
             except ValueError:
-                logger.warning("Failed to decrypt api_key_enc in policy section %r", section)
+                logger.error(
+                    "policy api_key_enc decryption failed section=%r — "
+                    "provider credentials are invalid (SECRET_KEY mismatch or corrupted value). "
+                    "Re-enter the provider API key via the dashboard.",
+                    section,
+                )
+                raise ValueError(
+                    f"Provider API key for section '{section}' could not be decrypted. "
+                    "The stored credential is invalid. Re-enter it via Settings."
+                )
 
     # Validate final thresholds — DB or override values could be inconsistent
     block    = policy["thresholds"]["block"]

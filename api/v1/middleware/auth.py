@@ -157,8 +157,8 @@ async def _log_session_expired(
                 tenant_id = _UUID(tid)
             except (ValueError, TypeError):
                 pass
-    except Exception:
-        pass   # extraction best-effort — continue with NULL context
+    except Exception as e:
+        logger.debug("auth session_expired context extraction failed: %s", e)
 
     logger.warning(
         "auth_event SESSION_EXPIRED user_id=%s tenant_id=%s reason=%s path=%s",

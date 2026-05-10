@@ -132,12 +132,17 @@ class UserRepository(BaseRepository):
         )
         return result.scalar_one() or 0
 
-    async def count_active_admins(self, tenant_id: UUID) -> int:
+    async def count_active_admins_for_update(self, tenant_id: UUID, lock_user_id: UUID) -> int:
         """
-        Returns count of active admin users for a tenant.
-        Used by last-admin protection before role change or deactivation.
-        Uses ix_users_role_active composite index.
+        Locks the target user row (SELECT FOR UPDATE) then counts active admins.
+        The row lock prevents concurrent requests from both passing the last-admin
+        check simultaneously — the second request blocks until the first commits.
+        Used exclusively by last-admin protection before role change or deactivation.
         """
+        # Lock the row being modified — blocks concurrent updates to this user
+        await self.session.execute(
+            select(UserModel).where(UserModel.id == lock_user_id).with_for_update()
+        )
         result = await self.session.execute(
             select(func.count()).where(
                 UserModel.tenant_id == tenant_id,

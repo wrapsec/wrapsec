@@ -364,7 +364,7 @@ async def update_user(
     is_deactivating_admin = (user.role == "ADMIN" and new_is_active is False)
 
     if is_demoting_admin or is_deactivating_admin:
-        active_admins = await repo.count_active_admins(tenant_id)
+        active_admins = await repo.count_active_admins_for_update(tenant_id, user_id)
         if active_admins <= 1:
             return JSONResponse(
                 status_code=400,
