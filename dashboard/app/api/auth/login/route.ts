@@ -65,6 +65,10 @@ export async function POST(request: NextRequest) {
       maxAge:   60 * 60 * 8,   // 8 hours
       path:     "/",
     })
+    // Clear any stale JWT credentials — only one auth mechanism active at a time
+    res.cookies.set("wrapsec_jwt",     "", { httpOnly: true, secure: COOKIE_SECURE, sameSite: "strict", maxAge: 0, path: "/" })
+    res.cookies.set("wrapsec_session", "", { httpOnly: true, secure: COOKIE_SECURE, sameSite: "strict", maxAge: 0, path: "/" })
+    res.cookies.set("refresh_token",   "", { httpOnly: true, secure: COOKIE_SECURE, sameSite: "strict", maxAge: 0, path: "/api/auth" })
     return res
   }
 
@@ -135,6 +139,8 @@ export async function POST(request: NextRequest) {
       }
     }
 
+    // Clear any stale API key credential — only one auth mechanism active at a time
+    res.cookies.set("wrapsec_api_key", "", { httpOnly: true, secure: COOKIE_SECURE, sameSite: "strict", maxAge: 0, path: "/" })
     return res
   }
 
