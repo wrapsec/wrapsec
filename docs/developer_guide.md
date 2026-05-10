@@ -186,7 +186,12 @@ Raw token: `secrets.token_urlsafe(32)`. Never stored server-side — only `SHA-2
 
 Every use: old token revoked, new token issued. `RefreshTokenRepository.get_by_hash()` uses `SELECT FOR UPDATE` to prevent race conditions on parallel refresh requests with the same token.
 
-Cookie: `Path=/v1/auth` — browser only sends it to `/v1/auth/*` endpoints. If the API prefix changes, the cookie path must also change.
+**Cookie path — BFF pattern:**
+The backend sets the refresh token cookie with `Path=/v1/auth`. The dashboard BFF does NOT forward this cookie directly to the browser. Instead, `login/route.ts` and `refresh/route.ts` parse the token value and re-issue it as a new `httpOnly` cookie with `Path=/api/auth` — the browser then sends it only to BFF auth routes (`/api/auth/refresh`, `/api/auth/logout`), never to arbitrary paths.
+
+`logout/route.ts` reads the cookie from the browser request and forwards it to the backend via a server-side `Cookie` header so the backend can revoke it. If the API prefix ever changes, update `Path=/api/auth` in all three routes and `Path=/v1/auth` in `api/v1/endpoints/auth.py` (`REFRESH_COOKIE_PATH`).
+
+**Rule:** Never forward the raw backend `set-cookie` header to the browser — always re-issue with the BFF-appropriate path.
 
 ### Account lockout
 
@@ -799,6 +804,7 @@ These rules must be followed in all new code. Violation creates real production 
 55. All IP attribution in audit logs, admin events, and auth events must use `get_client_ip(request)` — never `request.headers.get("x-forwarded-for", ...)` directly
 56. Semantic cache keys must include `tenant_id` — never key solely on prompt + mode. Without tenant scoping, an ALLOW result from one tenant can be returned to another tenant whose policy would block the same input. Use `"global"` as the tenant key for requests with no tenant_id (admin/system calls)
 57. The Next.js BFF (`dashboard/app/api/auth/login/route.ts`) must forward the real client IP as `x-forwarded-for` on all backend fetch calls — without this, the backend rate limiter sees only the BFF server IP and cannot enforce per-client limits
+58. The Next.js BFF must never forward the raw backend `set-cookie` header to the browser — always parse the token value and max-age, then re-issue with `Path=/api/auth`. The backend sets `Path=/v1/auth`; that path restriction means the browser will never send the cookie back to `/api/auth/*` BFF routes, breaking refresh and logout
 
 ---
 
