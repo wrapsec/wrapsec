@@ -348,12 +348,14 @@ async def proxy_chat_completions(
     )
 
     # -- 3. Load proxy provider config — per-key first, dept-level fallback --
-    result = await db.execute(
-        select(ProxyProviderConfigModel).where(
-            ProxyProviderConfigModel.key_id == key_id
+    config = None
+    if key_id is not None:
+        result = await db.execute(
+            select(ProxyProviderConfigModel).where(
+                ProxyProviderConfigModel.key_id == key_id
+            )
         )
-    )
-    config          = result.scalar_one_or_none()
+        config = result.scalar_one_or_none()
     dept_proxy_cfg  = policy.get("proxy_provider") if not config else None
 
     if not config and not dept_proxy_cfg:
