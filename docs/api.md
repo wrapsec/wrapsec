@@ -1411,7 +1411,23 @@ Returns the default tenant configuration.
 
 ### PUT /v1/admin/tenant
 
-Updates tenant name, description, contact email, or global policy.
+Updates tenant name, description, contact email, or global policy. All fields are optional — only provided fields are updated.
+
+`global_policy` is schema-validated. Accepted structure (all sub-fields optional):
+
+```json
+{
+  "thresholds": { "block": 0.8, "sanitize": 0.4 },
+  "detection":  { "rule_enabled": true, "ml_enabled": true, "llm_enabled": true },
+  "guardrails": {
+    "pii":      { "enabled": true, "block_threshold": 0.8, "sanitize_threshold": 0.4 },
+    "toxicity": { "enabled": true, "block_threshold": 0.8, "sanitize_threshold": 0.4 }
+  },
+  "rate_limit": { "per_minute": 60 }
+}
+```
+
+Unknown keys are rejected (422). Invariant: `0.0 < sanitize < block <= 1.0`.
 
 **Request:**
 ```json

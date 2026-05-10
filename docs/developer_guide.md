@@ -136,7 +136,7 @@ Not python-jose. These are not interchangeable — exception types differ.
 
 `users.token_version` starts at 1 and is atomically incremented by `UserRepository.increment_token_version()`. The JWT middleware checks `payload["ver"] == user.token_version` on every authenticated request. Mismatch → `SESSION_INVALIDATED` 401.
 
-`logout_all_sessions()` increments `token_version` + revokes all refresh tokens. Called on:
+`logout_all_sessions()` increments `token_version` + revokes all refresh tokens + deletes the Redis user cache entry. Called on:
 - Password change
 - Role change
 - Department change
@@ -144,6 +144,23 @@ Not python-jose. These are not interchangeable — exception types differ.
 - Admin password reset
 
 NOT called on reactivation — there are no active sessions to invalidate.
+
+### JWT user cache
+
+To avoid a DB lookup on every authenticated request, the JWT middleware caches the user record in Redis after the first DB hit.
+
+- **Cache key:** `auth:user:{user_id}` (UUID string)
+- **TTL:** 1800 seconds — matches the JWT access token expiry
+- **Cached fields:** `id`, `is_active`, `tenant_id`, `dept_id`, `role`, `force_password_change`, `token_version`, `email`
+- **Invalidation:** `logout_all_sessions()` deletes the key immediately after the DB commit that increments `token_version`
+- **Failure mode:** any Redis error falls back to a direct DB lookup — never fails auth
+
+**Important for developers:** if you add a new field to the `users` table that must affect auth decisions (e.g., a new flag that should gate access), you must:
+1. Add it to the cached payload dict in `_get_user_cached()` in `api/v1/middleware/auth.py`
+2. Add it to the downstream check in `_authenticate_jwt()`
+3. Ensure `logout_all_sessions()` is called whenever that field changes, so the cache is invalidated
+
+Skipping step 3 means the old cached value will be used for up to 1800 seconds after the DB change.
 
 ### Dashboard session hardening
 
@@ -682,6 +699,31 @@ resolved_policy
 
 `global_policy` on the tenant table is kept in DB but not applied in resolution. DB settings table is authoritative.
 
+When set via `PUT /v1/tenant`, `global_policy` is validated against `GlobalPolicySchema` — only the following keys are accepted (`extra="forbid"` rejects anything else):
+
+```json
+{
+  "thresholds": {
+    "block":    0.8,
+    "sanitize": 0.4
+  },
+  "detection": {
+    "rule_enabled": true,
+    "ml_enabled":   true,
+    "llm_enabled":  true
+  },
+  "guardrails": {
+    "pii":      { "enabled": true, "block_threshold": 0.8, "sanitize_threshold": 0.4 },
+    "toxicity": { "enabled": true, "block_threshold": 0.8, "sanitize_threshold": 0.4 }
+  },
+  "rate_limit": {
+    "per_minute": 60
+  }
+}
+```
+
+All fields are optional — only provided keys are stored. Invariant: `0.0 < sanitize < block <= 1.0`.
+
 `rate_limit_override` on an application is a dedicated integer column (separate from `policy_override`). When set, it overrides `policy["rate_limit"]["per_minute"]` and is enforced as a per-app bucket (key `app:{app_id}`) in `ai.py` after policy resolution. Setting it to `null` removes the per-app limit.
 
 ---
@@ -805,6 +847,8 @@ These rules must be followed in all new code. Violation creates real production 
 56. Semantic cache keys must include `tenant_id` — never key solely on prompt + mode. Without tenant scoping, an ALLOW result from one tenant can be returned to another tenant whose policy would block the same input. Use `"global"` as the tenant key for requests with no tenant_id (admin/system calls)
 57. The Next.js BFF (`dashboard/app/api/auth/login/route.ts`) must forward the real client IP as `x-forwarded-for` on all backend fetch calls — without this, the backend rate limiter sees only the BFF server IP and cannot enforce per-client limits
 58. The Next.js BFF must never forward the raw backend `set-cookie` header to the browser — always parse the token value and max-age, then re-issue with `Path=/api/auth`. The backend sets `Path=/v1/auth`; that path restriction means the browser will never send the cookie back to `/api/auth/*` BFF routes, breaking refresh and logout
+59. Only one auth mechanism must be active at a time per session — when a user logs in via JWT (email/password), the BFF login route must clear any existing `wrapsec_api_key` cookie, and vice versa. Allowing both simultaneously creates an ambiguous fallback state where a revoked JWT session could silently continue via a still-valid API key cookie
+60. API keys must never be created without a valid `tenant_id` on `request.state` — a scopeless key bypasses tenant isolation in every downstream auth check. The key creation endpoint enforces this with a 403 guard before any DB write
 
 ---
 
