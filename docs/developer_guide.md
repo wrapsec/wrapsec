@@ -257,7 +257,8 @@ Rate limiter, metrics, and logs all use `key_id`. The prefix ensures no collisio
 get_current_principal(request)           # API key OR JWT — scan/audit endpoints
 require_jwt(principal)                   # JWT only — rejects API key with 403
 require_role(*roles)                     # JWT + role — factory, implies require_jwt
-require_admin()                          # shorthand for require_role("ADMIN")
+require_admin()                          # shorthand for require_role("ADMIN") — JWT only
+require_any_admin()                      # admin access from any auth type — JWT ADMIN role OR admin API key
 endpoint_rate_limit(limit_setting: str)  # per-identity rate limit — factory
 ```
 
@@ -283,9 +284,11 @@ JWT + ADMIN:       ALL /v1/admin/users/*
                    POST /v1/keys, PUT /v1/keys/{id}, DELETE /v1/keys/{id}
                    POST /v1/keys/{id}/rotate
 
+Admin (any auth):  PUT /v1/settings/proxy   (require_any_admin — JWT ADMIN or admin API key)
+
 API key OR JWT:    POST /v1/ai/request, POST /v1/chat/completions
                    GET /v1/ai/requests/*, GET /v1/audit/*
-                   GET /v1/settings/*, GET/PUT/DELETE /v1/settings/proxy*
+                   GET /v1/settings/*, GET/DELETE /v1/settings/proxy*
                    GET /v1/keys, GET /v1/keys/{id}
                    GET /v1/admin/tenant, GET /v1/admin/departments/*
                    GET /v1/admin/applications/*
@@ -335,6 +338,13 @@ Layer 5 — Audit export limit     endpoint_rate_limit dependency on the export 
                                  Applies to: GET /v1/audit/export
                                  Keyed by endpoint:{path}:{key_id}.
                                  Limit: DB → Redis cache → .env (AUDIT_EXPORT_RATE_LIMIT, default 5/min).
+
+Layer 6 — Login IP limit         Inline in auth.py, before auth_service.login() is called.
+                                 Applies to: POST /v1/auth/login only.
+                                 Keyed by login:ip:{client_ip} — separate from global bucket.
+                                 Complements per-email lockout: stops distributed guessing across
+                                 many emails from one IP. Per-email lockout still fires independently.
+                                 Limit: LOGIN_RATE_LIMIT_PER_MINUTE (env-only, default 10/min).
 ```
 
 ### Redis key naming convention
@@ -344,6 +354,7 @@ rate_limit:{key_id or ip}              Global middleware bucket
 trial:key:{key_id}                     Trial key bucket
 debug:key:{key_id}                     Debug mode bucket
 endpoint:{path}:{key_id or ip}         Admin write / export bucket
+login:ip:{ip}                          Login endpoint IP bucket (Layer 6)
 ```
 
 All keys use a 60-second sliding window via the Lua script in `cache/rate_limit_store.py`. The Lua script is atomic — no race condition possible between ZCARD and ZADD.
@@ -368,7 +379,7 @@ Layers 2 and 3 (trial and debug) read directly from `settings` — no DB/Redis c
 
 ### Fail-open policy
 
-All five layers fail open when Redis is unavailable. Rate limiting is silently disabled during Redis outages to preserve API availability. Monitor Redis health and alert on connection errors if strict enforcement during outages is required.
+All six layers fail open when Redis is unavailable. Rate limiting is silently disabled during Redis outages to preserve API availability. Monitor Redis health and alert on connection errors if strict enforcement during outages is required.
 
 ### Dashboard configuration (Layers 1, 4, 5 only)
 
@@ -379,7 +390,7 @@ GET/PUT /v1/settings/admin_limits    Admin write + export limits (Layers 4, 5)
 
 Changes to `admin_limits` are recorded in `admin_events` with old and new values (`action = settings_changed`). Changes to `rate_limit` are not currently logged — add audit logging there if required.
 
-Layers 2 and 3 are intentionally not dashboard-configurable. The debug limit in particular is a security control — making it configurable via the dashboard would allow a compromised admin credential to raise it, defeating its purpose.
+Layers 2, 3, and 6 are intentionally not dashboard-configurable. The debug and login limits are security controls — making them configurable via the dashboard would allow a compromised admin credential to raise them, defeating their purpose.
 
 ### Floor and ceiling constraints
 
@@ -756,7 +767,7 @@ These rules must be followed in all new code. Violation creates real production 
 37. Datetimes at DB boundary: strip timezone with `_to_db()` — internal calculations stay aware
 38. JWT middleware uses `_get_db_session()` — never `AsyncSessionFactory()` directly
 39. Endpoints use `get_db` from dependencies — not `get_session` from `db/session.py`
-40. All five rate limit layers fail open — never raise on Redis unavailability, always `except Exception: pass`
+40. All six rate limit layers fail open — never raise on Redis unavailability, always `except Exception: pass`
 41. Rate limit Redis keys follow the naming convention — never invent new prefixes (see Rate Limiting section)
 42. `endpoint_rate_limit` limit values come from settings — never hardcode a number at the call site
 43. Debug rate limit and trial rate limit are env-only — never add them to the DB-backed settings chain
@@ -767,6 +778,11 @@ These rules must be followed in all new code. Violation creates real production 
 48. Every policy override change (department or application, any endpoint) must log a `POLICY_OVERRIDE_CHANGED` admin event — metadata must not include raw policy values or `api_key_enc` fields
 49. `cookie_secure` controls the `Secure` flag on the refresh token cookie — never derive it from `environment == "production"` or any other string comparison; always read from `settings.cookie_secure`
 50. ML model (`ml_detector.pkl`) must never be loaded via `pickle.loads` without a matching `.sha256` integrity file — absent hash file is treated the same as a failed hash check (model not loaded, not a warning)
+51. Login IP rate limit (Layer 6) must fire before `auth_service.login()` — never after; the check must not depend on DB or auth state
+52. `sort_by` and `sort_order` query parameters on any sortable endpoint must use `Literal` types — never raw `str`; FastAPI returns 422 automatically on invalid values
+53. Key rotation `grace_period_minutes` is bounded `ge=0, le=10080` (max 7 days) — never accept unbounded integer input for time-based security windows
+54. Use `require_any_admin()` for endpoints that are admin-only but must also accept the admin API key (programmatic access). Use `require_admin()` only for dashboard-exclusive endpoints that must reject API key auth
+55. All IP attribution in audit logs, admin events, and auth events must use `get_client_ip(request)` — never `request.headers.get("x-forwarded-for", ...)` directly
 
 ---
 
@@ -795,6 +811,7 @@ These rules must be followed in all new code. Violation creates real production 
 | `AUDIT_EXPORT_RATE_LIMIT` | `5` | Per-caller limit on audit CSV export. DB-backed |
 | `TRIAL_RATE_LIMIT_PER_MINUTE` | `10` | Rate limit for trial keys — env-only, not dashboard-configurable |
 | `DEBUG_RATE_LIMIT_PER_MINUTE` | `10` | Rate limit for debug mode requests — env-only, security control |
+| `LOGIN_RATE_LIMIT_PER_MINUTE` | `10` | Per-IP rate limit on `POST /v1/auth/login` — env-only, security control. Complements per-email lockout |
 | `COOKIE_SECURE` | `true` | Adds `Secure` flag to refresh token cookie. Set `false` only for local HTTP dev — must be `true` in all deployed environments |
 
 **Load test env vars** — required when running `tests/load/` scripts:
