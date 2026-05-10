@@ -101,11 +101,31 @@ async def login(
         401 ACCOUNT_DISABLED    — is_active = False
         429 ACCOUNT_LOCKED      — too many failed attempts
     """
+    import os
     from config.settings import get_settings
     _settings = get_settings()
 
     ip_address = get_client_ip(request) or None
     user_agent = request.headers.get("user-agent")
+
+    # IP-based rate limit — fires before any DB work or per-email lockout.
+    # Separate from the global 60/min; targets credential-stuffing from one IP.
+    # Fails open so a Redis outage never blocks legitimate logins.
+    if os.getenv("TESTING") != "true":
+        try:
+            from cache.rate_limit_store import is_rate_limited
+            _rl_key = f"login:ip:{ip_address or 'unknown'}"
+            _limited, _, _ = await is_rate_limited(_rl_key, limit=_settings.login_rate_limit_per_minute)
+            if _limited:
+                return JSONResponse(
+                    status_code=429,
+                    content={"error": {
+                        "code":    "RATE_LIMITED",
+                        "message": "Too many login attempts. Try again later.",
+                    }},
+                )
+        except Exception:
+            pass  # Fail open — never block login due to Redis unavailability
 
     try:
         result = await auth_service.login(

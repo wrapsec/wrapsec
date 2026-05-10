@@ -120,6 +120,13 @@ class Settings(BaseSettings):
     trial_max_input_chars:       int   = 500    # vs 8000 for live keys
     trial_proxy_enabled:         bool  = False  # proxy disabled for trial keys
 
+    # ── Login rate limit ──────────────────────────────────────────────────────
+    # IP-based limit on POST /v1/auth/login — stricter than the global 60/min.
+    # Prevents distributed brute force across many email addresses from one IP.
+    # Per-email lockout (AUTH_MAX_FAILED_ATTEMPTS) still applies independently.
+    # Intentionally env-only — not dashboard-configurable (security control).
+    login_rate_limit_per_minute: int   = 10
+
     # ── Debug mode limits ─────────────────────────────────────────────────────
     # debug=true exposes per-layer scores — a tighter separate limit prevents
     # model fingerprinting (probing to calibrate below-threshold attacks).
