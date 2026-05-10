@@ -62,7 +62,7 @@ async def test_login_wrong_email_same_message(auth_client, auth_setup):
     assert response.status_code == 401
     data = response.json()
     assert data["error"]["code"] == "INVALID_CREDENTIALS"
-    assert data["error"]["message"] == "Invalid email or password."
+    assert data["error"]["message"] == "Invalid email or password"
 
 
 @pytest.mark.asyncio
