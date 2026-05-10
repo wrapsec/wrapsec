@@ -566,7 +566,7 @@ async def proxy_chat_completions(
 
     except (httpx.ConnectError, httpx.HTTPStatusError) as exc:
         total_ms = int((time.monotonic() - wall_start) * 1000)
-        logger.error(f"Provider call failed trace_id={trace_id}: {exc}")
+        logger.error("Provider call failed trace_id=%s: %.500s", trace_id, exc)
         headers  = _build_wrapsec_headers(
             trace_id, input_decision, input_reason, input_conf,
             input_decision == "SANITIZE", None, False, STATUS_FAILED,
