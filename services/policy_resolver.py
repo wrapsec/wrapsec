@@ -170,6 +170,10 @@ async def resolve_policy(
                 if app and app.policy_override:
                     app_override = app.policy_override
                     policy       = deep_merge(policy, app_override)
+                # rate_limit_override is a dedicated integer column — enforced separately
+                # from policy_override so it doesn't require JSONB knowledge to set.
+                if app and app.rate_limit_override is not None:
+                    policy["rate_limit"]["per_minute"] = app.rate_limit_override
             except Exception as e:
                 logger.warning(f"Failed to load application policy: {e}")
 

@@ -307,7 +307,7 @@ Breaking change: `POST/PUT/DELETE /v1/keys/*` requires JWT + ADMIN — API key n
 
 ## Rate Limiting
 
-Five rate limit layers apply to different surfaces. They are additive — a request may be checked by multiple layers in sequence.
+Seven rate limit layers apply to different surfaces. They are additive — a request may be checked by multiple layers in sequence.
 
 ### Layer overview
 
@@ -345,6 +345,14 @@ Layer 6 — Login IP limit         Inline in auth.py, before auth_service.login(
                                  Complements per-email lockout: stops distributed guessing across
                                  many emails from one IP. Per-email lockout still fires independently.
                                  Limit: LOGIN_RATE_LIMIT_PER_MINUTE (env-only, default 10/min).
+
+Layer 7 — Per-app limit          Inline in ai.py, after resolve_policy().
+                                 Applies when app_id is known AND rate_limit_override is set on the
+                                 application record.
+                                 Keyed by app:{app_id} — per-application bucket.
+                                 Set by PATCH /v1/applications/{id} with rate_limit_override (1–10000).
+                                 Enforces admin-configured per-app throughput caps independently
+                                 of the global limit. Does not raise or bypass the global limit.
 ```
 
 ### Redis key naming convention
@@ -355,6 +363,7 @@ trial:key:{key_id}                     Trial key bucket
 debug:key:{key_id}                     Debug mode bucket
 endpoint:{path}:{key_id or ip}         Admin write / export bucket
 login:ip:{ip}                          Login endpoint IP bucket (Layer 6)
+app:{app_id}                           Per-application bucket (Layer 7)
 ```
 
 All keys use a 60-second sliding window via the Lua script in `cache/rate_limit_store.py`. The Lua script is atomic — no race condition possible between ZCARD and ZADD.
@@ -379,7 +388,7 @@ Layers 2 and 3 (trial and debug) read directly from `settings` — no DB/Redis c
 
 ### Fail-open policy
 
-All six layers fail open when Redis is unavailable. Rate limiting is silently disabled during Redis outages to preserve API availability. Monitor Redis health and alert on connection errors if strict enforcement during outages is required.
+All seven layers fail open when Redis is unavailable. Rate limiting is silently disabled during Redis outages to preserve API availability. Monitor Redis health and alert on connection errors if strict enforcement during outages is required.
 
 ### Dashboard configuration (Layers 1, 4, 5 only)
 
@@ -391,6 +400,8 @@ GET/PUT /v1/settings/admin_limits    Admin write + export limits (Layers 4, 5)
 Changes to `admin_limits` are recorded in `admin_events` with old and new values (`action = settings_changed`). Changes to `rate_limit` are not currently logged — add audit logging there if required.
 
 Layers 2, 3, and 6 are intentionally not dashboard-configurable. The debug and login limits are security controls — making them configurable via the dashboard would allow a compromised admin credential to raise them, defeating their purpose.
+
+Layer 7 (per-app) is configurable per-application via `PATCH /v1/applications/{id}` — the `rate_limit_override` integer field. Range: 1–10000 req/min. Setting `null` disables the per-app bucket (inherits global limit only).
 
 ### Floor and ceiling constraints
 
@@ -659,11 +670,14 @@ DB settings table (policy_thresholds, detection_layers, llm_settings, rate_limit
 dept.policy_override   ← null fields inherit from above
     ↓ deep merge
 app.policy_override    ← null fields inherit from above
+    ↓ app.rate_limit_override (integer column, takes precedence over rate_limit.per_minute)
     ↓
 resolved_policy
 ```
 
 `global_policy` on the tenant table is kept in DB but not applied in resolution. DB settings table is authoritative.
+
+`rate_limit_override` on an application is a dedicated integer column (separate from `policy_override`). When set, it overrides `policy["rate_limit"]["per_minute"]` and is enforced as a per-app bucket (key `app:{app_id}`) in `ai.py` after policy resolution. Setting it to `null` removes the per-app limit.
 
 ---
 
@@ -783,6 +797,8 @@ These rules must be followed in all new code. Violation creates real production 
 53. Key rotation `grace_period_minutes` is bounded `ge=0, le=10080` (max 7 days) — never accept unbounded integer input for time-based security windows
 54. Use `require_any_admin()` for endpoints that are admin-only but must also accept the admin API key (programmatic access). Use `require_admin()` only for dashboard-exclusive endpoints that must reject API key auth
 55. All IP attribution in audit logs, admin events, and auth events must use `get_client_ip(request)` — never `request.headers.get("x-forwarded-for", ...)` directly
+56. Semantic cache keys must include `tenant_id` — never key solely on prompt + mode. Without tenant scoping, an ALLOW result from one tenant can be returned to another tenant whose policy would block the same input. Use `"global"` as the tenant key for requests with no tenant_id (admin/system calls)
+57. The Next.js BFF (`dashboard/app/api/auth/login/route.ts`) must forward the real client IP as `x-forwarded-for` on all backend fetch calls — without this, the backend rate limiter sees only the BFF server IP and cannot enforce per-client limits
 
 ---
 

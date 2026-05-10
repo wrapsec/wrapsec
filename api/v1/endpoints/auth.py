@@ -133,18 +133,9 @@ async def login(
             ip_address = ip_address or None,
             user_agent = user_agent or None,
         )
-    except AccountLockedException as e:
-        return JSONResponse(
-            status_code=429,
-            content={"error": {
-                "code":        "ACCOUNT_LOCKED",
-                "message":     "Too many failed attempts. Account temporarily locked.",
-                "retry_after": e.retry_after,
-            }},
-        )
-    except (AuthenticationError, AccountDisabledException):
-        # Intentionally identical response for wrong credentials and disabled
-        # accounts — distinguishing them leaks whether the account exists.
+    except (AccountLockedException, AuthenticationError, AccountDisabledException):
+        # All credential failures return identical 401 — distinguishing locked,
+        # wrong password, disabled, or non-existent accounts leaks email existence.
         return JSONResponse(
             status_code=401,
             content={"error": {

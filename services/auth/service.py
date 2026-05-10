@@ -246,6 +246,19 @@ class AuthService:
             )
             raise InvalidTokenException()
 
+        # expires_at is stored as naive UTC — compare against datetime.utcnow()
+        if token_rec.expires_at and token_rec.expires_at < datetime.utcnow():
+            await rt_repo.revoke(token_hash)
+            await db.commit()
+            logger.warning("auth_event TOKEN_REFRESH_FAILED reason=token_expired user_id=%s", token_rec.user_id)
+            await _log_auth_event(
+                action         = "token_refresh_failed",
+                success        = False,
+                user_id        = token_rec.user_id,
+                failure_reason = "token_expired",
+            )
+            raise InvalidTokenException("Refresh token has expired.")
+
         user_repo = UserRepository(db)
         user      = await user_repo.get_by_id(token_rec.user_id)
 

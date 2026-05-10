@@ -5,7 +5,7 @@
 import uuid
 import logging
 
-from fastapi import APIRouter, Depends, Request
+from fastapi import APIRouter, Depends, Query, Request
 from fastapi.responses import JSONResponse
 from pydantic import BaseModel, EmailStr
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -230,8 +230,8 @@ async def list_users(
     request:   Request,
     role:      str  | None = None,
     is_active: bool | None = None,
-    limit:     int  = 50,
-    offset:    int  = 0,
+    limit:     int  = Query(50, ge=1, le=200),
+    offset:    int  = Query(0, ge=0),
     principal: Principal    = Depends(require_admin()),
     db:        AsyncSession = Depends(get_db),
 ) -> JSONResponse:

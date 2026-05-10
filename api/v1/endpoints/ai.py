@@ -184,7 +184,8 @@ async def ai_request(
 
     from cache.semantic_cache import get_cached_result, set_cached_result
     from observability.metrics import CACHE_HITS, CACHE_MISSES
-    cached = await get_cached_result(body.input, det_mode_str, exe_mode_str)
+    _tenant_id = getattr(request.state, "tenant_id", None) or "global"
+    cached = await get_cached_result(body.input, det_mode_str, exe_mode_str, _tenant_id)
     if cached:
         CACHE_HITS.inc()
         return JSONResponse(content=cached)
@@ -217,6 +218,27 @@ async def ai_request(
         dept_id   = getattr(request.state, "dept_id",   None),
         app_id    = getattr(request.state, "app_id",    None),
     )
+
+    # Per-app rate limit — enforced when app_id is known and rate_limit_override is set.
+    # Uses a separate per-app bucket so the global middleware bucket is unaffected.
+    # Fails open if Redis is unavailable — consistent with all other rate limit checks.
+    _app_id = getattr(request.state, "app_id", None)
+    if _app_id:
+        _app_rate_limit = policy.get("rate_limit", {}).get("per_minute")
+        if _app_rate_limit is not None:
+            try:
+                from cache.rate_limit_store import is_rate_limited
+                _app_limited, _, _ = await is_rate_limited(
+                    f"app:{_app_id}",
+                    limit=_app_rate_limit,
+                )
+                if _app_limited:
+                    from errors.exceptions import RateLimitError
+                    raise RateLimitError()
+            except RateLimitError:
+                raise
+            except Exception:
+                pass
 
     block_threshold    = policy["thresholds"]["block"]
     sanitize_threshold = policy["thresholds"]["sanitize"]
@@ -336,7 +358,7 @@ async def ai_request(
         sanitize_threshold  = sanitize_threshold,
     )
 
-    await set_cached_result(body.input, det_mode_str, exe_mode_str, response)
+    await set_cached_result(body.input, det_mode_str, exe_mode_str, _tenant_id, response)
 
     return JSONResponse(content=response)
 

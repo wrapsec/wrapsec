@@ -5,7 +5,7 @@
 import uuid
 from fastapi import APIRouter, Depends, Request
 from fastapi.responses import JSONResponse
-from pydantic import BaseModel, SecretStr, field_validator
+from pydantic import BaseModel, Field, SecretStr, field_validator
 from sqlalchemy.ext.asyncio import AsyncSession
 from api.v1.dependencies.auth import get_current_principal, require_admin
 from api.v1.dependencies.db import get_db
@@ -75,7 +75,7 @@ class ApplicationCreateSchema(BaseModel):
     environment:        str  | None = "production"
     metadata:           dict | None = None
     policy_override:    dict | None = None
-    rate_limit_override: int | None = None
+    rate_limit_override: int | None = Field(None, ge=1, le=10000)
 
 
 class ApplicationUpdateSchema(BaseModel):
@@ -86,7 +86,7 @@ class ApplicationUpdateSchema(BaseModel):
     environment:        str  | None = None
     metadata:           dict | None = None
     policy_override:    dict | None = None
-    rate_limit_override: int | None = None
+    rate_limit_override: int | None = Field(None, ge=1, le=10000)
     is_active:          bool | None = None
 
 

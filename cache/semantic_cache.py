@@ -13,14 +13,15 @@ CACHE_PREFIX  = "prompt_cache:"
 CACHE_TTL     = 3600  # 1 hour
 
 
-def _cache_key(text: str, detection_mode: str, execution_mode: str = "scan_only") -> str:
+def _cache_key(text: str, detection_mode: str, execution_mode: str, tenant_id: str) -> str:
     """
-    Generate a deterministic cache key from prompt + detection mode + execution mode.
+    Generate a deterministic cache key from prompt + detection mode + execution mode + tenant.
+    tenant_id is included so one tenant's ALLOW result cannot be returned to another tenant.
     Input is lowercased before hashing — case variants ("Hello" vs "hello") share
     a cache entry. Only ALLOW results are cached, so the security impact is limited
     to identical treatment of case-only variants of clean inputs.
     """
-    content = f"{detection_mode}:{execution_mode}:{text.strip().lower()}"
+    content = f"{tenant_id}:{detection_mode}:{execution_mode}:{text.strip().lower()}"
     digest  = hashlib.sha256(content.encode()).hexdigest()
     return f"{CACHE_PREFIX}{digest}"
 
@@ -28,11 +29,12 @@ def _cache_key(text: str, detection_mode: str, execution_mode: str = "scan_only"
 async def get_cached_result(
     text:           str,
     detection_mode: str,
-    execution_mode: str = "scan_only",
+    execution_mode: str,
+    tenant_id:      str,
 ) -> dict | None:
     try:
         redis  = get_redis()
-        key    = _cache_key(text, detection_mode, execution_mode)
+        key    = _cache_key(text, detection_mode, execution_mode, tenant_id)
         cached = await redis.get(key)
         if cached:
             logger.debug(f"Cache hit for key {key[:20]}...")
@@ -47,6 +49,7 @@ async def set_cached_result(
     text:           str,
     detection_mode: str,
     execution_mode: str,
+    tenant_id:      str,
     result:         dict,
     ttl:            int = CACHE_TTL,
 ) -> None:
@@ -54,7 +57,7 @@ async def set_cached_result(
         if result.get("decision") != "ALLOW":
             return
         redis = get_redis()
-        key   = _cache_key(text, detection_mode, execution_mode)
+        key   = _cache_key(text, detection_mode, execution_mode, tenant_id)
         await redis.setex(key, ttl, json.dumps(result))
         logger.debug(f"Cached result for key {key[:20]}...")
     except Exception as e:
@@ -64,11 +67,12 @@ async def set_cached_result(
 async def invalidate(
     text:           str,
     detection_mode: str,
-    execution_mode: str = "scan_only",
+    execution_mode: str,
+    tenant_id:      str,
 ) -> None:
     try:
         redis = get_redis()
-        key   = _cache_key(text, detection_mode, execution_mode)
+        key   = _cache_key(text, detection_mode, execution_mode, tenant_id)
         await redis.delete(key)
     except Exception as e:
         logger.warning(f"Cache invalidate failed: {e}")

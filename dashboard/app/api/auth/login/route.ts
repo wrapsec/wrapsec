@@ -22,8 +22,21 @@ const COOKIE_SECURE = process.env.COOKIE_SECURE === "true"
  *   The refresh token cookie is set by the backend directly (Path=/v1/auth) —
  *   it cannot be read here, but it persists in the browser for /v1/auth/* calls.
  */
+// Real client IP for forwarding to backend rate limiter.
+// Next.js populates x-forwarded-for from the incoming request (set by the
+// edge/proxy in front of the BFF). Fallback to x-real-ip, then unknown.
+// The backend trusts this header only when TRUSTED_PROXY_IPS is configured.
+function getClientIp(req: NextRequest): string {
+  return (
+    req.headers.get("x-forwarded-for")?.split(",")[0].trim() ||
+    req.headers.get("x-real-ip") ||
+    "unknown"
+  )
+}
+
 export async function POST(request: NextRequest) {
   const body = await request.json()
+  const clientIp = getClientIp(request)
 
   // ── Mode A: API key login (unchanged) ──────────────────────────────────
   if (body.apiKey) {
@@ -33,8 +46,9 @@ export async function POST(request: NextRequest) {
       `${API_BASE_URL}/v1/audit/logs?limit=1&offset=0`,
       {
         headers: {
-          "Content-Type": "application/json",
-          "x-api-key":    apiKey,
+          "Content-Type":    "application/json",
+          "x-api-key":       apiKey,
+          "x-forwarded-for": clientIp,
         },
       }
     )
@@ -60,7 +74,10 @@ export async function POST(request: NextRequest) {
 
     const response = await fetch(`${API_BASE_URL}/v1/auth/login`, {
       method:  "POST",
-      headers: { "Content-Type": "application/json" },
+      headers: {
+        "Content-Type":    "application/json",
+        "x-forwarded-for": clientIp,
+      },
       body:    JSON.stringify({ email, password }),
     })
 
