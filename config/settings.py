@@ -127,6 +127,11 @@ class Settings(BaseSettings):
     # Intentionally env-only — not dashboard-configurable (security control).
     debug_rate_limit_per_minute: int   = 10
 
+    # -- Cookie security -------------------------------------------------------
+    # Set COOKIE_SECURE=false only for local HTTP dev environments.
+    # Must be True in all deployed environments (staging, production).
+    cookie_secure: bool = True
+
     # -- Data storage ----------------------------------------------------------
     data_storage_mode:        str = Field(default="masked")
     # full   -- store input_raw and output_raw as-is (development)

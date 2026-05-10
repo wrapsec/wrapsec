@@ -42,6 +42,21 @@ async def test_login_sets_httponly_cookie(auth_client, auth_setup):
 
 
 @pytest.mark.asyncio
+async def test_login_cookie_has_secure_flag(auth_client, auth_setup):
+    """Refresh cookie must carry the Secure attribute when cookie_secure=True (default)."""
+    email    = auth_setup["admin_user"].email
+    response = await auth_client.post(
+        "/v1/auth/login",
+        json={"email": email, "password": "TestPass1!"},
+    )
+    assert response.status_code == 200
+    set_cookie = response.headers.get("set-cookie", "")
+    assert "secure" in set_cookie.lower(), (
+        f"Refresh cookie missing Secure flag. Set-Cookie: {set_cookie}"
+    )
+
+
+@pytest.mark.asyncio
 async def test_login_wrong_password_401(auth_client, auth_setup):
     email    = auth_setup["admin_user"].email
     response = await auth_client.post(
