@@ -167,6 +167,13 @@ async def resolve_policy(
             try:
                 app_repo = ApplicationRepository(db)
                 app      = await app_repo.get_by_id(uuid.UUID(str(app_id)))
+                if app and tenant_id and str(app.tenant_id) != str(tenant_id):
+                    logger.error(
+                        "policy app_tenant_mismatch app_id=%s app.tenant=%s "
+                        "request.tenant=%s — skipping app policy",
+                        app_id, app.tenant_id, tenant_id,
+                    )
+                    app = None
                 if app and app.policy_override:
                     app_override = app.policy_override
                     policy       = deep_merge(policy, app_override)
