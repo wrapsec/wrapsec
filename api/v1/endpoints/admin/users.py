@@ -526,5 +526,5 @@ async def reset_password(
 
     return JSONResponse(content={
         "message": "Password reset. User must change password on next login.",
-        "user_id": user_id,
+        "user_id": str(user_id),
     })
