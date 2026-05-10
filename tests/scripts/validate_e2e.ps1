@@ -12,7 +12,7 @@
 # =============================================================================
 
 $base     = "http://localhost:8000"
-$adminKey = "wrapsec_admin_key"
+$adminKey = "wrapsec_admin_key_wrapsec_admin_key"
 $pass     = 0
 $fail     = 0
 

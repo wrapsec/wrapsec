@@ -129,7 +129,7 @@ async def login(
             status_code=401,
             content={"error": {
                 "code":    "INVALID_CREDENTIALS",
-                "message": "Invalid email or password.",
+                "message": "Invalid email or password",
             }},
         )
 
