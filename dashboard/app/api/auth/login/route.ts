@@ -115,12 +115,24 @@ export async function POST(request: NextRequest) {
       path:     "/",
     })
 
-    // Forward the refresh token cookie from the backend response
-    // The backend sets: refresh_token=...; HttpOnly; Path=/v1/auth
-    // We need to relay it to the browser since this is a server-side fetch
+    // Re-issue the refresh token cookie scoped to the BFF auth path.
+    // The backend sets Path=/v1/auth — the browser won't send that cookie to
+    // /api/auth/* routes. We parse the token value and max-age from the
+    // backend set-cookie and re-store it with Path=/api/auth so the browser
+    // includes it on /api/auth/refresh and /api/auth/logout requests.
     const setCookie = response.headers.get("set-cookie")
     if (setCookie) {
-      res.headers.append("set-cookie", setCookie)
+      const tokenMatch  = setCookie.match(/refresh_token=([^;]+)/)
+      const maxAgeMatch = setCookie.match(/[Mm]ax-[Aa]ge=(\d+)/)
+      if (tokenMatch) {
+        res.cookies.set("refresh_token", tokenMatch[1], {
+          httpOnly: true,
+          secure:   COOKIE_SECURE,
+          sameSite: "strict",
+          maxAge:   maxAgeMatch ? parseInt(maxAgeMatch[1], 10) : 30 * 24 * 60 * 60,
+          path:     "/api/auth",
+        })
+      }
     }
 
     return res

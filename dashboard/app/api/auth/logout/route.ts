@@ -18,8 +18,9 @@ const COOKIE_SECURE = process.env.COOKIE_SECURE === "true"
  * always succeed from the client's perspective.
  */
 export async function POST(request: NextRequest) {
-  const cookieStore = await cookies()
-  const jwtToken    = cookieStore.get("wrapsec_jwt")?.value
+  const cookieStore    = await cookies()
+  const jwtToken       = cookieStore.get("wrapsec_jwt")?.value
+  const refreshToken   = cookieStore.get("refresh_token")?.value
 
   // Parse reason from request body (default: "manual")
   let reason = "manual"
@@ -32,16 +33,22 @@ export async function POST(request: NextRequest) {
     // No body or invalid JSON — use default reason
   }
 
-  // If JWT session — call backend to revoke refresh token with reason
+  // Revoke refresh token at backend — forward both JWT (for auth) and
+  // refresh_token cookie (for revocation). Without the cookie, backend
+  // skips revocation and the token stays valid until natural expiry.
   if (jwtToken) {
     try {
+      const logoutHeaders: Record<string, string> = {
+        "Authorization": `Bearer ${jwtToken}`,
+        "Content-Type":  "application/json",
+      }
+      if (refreshToken) {
+        logoutHeaders["Cookie"] = `refresh_token=${refreshToken}`
+      }
       await fetch(`${API_BASE_URL}/v1/auth/logout`, {
         method:  "POST",
-        headers: {
-          "Authorization": `Bearer ${jwtToken}`,
-          "Content-Type":  "application/json",
-        },
-        body: JSON.stringify({ reason }),
+        headers: logoutHeaders,
+        body:    JSON.stringify({ reason }),
       })
     } catch {
       // Best effort — clear local cookies regardless
@@ -62,6 +69,7 @@ export async function POST(request: NextRequest) {
   res.cookies.set("wrapsec_api_key", "", cookieOpts)
   res.cookies.set("wrapsec_jwt",     "", cookieOpts)
   res.cookies.set("wrapsec_session", "", cookieOpts)
+  res.cookies.set("refresh_token",   "", { ...cookieOpts, path: "/api/auth" })
 
   return res
 }

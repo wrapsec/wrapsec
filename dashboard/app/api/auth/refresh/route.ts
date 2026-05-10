@@ -62,10 +62,21 @@ export async function POST(request: NextRequest) {
     path:     "/",
   })
 
-  // Forward the new refresh_token cookie from backend if present
+  // Re-issue the rotated refresh token with Path=/api/auth (same as login/route.ts).
+  // Backend returns Path=/v1/auth — rewrite to BFF path so browser sends it here.
   const setCookie = response.headers.get("set-cookie")
   if (setCookie) {
-    res.headers.append("set-cookie", setCookie)
+    const tokenMatch  = setCookie.match(/refresh_token=([^;]+)/)
+    const maxAgeMatch = setCookie.match(/[Mm]ax-[Aa]ge=(\d+)/)
+    if (tokenMatch) {
+      res.cookies.set("refresh_token", tokenMatch[1], {
+        httpOnly: true,
+        secure:   COOKIE_SECURE,
+        sameSite: "strict",
+        maxAge:   maxAgeMatch ? parseInt(maxAgeMatch[1], 10) : 30 * 24 * 60 * 60,
+        path:     "/api/auth",
+      })
+    }
   }
 
   return res
