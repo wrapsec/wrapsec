@@ -104,6 +104,23 @@ async def update_thresholds(
     if body.sanitize_threshold is not None:
         current["sanitize_threshold"] = body.sanitize_threshold
 
+    # Validate merged final state — schema validates against system defaults,
+    # not stored DB values. After merging, enforce the full invariant:
+    # 0.0 < sanitize < block <= 1.0
+    block    = current["block_threshold"]
+    sanitize = current["sanitize_threshold"]
+    if not (0.0 < sanitize < block <= 1.0):
+        from errors.exceptions import WrapSecError
+        raise WrapSecError(
+            code        = "VALIDATION_ERROR",
+            message     = (
+                f"Invalid threshold combination after merge: "
+                f"block={block}, sanitize={sanitize}. "
+                f"Required: 0.0 < sanitize < block <= 1.0"
+            ),
+            status_code = 422,
+        )
+
     await repo.set(THRESHOLD_KEY, current)
     await db.commit()
 

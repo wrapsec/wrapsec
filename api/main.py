@@ -2,12 +2,15 @@
 # Copyright (c) 2026 WrapSec. All rights reserved.
 # WrapSec v1.0 | AI Security Gateway - https://wrapsec.com
 
+import logging
 import time
 from contextlib import asynccontextmanager
 from observability.logging import setup_logging
 from observability.metrics import get_metrics
 import hmac
 from fastapi import FastAPI, Request
+
+logger = logging.getLogger("wrapsec.metrics")
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 from fastapi import Response
@@ -195,6 +198,11 @@ async def metrics(request: Request):
     auth_header = request.headers.get("authorization", "")
     token       = auth_header.removeprefix("Bearer ").strip()
     if not token or not hmac.compare_digest(token, expected):
+        logger.warning(
+            "metrics auth failed ip=%s token_present=%s",
+            request.client.host if request.client else "unknown",
+            bool(token),
+        )
         return JSONResponse(status_code=401, content={"error": "Unauthorized"})
     data, content_type = get_metrics()
     return Response(content=data, media_type=content_type)

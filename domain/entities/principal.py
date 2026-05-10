@@ -5,7 +5,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, NoReturn
 
 from domain.enums import PrincipalType
 
@@ -47,7 +47,7 @@ class Principal:
         """Check if principal has any of the specified roles. Used in all v1 guards."""
         return any(r in self.roles for r in roles)
 
-    def has_permission(self, permission: str) -> bool:
+    def has_permission(self, permission: str) -> NoReturn:
         """
         Wildcard permission check.
 
