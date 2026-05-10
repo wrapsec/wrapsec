@@ -185,6 +185,70 @@ async def _log_session_expired(
         await session.close()
 
 
+_USER_CACHE_TTL = 1800  # seconds — matches JWT access token expiry
+_USER_DB_ERROR  = object()  # sentinel: DB/Redis failure, distinct from "user not found"
+
+
+async def _get_user_cached(user_uuid: UUID, user_id_str: str):
+    """
+    Returns the user record for JWT auth, using Redis as a read-through cache.
+    Cache key: auth:user:{user_id}, TTL: 1800s (JWT expiry).
+    Cache is invalidated in logout_all_sessions() whenever token_version changes.
+
+    Return values:
+      SimpleNamespace / ORM user — found (cache hit or DB hit)
+      None                       — user does not exist in DB
+      _USER_DB_ERROR             — DB/Redis failure (caller returns 500-equivalent)
+    """
+    import json
+    from types import SimpleNamespace
+
+    cache_key = f"auth:user:{user_id_str}"
+
+    # Cache read
+    if not _TESTING:
+        try:
+            from cache.redis_client import get_redis
+            raw = await get_redis().get(cache_key)
+            if raw:
+                d = json.loads(raw)
+                return SimpleNamespace(**d)
+        except Exception as e:
+            logger.debug("auth user cache read failed user_id=%s error=%s", user_id_str, e)
+
+    # Cache miss or test mode — DB lookup
+    from db.repositories.user import UserRepository
+    try:
+        engine, session_ctx = await _get_db_session()
+        async with session_ctx as session:
+            user = await UserRepository(session).get_by_id(user_uuid)
+        if engine:
+            await engine.dispose()
+    except Exception as e:
+        logger.error("auth JWT db_lookup_failed user_id=%s error=%s", user_id_str, e)
+        return _USER_DB_ERROR
+
+    # Write to cache (production only — skip in tests)
+    if user and not _TESTING:
+        try:
+            from cache.redis_client import get_redis
+            payload = {
+                "id":                    str(user.id),
+                "is_active":             user.is_active,
+                "tenant_id":             str(user.tenant_id) if user.tenant_id else None,
+                "dept_id":               str(user.dept_id)   if user.dept_id   else None,
+                "role":                  user.role,
+                "force_password_change": user.force_password_change,
+                "token_version":         user.token_version,
+                "email":                 user.email,
+            }
+            await get_redis().set(cache_key, json.dumps(payload), ex=_USER_CACHE_TTL)
+        except Exception as e:
+            logger.debug("auth user cache write failed user_id=%s error=%s", user_id_str, e)
+
+    return user  # None if not found, ORM object if found
+
+
 async def _get_db_session():
     """
     Returns an async session appropriate for the current environment.
@@ -329,7 +393,6 @@ class AuthMiddleware(BaseHTTPMiddleware):
         Uses NullPool session in test mode to avoid asyncpg pool poisoning.
         Uses AsyncSessionFactory in production for efficiency.
         """
-        from db.repositories.user import UserRepository
         from services.auth.token import decode_access_token
 
         # Step 1 — decode and validate JWT
@@ -356,17 +419,9 @@ class AuthMiddleware(BaseHTTPMiddleware):
                            user_id_str, request.url.path)
             return _unauthorized(request, "invalid_token")
 
-        # Step 2a — load user from DB using environment-appropriate session
-        try:
-            engine, session_ctx = await _get_db_session()
-            async with session_ctx as session:
-                repo = UserRepository(session)
-                user = await repo.get_by_id(user_uuid)
-            if engine:
-                await engine.dispose()
-        except Exception as e:
-            logger.error("auth JWT db_lookup_failed user_id=%s error=%s",
-                         user_id_str, e)
+        # Step 2a — load user (Redis cache → DB fallback)
+        user = await _get_user_cached(user_uuid, user_id_str)
+        if user is _USER_DB_ERROR:
             return _unauthorized(request, "internal_error")
 
         # Step 2b — existence

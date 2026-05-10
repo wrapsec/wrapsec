@@ -2,6 +2,7 @@
 # Copyright (c) 2026 WrapSec. All rights reserved.
 # WrapSec v1.0 | AI Security Gateway - https://wrapsec.com
 
+import asyncio
 import logging
 
 from fastapi import APIRouter, Depends, HTTPException
@@ -58,18 +59,30 @@ async def setup_status(db: AsyncSession = Depends(get_db)):
     """
     # Fast path — Redis cache hit means already initialized, skip DB entirely
     try:
-        cached = await get_redis().get(_CACHE_KEY)
+        cached = await asyncio.wait_for(get_redis().get(_CACHE_KEY), timeout=2.0)
         if cached:
             return SetupStatusResponse(initialized=True)
+    except asyncio.TimeoutError:
+        logger.warning("setup cache read timed out — falling back to DB")
     except Exception as e:
         logger.warning("setup cache read failed: %s — falling back to DB", e)
 
     # Cache miss — check DB
-    tenant = await TenantRepository(db).get_default()
+    try:
+        tenant = await asyncio.wait_for(TenantRepository(db).get_default(), timeout=5.0)
+    except asyncio.TimeoutError:
+        logger.warning("setup DB status check timed out — returning not initialized")
+        return SetupStatusResponse(initialized=False)
+
     if not tenant:
         return SetupStatusResponse(initialized=False)
 
-    count = await UserRepository(db).count_by_tenant(tenant.id)
+    try:
+        count = await asyncio.wait_for(UserRepository(db).count_by_tenant(tenant.id), timeout=5.0)
+    except asyncio.TimeoutError:
+        logger.warning("setup DB user count timed out — returning not initialized")
+        return SetupStatusResponse(initialized=False)
+
     initialized = count > 0
 
     # Warm the cache so future calls skip the DB

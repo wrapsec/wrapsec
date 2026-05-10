@@ -370,6 +370,12 @@ class AuthService:
         revoked = await rt_repo.revoke_all_for_user(user_id)
         await db.commit()
 
+        try:
+            from cache.redis_client import get_redis
+            await get_redis().delete(f"auth:user:{user_id}")
+        except Exception:
+            pass  # stale cache will fail token_version check at next request
+
         logger.info(
             "auth_event SESSION_INVALIDATED user_id=%s "
             "new_token_version=%d refresh_tokens_revoked=%d",
