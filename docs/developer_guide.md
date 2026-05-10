@@ -765,6 +765,7 @@ These rules must be followed in all new code. Violation creates real production 
 46. `_parse_dt()` in `audit.py` raises `ValidationError` (400) on non-empty unparseable dates — never return `None` for invalid input, never add inline `except ValueError: pass` for date params
 47. CSV export (`/v1/audit/export`) must never write raw `ip_address` or `user_id` — always hash IP (SHA-256, first 16 hex chars) and truncate user_id to 8 chars
 48. Every policy override change (department or application, any endpoint) must log a `POLICY_OVERRIDE_CHANGED` admin event — metadata must not include raw policy values or `api_key_enc` fields
+49. `cookie_secure` controls the `Secure` flag on the refresh token cookie — never derive it from `environment == "production"` or any other string comparison; always read from `settings.cookie_secure`
 
 ---
 
@@ -793,6 +794,7 @@ These rules must be followed in all new code. Violation creates real production 
 | `AUDIT_EXPORT_RATE_LIMIT` | `5` | Per-caller limit on audit CSV export. DB-backed |
 | `TRIAL_RATE_LIMIT_PER_MINUTE` | `10` | Rate limit for trial keys — env-only, not dashboard-configurable |
 | `DEBUG_RATE_LIMIT_PER_MINUTE` | `10` | Rate limit for debug mode requests — env-only, security control |
+| `COOKIE_SECURE` | `true` | Adds `Secure` flag to refresh token cookie. Set `false` only for local HTTP dev — must be `true` in all deployed environments |
 
 **Load test env vars** — required when running `tests/load/` scripts:
 

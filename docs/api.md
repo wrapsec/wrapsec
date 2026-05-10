@@ -266,6 +266,8 @@ Email is validated (RFC 5322) before reaching the service.
 
 Sets cookie: `refresh_token=<raw>; HttpOnly; Secure; SameSite=Strict; Path=/v1/auth; Max-Age=2592000`
 
+> `Secure` is present when `COOKIE_SECURE=true` (default). Set `COOKIE_SECURE=false` only for local HTTP dev environments. All deployed environments must leave this at its default.
+
 **When `force_password_change: true`:** The access token is valid but middleware blocks all endpoints except `/v1/auth/change-password`, `/v1/auth/logout`, and `/v1/auth/me`. User must change password before doing anything else.
 
 **Errors:**
