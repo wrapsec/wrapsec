@@ -631,6 +631,7 @@ export default function AnalyticsPage() {
             title="Department risk ranking"
             emptyText="No department data"
             rows={(attribution?.by_department ?? [])
+              .filter((r: any) => !depts || !!deptNames[r.dept_id])
               .sort((a: any, b: any) => b.block_rate - a.block_rate)
               .slice(0, 8)
               .map((r: any) => ({
@@ -643,6 +644,7 @@ export default function AnalyticsPage() {
             title="Application risk ranking"
             emptyText="No application data"
             rows={(attribution?.by_application ?? [])
+              .filter((r: any) => !apps || !!appNames[r.app_id])
               .sort((a: any, b: any) => b.block_rate - a.block_rate)
               .slice(0, 8)
               .map((r: any) => ({

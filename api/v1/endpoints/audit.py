@@ -324,7 +324,7 @@ async def get_attribution_report(
             case((AuditLogModel.decision == "BLOCK", 1), else_=0)
         ).label("blocked"),
         func.avg(AuditLogModel.latency_ms).label("avg_latency"),
-    ).where(*base_where).group_by(
+    ).where(*base_where, AuditLogModel.key_id.isnot(None)).group_by(
         AuditLogModel.key_id,
         AuditLogModel.source,
     ).order_by(func.count().desc()).limit(limit)
@@ -349,9 +349,9 @@ async def get_attribution_report(
         func.sum(
             case((AuditLogModel.decision == "BLOCK", 1), else_=0)
         ).label("blocked"),
-    ).where(*base_where).group_by(AuditLogModel.dept_id).order_by(
-        func.count().desc()
-    ).limit(limit)
+    ).where(*base_where, AuditLogModel.dept_id.isnot(None)).group_by(
+        AuditLogModel.dept_id
+    ).order_by(func.count().desc()).limit(limit)
 
     dept_result = await db.execute(dept_query)
     by_dept = [
@@ -372,7 +372,7 @@ async def get_attribution_report(
             case((AuditLogModel.decision == "BLOCK", 1), else_=0)
         ).label("blocked"),
         func.avg(AuditLogModel.latency_ms).label("avg_latency"),
-    ).where(*base_where).group_by(
+    ).where(*base_where, AuditLogModel.app_id.isnot(None)).group_by(
         AuditLogModel.app_id,
     ).order_by(func.count().desc()).limit(limit)
 
