@@ -6,6 +6,7 @@ import csv
 import hashlib
 import io
 from datetime import datetime, timezone
+from typing import Literal
 from fastapi import APIRouter, Query, Depends, Request
 from api.v1.dependencies.auth import get_current_principal, endpoint_rate_limit
 from api.v1.dependencies.scope import get_audit_scope
@@ -143,8 +144,8 @@ async def get_audit_logs(
     execution_mode:  str | None = Query(None),
     from_:           str | None = Query(None, alias="from"),
     to:              str | None = Query(None),
-    sort_by:         str        = Query("created_at"),
-    sort_order:      str        = Query("desc"),
+    sort_by:         Literal["created_at", "risk_score", "latency_ms", "decision"] = Query("created_at"),
+    sort_order:      Literal["asc", "desc"]                                        = Query("desc"),
     limit:           int        = Query(50, ge=1, le=500),
     offset:          int        = Query(0, ge=0),
     db:              AsyncSession = Depends(get_db),

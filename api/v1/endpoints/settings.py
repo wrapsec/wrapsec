@@ -12,6 +12,7 @@ from pydantic import BaseModel, model_validator, field_validator, SecretStr
 from sqlalchemy.ext.asyncio import AsyncSession
 from api.v1.dependencies.db import get_db
 from api.v1.dependencies.auth import get_current_principal, require_admin
+from api.v1.middleware.auth import get_client_ip
 from cache.redis_client import get_redis
 from db.repositories.settings import SettingsRepository
 from db.repositories.admin_event import AdminEventRepository
@@ -544,7 +545,7 @@ async def update_admin_limits(
 
     # Audit log — security controls changing must always be recorded
     try:
-        ip        = request.headers.get("x-forwarded-for", request.client.host if request.client else None)
+        ip        = get_client_ip(request)
         ua        = request.headers.get("user-agent")
         actor_id  = uuid.UUID(str(principal.id).replace("user:", ""))
         tenant_id = uuid.UUID(str(principal.tenant_id))

@@ -120,6 +120,23 @@ def require_admin():
     return require_role("ADMIN")
 
 
+def require_any_admin():
+    """
+    Require admin access from any auth type — JWT ADMIN role or admin API key.
+    Use this for endpoints that must be admin-only but are also called
+    programmatically via the admin API key (not the dashboard).
+
+    Usage:
+        principal: Principal = Depends(require_any_admin())
+    """
+    async def _dependency(request: Request) -> Principal:
+        principal = _get_principal_from_state(request)
+        if not principal.is_admin:
+            raise ForbiddenError("Admin access required.")
+        return principal
+    return _dependency
+
+
 def endpoint_rate_limit(limit_setting: str):
     """
     Dependency factory — per-identity sliding-window rate limit.

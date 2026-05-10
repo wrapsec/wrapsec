@@ -8,7 +8,7 @@ import hashlib
 from datetime import datetime, timezone
 from fastapi import APIRouter, Depends, Request
 from fastapi.responses import JSONResponse
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 from sqlalchemy.ext.asyncio import AsyncSession
 from api.v1.dependencies.auth import get_current_principal, require_admin
 from api.v1.dependencies.db import get_db
@@ -273,7 +273,7 @@ async def delete_key(
     })
 
 class RotateKeySchema(BaseModel):
-    grace_period_minutes: int = 60
+    grace_period_minutes: int = Field(60, ge=0, le=10080)  # 0 = immediate, max 7 days
 
 
 @router.post("/{key_id}/rotate")

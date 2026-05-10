@@ -26,7 +26,7 @@ from pydantic import BaseModel, field_validator, HttpUrl, SecretStr
 from sqlalchemy import select, delete
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from api.v1.dependencies.auth import get_current_principal
+from api.v1.dependencies.auth import get_current_principal, require_any_admin
 from api.v1.dependencies.db import get_db
 from domain.entities.principal import Principal
 from config.settings import get_settings
@@ -172,7 +172,7 @@ async def put_proxy_settings(
     request:    Request,
     body:       ProxySettingsPutSchema,
     db:         AsyncSession = Depends(get_db),
-    _principal: Principal    = Depends(get_current_principal),
+    _principal: Principal    = Depends(require_any_admin()),
 ):
     """
     Creates or replaces the proxy provider config for the current API key (upsert).
