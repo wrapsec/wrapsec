@@ -53,11 +53,14 @@ class IdempotencyMiddleware(BaseHTTPMiddleware):
         body      = await request.body()
         body_hash = hashlib.sha256(body).hexdigest()
 
-        # Scope idempotency to the authenticated API key.
-        # Without this, two different keys using the same Idempotency-Key
+        # Scope idempotency to the authenticated caller.
+        # Without this, two different callers using the same Idempotency-Key
         # value would collide — dept A could receive dept B's cached response.
-        # key_id is always set by AuthMiddleware before this runs.
-        key_id    = getattr(request.state, "key_id", None) or "anon"
+        # If key_id is absent (unauthenticated), skip idempotency entirely —
+        # we cannot scope the key safely without an identity.
+        key_id = getattr(request.state, "key_id", None)
+        if not key_id:
+            return await call_next(request)
         scope     = f"{key_id}:{idempotency_key}"
         idem_hash    = hashlib.sha256(scope.encode()).hexdigest()
         hash_key     = f"idempotency:{idem_hash}:hash"

@@ -64,6 +64,16 @@ async def create_key(
     The raw key value is returned once and cannot be retrieved again.
     Auth: JWT + ADMIN role required.
     """
+    # Tenant must be known before any key is created — keys without a tenant
+    # bypass tenant isolation checks in every downstream auth path.
+    if not request.state.tenant_id:
+        from errors.exceptions import WrapSecError
+        raise WrapSecError(
+            code        = "FORBIDDEN",
+            message     = "Cannot create API key: authenticated principal has no tenant scope",
+            status_code = 403,
+        )
+
     # Validate key_type
     if body.key_type not in ("live", "trial"):
         from errors.exceptions import WrapSecError
@@ -99,9 +109,8 @@ async def create_key(
         dept_id   = dept.id
         tenant_id = dept.tenant_id
     else:
-        # No scope specified — use authenticated tenant
-        if request.state.tenant_id:
-            tenant_id = uuid.UUID(request.state.tenant_id)
+        # No scope specified — use authenticated tenant (guaranteed non-None by guard above)
+        tenant_id = uuid.UUID(request.state.tenant_id)
         if request.state.dept_id:
             dept_id = uuid.UUID(request.state.dept_id)
 
