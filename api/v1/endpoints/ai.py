@@ -106,20 +106,42 @@ async def ai_request(
 
     Processing order:
       1. Debug mode guard — only admin keys may request debug output.
-      2. Trial key restrictions — input size cap and proxy mode blocked.
-      3. Trial rate limit — stricter per-minute limit applied on top of global middleware limit.
-      4. Semantic cache lookup — returns cached result on hit, skips pipeline.
-      5. Policy resolution — resolves effective thresholds and detection layers for the
+      2. Debug rate limit — separate 10/min bucket prevents model fingerprinting.
+      3. Trial key restrictions — input size cap and proxy mode blocked.
+      4. Trial rate limit — stricter per-minute limit applied on top of global middleware limit.
+      5. Semantic cache lookup — returns cached result on hit, skips pipeline.
+      6. Policy resolution — resolves effective thresholds and detection layers for the
          request's tenant/dept/app scope.
-      6. Detection pipeline — runs via GatewayService (rule, ML, LLM layers as configured).
-      7. Audit log write — persists full decision record to audit_logs.
-      8. Metrics recording — non-blocking; errors are swallowed.
-      9. Semantic cache write — caches successful responses for future identical inputs.
+      7. Detection pipeline — runs via GatewayService (rule, ML, LLM layers as configured).
+      8. Audit log write — persists full decision record to audit_logs.
+      9. Metrics recording — non-blocking; errors are swallowed.
+     10. Semantic cache write — caches successful responses for future identical inputs.
 
     Auth: any valid principal (API key).
     """
     if body.options.debug and not getattr(request.state, "is_admin", False):
         raise DebugForbiddenError()
+
+    # Debug rate limit — separate bucket, tighter than global limit.
+    # Prevents model fingerprinting: an attacker with a stolen admin key
+    # cannot probe 60 inputs/min to calibrate below-threshold payloads.
+    # Fails open if Redis unavailable — consistent with other rate limit checks.
+    if body.options.debug:
+        try:
+            from cache.rate_limit_store import is_rate_limited
+            key_id   = getattr(request.state, "key_id", None)
+            debug_id = f"debug:key:{key_id or 'admin'}"
+            is_limited, _, _ = await is_rate_limited(
+                debug_id,
+                limit=settings.debug_rate_limit_per_minute,
+            )
+            if is_limited:
+                from errors.exceptions import RateLimitError
+                raise RateLimitError()
+        except RateLimitError:
+            raise
+        except Exception:
+            pass  # Fail open if Redis unavailable
 
     # Trial key restrictions — enforced after auth, key_type is available here
     key_type = getattr(request.state, "key_type", "live")

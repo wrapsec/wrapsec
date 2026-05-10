@@ -13,6 +13,7 @@ import { LLMSettingsForm } from "@/components/settings/LLMSettings"
 import { TenantSettingsForm } from "@/components/settings/TenantSettings"
 import { RetentionSettingsForm } from "@/components/settings/RetentionSettings"
 import { RateLimitSettingsForm } from "@/components/settings/RateLimitSettings"
+import { AdminLimitsForm } from "@/components/settings/AdminLimitsForm"
 import { ProxySettingsForm } from "@/components/settings/ProxySettings"
 import { PageSpinner } from "@/components/ui/Spinner"
 import {
@@ -22,6 +23,7 @@ import {
   getTenant,
   getRetentionSettings,
   getRateLimitSettings,
+  getAdminLimits,
   getProxySettings,
   getStorageSettings,
 } from "@/lib/api"
@@ -56,7 +58,8 @@ export default function SettingsPage() {
   const { data: retention,  isLoading: retentionLoading,  mutate: mutateR } =
     useSWR("retention",    getRetentionSettings)
 
-  const { data: rateLimit, mutate: mutateRL } = useSWR("rate-limit-settings", getRateLimitSettings)
+  const { data: rateLimit,    mutate: mutateRL  } = useSWR("rate-limit-settings", getRateLimitSettings)
+  const { data: adminLimits,  mutate: mutateAL  } = useSWR("admin-limits",        getAdminLimits)
   const { data: storage } = useSWR("storage-settings", getStorageSettings)
 
   const { data: proxy, mutate: mutateProxy } = useSWR(
@@ -158,18 +161,38 @@ export default function SettingsPage() {
         )}
 
         {activeTab === "rate-limits" && (
-          <Card>
-            <CardHeader
-              title="Rate Limits"
-              subtitle="Configure request rate limits for live and trial keys"
-            />
-            <RateLimitSettingsForm
-              perMinute={rateLimit?.per_minute ?? 60}
-              source={rateLimit?.source ?? "environment"}
-              trialLimit={10}
-              onUpdated={(perMinute, source) => mutateRL({ per_minute: perMinute, source }, false)}
-            />
-          </Card>
+          <div className="space-y-5">
+            <Card>
+              <CardHeader
+                title="Rate Limits"
+                subtitle="Configure request rate limits for live and trial keys"
+              />
+              <RateLimitSettingsForm
+                perMinute={rateLimit?.per_minute ?? 60}
+                source={rateLimit?.source ?? "environment"}
+                trialLimit={10}
+                onUpdated={(perMinute, source) => mutateRL({ per_minute: perMinute, source }, false)}
+              />
+            </Card>
+
+            <Card>
+              <CardHeader
+                title="Admin Operation Limits"
+                subtitle="Security controls — rate limits for admin write operations and audit export"
+              />
+              <AdminLimitsForm
+                adminWrite={adminLimits?.admin_write_rate_limit ?? 20}
+                exportLimit={adminLimits?.audit_export_rate_limit ?? 5}
+                source={adminLimits?.source ?? "environment"}
+                onUpdated={(adminWrite, exportLimit, source) =>
+                  mutateAL(
+                    { admin_write_rate_limit: adminWrite, audit_export_rate_limit: exportLimit, source },
+                    false
+                  )
+                }
+              />
+            </Card>
+          </div>
         )}
 
         {activeTab === "llm" && (

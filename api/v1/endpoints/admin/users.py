@@ -10,7 +10,7 @@ from fastapi.responses import JSONResponse
 from pydantic import BaseModel, EmailStr
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from api.v1.dependencies.auth import require_admin
+from api.v1.dependencies.auth import require_admin, endpoint_rate_limit
 from api.v1.dependencies.db import get_db
 from api.v1.middleware.auth import get_client_ip
 from db.repositories.admin_event import AdminEventRepository
@@ -131,6 +131,7 @@ async def create_user(
     request:   Request,
     principal: Principal    = Depends(require_admin()),
     db:        AsyncSession = Depends(get_db),
+    _rl:       None         = Depends(endpoint_rate_limit("admin_write_rate_limit")),
 ) -> JSONResponse:
     """
     Creates a new dashboard user.
@@ -283,6 +284,7 @@ async def update_user(
     request:   Request,
     principal: Principal    = Depends(require_admin()),
     db:        AsyncSession = Depends(get_db),
+    _rl:       None         = Depends(endpoint_rate_limit("admin_write_rate_limit")),
 ) -> JSONResponse:
     """
     Partially updates a user's role, dept_id, or is_active.
@@ -478,6 +480,7 @@ async def reset_password(
     request:   Request,
     principal: Principal    = Depends(require_admin()),
     db:        AsyncSession = Depends(get_db),
+    _rl:       None         = Depends(endpoint_rate_limit("admin_write_rate_limit")),
 ) -> JSONResponse:
     """
     Admin resets a user's password.

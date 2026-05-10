@@ -10,10 +10,13 @@ from sqlalchemy import func, select as sa_select
 from sqlalchemy.ext.asyncio import AsyncSession
 from api.v1.dependencies.auth import get_current_principal, require_admin
 from api.v1.dependencies.db import get_db
+from api.v1.middleware.auth import get_client_ip
 from config.settings import get_settings
 from db.models import AuditLogModel
+from db.repositories.admin_event import AdminEventRepository
 from db.repositories.department import DepartmentRepository
 from domain.entities.principal import Principal
+from domain.enums import AdminEventAction
 from errors.exceptions import NotFoundError
 from security.encryption import encrypt, decrypt, mask
 
@@ -359,6 +362,23 @@ async def update_department(
     if not record:
         raise NotFoundError("department", dept_id)
     await db.commit()
+
+    if "policy_override" in data:
+        try:
+            event_repo = AdminEventRepository(db)
+            await event_repo.insert(
+                tenant_id     = uuid.UUID(request.state.tenant_id),
+                actor_user_id = uuid.UUID(str(principal.id).replace("user:", "")),
+                action        = AdminEventAction.POLICY_OVERRIDE_CHANGED,
+                dept_id       = uuid.UUID(dept_id),
+                metadata      = {"scope": "department", "dept_id": dept_id, "section": "policy_override"},
+                ip_address    = get_client_ip(request),
+                user_agent    = request.headers.get("user-agent"),
+            )
+            await db.commit()
+        except Exception:
+            pass
+
     return JSONResponse(content=_format(record))
 
 
@@ -407,6 +427,22 @@ async def update_dept_llm_override(
     if not record:
         raise NotFoundError("department", dept_id)
     await db.commit()
+
+    try:
+        event_repo = AdminEventRepository(db)
+        await event_repo.insert(
+            tenant_id     = uuid.UUID(request.state.tenant_id),
+            actor_user_id = uuid.UUID(str(principal.id).replace("user:", "")),
+            action        = AdminEventAction.POLICY_OVERRIDE_CHANGED,
+            dept_id       = uuid.UUID(dept_id),
+            metadata      = {"scope": "department", "dept_id": dept_id, "section": "llm", "cleared": body.clear},
+            ip_address    = get_client_ip(request),
+            user_agent    = request.headers.get("user-agent"),
+        )
+        await db.commit()
+    except Exception:
+        pass
+
     return JSONResponse(content=_format(record))
 
 
@@ -455,6 +491,22 @@ async def update_dept_proxy_override(
     if not record:
         raise NotFoundError("department", dept_id)
     await db.commit()
+
+    try:
+        event_repo = AdminEventRepository(db)
+        await event_repo.insert(
+            tenant_id     = uuid.UUID(request.state.tenant_id),
+            actor_user_id = uuid.UUID(str(principal.id).replace("user:", "")),
+            action        = AdminEventAction.POLICY_OVERRIDE_CHANGED,
+            dept_id       = uuid.UUID(dept_id),
+            metadata      = {"scope": "department", "dept_id": dept_id, "section": "proxy_provider", "cleared": body.clear},
+            ip_address    = get_client_ip(request),
+            user_agent    = request.headers.get("user-agent"),
+        )
+        await db.commit()
+    except Exception:
+        pass
+
     return JSONResponse(content=_format(record))
 
 

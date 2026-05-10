@@ -939,6 +939,8 @@ When unreachable, `reachable: false` and an `error` string are returned — stil
 
 All audit endpoints scope non-admin identities to their own department — the `dept_id` query param is ignored for non-admin callers.
 
+**Date parameters (`from`, `to`):** All audit endpoints that accept date filters require ISO 8601 format (e.g. `2026-01-15T00:00:00Z`). Malformed values return `400 INVALID_REQUEST` — they are not silently ignored. Empty or absent values apply no date filter.
+
 ### GET /v1/audit/logs
 
 List audit log records.
@@ -1114,7 +1116,9 @@ Exports audit logs as CSV.
 
 **Query params:** `dept_id`, `app_id`, `decision`, `primary_reason`, `confidence_band`, `from`, `to`, `limit` (default 1000, max 10000)
 
-**CSV columns:** `trace_id`, `timestamp`, `decision`, `risk_score`, `confidence`, `confidence_band`, `primary_reason`, `threats`, `tenant_id`, `dept_id`, `app_id`, `key_id`, `source`, `user_id`, `ip_address`, `policy_source`, `detection_mode`, `latency_ms`
+**CSV columns:** `trace_id`, `timestamp`, `decision`, `risk_score`, `confidence`, `confidence_band`, `primary_reason`, `threats`, `tenant_id`, `dept_id`, `app_id`, `key_id`, `source`, `user_id_prefix`, `ip_address_hash`, `policy_source`, `detection_mode`, `latency_ms`
+
+**Privacy note:** `ip_address` is SHA-256 hashed (first 16 hex chars) and exported as `ip_address_hash`. `user_id` is truncated to the first 8 characters and exported as `user_id_prefix`. Both fields retain enough entropy for correlation within an export without exposing raw PII. Full values remain available in the database for authorized access.
 
 ---
 

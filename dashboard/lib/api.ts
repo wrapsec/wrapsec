@@ -328,6 +328,29 @@ export async function getStorageSettings(): Promise<{
   return request("/v1/settings/storage")
 }
 
+export async function getAdminLimits(): Promise<{
+  admin_write_rate_limit:  number
+  audit_export_rate_limit: number
+  source: string
+}> {
+  return request("/v1/settings/admin_limits")
+}
+
+export async function updateAdminLimits(payload: {
+  admin_write_rate_limit?:  number
+  audit_export_rate_limit?: number
+}): Promise<{
+  admin_write_rate_limit:  number
+  audit_export_rate_limit: number
+  source:     string
+  updated_at: string
+}> {
+  return request("/v1/settings/admin_limits", {
+    method: "PUT",
+    body:   JSON.stringify(payload),
+  })
+}
+
 // ── Proxy Settings ────────────────────────────────────────────
 export async function getProxySettings(): Promise<ProxyProviderConfig> {
   return request<ProxyProviderConfig>("/v1/settings/proxy")

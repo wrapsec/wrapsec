@@ -70,6 +70,8 @@ class AdminEventAction(str, Enum):
     PASSWORD_RESET   = "password_reset"
     ROLE_CHANGED     = "role_changed"
     DEPT_CHANGED     = "dept_changed"
+    SETTINGS_CHANGED        = "settings_changed"
+    POLICY_OVERRIDE_CHANGED = "policy_override_changed"
 
 
 class AuthEventAction(str, Enum):

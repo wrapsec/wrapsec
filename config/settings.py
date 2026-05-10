@@ -64,9 +64,11 @@ class Settings(BaseSettings):
     redis_ttl:       int = 3600
 
     # ── Rate Limiting ─────────────────────────────────────────
-    rate_limit_enabled:      bool = True
-    rate_limit_per_minute:   int  = 60
-    rate_limit_burst:        int  = 10
+    rate_limit_enabled:             bool = True
+    rate_limit_per_minute:          int  = 60
+    rate_limit_burst:               int  = 10
+    admin_write_rate_limit:         int  = 20   # POST/PATCH on admin user endpoints
+    audit_export_rate_limit:        int  = 5    # GET /audit/export
 
     # ── Audit log retention ────────────────────────────────────
     audit_retention_days:    int  = 30  # days to keep audit logs in DB
@@ -117,6 +119,13 @@ class Settings(BaseSettings):
     trial_rate_limit_per_minute: int   = 10     # vs 60 for live keys
     trial_max_input_chars:       int   = 500    # vs 8000 for live keys
     trial_proxy_enabled:         bool  = False  # proxy disabled for trial keys
+
+    # ── Debug mode limits ─────────────────────────────────────────────────────
+    # debug=true exposes per-layer scores — a tighter separate limit prevents
+    # model fingerprinting (probing to calibrate below-threshold attacks).
+    # Applies only to admin keys; non-admin keys are blocked before this check.
+    # Intentionally env-only — not dashboard-configurable (security control).
+    debug_rate_limit_per_minute: int   = 10
 
     # -- Data storage ----------------------------------------------------------
     data_storage_mode:        str = Field(default="masked")

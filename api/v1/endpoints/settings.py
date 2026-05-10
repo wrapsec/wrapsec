@@ -3,6 +3,7 @@
 # WrapSec v1.0 | AI Security Gateway - https://wrapsec.com
 
 import ipaddress
+import uuid
 from datetime import datetime, timezone
 from urllib.parse import urlparse
 from fastapi import APIRouter, Depends, Request
@@ -13,7 +14,9 @@ from api.v1.dependencies.db import get_db
 from api.v1.dependencies.auth import get_current_principal, require_admin
 from cache.redis_client import get_redis
 from db.repositories.settings import SettingsRepository
+from db.repositories.admin_event import AdminEventRepository
 from config.settings import get_settings
+from domain.enums import AdminEventAction
 from errors.exceptions import ValidationError
 from security.encryption import encrypt, decrypt, mask
 
@@ -450,4 +453,117 @@ async def get_storage_settings(
     return JSONResponse(content={
         "storage_mode":         cfg.data_storage_mode,
         "retention_days_proxy": cfg.data_retention_days_proxy,
+    })
+
+
+ADMIN_LIMITS_KEY       = "admin_rate_limits"
+ADMIN_LIMITS_CACHE_KEY = "wrapsec:settings:admin_rate_limits"
+ADMIN_LIMITS_CACHE_TTL = 60  # seconds — same TTL as global rate limit cache
+
+
+def _default_admin_limits() -> dict:
+    _s = get_settings()
+    return {
+        "admin_write_rate_limit":  _s.admin_write_rate_limit,
+        "audit_export_rate_limit": _s.audit_export_rate_limit,
+    }
+
+
+class AdminLimitsUpdateSchema(BaseModel):
+    admin_write_rate_limit:  int | None = None
+    audit_export_rate_limit: int | None = None
+
+    @model_validator(mode="after")
+    def validate_limits(self) -> "AdminLimitsUpdateSchema":
+        if self.admin_write_rate_limit is not None:
+            if self.admin_write_rate_limit < 5:
+                raise ValueError("admin_write_rate_limit must be at least 5")
+            if self.admin_write_rate_limit > 200:
+                raise ValueError("admin_write_rate_limit cannot exceed 200")
+        if self.audit_export_rate_limit is not None:
+            if self.audit_export_rate_limit < 1:
+                raise ValueError("audit_export_rate_limit must be at least 1")
+            if self.audit_export_rate_limit > 60:
+                raise ValueError("audit_export_rate_limit cannot exceed 60")
+        return self
+
+
+@router.get("/admin_limits")
+async def get_admin_limits(
+    db:         AsyncSession = Depends(get_db),
+    _principal  = Depends(get_current_principal),
+):
+    """
+    Returns the active admin operation rate limits.
+    Source is 'database' if explicitly set via PUT, 'environment' if using defaults.
+    Auth: any valid principal.
+    """
+    repo   = SettingsRepository(db)
+    stored = await repo.get(ADMIN_LIMITS_KEY)
+    if stored:
+        return JSONResponse(content={**stored, "source": "database"})
+    return JSONResponse(content={**_default_admin_limits(), "source": "environment"})
+
+
+@router.put("/admin_limits")
+async def update_admin_limits(
+    body:      AdminLimitsUpdateSchema,
+    request:   Request,
+    db:        AsyncSession = Depends(get_db),
+    principal  = Depends(require_admin()),
+):
+    """
+    Updates admin write and/or audit export rate limits. Merges with existing values.
+    Takes effect immediately — Redis cache is invalidated on update.
+    Changes are recorded in admin_events for audit trail.
+
+    Floors: admin_write >= 5, audit_export >= 1.
+    Ceilings: admin_write <= 200, audit_export <= 60.
+
+    Auth: JWT + ADMIN role required.
+    """
+    repo    = SettingsRepository(db)
+    current = await repo.get(ADMIN_LIMITS_KEY) or _default_admin_limits()
+
+    old_values = dict(current)
+
+    if body.admin_write_rate_limit  is not None:
+        current["admin_write_rate_limit"]  = body.admin_write_rate_limit
+    if body.audit_export_rate_limit is not None:
+        current["audit_export_rate_limit"] = body.audit_export_rate_limit
+
+    await repo.set(ADMIN_LIMITS_KEY, current)
+    await db.commit()
+
+    # Invalidate Redis cache — new limits take effect on next request
+    try:
+        redis = get_redis()
+        await redis.delete(ADMIN_LIMITS_CACHE_KEY)
+    except Exception:
+        pass
+
+    # Audit log — security controls changing must always be recorded
+    try:
+        ip        = request.headers.get("x-forwarded-for", request.client.host if request.client else None)
+        ua        = request.headers.get("user-agent")
+        actor_id  = uuid.UUID(str(principal.id).replace("user:", ""))
+        tenant_id = uuid.UUID(str(principal.tenant_id))
+
+        event_repo = AdminEventRepository(db)
+        await event_repo.insert(
+            tenant_id     = tenant_id,
+            actor_user_id = actor_id,
+            action        = AdminEventAction.SETTINGS_CHANGED,
+            metadata      = {"setting": ADMIN_LIMITS_KEY, "old": old_values, "new": current},
+            ip_address    = ip,
+            user_agent    = ua,
+        )
+        await db.commit()
+    except Exception:
+        pass  # Audit logging is best-effort — never fails the request
+
+    return JSONResponse(content={
+        **current,
+        "source":     "database",
+        "updated_at": datetime.now(timezone.utc).isoformat(),
     })

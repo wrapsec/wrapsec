@@ -118,3 +118,72 @@ def require_admin():
         principal: Principal = Depends(require_admin())
     """
     return require_role("ADMIN")
+
+
+def endpoint_rate_limit(limit_setting: str):
+    """
+    Dependency factory — per-identity sliding-window rate limit.
+    Keyed by key_id (JWT user or API key) with IP fallback.
+    Applies on top of the global middleware limit.
+
+    Limit resolution order:
+      1. Redis cache  (wrapsec:settings:admin_rate_limits, 60 s TTL)
+      2. DB           (settings table, key = admin_rate_limits)
+      3. .env default (Settings field named limit_setting)
+
+    Fails open if Redis and DB are both unavailable.
+    TESTING env var bypasses cache/DB — always uses .env default.
+
+    Usage:
+        _: None = Depends(endpoint_rate_limit("admin_write_rate_limit"))
+    """
+    async def _dependency(request: Request) -> None:
+        import json
+        import os
+        from cache.rate_limit_store import is_rate_limited
+        from errors.exceptions import RateLimitError
+        from api.v1.middleware.auth import get_client_ip
+        from config.settings import get_settings
+
+        limit = None
+
+        if os.getenv("TESTING") != "true":
+            # 1. Redis cache
+            try:
+                from cache.redis_client import get_redis
+                cached = await get_redis().get("wrapsec:settings:admin_rate_limits")
+                if cached:
+                    limit = json.loads(cached).get(limit_setting)
+            except Exception:
+                pass
+
+            # 2. DB — also warms the cache on hit
+            if limit is None:
+                try:
+                    from db.session import AsyncSessionFactory
+                    from db.repositories.settings import SettingsRepository
+                    async with AsyncSessionFactory() as session:
+                        stored = await SettingsRepository(session).get("admin_rate_limits")
+                        if stored and limit_setting in stored:
+                            limit = stored[limit_setting]
+                            try:
+                                from cache.redis_client import get_redis
+                                await get_redis().setex(
+                                    "wrapsec:settings:admin_rate_limits", 60, json.dumps(stored)
+                                )
+                            except Exception:
+                                pass
+                except Exception:
+                    pass
+
+        # 3. .env fallback
+        if limit is None:
+            limit = getattr(get_settings(), limit_setting)
+
+        identity  = getattr(request.state, "key_id", None) or get_client_ip(request) or "unknown"
+        rl_key    = f"endpoint:{request.url.path}:{identity}"
+        is_limited, _, _ = await is_rate_limited(rl_key, limit=limit)
+        if is_limited:
+            raise RateLimitError()
+
+    return _dependency

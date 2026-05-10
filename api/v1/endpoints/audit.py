@@ -3,10 +3,11 @@
 # WrapSec v1.0 | AI Security Gateway - https://wrapsec.com
 
 import csv
+import hashlib
 import io
 from datetime import datetime, timezone
 from fastapi import APIRouter, Query, Depends, Request
-from api.v1.dependencies.auth import get_current_principal
+from api.v1.dependencies.auth import get_current_principal, endpoint_rate_limit
 from api.v1.dependencies.scope import get_audit_scope
 from domain.entities.principal import Principal
 from domain.value_objects.severity import compute_severity
@@ -27,7 +28,10 @@ def _parse_dt(value: str | None) -> datetime | None:
     try:
         return datetime.fromisoformat(value.replace("Z", "+00:00"))
     except ValueError:
-        return None
+        from errors.exceptions import ValidationError
+        raise ValidationError(
+            f"Invalid date format: '{value}'. Use ISO 8601, e.g. 2026-01-15T00:00:00Z"
+        )
 
 
 def _format_item(
@@ -305,19 +309,10 @@ async def get_attribution_report(
     if dept_id:
         base_where.append(AuditLogModel.dept_id == dept_id)
     if from_:
-        try:
-            from_dt = datetime.fromisoformat(from_).replace(tzinfo=None)
-            base_where.append(AuditLogModel.created_at >= from_dt)
-        except ValueError:
-            pass
+        base_where.append(AuditLogModel.created_at >= _parse_dt(from_).replace(tzinfo=None))
     if to:
-        try:
-            # Use end of day if only date portion provided, otherwise use as-is
-            to_str  = to if "T" in to else to + "T23:59:59"
-            to_dt   = datetime.fromisoformat(to_str).replace(tzinfo=None)
-            base_where.append(AuditLogModel.created_at <= to_dt)
-        except ValueError:
-            pass
+        to_str = to if "T" in to else to + "T23:59:59"
+        base_where.append(AuditLogModel.created_at <= _parse_dt(to_str).replace(tzinfo=None))
 
     # By API key
     key_query = select(
@@ -463,17 +458,9 @@ async def get_analytics(
     if dept_id:
         stmt = stmt.where(AuditLogModel.dept_id == dept_id)
     if from_date:
-        try:
-            dt   = datetime.fromisoformat(from_date).replace(tzinfo=None)
-            stmt = stmt.where(AuditLogModel.created_at >= dt)
-        except ValueError:
-            pass
+        stmt = stmt.where(AuditLogModel.created_at >= _parse_dt(from_date).replace(tzinfo=None))
     if to_date:
-        try:
-            dt   = datetime.fromisoformat(to_date + "T23:59:59").replace(tzinfo=None)
-            stmt = stmt.where(AuditLogModel.created_at <= dt)
-        except ValueError:
-            pass
+        stmt = stmt.where(AuditLogModel.created_at <= _parse_dt(to_date + "T23:59:59").replace(tzinfo=None))
 
     stmt   = stmt.group_by("period", AuditLogModel.decision).order_by("period")
     result = await db.execute(stmt)
@@ -536,6 +523,7 @@ async def export_audit_logs(
     limit:           int        = Query(1000, ge=1, le=10000),
     db:              AsyncSession = Depends(get_db),
     _principal:      Principal    = Depends(get_current_principal),
+    _rl:             None         = Depends(endpoint_rate_limit("audit_export_rate_limit")),
 ):
     """
     Exports audit logs as a CSV file for compliance reporting (up to 10,000 rows).
@@ -565,17 +553,22 @@ async def export_audit_logs(
     output = io.StringIO()
     writer = csv.writer(output)
 
-    # Header
+    # Header — ip_address is hashed, user_id truncated (GDPR compliance)
     writer.writerow([
         "trace_id", "timestamp", "decision", "risk_score",
         "confidence", "confidence_band", "primary_reason",
         "threats", "tenant_id", "dept_id", "app_id",
-        "key_id", "source", "user_id", "ip_address",
+        "key_id", "source", "user_id_prefix", "ip_address_hash",
         "policy_source", "detection_mode", "latency_ms",
     ])
 
     # Rows
     for item in items:
+        ip_hash = (
+            hashlib.sha256(item.ip_address.encode()).hexdigest()[:16]
+            if item.ip_address else None
+        )
+        user_prefix = item.user_id[:8] if item.user_id else None
         writer.writerow([
             item.trace_id,
             item.created_at.isoformat(),
@@ -590,8 +583,8 @@ async def export_audit_logs(
             item.app_id,
             item.key_id,
             item.source,
-            item.user_id,
-            item.ip_address,
+            user_prefix,
+            ip_hash,
             item.policy_source,
             item.detection_mode,
             item.latency_ms,

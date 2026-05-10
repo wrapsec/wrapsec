@@ -254,15 +254,18 @@ Rate limiter, metrics, and logs all use `key_id`. The prefix ensures no collisio
 ```python
 # api/v1/dependencies/auth.py
 
-get_current_principal(request)  # API key OR JWT — scan/audit endpoints
-require_jwt(principal)          # JWT only — rejects API key with 403
-require_role(*roles)            # JWT + role — factory, implies require_jwt
-require_admin()                 # shorthand for require_role("ADMIN")
+get_current_principal(request)           # API key OR JWT — scan/audit endpoints
+require_jwt(principal)                   # JWT only — rejects API key with 403
+require_role(*roles)                     # JWT + role — factory, implies require_jwt
+require_admin()                          # shorthand for require_role("ADMIN")
+endpoint_rate_limit(limit_setting: str)  # per-identity rate limit — factory
 ```
 
 Principal is built from `request.state` — no second DB call in dependencies.
 
 `has_permission()` raises `NotImplementedError` in v1. All guards use `has_role()` exclusively. Permission strings in `ROLE_PERMISSIONS` are defined for v2+ reference only.
+
+`endpoint_rate_limit` is a dependency factory applied on top of the global middleware limit. It reads the effective limit from Redis cache → DB → `.env` (same 3-tier chain as the global limit). Identity key: `key_id` from `request.state` with IP fallback. Bucket key: `endpoint:{path}:{identity}` — per-endpoint, per-identity, never shared across endpoints. Fails open if Redis is unavailable.
 
 ### Endpoint protection matrix
 
@@ -296,6 +299,97 @@ enforce RBAC per-endpoint.
 
 Breaking change: `PUT /v1/settings/*` requires JWT + ADMIN — admin API key no longer accepted.
 Breaking change: `POST/PUT/DELETE /v1/keys/*` requires JWT + ADMIN — API key no longer accepted.
+
+---
+
+## Rate Limiting
+
+Five rate limit layers apply to different surfaces. They are additive — a request may be checked by multiple layers in sequence.
+
+### Layer overview
+
+```
+Layer 1 — Global middleware      RateLimitMiddleware in api/v1/middleware/rate_limit.py
+                                 Applies to all non-public paths before auth runs.
+                                 Keyed by key_id (if present) or IP.
+                                 Limit: DB → Redis cache → .env (RATE_LIMIT_PER_MINUTE, default 60/min).
+
+Layer 2 — Trial key limit        Inline in ai.py, after auth.
+                                 Applies only to key_type = "trial".
+                                 Keyed by trial:key:{key_id}.
+                                 Limit: TRIAL_RATE_LIMIT_PER_MINUTE (env-only, default 10/min).
+
+Layer 3 — Debug mode limit       Inline in ai.py, after the admin guard.
+                                 Applies only when debug=true (admin keys only).
+                                 Keyed by debug:key:{key_id}.
+                                 Limit: DEBUG_RATE_LIMIT_PER_MINUTE (env-only, default 10/min).
+
+Layer 4 — Admin write limit      endpoint_rate_limit dependency on admin write endpoints.
+                                 Applies to: POST /v1/admin/users
+                                             PATCH /v1/admin/users/{id}
+                                             POST /v1/admin/users/{id}/reset-password
+                                 Keyed by endpoint:{path}:{key_id}.
+                                 Limit: DB → Redis cache → .env (ADMIN_WRITE_RATE_LIMIT, default 20/min).
+
+Layer 5 — Audit export limit     endpoint_rate_limit dependency on the export endpoint.
+                                 Applies to: GET /v1/audit/export
+                                 Keyed by endpoint:{path}:{key_id}.
+                                 Limit: DB → Redis cache → .env (AUDIT_EXPORT_RATE_LIMIT, default 5/min).
+```
+
+### Redis key naming convention
+
+```
+rate_limit:{key_id or ip}              Global middleware bucket
+trial:key:{key_id}                     Trial key bucket
+debug:key:{key_id}                     Debug mode bucket
+endpoint:{path}:{key_id or ip}         Admin write / export bucket
+```
+
+All keys use a 60-second sliding window via the Lua script in `cache/rate_limit_store.py`. The Lua script is atomic — no race condition possible between ZCARD and ZADD.
+
+### Limit configuration — 3-tier chain (Layers 1, 4, 5)
+
+```
+Priority 1: Redis cache  (wrapsec:settings:rate_limit or wrapsec:settings:admin_rate_limits)
+            TTL: 60 seconds — changes propagate within 1 minute on all nodes.
+
+Priority 2: DB           (settings table, keys: "rate_limit" and "admin_rate_limits")
+            Updated via PUT /v1/settings/rate_limit or PUT /v1/settings/admin_limits.
+            On read: value is written back to Redis cache (cache warming).
+
+Priority 3: .env         (RATE_LIMIT_PER_MINUTE, ADMIN_WRITE_RATE_LIMIT, AUDIT_EXPORT_RATE_LIMIT)
+            Used on first startup and when no DB value exists.
+```
+
+When a PUT settings endpoint saves a new limit, it calls `redis.delete(cache_key)` immediately — the new value takes effect on the next request (within seconds, not 60 seconds).
+
+Layers 2 and 3 (trial and debug) read directly from `settings` — no DB/Redis chain. They are env-only and require a restart to change. This is intentional: trial and debug limits are operational constants, not runtime-tunable controls.
+
+### Fail-open policy
+
+All five layers fail open when Redis is unavailable. Rate limiting is silently disabled during Redis outages to preserve API availability. Monitor Redis health and alert on connection errors if strict enforcement during outages is required.
+
+### Dashboard configuration (Layers 1, 4, 5 only)
+
+```
+GET/PUT /v1/settings/rate_limit      Global limit (Layer 1)
+GET/PUT /v1/settings/admin_limits    Admin write + export limits (Layers 4, 5)
+```
+
+Changes to `admin_limits` are recorded in `admin_events` with old and new values (`action = settings_changed`). Changes to `rate_limit` are not currently logged — add audit logging there if required.
+
+Layers 2 and 3 are intentionally not dashboard-configurable. The debug limit in particular is a security control — making it configurable via the dashboard would allow a compromised admin credential to raise it, defeating its purpose.
+
+### Floor and ceiling constraints
+
+```
+ADMIN_WRITE_RATE_LIMIT:  min 5,  max 200   (floor prevents admin self-lockout)
+AUDIT_EXPORT_RATE_LIMIT: min 1,  max 60
+RATE_LIMIT_PER_MINUTE:   min 1,  max 10000 (must be >= TRIAL_RATE_LIMIT_PER_MINUTE)
+```
+
+Floors are enforced server-side in the Pydantic schema — not just client-side. Setting `ADMIN_WRITE_RATE_LIMIT` below 5 via `.env` bypasses the schema validation; the server will still use whatever value is in settings.
 
 ---
 
@@ -370,9 +464,9 @@ Clause 2: DELETE WHERE expires_at < NOW() - 90 days
 
 Written to `audit_logs` table. Every scan request. Includes decision, risk score, threats, severity, principal attribution.
 
-### Admin events (user management)
+### Admin events (user management and policy changes)
 
-Written to `admin_events` table. Every user management action.
+Written to `admin_events` table. Every user management and policy change action.
 
 - Logging order (must follow):
   1. Perform database update
@@ -383,6 +477,20 @@ Written to `admin_events` table. Every user management action.
 - `action` is enum-controlled via `AdminEventAction` — no free-form strings
 - `dept_id` = target user's dept_id after the update (post-update state)
 - For `dept_changed`: `admin_events.dept_id` = new_dept_id; metadata contains both old and new
+- For `policy_override_changed`: `dept_id` = the affected department (or the app's dept_id for application-scope changes); metadata contains `scope`, `section`, and `cleared` — never contains raw policy values or encrypted keys
+
+**Action values (full set):**
+
+| Action | Emitted by | When |
+|---|---|---|
+| `user_created` | `admin/users.py` | New dashboard user created |
+| `user_deactivated` | `admin/users.py` | User set to `is_active=False` |
+| `user_reactivated` | `admin/users.py` | User set to `is_active=True` |
+| `password_reset` | `admin/users.py` | Admin resets a user's password |
+| `role_changed` | `admin/users.py` | User role changed |
+| `dept_changed` | `admin/users.py` | User's department changed |
+| `settings_changed` | `settings.py` | Rate limit settings changed via dashboard |
+| `policy_override_changed` | `departments.py`, `applications.py` | Department or application policy override set, updated, or cleared |
 
 ### Auth events (authentication tracking)
 
@@ -648,6 +756,15 @@ These rules must be followed in all new code. Violation creates real production 
 37. Datetimes at DB boundary: strip timezone with `_to_db()` — internal calculations stay aware
 38. JWT middleware uses `_get_db_session()` — never `AsyncSessionFactory()` directly
 39. Endpoints use `get_db` from dependencies — not `get_session` from `db/session.py`
+40. All five rate limit layers fail open — never raise on Redis unavailability, always `except Exception: pass`
+41. Rate limit Redis keys follow the naming convention — never invent new prefixes (see Rate Limiting section)
+42. `endpoint_rate_limit` limit values come from settings — never hardcode a number at the call site
+43. Debug rate limit and trial rate limit are env-only — never add them to the DB-backed settings chain
+44. `admin_limits` changes must log a `SETTINGS_CHANGED` admin event — never skip audit logging for security control changes
+45. `PUT /v1/settings/admin_limits` must invalidate `wrapsec:settings:admin_rate_limits` Redis key — new limits must take effect within seconds, not 60 seconds
+46. `_parse_dt()` in `audit.py` raises `ValidationError` (400) on non-empty unparseable dates — never return `None` for invalid input, never add inline `except ValueError: pass` for date params
+47. CSV export (`/v1/audit/export`) must never write raw `ip_address` or `user_id` — always hash IP (SHA-256, first 16 hex chars) and truncate user_id to 8 chars
+48. Every policy override change (department or application, any endpoint) must log a `POLICY_OVERRIDE_CHANGED` admin event — metadata must not include raw policy values or `api_key_enc` fields
 
 ---
 
@@ -671,6 +788,11 @@ These rules must be followed in all new code. Violation creates real production 
 | `RETENTION_WORKER_MINUTE` | `0` | UTC minute for daily cleanup |
 | `LOCKOUT_MAX_ATTEMPTS` | `5` | Failed login attempts before lockout |
 | `LOCKOUT_DURATION_SECONDS` | `900` | Lockout duration (15 min) |
+| `RATE_LIMIT_PER_MINUTE` | `60` | Global rate limit for live API keys. Also configurable via dashboard (DB-backed) |
+| `ADMIN_WRITE_RATE_LIMIT` | `20` | Per-user limit on admin write ops (user create/update/reset-password). DB-backed |
+| `AUDIT_EXPORT_RATE_LIMIT` | `5` | Per-caller limit on audit CSV export. DB-backed |
+| `TRIAL_RATE_LIMIT_PER_MINUTE` | `10` | Rate limit for trial keys — env-only, not dashboard-configurable |
+| `DEBUG_RATE_LIMIT_PER_MINUTE` | `10` | Rate limit for debug mode requests — env-only, security control |
 
 **Load test env vars** — required when running `tests/load/` scripts:
 

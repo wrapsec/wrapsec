@@ -9,10 +9,13 @@ from pydantic import BaseModel, SecretStr, field_validator
 from sqlalchemy.ext.asyncio import AsyncSession
 from api.v1.dependencies.auth import get_current_principal, require_admin
 from api.v1.dependencies.db import get_db
+from api.v1.middleware.auth import get_client_ip
 from config.settings import get_settings
+from db.repositories.admin_event import AdminEventRepository
 from db.repositories.application import ApplicationRepository
 from db.repositories.department import DepartmentRepository
 from domain.entities.principal import Principal
+from domain.enums import AdminEventAction
 from errors.exceptions import NotFoundError
 from security.encryption import encrypt, decrypt, mask
 from services.policy_resolver import resolve_policy
@@ -177,6 +180,23 @@ async def update_application(
     if not record:
         raise NotFoundError("application", str(app_id))
     await db.commit()
+
+    if "policy_override" in data:
+        try:
+            event_repo = AdminEventRepository(db)
+            await event_repo.insert(
+                tenant_id     = uuid.UUID(request.state.tenant_id),
+                actor_user_id = uuid.UUID(str(principal.id).replace("user:", "")),
+                action        = AdminEventAction.POLICY_OVERRIDE_CHANGED,
+                dept_id       = record.dept_id,
+                metadata      = {"scope": "application", "app_id": str(app_id), "dept_id": str(record.dept_id), "section": "policy_override"},
+                ip_address    = get_client_ip(request),
+                user_agent    = request.headers.get("user-agent"),
+            )
+            await db.commit()
+        except Exception:
+            pass
+
     return JSONResponse(content=_format(record))
 
 
@@ -258,6 +278,21 @@ async def set_application_policy(
     })
     await db.commit()
 
+    try:
+        event_repo = AdminEventRepository(db)
+        await event_repo.insert(
+            tenant_id     = uuid.UUID(request.state.tenant_id),
+            actor_user_id = uuid.UUID(str(principal.id).replace("user:", "")),
+            action        = AdminEventAction.POLICY_OVERRIDE_CHANGED,
+            dept_id       = record.dept_id,
+            metadata      = {"scope": "application", "app_id": str(app_id), "dept_id": str(record.dept_id), "section": "full", "cleared": body.policy_override is None},
+            ip_address    = get_client_ip(request),
+            user_agent    = request.headers.get("user-agent"),
+        )
+        await db.commit()
+    except Exception:
+        pass
+
     policy, policy_source = await resolve_policy(
         db        = db,
         tenant_id = str(record.tenant_id),
@@ -294,6 +329,21 @@ async def reset_application_policy(
 
     await repo.update(app_id, {"policy_override": None})
     await db.commit()
+
+    try:
+        event_repo = AdminEventRepository(db)
+        await event_repo.insert(
+            tenant_id     = uuid.UUID(request.state.tenant_id),
+            actor_user_id = uuid.UUID(str(principal.id).replace("user:", "")),
+            action        = AdminEventAction.POLICY_OVERRIDE_CHANGED,
+            dept_id       = record.dept_id,
+            metadata      = {"scope": "application", "app_id": str(app_id), "dept_id": str(record.dept_id), "section": "full", "cleared": True},
+            ip_address    = get_client_ip(request),
+            user_agent    = request.headers.get("user-agent"),
+        )
+        await db.commit()
+    except Exception:
+        pass
 
     return JSONResponse(content={
         "app_id":          str(app_id),
@@ -437,6 +487,22 @@ async def update_app_llm_override(
     if not record:
         raise NotFoundError("application", str(app_id))
     await db.commit()
+
+    try:
+        event_repo = AdminEventRepository(db)
+        await event_repo.insert(
+            tenant_id     = uuid.UUID(request.state.tenant_id),
+            actor_user_id = uuid.UUID(str(principal.id).replace("user:", "")),
+            action        = AdminEventAction.POLICY_OVERRIDE_CHANGED,
+            dept_id       = record.dept_id,
+            metadata      = {"scope": "application", "app_id": str(app_id), "dept_id": str(record.dept_id), "section": "llm", "cleared": body.clear},
+            ip_address    = get_client_ip(request),
+            user_agent    = request.headers.get("user-agent"),
+        )
+        await db.commit()
+    except Exception:
+        pass
+
     return JSONResponse(content=_format(record))
 
 
@@ -483,4 +549,20 @@ async def update_app_proxy_override(
     if not record:
         raise NotFoundError("application", str(app_id))
     await db.commit()
+
+    try:
+        event_repo = AdminEventRepository(db)
+        await event_repo.insert(
+            tenant_id     = uuid.UUID(request.state.tenant_id),
+            actor_user_id = uuid.UUID(str(principal.id).replace("user:", "")),
+            action        = AdminEventAction.POLICY_OVERRIDE_CHANGED,
+            dept_id       = record.dept_id,
+            metadata      = {"scope": "application", "app_id": str(app_id), "dept_id": str(record.dept_id), "section": "proxy_provider", "cleared": body.clear},
+            ip_address    = get_client_ip(request),
+            user_agent    = request.headers.get("user-agent"),
+        )
+        await db.commit()
+    except Exception:
+        pass
+
     return JSONResponse(content=_format(record))
