@@ -261,23 +261,45 @@ try {
 
 Section "11. Last-admin protection"
 
-# Get a dept_id for the demotion attempt
-$depts  = Invoke-WebRequest -UseBasicParsing -Method GET "$base/v1/admin/departments" `
-    -Headers @{"x-api-key" = $adminKey}
-$deptId = ($depts.Content | ConvertFrom-Json).departments[0].id
-
+# Fetch dept_id (needed here and by tests 12, 13, 15)
+$deptId = $null
 try {
-    $demoteBody = "{`"role`":`"DEVELOPER`",`"dept_id`":`"$deptId`"}"
-    Invoke-WebRequest -UseBasicParsing -Method PATCH "$base/v1/admin/users/$myId" `
-        -Headers @{"Authorization" = "Bearer $token"} `
-        -ContentType "application/json" `
-        -Body $demoteBody | Out-Null
-    Check "Should have returned 400" $false
+    $depts  = Invoke-WebRequest -UseBasicParsing -Method GET "$base/v1/admin/departments" `
+        -Headers @{"x-api-key" = $adminKey}
+    $deptId = ($depts.Content | ConvertFrom-Json).departments[0].id
 } catch {
-    $code = $_.Exception.Response.StatusCode.value__
-    $body = $_.ErrorDetails.Message | ConvertFrom-Json
-    Check "HTTP 400"                  ($code -eq 400)
-    Check "mentions last active admin" ($body.error.message -match "last active admin")
+    Write-Host "  [ERROR] Could not fetch departments for test 11: $_" -ForegroundColor Red
+}
+
+# Guard: if multiple active admins exist, demotion is legal and would invalidate
+# the test token, cascading failures through the remaining tests.
+# Skip gracefully and note that a clean single-admin environment is required.
+$activeAdminCount = 0
+try {
+    $adminList = Invoke-WebRequest -UseBasicParsing -Method GET `
+        "$base/v1/admin/users?role=ADMIN&is_active=true" `
+        -Headers @{"Authorization" = "Bearer $token"} |
+        Select-Object -ExpandProperty Content | ConvertFrom-Json
+    $activeAdminCount = $adminList.total
+} catch {}
+
+if ($activeAdminCount -gt 1) {
+    Write-Host "  [SKIP] $activeAdminCount active admins found -- last-admin protection requires exactly 1." -ForegroundColor Yellow
+    Write-Host "         Run against a clean environment to test this guard." -ForegroundColor Yellow
+} else {
+    try {
+        $demoteBody = "{`"role`":`"DEVELOPER`",`"dept_id`":`"$deptId`"}"
+        Invoke-WebRequest -UseBasicParsing -Method PATCH "$base/v1/admin/users/$myId" `
+            -Headers @{"Authorization" = "Bearer $token"} `
+            -ContentType "application/json" `
+            -Body $demoteBody | Out-Null
+        Check "Should have returned 400" $false
+    } catch {
+        $code = $_.Exception.Response.StatusCode.value__
+        $body = $_.ErrorDetails.Message | ConvertFrom-Json
+        Check "HTTP 400"                  ($code -eq 400)
+        Check "mentions last active admin" ($body.error.message -match "last active admin")
+    }
 }
 
 # =============================================================================
