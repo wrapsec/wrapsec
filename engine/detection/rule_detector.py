@@ -113,7 +113,7 @@ class RuleDetector(BaseDetector):
                 if matched:
                     threats.append(category)
                     # Score is the max across all matching categories, not a sum.
-                    # Multi-category hits do not boost the score — each category
+                    # Multi-category hits do not boost the score - each category
                     # has a calibrated base_score that already reflects severity.
                     # The list of threat categories in `threats` carries the
                     # multi-category signal for policy and audit purposes.

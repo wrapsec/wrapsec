@@ -17,12 +17,12 @@ def _cache_key(text: str, detection_mode: str, execution_mode: str, tenant_id: s
     """
     Generate a deterministic cache key from prompt + detection mode + execution mode + tenant.
     tenant_id is included so one tenant's ALLOW result cannot be returned to another tenant.
-    Input is lowercased before hashing — case variants ("Hello" vs "hello") share
+    Input is lowercased before hashing - case variants ("Hello" vs "hello") share
     a cache entry. Only ALLOW results are cached, so the security impact is limited
     to identical treatment of case-only variants of clean inputs.
     """
     if not tenant_id:
-        raise ValueError("tenant_id must be a non-empty string — use 'global' for system calls")
+        raise ValueError("tenant_id must be a non-empty string - use 'global' for system calls")
     content = f"{tenant_id}:{detection_mode}:{execution_mode}:{text.strip().lower()}"
     digest  = hashlib.sha256(content.encode()).hexdigest()
     return f"{CACHE_PREFIX}{digest}"

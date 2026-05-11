@@ -16,7 +16,7 @@ WINDOW_SECS = 60
 # Atomic sliding-window rate limit via Lua.
 # ZREMRANGEBYSCORE + ZCARD + ZADD + EXPIRE as separate commands allow two
 # concurrent requests to both pass the limit check if they race at the boundary.
-# Lua scripts execute atomically in Redis — no race condition possible.
+# Lua scripts execute atomically in Redis - no race condition possible.
 _RATE_LIMIT_LUA = """
 local key    = KEYS[1]
 local now    = tonumber(ARGV[1])
@@ -69,8 +69,8 @@ async def is_rate_limited(client_ip: str, limit: int | None = None) -> tuple[boo
         return is_limited, remaining, reset_at
 
     except Exception as e:
-        logger.warning("Redis rate limit check failed: %s — allowing request", e)
-        # Fail open — if Redis is down, allow the request
+        logger.warning("Redis rate limit check failed: %s - allowing request", e)
+        # Fail open - if Redis is down, allow the request
         return False, get_settings().rate_limit_per_minute, 0
 
 

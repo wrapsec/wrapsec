@@ -3,9 +3,9 @@
 # WrapSec v1.0 | AI Security Gateway - https://wrapsec.com
 
 """
-Configuration schema — allowed keys, types, defaults, and validation.
+Configuration schema - allowed keys, types, defaults, and validation.
 
-Spec reference: Section 3 (Module Boundaries — config/schema.py),
+Spec reference: Section 3 (Module Boundaries - config/schema.py),
                 Section 13.2 (wrapsec config command reference)
 """
 
@@ -23,17 +23,17 @@ ALLOWED_CONFIG_KEYS: frozenset[str] = frozenset({
 DEFAULTS: dict[str, object] = {
     "base_url": "http://localhost:8000",
     "timeout":  30,
-    # api_key has no default — must be set by user
+    # api_key has no default - must be set by user
 }
 
 # Minimum timeout enforced at both config-write time and request time
 # Spec Section 7: timeout=0 causes indefinite hang in requests/httpx
 TIMEOUT_MIN = 1
 
-# Fix #3 — API key minimum length.
+# Fix #3 - API key minimum length.
 # "wsk_live_" is 8 chars. A real key must have at least 20 additional chars
 # of random entropy after the prefix to be meaningful.
-# "wsk_trial_" is 9 chars — same rule applies.
+# "wsk_trial_" is 9 chars - same rule applies.
 _API_KEY_MIN_TOTAL_LEN = 32
 _VALID_API_KEY_PREFIXES = ("wsk_live_", "wsk_trial_", "wrapsec_")
 
@@ -42,7 +42,7 @@ _VALID_API_KEY_PREFIXES = ("wsk_live_", "wsk_trial_", "wrapsec_")
 class WrapSecConfig:
     """
     Resolved configuration object returned by config/loader.py.
-    All fields are typed — loader returns this, not raw strings.
+    All fields are typed - loader returns this, not raw strings.
 
     Spec: config/loader.py returns a typed config object, not raw strings.
     """
@@ -71,7 +71,7 @@ def validate_config_value(key: str, value: str) -> str | int:
     Returns the coerced value on success.
     Raises ValueError with a clear message on failure.
 
-    Spec: Section 13.2 — validation at both CLI and SDK level
+    Spec: Section 13.2 - validation at both CLI and SDK level
     """
     if key not in ALLOWED_CONFIG_KEYS:
         raise ValueError(
@@ -98,16 +98,16 @@ def validate_config_value(key: str, value: str) -> str | int:
         return value.rstrip("/")
 
     if key == "api_key":
-        # Fix #3 — validate prefix AND minimum length.
-        # Previous check only validated prefix — "wsk_live_" alone (8 chars) would pass.
+        # Fix #3 - validate prefix AND minimum length.
+        # Previous check only validated prefix - "wsk_live_" alone (8 chars) would pass.
         # A real WrapSec key has significant random entropy after the prefix.
         # Minimum total length of 32 chars rejects obvious misconfiguration
         # (typos, truncated keys, placeholder values) before the first API call.
         #
         # Accepted prefixes:
-        #   wsk_live_   — production live keys
-        #   wsk_trial_  — trial/demo keys
-        #   wrapsec_   — hardcoded admin key (development only)
+        #   wsk_live_   - production live keys
+        #   wsk_trial_  - trial/demo keys
+        #   wrapsec_   - hardcoded admin key (development only)
         if not any(value.startswith(p) for p in _VALID_API_KEY_PREFIXES):
             raise ValueError(
                 f"api_key must start with 'wsk_live_', 'wsk_trial_', or 'wrapsec_'. "

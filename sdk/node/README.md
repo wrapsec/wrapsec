@@ -21,19 +21,19 @@ Your Application
       │
       ▼
 ┌─────────────────┐
-│  WrapSec SDK    │  ← wrapsec-node
+│  WrapSec SDK    │  <- wrapsec-node
 │  (this package) │
 └────────┬────────┘
          │  scan(userInput)
          ▼
 ┌─────────────────┐
-│  WrapSec        │  ← your on-premise instance
+│  WrapSec        │  <- your on-premise instance
 │  Gateway        │
 └────────┬────────┘
          │  ALLOW / BLOCK / SANITIZE
          ▼
 ┌─────────────────┐
-│  LLM Provider   │  ← only reached on ALLOW or SANITIZE
+│  LLM Provider   │  <- only reached on ALLOW or SANITIZE
 │  (OpenAI, etc.) │
 └─────────────────┘
 ```
@@ -134,9 +134,9 @@ const result = await client.scan(text, options?)
 | Parameter | Type | Default | Description |
 |---|---|---|---|
 | `text` | string | required | Input to scan. Max 64KB. |
-| `options.mode` | `"fast"` \| `"full"` | `"fast"` | `fast` uses rule + ML detectors (~5ms). `full` adds LLM semantic analysis (~100–500ms extra). |
+| `options.mode` | `"fast"` \| `"full"` | `"fast"` | `fast` uses rule + ML detectors (~5ms). `full` adds LLM semantic analysis (~100-500ms extra). |
 | `options.executionMode` | `"scan_only"` \| `"proxy"` | `"scan_only"` | `scan_only` scans and returns the decision. `proxy` scans then forwards to the LLM provider on ALLOW/SANITIZE. |
-| `options.model` | string | — | LLM model identifier (e.g. `"openai/gpt-4o"`). Required when `executionMode` is `"proxy"`. |
+| `options.model` | string | - | LLM model identifier (e.g. `"openai/gpt-4o"`). Required when `executionMode` is `"proxy"`. |
 | `options.user` | string | `"sdk"` | User ID for audit attribution. |
 | `options.timeout` | number | client default | Per-request timeout in seconds. Overrides client default for this call only. |
 
@@ -146,8 +146,8 @@ const result = await client.scan(text, options?)
 |---|---|---|
 | `decision` | `"ALLOW"` \| `"BLOCK"` \| `"SANITIZE"` | Security verdict. Always check this. |
 | `primaryReason` | string | What triggered the decision. e.g. `RULE_DETECTOR`, `ML_DETECTOR`, `PII_GUARDRAIL_BLOCK` |
-| `riskScore` | number | 0.0–1.0. The threshold value that drove the BLOCK/SANITIZE/ALLOW decision. |
-| `confidence` | number | 0.0–1.0. Detection model certainty. Distinct from `riskScore`. |
+| `riskScore` | number | 0.0-1.0. The threshold value that drove the BLOCK/SANITIZE/ALLOW decision. |
+| `confidence` | number | 0.0-1.0. Detection model certainty. Distinct from `riskScore`. |
 | `confidenceBand` | `"HIGH"` \| `"MEDIUM"` \| `"LOW"` | HIGH ≥ 0.7, MEDIUM ≥ 0.4, LOW < 0.4 |
 | `traceId` | string | Unique request ID (`req_...`). Use for debugging and audit lookup. |
 | `threats` | string[] | Detected threat categories. |
@@ -334,19 +334,19 @@ const csvBuffer = await client.auditExport({
 fs.writeFileSync('audit_export.csv', csvBuffer)
 ```
 
-**`getRequest(traceId, timeout?)`** — returns the full audit record for a single request. Scoped to the caller's department/tenant. Returns `Record<string, unknown>`.
+**`getRequest(traceId, timeout?)`** - returns the full audit record for a single request. Scoped to the caller's department/tenant. Returns `Record<string, unknown>`.
 
-**`auditExport(options?)`** — exports audit records as a CSV `Buffer`. Options:
+**`auditExport(options?)`** - exports audit records as a CSV `Buffer`. Options:
 
 | Option | Type | Default | Description |
 |---|---|---|---|
-| `decision` | `"ALLOW"` \| `"BLOCK"` \| `"SANITIZE"` | — | Filter by decision. |
-| `primaryReason` | string | — | Filter by reason string. |
-| `confidenceBand` | `"HIGH"` \| `"MEDIUM"` \| `"LOW"` | — | Filter by confidence band. |
-| `fromDate` | string | — | ISO date lower bound. |
-| `toDate` | string | — | ISO date upper bound. |
-| `deptId` | string | — | Filter by department ID. |
-| `appId` | string | — | Filter by application ID. |
+| `decision` | `"ALLOW"` \| `"BLOCK"` \| `"SANITIZE"` | - | Filter by decision. |
+| `primaryReason` | string | - | Filter by reason string. |
+| `confidenceBand` | `"HIGH"` \| `"MEDIUM"` \| `"LOW"` | - | Filter by confidence band. |
+| `fromDate` | string | - | ISO date lower bound. |
+| `toDate` | string | - | ISO date upper bound. |
+| `deptId` | string | - | Filter by department ID. |
+| `appId` | string | - | Filter by application ID. |
 | `limit` | number | `1000` | Max rows to export (server cap: 10000). |
 | `timeout` | number | client default | Per-request timeout in seconds. |
 

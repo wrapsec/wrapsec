@@ -38,12 +38,12 @@ def test_layers_disagree_medium_confidence():
 
 
 def test_llm_not_invoked_excluded_from_variance():
-    # LLM not invoked — only rule + ml
+    # LLM not invoked - only rule + ml
     result_without_llm = detector_confidence(
         rule_score=0.85, ml_score=0.30, llm_score=0.0,
         rule_enabled=True, ml_enabled=True, llm_invoked=False,
     )
-    # LLM invoked with 0.0 score — inflates variance
+    # LLM invoked with 0.0 score - inflates variance
     result_with_llm_zero = detector_confidence(
         rule_score=0.85, ml_score=0.30, llm_score=0.0,
         rule_enabled=True, ml_enabled=True, llm_invoked=True,

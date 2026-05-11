@@ -43,7 +43,7 @@ async def health_ready():
     # Redis ping
     redis_ok = await redis_ping()
 
-    # ML model check — verify the model file was loaded at startup
+    # ML model check - verify the model file was loaded at startup
     ml_ok = False
     try:
         from engine.detection.ml_detector import MLDetector

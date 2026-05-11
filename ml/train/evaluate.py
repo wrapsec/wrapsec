@@ -3,7 +3,7 @@
 # WrapSec v1.0 | AI Security Gateway - https://wrapsec.com
 
 """
-Model evaluation — cross-validation, per-class metrics, confusion matrix.
+Model evaluation - cross-validation, per-class metrics, confusion matrix.
 
 Produces:
   - 5-fold stratified cross-validation accuracy
@@ -80,7 +80,7 @@ def cross_validate(
             f"Consider more training data or hyperparameter tuning."
         )
     else:
-        logger.info(f"✔ CV accuracy meets target ({TARGET_ACCURACY})")
+        logger.info(f" CV accuracy meets target ({TARGET_ACCURACY})")
 
     return result
 
@@ -139,7 +139,7 @@ def evaluate_on_holdout(
     for i, row in enumerate(cm):
         logger.info(f"{LABEL_NAMES[i][:4]:>5} " + " ".join(f"{v:>6}" for v in row))
 
-    # False positive analysis — benign samples misclassified
+    # False positive analysis - benign samples misclassified
     benign_mask = [l == 0 for l in labels_test]
     benign_texts  = [t for t, m in zip(texts_test, benign_mask) if m]
     benign_labels = [l for l, m in zip(labels_test, benign_mask) if m]
@@ -155,7 +155,7 @@ def evaluate_on_holdout(
         for text, pred in false_positives[:5]:  # show first 5
             logger.warning(f"  [{LABEL_NAMES[pred]}] {text[:80]}")
     else:
-        logger.info("\n✔ No benign samples misclassified (zero false positives on test set)")
+        logger.info("\n No benign samples misclassified (zero false positives on test set)")
 
     return {
         "accuracy":       acc,
@@ -194,7 +194,7 @@ def confidence_check(
 
         if not correct or confidence < 0.5:
             logger.info(
-                f"  {'✔' if correct else '✗'} "
+                f"  {'' if correct else ''} "
                 f"actual={LABEL_NAMES[actual][:12]:<12} "
                 f"pred={LABEL_NAMES[pred_class][:12]:<12} "
                 f"conf={confidence:.2f}{flag}"

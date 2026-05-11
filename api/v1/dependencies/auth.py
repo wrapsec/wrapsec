@@ -18,10 +18,10 @@ from errors.exceptions import ForbiddenError, UnauthorizedError
 def _get_principal_from_state(request: Request) -> Principal:
     """
     Builds a Principal from request.state populated by AuthMiddleware.
-    Accepts both API key and JWT auth paths — all state fields are identical.
+    Accepts both API key and JWT auth paths - all state fields are identical.
 
     Raises UnauthorizedError if request.state is not populated
-    (should never happen in practice — middleware runs first).
+    (should never happen in practice - middleware runs first).
     """
     principal_type = getattr(request.state, "principal_type", None)
     tenant_id      = getattr(request.state, "tenant_id", None)
@@ -30,8 +30,8 @@ def _get_principal_from_state(request: Request) -> Principal:
         raise UnauthorizedError()
 
     if principal_type == "user":
-        # JWT path — build from state fields directly
-        # (UserModel not available here — middleware already validated everything)
+        # JWT path - build from state fields directly
+        # (UserModel not available here - middleware already validated everything)
         return Principal(
             id          = getattr(request.state, "key_id", ""),       # "user:{uuid}"
             type        = PrincipalType.USER,
@@ -43,7 +43,7 @@ def _get_principal_from_state(request: Request) -> Principal:
             email       = getattr(request.state, "key_name", None),
         )
     else:
-        # API key path — build from state fields directly
+        # API key path - build from state fields directly
         return Principal(
             id          = getattr(request.state, "key_id", ""),       # "key:{key_id}"
             type        = PrincipalType.API_KEY,
@@ -59,7 +59,7 @@ def _get_principal_from_state(request: Request) -> Principal:
 
 async def get_current_principal(request: Request) -> Principal:
     """
-    FastAPI dependency — builds Principal from request.state.
+    FastAPI dependency - builds Principal from request.state.
     Accepts both API key and JWT auth.
     Use on endpoints that accept both (scan, audit, proxy).
 
@@ -71,7 +71,7 @@ async def get_current_principal(request: Request) -> Principal:
 
 async def require_jwt(request: Request) -> Principal:
     """
-    FastAPI dependency — requires JWT specifically.
+    FastAPI dependency - requires JWT specifically.
     Rejects API key auth with 403 FORBIDDEN.
     Use on all dashboard management endpoints.
 
@@ -86,8 +86,8 @@ async def require_jwt(request: Request) -> Principal:
 
 def require_role(*roles: str):
     """
-    FastAPI dependency factory — requires JWT + one of the given roles.
-    Always implies require_jwt() — API keys get 403.
+    FastAPI dependency factory - requires JWT + one of the given roles.
+    Always implies require_jwt() - API keys get 403.
 
     Usage:
         Depends(require_role("ADMIN"))
@@ -122,7 +122,7 @@ def require_admin():
 
 def require_any_admin():
     """
-    Require admin access from any auth type — JWT ADMIN role or admin API key.
+    Require admin access from any auth type - JWT ADMIN role or admin API key.
     Use this for endpoints that must be admin-only but are also called
     programmatically via the admin API key (not the dashboard).
 
@@ -139,7 +139,7 @@ def require_any_admin():
 
 def endpoint_rate_limit(limit_setting: str):
     """
-    Dependency factory — per-identity sliding-window rate limit.
+    Dependency factory - per-identity sliding-window rate limit.
     Keyed by key_id (JWT user or API key) with IP fallback.
     Applies on top of the global middleware limit.
 
@@ -149,7 +149,7 @@ def endpoint_rate_limit(limit_setting: str):
       3. .env default (Settings field named limit_setting)
 
     Fails open if Redis and DB are both unavailable.
-    TESTING env var bypasses cache/DB — always uses .env default.
+    TESTING env var bypasses cache/DB - always uses .env default.
 
     Usage:
         _: None = Depends(endpoint_rate_limit("admin_write_rate_limit"))
@@ -174,7 +174,7 @@ def endpoint_rate_limit(limit_setting: str):
             except Exception:
                 pass
 
-            # 2. DB — also warms the cache on hit
+            # 2. DB - also warms the cache on hit
             if limit is None:
                 try:
                     from db.session import AsyncSessionFactory

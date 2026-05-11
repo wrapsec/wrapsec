@@ -82,7 +82,7 @@ class LLMDetector(BaseDetector):
             return DetectionResult.clean(self.name)
 
     async def detect_async(self, text: str) -> DetectionResult:
-        """Async entrypoint — awaits the LLM client directly, no new event loop."""
+        """Async entrypoint - awaits the LLM client directly, no new event loop."""
         try:
             from clients import get_llm_client, get_llm_settings_from_db
 
@@ -106,7 +106,7 @@ class LLMDetector(BaseDetector):
             return DetectionResult.clean(self.name)
 
     def detect(self, text: str) -> DetectionResult:
-        """Sync shim kept for any legacy callers — runs detect_async in a new loop."""
+        """Sync shim kept for any legacy callers - runs detect_async in a new loop."""
         import asyncio
         loop     = asyncio.new_event_loop()
         result   = loop.run_until_complete(self.detect_async(text))

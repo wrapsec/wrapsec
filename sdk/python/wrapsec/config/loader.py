@@ -3,7 +3,7 @@
 # WrapSec v1.0 | AI Security Gateway - https://wrapsec.com
 
 """
-Configuration loader — resolves config from env, file, and defaults.
+Configuration loader - resolves config from env, file, and defaults.
 
 Priority chain (highest to lowest):
   1. Environment variables (WRAPSEC_API_KEY, WRAPSEC_BASE_URL, WRAPSEC_TIMEOUT)
@@ -11,7 +11,7 @@ Priority chain (highest to lowest):
                   %APPDATA%\\wrapsec\\config.json on Windows)
   3. Hardcoded defaults (base_url: http://localhost:8000, timeout: 30)
 
-Returns a typed WrapSecConfig object — never raw strings.
+Returns a typed WrapSecConfig object - never raw strings.
 
 Spec reference: Section 3 (config/loader.py), Section 13.2 (config command),
                 Section 14.1 (config file location)
@@ -46,7 +46,7 @@ def get_config_dir() -> Path:
     Linux/macOS: $XDG_CONFIG_HOME/wrapsec (fallback: ~/.config/wrapsec)
     Windows:     %APPDATA%\\wrapsec
 
-    Spec: Section 14.1 — finalised, breaking change to move after V1 release
+    Spec: Section 14.1 - finalised, breaking change to move after V1 release
     """
     if sys.platform == "win32":
         base = os.environ.get("APPDATA") or Path.home()
@@ -73,15 +73,15 @@ def _read_config_file() -> dict[str, object]:
     try:
         raw = json.loads(path.read_text(encoding="utf-8"))
         if not isinstance(raw, dict):
-            logger.warning("Config file is not a JSON object — ignoring")
+            logger.warning("Config file is not a JSON object - ignoring")
             return {}
         return raw
     except json.JSONDecodeError as e:
-        logger.warning("Config file is not valid JSON — ignoring: %s", e)
+        logger.warning("Config file is not valid JSON - ignoring: %s", e)
         return {}
     except OSError as e:
         # Log the specific OS error (permission denied etc.) internally
-        # but do not surface it to the user — return empty config instead
+        # but do not surface it to the user - return empty config instead
         logger.warning("Could not read config file %s: %s", path, e)
         return {}
 
@@ -90,7 +90,7 @@ def _write_config_file(data: dict[str, object]) -> None:
     """
     Write config file atomically with 0o600 permissions on Unix.
 
-    Fix #1 — TOCTOU race condition:
+    Fix #1 - TOCTOU race condition:
         The original implementation called path.write_text() then os.chmod().
         Between those two calls the file was world-readable, exposing the API key.
 
@@ -100,14 +100,14 @@ def _write_config_file(data: dict[str, object]) -> None:
         but is no longer the primary permission mechanism.
 
         On Windows: os.open() mode argument is ignored; the chmod fallback
-        is also a no-op, which is acceptable — Windows uses ACLs not Unix modes.
+        is also a no-op, which is acceptable - Windows uses ACLs not Unix modes.
     """
     _ensure_config_dir()
     path    = get_config_path()
     content = json.dumps(data, indent=2).encode("utf-8")
 
     if sys.platform != "win32":
-        # Atomic creation with 0o600 — API key never exposed to other users
+        # Atomic creation with 0o600 - API key never exposed to other users
         flags = os.O_WRONLY | os.O_CREAT | os.O_TRUNC
         fd    = os.open(path, flags, mode=0o600)
         try:
@@ -121,7 +121,7 @@ def _write_config_file(data: dict[str, object]) -> None:
         except OSError:
             pass
     else:
-        # Windows — write normally, chmod is a no-op on Windows
+        # Windows - write normally, chmod is a no-op on Windows
         path.write_bytes(content)
 
 
@@ -137,30 +137,30 @@ def load_config() -> WrapSecConfig:
       2. Config file
       3. Defaults
 
-    Returns WrapSecConfig — a typed object, never raw strings.
+    Returns WrapSecConfig - a typed object, never raw strings.
 
     Spec: Section 3 (config/loader.py returns typed config object)
     """
     file_config = _read_config_file()
 
-    # api_key: env → file → None (no default)
+    # api_key: env -> file -> None (no default)
     api_key = (
         os.environ.get("WRAPSEC_API_KEY")
         or file_config.get("api_key")
         or None
     )
 
-    # base_url: env → file → default
+    # base_url: env -> file -> default
     base_url = (
         os.environ.get("WRAPSEC_BASE_URL")
         or file_config.get("base_url")
         or str(DEFAULTS["base_url"])
     )
 
-    # Fix #2 — warn loudly when using the localhost default.
+    # Fix #2 - warn loudly when using the localhost default.
     # A developer who forgets to set WRAPSEC_BASE_URL in production
     # silently sends all API keys and prompts to localhost, which either
-    # fails (connection refused) or — worse — hits an unexpected local service.
+    # fails (connection refused) or - worse - hits an unexpected local service.
     # We warn on stderr so the message is visible even with --quiet or --json.
     _default_base_url = str(DEFAULTS["base_url"])
     if base_url == _default_base_url:
@@ -170,7 +170,7 @@ def load_config() -> WrapSecConfig:
             _default_base_url,
         )
 
-    # timeout: env → file → default
+    # timeout: env -> file -> default
     raw_timeout = (
         os.environ.get("WRAPSEC_TIMEOUT")
         or file_config.get("timeout")
@@ -180,12 +180,12 @@ def load_config() -> WrapSecConfig:
             timeout = int(raw_timeout)
             if timeout < TIMEOUT_MIN:
                 logger.warning(
-                    "Configured timeout %ds is below minimum %ds — using %ds",
+                    "Configured timeout %ds is below minimum %ds - using %ds",
                     timeout, TIMEOUT_MIN, TIMEOUT_MIN,
                 )
                 timeout = TIMEOUT_MIN
         except (ValueError, TypeError):
-            logger.warning("Invalid timeout value %r — using default 30s", raw_timeout)
+            logger.warning("Invalid timeout value %r - using default 30s", raw_timeout)
             timeout = int(DEFAULTS["timeout"])
     else:
         timeout = int(DEFAULTS["timeout"])
@@ -207,9 +207,9 @@ def get_config_value(key: str) -> object | None:
 def set_config_value(key: str, value: str) -> None:
     """
     Validate and write a single config value.
-    Validation runs at write time — invalid values are rejected immediately.
+    Validation runs at write time - invalid values are rejected immediately.
 
-    Spec: Section 13.2 — validation at CLI and SDK level
+    Spec: Section 13.2 - validation at CLI and SDK level
     """
     coerced = validate_config_value(key, value)
     data    = _read_config_file()
@@ -225,7 +225,7 @@ def clear_config() -> None:
 def mask_api_key(key: str | None) -> str:
     """
     Mask an API key for display. Never print the raw key.
-    Spec: Section 10.3 — always mask API key in output
+    Spec: Section 10.3 - always mask API key in output
     """
     if not key:
         return "(not set)"

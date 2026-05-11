@@ -3,10 +3,10 @@
 # WrapSec v1.0 | AI Security Gateway - https://wrapsec.com
 
 """
-wrapsec config — manage CLI configuration (api_key, base_url, timeout).
+wrapsec config - manage CLI configuration (api_key, base_url, timeout).
 
 This command manages the CLI's OWN configuration file.
-It does NOT touch gateway settings — use `wrapsec settings get` for that.
+It does NOT touch gateway settings - use `wrapsec settings get` for that.
 
 Spec reference: Section 13.2 (wrapsec config), Section 10.4 (security rules)
 """
@@ -115,14 +115,14 @@ def config_clear(force: bool) -> None:
     \b
     Interactive (default):
       Prompts for confirmation before clearing.
-      Default answer is N (safe — Enter alone does not clear).
+      Default answer is N (safe - Enter alone does not clear).
 
     \b
     Non-interactive (CI):
       wrapsec config clear --force
       Skips confirmation. For use in CI teardown scripts.
 
-    Spec: Section 13.2 — --force skips confirmation for CI
+    Spec: Section 13.2 - --force skips confirmation for CI
     """
     if not force:
         confirmed = click.confirm(

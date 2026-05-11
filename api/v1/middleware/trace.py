@@ -28,7 +28,7 @@ class TraceMiddleware(BaseHTTPMiddleware):
         else:
             trace_id = f"req_{uuid.uuid4().hex}"
 
-        # Attach to request state — available in all endpoints
+        # Attach to request state - available in all endpoints
         request.state.trace_id = trace_id
         set_trace_id(trace_id)
 

@@ -6,11 +6,11 @@
 Dataset quality validation.
 
 Checks:
-  1. Class balance — no class should dominate by >5x
-  2. Text length distribution — flag outliers
-  3. Duplicate detection — exact and near-duplicate
-  4. Label sanity — no missing or invalid labels
-  5. Minimum sample count — each class must have MIN_SAMPLES
+  1. Class balance - no class should dominate by >5x
+  2. Text length distribution - flag outliers
+  3. Duplicate detection - exact and near-duplicate
+  4. Label sanity - no missing or invalid labels
+  5. Minimum sample count - each class must have MIN_SAMPLES
 """
 
 from __future__ import annotations
@@ -55,7 +55,7 @@ def validate(df: pd.DataFrame) -> bool:
         logger.error(f"Missing required columns: {missing}")
         issues += 1
     else:
-        logger.info("✔ Required columns present")
+        logger.info(" Required columns present")
 
     # ── Check 2: No null values ───────────────────────────────────────────────
     null_counts = df[["text", "label"]].isnull().sum()
@@ -63,7 +63,7 @@ def validate(df: pd.DataFrame) -> bool:
         logger.error(f"Null values found: {null_counts.to_dict()}")
         issues += 1
     else:
-        logger.info("✔ No null values")
+        logger.info(" No null values")
 
     # ── Check 3: Valid labels ─────────────────────────────────────────────────
     valid_labels = set(LABEL_NAMES.keys())
@@ -72,7 +72,7 @@ def validate(df: pd.DataFrame) -> bool:
         logger.error(f"Invalid labels found: {invalid}")
         issues += 1
     else:
-        logger.info("✔ All labels valid")
+        logger.info(" All labels valid")
 
     # ── Check 4: Minimum samples per class ────────────────────────────────────
     counts = df["label"].value_counts()
@@ -88,7 +88,7 @@ def validate(df: pd.DataFrame) -> bool:
         )
         warnings += 1
     else:
-        logger.info(f"✔ All classes have ≥{MIN_SAMPLES_PER_CLASS} samples")
+        logger.info(f" All classes have ≥{MIN_SAMPLES_PER_CLASS} samples")
 
     # ── Check 5: Class balance ────────────────────────────────────────────────
     if len(counts) > 0:
@@ -100,7 +100,7 @@ def validate(df: pd.DataFrame) -> bool:
             )
             warnings += 1
         else:
-            logger.info(f"✔ Class balance OK (ratio: {ratio:.1f}x)")
+            logger.info(f" Class balance OK (ratio: {ratio:.1f}x)")
 
     # ── Check 6: Text length distribution ────────────────────────────────────
     lengths = df["text"].str.len()
@@ -113,7 +113,7 @@ def validate(df: pd.DataFrame) -> bool:
         logger.warning(f"{very_long} samples with text length > 2000 chars")
         warnings += 1
     logger.info(
-        f"Text lengths — min: {lengths.min()}, "
+        f"Text lengths - min: {lengths.min()}, "
         f"median: {lengths.median():.0f}, "
         f"max: {lengths.max()}"
     )
@@ -124,7 +124,7 @@ def validate(df: pd.DataFrame) -> bool:
         logger.warning(f"{dupes} exact duplicate texts found")
         warnings += 1
     else:
-        logger.info("✔ No exact duplicates")
+        logger.info(" No exact duplicates")
 
     # ── Summary ───────────────────────────────────────────────────────────────
     logger.info("\nClass distribution:")
@@ -139,12 +139,12 @@ def validate(df: pd.DataFrame) -> bool:
     logger.info(f"Warnings:      {warnings}")
 
     if issues > 0:
-        logger.error("Validation FAILED — critical issues found")
+        logger.error("Validation FAILED - critical issues found")
         return False
 
     if warnings > 0:
         logger.warning("Validation passed with warnings")
     else:
-        logger.info("✔ Validation passed")
+        logger.info(" Validation passed")
 
     return True

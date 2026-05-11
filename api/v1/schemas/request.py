@@ -10,7 +10,7 @@ from config.settings import get_settings
 
 
 class RequestMetadataSchema(BaseModel):
-    # tenant_id intentionally removed — derived from API key only
+    # tenant_id intentionally removed - derived from API key only
     # Allowing caller-provided tenant_id enables spoofing
     source:  str | None = None
     user_id: str | None = None
@@ -39,17 +39,17 @@ class AIRequestSchema(BaseModel):
     def validate_mode_combinations(self) -> "AIRequestSchema":
         settings = get_settings()
 
-        # Input size limit — driven by MAX_INPUT_CHARS setting (default 8000)
+        # Input size limit - driven by MAX_INPUT_CHARS setting (default 8000)
         if len(self.input) > settings.max_input_chars:
             raise ValueError(
                 f"Input exceeds maximum length of {settings.max_input_chars} characters "
                 f"(received {len(self.input)} characters)."
             )
 
-        # Heuristic token limit — safe for all languages including CJK
+        # Heuristic token limit - safe for all languages including CJK
         # Conservative estimate: 1 token ≈ 2 chars
-        # English: actual ~4 chars/token → estimate is 2x conservative (safe)
-        # CJK:     actual ~1 char/token  → estimate is 2x conservative (safe)
+        # English: actual ~4 chars/token -> estimate is 2x conservative (safe)
+        # CJK:     actual ~1 char/token  -> estimate is 2x conservative (safe)
         # This ensures we never undercount tokens regardless of language
         # Full per-model tiktoken counting is planned (replaces this heuristic)
         token_limit      = settings.max_input_chars // 2
@@ -69,7 +69,7 @@ class AIRequestSchema(BaseModel):
         if self.execution_mode == ExecutionMode.PROXY and not self.model:
             raise ModelRequiredError()
 
-        # model field ignored in scan_only mode — clear it
+        # model field ignored in scan_only mode - clear it
         if self.execution_mode == ExecutionMode.SCAN_ONLY:
             self.model = None
 

@@ -5,10 +5,10 @@
 """
 Thread-safe spinner for CLI output.
 
-Internal module — not part of public API.
+Internal module - not part of public API.
 
 Safety requirements per spec Section 12.2:
-  1. try/finally MUST call stop() — spinner stops before exceptions propagate
+  1. try/finally MUST call stop() - spinner stops before exceptions propagate
   2. SIGINT handler calls stop() before exit
   3. stop() writes \\r\\033[K (cursor return + clear line) not just \\r
   4. Never shown in --json or --quiet mode
@@ -79,7 +79,7 @@ class Spinner:
     def stop(self) -> None:
         """
         Stop spinner and clear the line.
-        Spec: Section 12.2 — clear line properly on all platforms.
+        Spec: Section 12.2 - clear line properly on all platforms.
         """
         with self._lock:
             self._running = False

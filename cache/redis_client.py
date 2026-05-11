@@ -33,7 +33,7 @@ def get_redis() -> Redis:
 
 
 async def ping() -> bool:
-    """Always creates a fresh connection for health checks — never uses cached pool."""
+    """Always creates a fresh connection for health checks - never uses cached pool."""
     try:
         fresh = Redis.from_url(
             get_settings().redis_url,

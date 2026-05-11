@@ -17,7 +17,7 @@ def detector_confidence(
     Measures agreement across invoked detection layers.
     Uses scaled inverse variance for meaningful differentiation.
 
-    Only includes layers that were actually invoked —
+    Only includes layers that were actually invoked -
     prevents false variance inflation when LLM is skipped.
     """
     invoked_scores = []
@@ -32,7 +32,7 @@ def detector_confidence(
         return 1.0
 
     if len(invoked_scores) == 1:
-        # Single layer — no variance possible
+        # Single layer - no variance possible
         # Confidence equals the score itself if high, else moderate
         return 1.0
 
@@ -55,21 +55,21 @@ def guardrail_confidence(
     sanitize_threshold: float = 0.4,
 ) -> float:
     """
-    Guardrails are deterministic — confidence is always high.
+    Guardrails are deterministic - confidence is always high.
     Tiered model reflects semantic difference between
     BLOCK and SANITIZE decisions.
 
-    BLOCK level:    0.90 – 0.95
-    SANITIZE level: 0.70 – 0.84
+    BLOCK level:    0.90 - 0.95
+    SANITIZE level: 0.70 - 0.84
     No guardrail:   0.0
     """
     if pii_score >= block_threshold:
-        # BLOCK-level PII — very high confidence
+        # BLOCK-level PII - very high confidence
         raw = 0.90 + (min(pii_score, 1.0) - block_threshold) * 0.05
         return round(min(raw, 0.95), 4)
 
     elif pii_score >= sanitize_threshold:
-        # SANITIZE-level PII — medium-high confidence
+        # SANITIZE-level PII - medium-high confidence
         raw = 0.70 + (pii_score - sanitize_threshold) * 0.20
         return round(min(raw, 0.84), 4)
 
@@ -94,9 +94,9 @@ def compute_confidence(
     Returns (confidence, confidence_band).
 
     Priority:
-      1. PII guardrail triggered      → guardrail_confidence(pii_score)
-      2. Toxicity guardrail triggered → guardrail_confidence(toxicity_score)
-      3. Detection-based              → detector_confidence(rule/ml/llm)
+      1. PII guardrail triggered      -> guardrail_confidence(pii_score)
+      2. Toxicity guardrail triggered -> guardrail_confidence(toxicity_score)
+      3. Detection-based              -> detector_confidence(rule/ml/llm)
     """
     if guardrail_triggered:
         confidence = guardrail_confidence(

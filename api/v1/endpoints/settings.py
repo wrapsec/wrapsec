@@ -104,7 +104,7 @@ async def update_thresholds(
     if body.sanitize_threshold is not None:
         current["sanitize_threshold"] = body.sanitize_threshold
 
-    # Validate merged final state — schema validates against system defaults,
+    # Validate merged final state - schema validates against system defaults,
     # not stored DB values. After merging, enforce the full invariant:
     # 0.0 < sanitize < block <= 1.0
     block    = current["block_threshold"]
@@ -149,7 +149,7 @@ async def update_layers(
 ):
     """
     Enables or disables detection layers (rule, ML, LLM). Merges with existing values.
-    Note: proxy mode requires llm_enabled=true — disabling LLM will block proxy requests.
+    Note: proxy mode requires llm_enabled=true - disabling LLM will block proxy requests.
     Auth: JWT + ADMIN role required.
     """
     repo    = SettingsRepository(db)
@@ -248,12 +248,12 @@ async def get_llm_settings(
     db:        AsyncSession = Depends(get_db),
     _principal = Depends(get_current_principal),
 ):
-    """Returns the active LLM layer configuration. api_key is masked in the response — never plaintext."""
+    """Returns the active LLM layer configuration. api_key is masked in the response - never plaintext."""
     repo    = SettingsRepository(db)
     stored  = await repo.get(LLM_KEY)
     payload = dict(stored) if stored else _default_llm()
 
-    # Mask the stored API key — never return plaintext
+    # Mask the stored API key - never return plaintext
     api_key_masked = None
     enc_record = await repo.get(LLM_API_KEY_KEY)
     if enc_record and enc_record.get("enc"):
@@ -275,7 +275,7 @@ async def update_llm_settings(
 ):
     """
     Updates LLM layer settings. Merges with existing values.
-    api_key is encrypted before storage — never stored or returned in plaintext.
+    api_key is encrypted before storage - never stored or returned in plaintext.
     Supported providers: ollama, openai, custom.
     Auth: JWT + ADMIN role required.
     """
@@ -290,7 +290,7 @@ async def update_llm_settings(
 
     await repo.set(LLM_KEY, current)
 
-    # Encrypt and store api_key separately — never in the main settings JSON
+    # Encrypt and store api_key separately - never in the main settings JSON
     api_key_masked = None
     if body.api_key is not None:
         raw = body.api_key.get_secret_value().strip()
@@ -302,7 +302,7 @@ async def update_llm_settings(
             # Empty string = clear the stored key
             await repo.set(LLM_API_KEY_KEY, {})
     else:
-        # api_key not provided — return existing masked key
+        # api_key not provided - return existing masked key
         enc_record = await repo.get(LLM_API_KEY_KEY)
         if enc_record and enc_record.get("enc"):
             try:
@@ -360,7 +360,7 @@ async def update_retention_settings(
     _principal = Depends(require_admin()),
 ):
     """
-    Updates the audit log retention period. Valid range: 7–3650 days (7 days to 10 years).
+    Updates the audit log retention period. Valid range: 7-3650 days (7 days to 10 years).
     Auth: JWT + ADMIN role required.
     """
     repo = SettingsRepository(db)
@@ -409,7 +409,7 @@ async def get_rate_limit_settings(
     """
     Returns the current global rate limit.
     Source is 'database' if explicitly set, 'environment' if using default.
-    This is the actual enforced value — not the global_policy default.
+    This is the actual enforced value - not the global_policy default.
     """
     repo   = SettingsRepository(db)
     stored = await repo.get(RATE_LIMIT_KEY)
@@ -432,7 +432,7 @@ async def update_rate_limit_settings(
 ):
     """
     Update the global rate limit for live keys.
-    Takes effect immediately — Redis cache is invalidated on update.
+    Takes effect immediately - Redis cache is invalidated on update.
     Does not require server restart.
     Trial key limit is configured via TRIAL_RATE_LIMIT_PER_MINUTE in .env.
     """
@@ -476,7 +476,7 @@ async def get_storage_settings(
 
 ADMIN_LIMITS_KEY       = "admin_rate_limits"
 ADMIN_LIMITS_CACHE_KEY = "wrapsec:settings:admin_rate_limits"
-ADMIN_LIMITS_CACHE_TTL = 60  # seconds — same TTL as global rate limit cache
+ADMIN_LIMITS_CACHE_TTL = 60  # seconds - same TTL as global rate limit cache
 
 
 def _default_admin_limits() -> dict:
@@ -532,7 +532,7 @@ async def update_admin_limits(
 ):
     """
     Updates admin write and/or audit export rate limits. Merges with existing values.
-    Takes effect immediately — Redis cache is invalidated on update.
+    Takes effect immediately - Redis cache is invalidated on update.
     Changes are recorded in admin_events for audit trail.
 
     Floors: admin_write >= 5, audit_export >= 1.
@@ -553,14 +553,14 @@ async def update_admin_limits(
     await repo.set(ADMIN_LIMITS_KEY, current)
     await db.commit()
 
-    # Invalidate Redis cache — new limits take effect on next request
+    # Invalidate Redis cache - new limits take effect on next request
     try:
         redis = get_redis()
         await redis.delete(ADMIN_LIMITS_CACHE_KEY)
     except Exception:
         pass
 
-    # Audit log — security controls changing must always be recorded
+    # Audit log - security controls changing must always be recorded
     try:
         ip        = get_client_ip(request)
         ua        = request.headers.get("user-agent")
@@ -578,7 +578,7 @@ async def update_admin_limits(
         )
         await db.commit()
     except Exception:
-        pass  # Audit logging is best-effort — never fails the request
+        pass  # Audit logging is best-effort - never fails the request
 
     return JSONResponse(content={
         **current,

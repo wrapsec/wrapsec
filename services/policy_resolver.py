@@ -63,13 +63,13 @@ def deep_merge(parent: dict, child: dict | None) -> dict:
 
     for key, value in child.items():
         if value is None:
-            # Null field — inherit from parent
+            # Null field - inherit from parent
             continue
         if isinstance(value, dict) and key in result and isinstance(result[key], dict):
-            # Nested dict — recurse
+            # Nested dict - recurse
             result[key] = deep_merge(result[key], value)
         else:
-            # Scalar — override
+            # Scalar - override
             result[key] = value
 
     return result
@@ -82,7 +82,7 @@ def determine_policy_source(
 ) -> str:
     """
     Returns the highest priority level that changed any field.
-    tenant global_policy is no longer used — DB settings table is authoritative.
+    tenant global_policy is no longer used - DB settings table is authoritative.
     """
     if app_override:
         return "application_override"
@@ -104,9 +104,9 @@ async def resolve_policy(
 
     Resolution order:
       system defaults
-        → DB settings (policy_thresholds, detection_layers, llm_settings, rate_limit)
-          → department policy_override
-            → application policy_override
+        -> DB settings (policy_thresholds, detection_layers, llm_settings, rate_limit)
+          -> department policy_override
+            -> application policy_override
     """
     policy = system_defaults()
 
@@ -144,7 +144,7 @@ async def resolve_policy(
         if stored_rate_limit:
             policy["rate_limit"]["per_minute"] = stored_rate_limit.get("per_minute", policy["rate_limit"]["per_minute"])
 
-        # Tenant global_policy — intentionally skipped.
+        # Tenant global_policy - intentionally skipped.
         # global_policy on the tenant is kept in the DB for future use
         # but is NOT applied in policy resolution. DB settings table
         # (policy_thresholds, detection_layers, llm_settings, rate_limit)
@@ -162,7 +162,7 @@ async def resolve_policy(
             except Exception as e:
                 logger.warning(f"Failed to load department policy: {e}")
 
-        # Application policy_override — applied if set; null inherits from department
+        # Application policy_override - applied if set; null inherits from department
         if app_id:
             try:
                 app_repo = ApplicationRepository(db)
@@ -170,14 +170,14 @@ async def resolve_policy(
                 if app and tenant_id and str(app.tenant_id) != str(tenant_id):
                     logger.error(
                         "policy app_tenant_mismatch app_id=%s app.tenant=%s "
-                        "request.tenant=%s — skipping app policy",
+                        "request.tenant=%s - skipping app policy",
                         app_id, app.tenant_id, tenant_id,
                     )
                     app = None
                 if app and app.policy_override:
                     app_override = app.policy_override
                     policy       = deep_merge(policy, app_override)
-                # rate_limit_override is a dedicated integer column — enforced separately
+                # rate_limit_override is a dedicated integer column - enforced separately
                 # from policy_override so it doesn't require JSONB knowledge to set.
                 if app and app.rate_limit_override is not None:
                     policy["rate_limit"]["per_minute"] = app.rate_limit_override
@@ -185,7 +185,7 @@ async def resolve_policy(
                 logger.warning(f"Failed to load application policy: {e}")
 
     except Exception as e:
-        logger.error(f"Policy resolution failed: {e} — using system defaults")
+        logger.error(f"Policy resolution failed: {e} - using system defaults")
         try:
             from observability.metrics import SYSTEM_ERRORS
             SYSTEM_ERRORS.labels(execution_mode="unknown").inc()
@@ -202,7 +202,7 @@ async def resolve_policy(
                 sec["api_key"] = decrypt(enc, settings.secret_key)
             except ValueError:
                 logger.error(
-                    "policy api_key_enc decryption failed section=%r — "
+                    "policy api_key_enc decryption failed section=%r - "
                     "provider credentials are invalid (SECRET_KEY mismatch or corrupted value). "
                     "Re-enter the provider API key via the dashboard.",
                     section,
@@ -212,12 +212,12 @@ async def resolve_policy(
                     "The stored credential is invalid. Re-enter it via Settings."
                 )
 
-    # Validate final thresholds — DB or override values could be inconsistent
+    # Validate final thresholds - DB or override values could be inconsistent
     block    = policy["thresholds"]["block"]
     sanitize = policy["thresholds"]["sanitize"]
     if not (0.0 < sanitize < block <= 1.0):
         logger.error(
-            "Resolved thresholds invalid (block=%.2f sanitize=%.2f) — "
+            "Resolved thresholds invalid (block=%.2f sanitize=%.2f) - "
             "reverting to system defaults",
             block, sanitize,
         )

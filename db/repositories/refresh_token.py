@@ -24,10 +24,10 @@ class RefreshTokenRepository(BaseRepository):
         """
         Inserts a new active refresh token row.
 
-        token_version REQUIRED — must be user.token_version at time of issuance.
+        token_version REQUIRED - must be user.token_version at time of issuance.
         Stored so the refresh flow can detect session invalidation:
-            if token_rec.token_version != user.token_version → SESSION_INVALIDATED.
-        Caller owns the transaction — no commit here.
+            if token_rec.token_version != user.token_version -> SESSION_INVALIDATED.
+        Caller owns the transaction - no commit here.
         """
         record = RefreshTokenModel(
             user_id       = user_id,
@@ -44,8 +44,8 @@ class RefreshTokenRepository(BaseRepository):
 
         Uses SELECT ... FOR UPDATE to prevent race conditions on parallel refresh
         requests with the same token:
-            Request A: acquires row lock → proceeds → revokes old → creates new → commits
-            Request B: blocks until A commits → sees revoked_at IS NOT NULL → returns None → 401
+            Request A: acquires row lock -> proceeds -> revokes old -> creates new -> commits
+            Request B: blocks until A commits -> sees revoked_at IS NOT NULL -> returns None -> 401
 
         Returns None if:
         - Token not found
@@ -66,8 +66,8 @@ class RefreshTokenRepository(BaseRepository):
     async def revoke(self, token_hash: str) -> None:
         """
         Sets revoked_at = NOW() on the matching token.
-        Idempotent — safe to call if already revoked (UPDATE affects 0 rows, no error).
-        Caller owns the transaction — no commit here.
+        Idempotent - safe to call if already revoked (UPDATE affects 0 rows, no error).
+        Caller owns the transaction - no commit here.
         """
         await self.session.execute(
             update(RefreshTokenModel)
@@ -80,7 +80,7 @@ class RefreshTokenRepository(BaseRepository):
         Revokes all active (revoked_at IS NULL) tokens for a user.
         Returns count of rows updated.
         Called exclusively by AuthService.logout_all_sessions().
-        Caller owns the transaction — no commit here.
+        Caller owns the transaction - no commit here.
         """
         result = await self.session.execute(
             update(RefreshTokenModel)
@@ -94,15 +94,15 @@ class RefreshTokenRepository(BaseRepository):
 
     async def cleanup_expired(self) -> int:
         """
-        Deletes expired refresh tokens. Two clauses — both run every call.
+        Deletes expired refresh tokens. Two clauses - both run every call.
 
-        Clause 1 (primary — preserves recent audit trail):
+        Clause 1 (primary - preserves recent audit trail):
             DELETE WHERE expires_at < NOW() AND revoked_at IS NOT NULL
             Keeps: expired-but-active (failed naturally, audit value remains)
             Keeps: revoked-but-not-expired (recent termination, investigation value)
-            Deletes: BOTH expired AND explicitly revoked — audit value exhausted.
+            Deletes: BOTH expired AND explicitly revoked - audit value exhausted.
 
-        Clause 2 (secondary — prevents unbounded table growth):
+        Clause 2 (secondary - prevents unbounded table growth):
             DELETE WHERE expires_at < NOW() - 90 days
             Deletes ALL tokens older than 3x the refresh token lifetime (30 days).
             Covers users who abandoned sessions without ever logging out.
@@ -112,12 +112,12 @@ class RefreshTokenRepository(BaseRepository):
         Recently expired tokens preserved until also revoked or age out.
 
         Returns total deleted rows from both clauses combined.
-        Caller owns the transaction — no commit here.
+        Caller owns the transaction - no commit here.
         """
         now              = datetime.utcnow()
         cutoff_secondary = now - timedelta(days=90)
 
-        # Clause 1 — expired AND revoked
+        # Clause 1 - expired AND revoked
         result1 = await self.session.execute(
             delete(RefreshTokenModel).where(
                 RefreshTokenModel.expires_at < now,
@@ -125,7 +125,7 @@ class RefreshTokenRepository(BaseRepository):
             )
         )
 
-        # Clause 2 — anything older than 90 days regardless of revocation state
+        # Clause 2 - anything older than 90 days regardless of revocation state
         result2 = await self.session.execute(
             delete(RefreshTokenModel).where(
                 RefreshTokenModel.expires_at < cutoff_secondary,

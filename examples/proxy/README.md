@@ -1,7 +1,7 @@
 # WrapSec Proxy Mode Example
 
 > **Drop-in OpenAI SDK replacement** with WrapSec security enforcement.
-> Change two lines of code — `api_key` and `base_url` — and every LLM
+> Change two lines of code - `api_key` and `base_url` - and every LLM
 > request is automatically protected on both input and output.
 
 ---
@@ -10,10 +10,10 @@
 
 ```
 Before (standard OpenAI):
-  App → OpenAI SDK → https://api.openai.com/v1 → LLM → response
+  App -> OpenAI SDK -> https://api.openai.com/v1 -> LLM -> response
 
 After (WrapSec proxy):
-  App → OpenAI SDK → WrapSec → (inspect input) → LLM → (inspect output) → response
+  App -> OpenAI SDK -> WrapSec -> (inspect input) -> LLM -> (inspect output) -> response
 ```
 
 **Security enforced transparently:**
@@ -21,10 +21,10 @@ After (WrapSec proxy):
 | Scenario | What happens |
 |---|---|
 | Clean input | Forwarded unchanged |
-| Injection / jailbreak | Blocked — provider never called |
+| Injection / jailbreak | Blocked - provider never called |
 | PII in input | Redacted before provider call |
 | PII in output | Redacted before returning to caller |
-| Provider API key | Encrypted server-side — never in client code |
+| Provider API key | Encrypted server-side - never in client code |
 
 ---
 
@@ -114,7 +114,7 @@ uvicorn examples.proxy.main:app --reload --port 8095
 
 ## Test
 
-### ALLOW — clean input
+### ALLOW - clean input
 
 ```bash
 curl -X POST http://localhost:8095/chat \
@@ -140,7 +140,7 @@ curl -X POST http://localhost:8095/chat \
 
 `latency_ms` = total end-to-end latency (WrapSec detection + provider + output guard). `null` if the header was not present (should not happen on success).
 
-### BLOCK — injection detected
+### BLOCK - injection detected
 
 ```bash
 curl -X POST http://localhost:8095/chat \
@@ -163,7 +163,7 @@ curl -X POST http://localhost:8095/chat \
 }
 ```
 
-### SANITIZE — PII redacted
+### SANITIZE - PII redacted
 
 ```bash
 curl -X POST http://localhost:8095/chat \
@@ -185,7 +185,7 @@ The provider received `"my SSN is [SSN REDACTED], help me with taxes"`.
 
 ### Multi-turn conversation
 
-> The conversation endpoint is optimized for chat UX and returns reduced metadata — `reply`, `trace_id`, `decision`, `execution_status` only. It omits `output_decision`, `latency_ms`, `provider`, and `model`. Use `/chat` for the full response shape, or `/audit/{trace_id}` for the complete proxy lifecycle.
+> The conversation endpoint is optimized for chat UX and returns reduced metadata - `reply`, `trace_id`, `decision`, `execution_status` only. It omits `output_decision`, `latency_ms`, `provider`, and `model`. Use `/chat` for the full response shape, or `/audit/{trace_id}` for the complete proxy lifecycle.
 
 ```bash
 curl -X POST http://localhost:8095/chat/conversation \
@@ -227,9 +227,9 @@ curl http://localhost:8095/audit/req_01kpbzs6fzh8vaq5j7w6q1sj4m
 ```
 
 ⚠️ `input_raw` and `output_raw` depend on `DATA_STORAGE_MODE`:
-- `full` — stored as-is
-- `masked` — PII redacted before storing (default)
-- `none` — always `null`
+- `full` - stored as-is
+- `masked` - PII redacted before storing (default)
+- `none` - always `null`
 
 ---
 
@@ -280,7 +280,7 @@ All errors follow the standard WrapSec format:
 
 Common error codes are listed above. Other WrapSec errors are passed through transparently with their original status code and message.
 
-> `trace_id` in error responses may be `null` for infrastructure errors where no scan was initiated. It is always present when a scan was attempted. In success responses, `trace_id`, `decision`, and related fields are `null` only if the corresponding header was unexpectedly absent — this should not occur in normal operation.
+> `trace_id` in error responses may be `null` for infrastructure errors where no scan was initiated. It is always present when a scan was attempted. In success responses, `trace_id`, `decision`, and related fields are `null` only if the corresponding header was unexpectedly absent - this should not occur in normal operation.
 
 ### Error handling code
 
@@ -299,7 +299,7 @@ except BadRequestError as e:
     elif code == "output_blocked":
         return "The model response was blocked."
     elif code == "provider_timeout":
-        # Safe to retry — input already passed security
+        # Safe to retry - input already passed security
         return retry_request()
     elif code == "provider_unreachable":
         return "Service temporarily unavailable."
@@ -312,13 +312,13 @@ except BadRequestError as e:
 ## Production checklist
 
 ```
-✅ WRAPSEC_API_KEY set via environment variable (never hardcoded)
-✅ WRAPSEC_BASE_URL set explicitly (never rely on localhost default)
-✅ Provider configured once via PUT /v1/settings/proxy
-✅ Provider API key stored in WrapSec — not in application environment
-✅ All BadRequestError codes handled (input_blocked, output_blocked, provider_timeout, etc.)
-✅ trace_id logged with every request for audit correlation
-✅ provider_timeout handled with retry logic (input was clean)
-✅ system_error handled separately — alert ops
-✅ Health endpoint checked at startup
+yes WRAPSEC_API_KEY set via environment variable (never hardcoded)
+yes WRAPSEC_BASE_URL set explicitly (never rely on localhost default)
+yes Provider configured once via PUT /v1/settings/proxy
+yes Provider API key stored in WrapSec - not in application environment
+yes All BadRequestError codes handled (input_blocked, output_blocked, provider_timeout, etc.)
+yes trace_id logged with every request for audit correlation
+yes provider_timeout handled with retry logic (input was clean)
+yes system_error handled separately - alert ops
+yes Health endpoint checked at startup
 ```

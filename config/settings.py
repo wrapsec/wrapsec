@@ -21,7 +21,7 @@ class Settings(BaseSettings):
     api_workers:     int = 1
     # Explicit CORS origins for credential-bearing requests (dashboard).
     # Empty list disables credentialed CORS entirely.
-    # Never use ["*"] with allow_credentials — browsers reject this.
+    # Never use ["*"] with allow_credentials - browsers reject this.
     cors_allowed_origins: list[str] = Field(default_factory=list)
 
     # ── Security ──────────────────────────────────────────────
@@ -31,7 +31,7 @@ class Settings(BaseSettings):
     # Comma-separated list of trusted reverse proxy IPs or CIDRs.
     # x-forwarded-for is only trusted when the direct connection IP
     # matches one of these entries. Leave empty (default) to always
-    # use the direct connection IP — safe when not behind a proxy.
+    # use the direct connection IP - safe when not behind a proxy.
     # Example: TRUSTED_PROXY_IPS=10.0.0.1,172.16.0.0/12
     trusted_proxy_ips: str = Field(default="")
 
@@ -42,7 +42,7 @@ class Settings(BaseSettings):
     # ── Bootstrap first admin (optional) ─────────────────────────────────────
     # If both are set, bootstrap creates the admin user automatically on first
     # startup (scripted / infrastructure-as-code deploys).
-    # If either is unset (default), bootstrap is skipped — the dashboard /setup
+    # If either is unset (default), bootstrap is skipped - the dashboard /setup
     # page handles first-user creation interactively.
     admin_email:    str | None = Field(default=None)
     admin_password: str | None = Field(default=None)
@@ -121,17 +121,17 @@ class Settings(BaseSettings):
     trial_proxy_enabled:         bool  = False  # proxy disabled for trial keys
 
     # ── Login rate limit ──────────────────────────────────────────────────────
-    # IP-based limit on POST /v1/auth/login — stricter than the global 60/min.
+    # IP-based limit on POST /v1/auth/login - stricter than the global 60/min.
     # Prevents distributed brute force across many email addresses from one IP.
     # Per-email lockout (AUTH_MAX_FAILED_ATTEMPTS) still applies independently.
-    # Intentionally env-only — not dashboard-configurable (security control).
+    # Intentionally env-only - not dashboard-configurable (security control).
     login_rate_limit_per_minute: int   = 10
 
     # ── Debug mode limits ─────────────────────────────────────────────────────
-    # debug=true exposes per-layer scores — a tighter separate limit prevents
+    # debug=true exposes per-layer scores - a tighter separate limit prevents
     # model fingerprinting (probing to calibrate below-threshold attacks).
     # Applies only to admin keys; non-admin keys are blocked before this check.
-    # Intentionally env-only — not dashboard-configurable (security control).
+    # Intentionally env-only - not dashboard-configurable (security control).
     debug_rate_limit_per_minute: int   = 10
 
     # -- Cookie security -------------------------------------------------------

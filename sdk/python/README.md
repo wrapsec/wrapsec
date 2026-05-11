@@ -21,19 +21,19 @@ Your Application
       │
       ▼
 ┌─────────────────┐
-│  WrapSec SDK    │  ← wrapsec-python
+│  WrapSec SDK    │  <- wrapsec-python
 │  (this package) │
 └────────┬────────┘
          │  scan(user_input)
          ▼
 ┌─────────────────┐
-│  WrapSec        │  ← your on-premise instance
+│  WrapSec        │  <- your on-premise instance
 │  Gateway        │
 └────────┬────────┘
          │  ALLOW / BLOCK / SANITIZE
          ▼
 ┌─────────────────┐
-│  LLM Provider   │  ← only reached on ALLOW or SANITIZE
+│  LLM Provider   │  <- only reached on ALLOW or SANITIZE
 │  (OpenAI, etc.) │
 └─────────────────┘
 ```
@@ -143,7 +143,7 @@ result = client.scan(text, mode="fast", execution_mode="scan_only", model=None, 
 | Parameter | Type | Default | Description |
 |---|---|---|---|
 | `text` | str | required | Input to scan. Max 8000 chars. |
-| `mode` | str | `"fast"` | `"fast"` uses rule + ML detectors (~5ms). `"full"` adds LLM semantic analysis (~100–500ms extra). |
+| `mode` | str | `"fast"` | `"fast"` uses rule + ML detectors (~5ms). `"full"` adds LLM semantic analysis (~100-500ms extra). |
 | `execution_mode` | str | `"scan_only"` | `"scan_only"` scans and returns the decision. `"proxy"` scans then forwards to the LLM provider on ALLOW/SANITIZE. |
 | `model` | str \| None | `None` | LLM model identifier (e.g. `"openai/gpt-4o"`). Required when `execution_mode="proxy"`. |
 | `user` | str | `"sdk"` | User ID for audit attribution. |
@@ -155,8 +155,8 @@ result = client.scan(text, mode="fast", execution_mode="scan_only", model=None, 
 |---|---|---|
 | `decision` | str | `"ALLOW"`, `"BLOCK"`, or `"SANITIZE"`. Always check this. |
 | `primary_reason` | str | What triggered the decision. e.g. `RULE_DETECTOR`, `ML_DETECTOR`, `PII_GUARDRAIL_BLOCK` |
-| `risk_score` | float | 0.0–1.0. The threshold value that drove the BLOCK/SANITIZE/ALLOW decision. |
-| `confidence` | float | 0.0–1.0. Detection model certainty. Distinct from `risk_score`. |
+| `risk_score` | float | 0.0-1.0. The threshold value that drove the BLOCK/SANITIZE/ALLOW decision. |
+| `confidence` | float | 0.0-1.0. Detection model certainty. Distinct from `risk_score`. |
 | `confidence_band` | str | `"HIGH"` (≥0.7), `"MEDIUM"` (≥0.4), `"LOW"` (<0.4) |
 | `trace_id` | str | Unique request ID (`req_...`). Use for debugging and audit lookup. |
 | `threats` | list[str] | Detected threat categories. |
@@ -311,9 +311,9 @@ with open("audit_export.csv", "wb") as f:
     f.write(csv_data)
 ```
 
-**`get_request(trace_id, timeout=None)`** — returns the full audit record for a single request by trace ID. Scoped to the caller's department/tenant. Returns a `dict`.
+**`get_request(trace_id, timeout=None)`** - returns the full audit record for a single request by trace ID. Scoped to the caller's department/tenant. Returns a `dict`.
 
-**`audit_export(...)`** — exports audit records as CSV bytes. Returns `bytes`. Parameters:
+**`audit_export(...)`** - exports audit records as CSV bytes. Returns `bytes`. Parameters:
 
 | Parameter | Type | Default | Description |
 |---|---|---|---|

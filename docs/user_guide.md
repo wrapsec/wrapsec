@@ -7,7 +7,7 @@
 
 ## What is WrapSec?
 
-WrapSec is an AI security gateway. It sits between your applications and LLM providers, inspecting every prompt and response for threats — prompt injection, jailbreak attempts, PII leakage, toxicity, and more.
+WrapSec is an AI security gateway. It sits between your applications and LLM providers, inspecting every prompt and response for threats - prompt injection, jailbreak attempts, PII leakage, toxicity, and more.
 
 You interact with WrapSec through this dashboard. Your applications interact with WrapSec through the API.
 
@@ -17,17 +17,17 @@ You interact with WrapSec through this dashboard. Your applications interact wit
 
 Open the dashboard at `http://your-host:3000`.
 
-**First-time setup:** On a fresh installation with no users, the dashboard redirects to `/setup` automatically. Enter your email and password to create the first admin account. The setup page is permanently disabled after this — it cannot be accessed again once any user exists.
+**First-time setup:** On a fresh installation with no users, the dashboard redirects to `/setup` automatically. Enter your email and password to create the first admin account. The setup page is permanently disabled after this - it cannot be accessed again once any user exists.
 
 On the login page you have two options:
 
-**Email / Password** — the primary login method for all dashboard users. Enter your email and password. If your account was created by an admin, you will be required to change your password on first login before accessing anything else.
+**Email / Password** - the primary login method for all dashboard users. Enter your email and password. If your account was created by an admin, you will be required to change your password on first login before accessing anything else.
 
-**API Key** — gives read-only access to settings, audit logs, and scan endpoints. **API key sessions cannot modify settings, manage users, manage keys, or change any configuration** — all write operations require an ADMIN account login via Email / Password.
+**API Key** - gives read-only access to settings, audit logs, and scan endpoints. **API key sessions cannot modify settings, manage users, manage keys, or change any configuration** - all write operations require an ADMIN account login via Email / Password.
 
 If your account has been locked after too many failed attempts, wait 15 minutes and try again.
 
-**Session timeout:** The dashboard automatically logs you out after 15 minutes of inactivity. A warning appears at 2 minutes remaining — click **Stay logged in** to continue, or **Log out now** to end your session immediately.
+**Session timeout:** The dashboard automatically logs you out after 15 minutes of inactivity. A warning appears at 2 minutes remaining - click **Stay logged in** to continue, or **Log out now** to end your session immediately.
 
 ---
 
@@ -36,7 +36,7 @@ If your account has been locked after too many failed attempts, wait 15 minutes 
 Every user has one of three roles. Your role determines what you can see and do.
 
 **ADMIN**
-Full access to everything. Can manage users, departments, applications, API keys, and settings. Not scoped to any department — sees data across the entire organisation. There must always be at least one active ADMIN account.
+Full access to everything. Can manage users, departments, applications, API keys, and settings. Not scoped to any department - sees data across the entire organisation. There must always be at least one active ADMIN account.
 
 **DEVELOPER**
 Operational access scoped to their assigned department. Can scan prompts, view audit logs, create and manage API keys, and read settings. Cannot manage users or change settings.
@@ -54,10 +54,10 @@ User management is available to ADMIN users only. Navigate to **Users** in the s
 
 Click **Add user**. Fill in:
 
-- **Email** — must be unique across the system
-- **Temporary password** — minimum 8 characters, at least one uppercase letter, one lowercase letter, and one digit
-- **Role** — ADMIN, DEVELOPER, or VIEWER
-- **Department** — required for DEVELOPER and VIEWER; not applicable for ADMIN
+- **Email** - must be unique across the system
+- **Temporary password** - minimum 8 characters, at least one uppercase letter, one lowercase letter, and one digit
+- **Role** - ADMIN, DEVELOPER, or VIEWER
+- **Department** - required for DEVELOPER and VIEWER; not applicable for ADMIN
 
 The user will be required to change this password on their first login. Share the credentials with them out-of-band (email, Slack, etc.).
 
@@ -67,20 +67,20 @@ Click **Manage** next to any user. From the modal you can:
 
 - Change their role
 - Change their department
-- Reset their password (sets a new temporary password — user must change it on next login)
+- Reset their password (sets a new temporary password - user must change it on next login)
 - Deactivate or reactivate their account
 
 When you change a user's role or department, all their active sessions are immediately invalidated. They will need to log in again.
 
 ### Deactivating a user
 
-Click **Manage** → **Deactivate user** → **Confirm**. The user is immediately signed out of all sessions and cannot log in until reactivated. Their data and audit history are preserved.
+Click **Manage** -> **Deactivate user** -> **Confirm**. The user is immediately signed out of all sessions and cannot log in until reactivated. Their data and audit history are preserved.
 
-You cannot deactivate your own account. You cannot deactivate or demote the last active ADMIN — create another ADMIN first.
+You cannot deactivate your own account. You cannot deactivate or demote the last active ADMIN - create another ADMIN first.
 
 ### Resetting a password
 
-Click **Manage** → **Reset password**. Enter a new temporary password. The user will be required to change it on their next login. All their current active sessions are immediately invalidated — they are signed out of all browsers and devices as soon as the reset is confirmed.
+Click **Manage** -> **Reset password**. Enter a new temporary password. The user will be required to change it on their next login. All their current active sessions are immediately invalidated - they are signed out of all browsers and devices as soon as the reset is confirmed.
 
 ---
 
@@ -96,7 +96,7 @@ To change your password, click **Change password** in the profile card. You will
 
 ## Departments
 
-Departments represent organisational units (e.g. Engineering, Finance, Legal). Each department can have its own security policy — different detection thresholds, PII sensitivity, or toxicity settings.
+Departments represent organisational units (e.g. Engineering, Finance, Legal). Each department can have its own security policy - different detection thresholds, PII sensitivity, or toxicity settings.
 
 Navigate to **Departments** under Administration.
 
@@ -110,7 +110,7 @@ If a department has no policy override, it inherits the global settings.
 
 Applications represent individual systems or services that connect to WrapSec (e.g. a code assistant, a customer support bot, an internal tool).
 
-Navigate to **Applications** under Administration (via the Departments page — each application belongs to a department).
+Navigate to **Applications** under Administration (via the Departments page - each application belongs to a department).
 
 Each application can have its own policy override, further customising detection behaviour for that specific use case.
 
@@ -124,13 +124,13 @@ Navigate to **API Keys** under Configuration.
 
 ### Key types
 
-**Live keys** (`wsk_live_...`) — standard production keys. Full access within their department or application scope.
+**Live keys** (`wsk_live_...`) - standard production keys. Full access within their department or application scope.
 
-**Trial keys** (`wsk_trial_...`) — restricted keys for demos. Input limited to 500 characters, rate limited to 10 requests per minute, proxy mode disabled.
+**Trial keys** (`wsk_trial_...`) - restricted keys for demos. Input limited to 500 characters, rate limited to 10 requests per minute, proxy mode disabled.
 
 ### Creating a key
 
-Click **Create key**. Choose a name, assign it to a department or application, and select the key type. The raw key value is shown once — copy it immediately and store it securely. It cannot be retrieved again.
+Click **Create key**. Choose a name, assign it to a department or application, and select the key type. The raw key value is shown once - copy it immediately and store it securely. It cannot be retrieved again.
 
 ### Rotating a key
 
@@ -147,21 +147,21 @@ Click **Revoke**. The key is immediately invalidated. Any application using it w
 The **Requests** page shows all AI requests that have passed through WrapSec.
 
 Each request shows:
-- **Trace ID** — unique identifier for the request
-- **Decision** — ALLOW, BLOCK, or SANITIZE
-- **Risk score** — detection pipeline score (0.0–1.0)
-- **Primary reason** — what triggered the decision
-- **Latency** — detection processing time
+- **Trace ID** - unique identifier for the request
+- **Decision** - ALLOW, BLOCK, or SANITIZE
+- **Risk score** - detection pipeline score (0.0-1.0)
+- **Primary reason** - what triggered the decision
+- **Latency** - detection processing time
 
 Click any row to see the full detail, including the input hash, detected threats, confidence score, and for proxy requests, the full interaction lifecycle.
 
 ### Decisions explained
 
-**ALLOW** — no threat detected, request forwarded to LLM as-is.
+**ALLOW** - no threat detected, request forwarded to LLM as-is.
 
-**BLOCK** — threat detected, request stopped. The application receives an error response — the LLM was never called.
+**BLOCK** - threat detected, request stopped. The application receives an error response - the LLM was never called.
 
-**SANITIZE** — PII or other sensitive content detected. The content was redacted before being forwarded to the LLM. The sanitized version of the input is available in the detail view.
+**SANITIZE** - PII or other sensitive content detected. The content was redacted before being forwarded to the LLM. The sanitized version of the input is available in the detail view.
 
 ### Filtering
 
@@ -171,7 +171,7 @@ Filter by decision, threat category, date range, execution mode (scan-only vs pr
 
 ## Analytics
 
-The **Analytics** page shows trends over time — block rates, threat categories, latency, and request volume. Use the date range selector and group-by options (hour, day, week, month) to view the data at the granularity you need.
+The **Analytics** page shows trends over time - block rates, threat categories, latency, and request volume. Use the date range selector and group-by options (hour, day, week, month) to view the data at the granularity you need.
 
 ---
 
@@ -183,26 +183,26 @@ The **Scanner** page lets you test inputs manually. Enter any text and run a sca
 
 ## Settings
 
-Settings are readable by all authenticated users (API key or JWT). Only ADMIN users logged in via Email / Password can modify settings. API key sessions see all settings but cannot save changes — a "Requires admin login" message is shown on all save buttons.
+Settings are readable by all authenticated users (API key or JWT). Only ADMIN users logged in via Email / Password can modify settings. API key sessions see all settings but cannot save changes - a "Requires admin login" message is shown on all save buttons.
 
 ### Detection thresholds
 
 Controls how sensitive the detection pipeline is.
 
-- **Block threshold** — risk score at or above this value triggers a BLOCK decision
-- **Sanitize threshold** — risk score at or above this value (but below block) triggers SANITIZE
+- **Block threshold** - risk score at or above this value triggers a BLOCK decision
+- **Sanitize threshold** - risk score at or above this value (but below block) triggers SANITIZE
 
 Default: block at 0.7, sanitize at 0.4. Block threshold must always be higher than sanitize threshold.
 
-Guardrail thresholds (PII, toxicity) are configured per department in department policy overrides — they are independent of these detection thresholds.
+Guardrail thresholds (PII, toxicity) are configured per department in department policy overrides - they are independent of these detection thresholds.
 
 ### Detection layers
 
 Enable or disable individual detection layers:
 
-- **Rule detector** — regex and heuristic patterns, very fast (~1ms)
-- **ML detector** — TF-IDF + logistic regression classifier (~5ms)
-- **LLM detector** — semantic analysis via LLM, most accurate but slower (~100–500ms additional)
+- **Rule detector** - regex and heuristic patterns, very fast (~1ms)
+- **ML detector** - TF-IDF + logistic regression classifier (~5ms)
+- **LLM detector** - semantic analysis via LLM, most accurate but slower (~100-500ms additional)
 
 For latency-sensitive applications, disable the LLM detector and use `fast` mode.
 
@@ -218,13 +218,13 @@ Controls how long audit logs are kept. Default: 30 days. Range: 7 to 3650 days. 
 
 ### Storage mode
 
-Controls whether raw input and output text is stored. Read-only — set via environment variable by your system administrator.
+Controls whether raw input and output text is stored. Read-only - set via environment variable by your system administrator.
 
 | Mode | Behaviour |
 |---|---|
 | `masked` | PII is redacted before storing (production default) |
 | `full` | Text stored as-is |
-| `none` | Text never persisted — only security metadata is stored |
+| `none` | Text never persisted - only security metadata is stored |
 
 ### Proxy settings
 
@@ -236,7 +236,7 @@ Use **Test connection** to verify WrapSec can reach the configured provider.
 
 ## System
 
-The **System** page shows the current health of all WrapSec components — API, database, Redis, and ML model. Also shows the active configuration snapshot.
+The **System** page shows the current health of all WrapSec components - API, database, Redis, and ML model. Also shows the active configuration snapshot.
 
 ---
 
@@ -244,7 +244,7 @@ The **System** page shows the current health of all WrapSec components — API, 
 
 ### Severity levels
 
-Every request is assigned a severity level for audit and alerting purposes. Severity is not shown in the scan response — it is stored in the audit log only.
+Every request is assigned a severity level for audit and alerting purposes. Severity is not shown in the scan response - it is stored in the audit log only.
 
 | Severity | Condition |
 |---|---|
@@ -257,15 +257,15 @@ Every request is assigned a severity level for audit and alerting purposes. Seve
 
 Guardrails are independent of the detection pipeline and always take priority over it.
 
-**PII guardrail** — detects and redacts personally identifiable information (22+ types including email addresses, phone numbers, credit card numbers, SSNs, etc.). Can BLOCK or SANITIZE depending on configured thresholds.
+**PII guardrail** - detects and redacts personally identifiable information (22+ types including email addresses, phone numbers, credit card numbers, SSNs, etc.). Can BLOCK or SANITIZE depending on configured thresholds.
 
-**Toxicity guardrail** — detects hate speech, harassment, and other toxic content. Can BLOCK or flag. Does not redact — the entire input is blocked if the threshold is exceeded.
+**Toxicity guardrail** - detects hate speech, harassment, and other toxic content. Can BLOCK or flag. Does not redact - the entire input is blocked if the threshold is exceeded.
 
 Guardrail thresholds can be configured independently per department in the department policy override settings.
 
 ### Department policy overrides
 
-Each department can override the global detection thresholds and guardrail settings. This allows different teams to have different sensitivity levels — for example, a customer-facing department might have stricter PII detection than an internal engineering tool.
+Each department can override the global detection thresholds and guardrail settings. This allows different teams to have different sensitivity levels - for example, a customer-facing department might have stricter PII detection than an internal engineering tool.
 
 When a department has an override, it shows **Overridden** in the department list. When no override is set, it shows **Inherits global**.
 
@@ -274,26 +274,26 @@ When a department has an override, it shows **Overridden** in the department lis
 ## Common Tasks
 
 **I need to add a new team member to the dashboard**
-→ Users → Add user → set role and department → share credentials
+-> Users -> Add user -> set role and department -> share credentials
 
 **A user has left the organisation**
-→ Users → Manage → Deactivate user
+-> Users -> Manage -> Deactivate user
 
 **An API key may have been compromised**
-→ API Keys → Rotate (gives a grace period) or Revoke (immediate)
+-> API Keys -> Rotate (gives a grace period) or Revoke (immediate)
 
 **I want to see all blocked requests from the last 7 days**
-→ Requests → filter Decision = BLOCK, set date range
+-> Requests -> filter Decision = BLOCK, set date range
 
 **I want to make our Finance department stricter about PII**
-→ Departments → Finance → Manage → Policy Override → set `guardrails.pii.block_threshold` lower
+-> Departments -> Finance -> Manage -> Policy Override -> set `guardrails.pii.block_threshold` lower
 
 **The LLM detector is adding too much latency**
-→ Settings → Detection layers → disable LLM detector
+-> Settings -> Detection layers -> disable LLM detector
 
 **I want to understand why a specific request was blocked**
-→ Requests → find the trace ID → click row → view detail panel
+-> Requests -> find the trace ID -> click row -> view detail panel
 
 ---
 
-*WrapSec v1.0 — May 2026*
+*WrapSec v1.0 - May 2026*

@@ -51,7 +51,7 @@ def test_verify_wrong_returns_false():
 
 
 def test_hash_is_not_deterministic():
-    # bcrypt uses random salt — same input produces different hashes
+    # bcrypt uses random salt - same input produces different hashes
     h1 = hash_password("SecurePass1")
     h2 = hash_password("SecurePass1")
     assert h1 != h2
@@ -64,7 +64,7 @@ def test_hash_rejects_overlong_password():
 
 
 def test_verify_rejects_overlong_password():
-    # Must return False immediately — bcrypt must never run on >128-char input
+    # Must return False immediately - bcrypt must never run on >128-char input
     h = hash_password("SecurePass1")
     overlong = "A1" * 65
     assert verify_password(overlong, h) is False
@@ -73,7 +73,7 @@ def test_verify_rejects_overlong_password():
 # ── verify_dummy ───────────────────────────────────────────────────────────────
 
 def test_verify_dummy_does_not_raise():
-    # Must not raise — timing equalisation must always complete
+    # Must not raise - timing equalisation must always complete
     verify_dummy()
 
 
@@ -85,7 +85,7 @@ def test_dummy_hash_is_static_not_dynamic():
 
 
 def test_dummy_verify_always_returns_false():
-    # Sentinel input never matches _DUMMY_HASH — that is correct and expected
+    # Sentinel input never matches _DUMMY_HASH - that is correct and expected
     result = pwd_context.verify("__dummy_input__", _DUMMY_HASH)
     assert result is False
 
@@ -149,9 +149,9 @@ def test_strength_rejects_common_password():
 
 
 def test_strength_rejects_common_password_case_insensitive():
-    # Mixed-case variant of "password123" — lowercases to a blocklist entry
+    # Mixed-case variant of "password123" - lowercases to a blocklist entry
     with pytest.raises(ValueError, match="common"):
-        validate_password_strength("pAsSword123")  # normalised → "password123"
+        validate_password_strength("pAsSword123")  # normalised -> "password123"
 
 
 def test_strength_strong_unique_passes():

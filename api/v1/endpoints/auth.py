@@ -97,9 +97,9 @@ async def login(
     Service layer additionally normalizes via normalize_email() (lowercase + strip).
 
     Errors:
-        401 INVALID_CREDENTIALS — wrong email or wrong password (identical message)
-        401 ACCOUNT_DISABLED    — is_active = False
-        429 ACCOUNT_LOCKED      — too many failed attempts
+        401 INVALID_CREDENTIALS - wrong email or wrong password (identical message)
+        401 ACCOUNT_DISABLED    - is_active = False
+        429 ACCOUNT_LOCKED      - too many failed attempts
     """
     import os
     from config.settings import get_settings
@@ -108,7 +108,7 @@ async def login(
     ip_address = get_client_ip(request) or None
     user_agent = request.headers.get("user-agent")
 
-    # IP-based rate limit — fires before any DB work or per-email lockout.
+    # IP-based rate limit - fires before any DB work or per-email lockout.
     # Separate from the global 60/min; targets credential-stuffing from one IP.
     # Fails open so a Redis outage never blocks legitimate logins.
     if os.getenv("TESTING") != "true":
@@ -125,7 +125,7 @@ async def login(
                     }},
                 )
         except Exception:
-            pass  # Fail open — never block login due to Redis unavailability
+            pass  # Fail open - never block login due to Redis unavailability
 
     try:
         result = await auth_service.login(
@@ -134,7 +134,7 @@ async def login(
             user_agent = user_agent or None,
         )
     except (AccountLockedException, AuthenticationError, AccountDisabledException):
-        # All credential failures return identical 401 — distinguishing locked,
+        # All credential failures return identical 401 - distinguishing locked,
         # wrong password, disabled, or non-existent accounts leaks email existence.
         return JSONResponse(
             status_code=401,
@@ -175,12 +175,12 @@ async def refresh(
 ) -> JSONResponse:
     """
     Rotates refresh token and issues new access token.
-    Refresh token read from httpOnly cookie — no body required.
+    Refresh token read from httpOnly cookie - no body required.
     Sets new rotated refresh token as httpOnly cookie.
 
     Errors:
-        401 INVALID_TOKEN       — expired, revoked, or not found
-        401 SESSION_INVALIDATED — token_version mismatch
+        401 INVALID_TOKEN       - expired, revoked, or not found
+        401 SESSION_INVALIDATED - token_version mismatch
     """
     from config.settings import get_settings
     _settings = get_settings()
@@ -239,16 +239,16 @@ async def logout(
 ) -> JSONResponse:
     """
     Revokes refresh token. Access token expires naturally (≤30 min).
-    Clears httpOnly cookie. Idempotent — safe to call multiple times.
+    Clears httpOnly cookie. Idempotent - safe to call multiple times.
 
     Optional body: { "reason": "manual" | "inactivity" | "expired" }
-    Invalid reason values are normalized to "manual" — never returns 400.
+    Invalid reason values are normalized to "manual" - never returns 400.
 
     Auth: JWT Bearer required.
     """
     from domain.enums import LogoutReason
 
-    # Validate and normalize reason — never raise 400 for invalid value
+    # Validate and normalize reason - never raise 400 for invalid value
     try:
         logout_reason = LogoutReason(body.reason).value
     except ValueError:
@@ -280,7 +280,7 @@ async def me(
     from uuid import UUID
     from db.repositories.user import UserRepository
 
-    # principal.id is "user:{uuid}" — strip prefix
+    # principal.id is "user:{uuid}" - strip prefix
     raw_id    = principal.id.replace("user:", "", 1)
     user_uuid = UUID(raw_id)
 
@@ -321,8 +321,8 @@ async def change_password(
     Auth: JWT Bearer required.
 
     Errors:
-        400 INVALID_REQUEST  — new password too weak
-        401 INVALID_PASSWORD — current password incorrect
+        400 INVALID_REQUEST  - new password too weak
+        401 INVALID_PASSWORD - current password incorrect
     """
     from uuid import UUID
 

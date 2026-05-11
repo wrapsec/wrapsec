@@ -226,8 +226,8 @@ async def get_application_policy(
 ):
     """
     Returns the fully resolved effective policy for this application.
-    Merges: system defaults → tenant global → department → application.
-    Application overrides are currently null for most keys — set via policy_override field.
+    Merges: system defaults -> tenant global -> department -> application.
+    Application overrides are currently null for most keys - set via policy_override field.
     """
     repo = ApplicationRepository(db)
     app  = await repo.get_by_id(app_id)
@@ -455,7 +455,7 @@ async def update_app_llm_override(
     """
     Set or clear the LLM detection override for an application.
     Takes precedence over department-level LLM override.
-    api_key is encrypted before storage — never stored or returned in plaintext.
+    api_key is encrypted before storage - never stored or returned in plaintext.
     Set clear=true to remove and inherit from the department.
     Auth: JWT + ADMIN role required.
     """
@@ -517,7 +517,7 @@ async def update_app_proxy_override(
     """
     Set or clear the proxy provider override for an application.
     Takes precedence over department-level proxy override for proxy mode requests.
-    api_key is encrypted before storage — never stored or returned in plaintext.
+    api_key is encrypted before storage - never stored or returned in plaintext.
     Set clear=true to fall back to the department-level proxy override.
     Auth: JWT + ADMIN role required.
     """

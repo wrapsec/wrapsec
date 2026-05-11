@@ -3,7 +3,7 @@
 # WrapSec v1.0 | AI Security Gateway - https://wrapsec.com
 
 """
-WrapSec — Worker Queue / Scheduler
+WrapSec - Worker Queue / Scheduler
 workers/queue.py
 
 Manages the APScheduler instance that runs background tasks.
@@ -26,10 +26,10 @@ Schedule configuration (.env):
     RETENTION_WORKER_ENABLED = true
 
 APScheduler is used because:
-  - Integrates natively with asyncio/FastAPI — no separate process
+  - Integrates natively with asyncio/FastAPI - no separate process
   - Supports cron-style scheduling
   - Handles missed runs gracefully (misfire_grace_time)
-  - Lightweight — no Redis or message broker required for simple scheduling
+  - Lightweight - no Redis or message broker required for simple scheduling
 """
 
 import logging
@@ -37,7 +37,7 @@ from config.settings import get_settings
 
 logger = logging.getLogger("wrapsec.worker_queue")
 
-# Module-level scheduler instance — started once, shared across the app
+# Module-level scheduler instance - started once, shared across the app
 _scheduler = None
 
 
@@ -45,7 +45,7 @@ async def start_scheduler() -> None:
     """
     Start the APScheduler background scheduler.
     Called once during FastAPI lifespan startup.
-    Safe to call multiple times — will not start a second scheduler.
+    Safe to call multiple times - will not start a second scheduler.
     """
     global _scheduler
 
@@ -78,13 +78,13 @@ async def start_scheduler() -> None:
         _scheduler.start()
 
         logger.info(
-            f"Retention worker: scheduler started — "
+            f"Retention worker: scheduler started - "
             f"runs daily at {_settings.retention_worker_hour:02d}:{_settings.retention_worker_minute:02d} UTC"
         )
 
     except ImportError:
         logger.warning(
-            "Retention worker: APScheduler not installed — worker disabled. "
+            "Retention worker: APScheduler not installed - worker disabled. "
             "Install with: pip install apscheduler"
         )
     except Exception as e:

@@ -85,7 +85,7 @@ async def test_stream_with_scan_only_returns_400(client, admin_headers):
 
 @pytest.mark.asyncio
 async def test_debug_requires_admin(client, standard_headers):
-    """Debug mode requires admin — non-admin or invalid key is rejected."""
+    """Debug mode requires admin - non-admin or invalid key is rejected."""
     response = await client.post(
         "/v1/ai/request",
         json={

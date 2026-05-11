@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """
 WrapSec Python SDK Manual Tests
-Runs without pytest — plain Python with a simple pass/fail framework.
+Runs without pytest - plain Python with a simple pass/fail framework.
 
 Usage:
     export WRAPSEC_API_KEY=wsk_live_...

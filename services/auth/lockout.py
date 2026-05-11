@@ -11,8 +11,8 @@ logger = logging.getLogger("wrapsec.auth")
 
 # ── Redis key scheme ───────────────────────────────────────────────────────────
 #
-# auth:failed:{normalized_email}  — INCR failure counter
-# auth:locked:{normalized_email}  — lock flag (exists = locked)
+# auth:failed:{normalized_email}  - INCR failure counter
+# auth:locked:{normalized_email}  - lock flag (exists = locked)
 #
 # Both keys use normalized (lowercase, stripped) email.
 # Prevents case-bypass: USER@x.com and user@x.com share the same counter.
@@ -20,12 +20,12 @@ logger = logging.getLogger("wrapsec.auth")
 # TTL behavior:
 #   Failure counter key:
 #       TTL set on FIRST failure only (fixed window).
-#       NOT reset on subsequent failures — window expires naturally.
-#       After TTL expires: key deleted by Redis → fresh window starts.
+#       NOT reset on subsequent failures - window expires naturally.
+#       After TTL expires: key deleted by Redis -> fresh window starts.
 #
 #   Lock key:
 #       Uses SETEX on every failure >= MAX_ATTEMPTS.
-#       SETEX always overwrites — each failure DURING lockout extends the
+#       SETEX always overwrites - each failure DURING lockout extends the
 #       lockout duration. Attacker who keeps trying extends their own lockout.
 #       This is intentional and desirable.
 # ──────────────────────────────────────────────────────────────────────────────
@@ -42,7 +42,7 @@ def _locked_key(email: str) -> str:
 async def is_locked(email: str) -> bool:
     """
     Returns True if the account is currently locked.
-    Fast path — checks Redis only, no DB query.
+    Fast path - checks Redis only, no DB query.
     Call this FIRST in login() before any DB access.
     """
     redis = get_redis()
@@ -75,7 +75,7 @@ async def record_failure(email: str) -> tuple[int, bool]:
 
     is_now_locked = False
     if count >= max_attempts:
-        # SETEX overwrites existing key — extends lockout on each retry
+        # SETEX overwrites existing key - extends lockout on each retry
         await redis.setex(locked_key, ttl, "1")
         is_now_locked = True
 

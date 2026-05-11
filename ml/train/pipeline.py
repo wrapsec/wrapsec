@@ -9,7 +9,7 @@ Architecture: TF-IDF + Logistic Regression
 Rationale:
   - Fast inference (<1ms per sample)
   - No GPU required
-  - Interpretable — we can inspect feature weights
+  - Interpretable - we can inspect feature weights
   - Well-suited for text classification with moderate data
   - Production-proven for security classification tasks
 
@@ -45,14 +45,14 @@ def build_pipeline(
     C:            Regularisation strength (lower = more regularised)
                   1.0 is a good starting point, tuned in tune.py
 
-    class_weight: "balanced" — critical for imbalanced classes
+    class_weight: "balanced" - critical for imbalanced classes
                   Weights each class inversely proportional to frequency
     """
     return Pipeline([
         ("tfidf", TfidfVectorizer(
             ngram_range   = ngram_range,
             max_features  = max_features,
-            sublinear_tf  = True,       # log(1+tf) — reduces impact of high-freq terms
+            sublinear_tf  = True,       # log(1+tf) - reduces impact of high-freq terms
             strip_accents  = "unicode",
             analyzer      = "word",
             token_pattern = r"(?u)\b\w+\b",

@@ -101,7 +101,7 @@ def test_policy_source_app_override():
 
 
 def test_policy_source_tenant_only():
-    # tenant_override no longer used in policy resolution — global_policy removed from chain.
+    # tenant_override no longer used in policy resolution - global_policy removed from chain.
     # With no dept or app override, result is always system_default.
     source = determine_policy_source(
         dept_override = None,

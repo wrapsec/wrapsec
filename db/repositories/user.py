@@ -19,7 +19,7 @@ class UserRepository(BaseRepository):
         Case-insensitive email lookup using LOWER() to match ux_users_email_lower index.
 
         CRITICAL: ALWAYS use func.lower() in the WHERE clause.
-        NEVER use WHERE email = :email — that query does NOT use the index
+        NEVER use WHERE email = :email - that query does NOT use the index
         and breaks case-insensitive uniqueness guarantees.
 
         email parameter must already be normalized via normalize_email()
@@ -44,8 +44,8 @@ class UserRepository(BaseRepository):
         Optional keys: dept_id (UUID), force_password_change (bool)
 
         Validations performed before insert:
-        1. role must be in (ADMIN, DEVELOPER, VIEWER) — raises ValueError otherwise
-        2. dept_id required if role != ADMIN — raises ValueError if missing
+        1. role must be in (ADMIN, DEVELOPER, VIEWER) - raises ValueError otherwise
+        2. dept_id required if role != ADMIN - raises ValueError if missing
         3. dept_id tenant integrity check: if dept_id is provided, verifies that
            the department belongs to the same tenant as the user.
            Raises ValueError if dept does not belong to tenant.
@@ -136,10 +136,10 @@ class UserRepository(BaseRepository):
         """
         Locks the target user row (SELECT FOR UPDATE) then counts active admins.
         The row lock prevents concurrent requests from both passing the last-admin
-        check simultaneously — the second request blocks until the first commits.
+        check simultaneously - the second request blocks until the first commits.
         Used exclusively by last-admin protection before role change or deactivation.
         """
-        # Lock the row being modified — blocks concurrent updates to this user
+        # Lock the row being modified - blocks concurrent updates to this user
         await self.session.execute(
             select(UserModel).where(UserModel.id == lock_user_id).with_for_update()
         )
@@ -189,7 +189,7 @@ class UserRepository(BaseRepository):
         """
         Verifies that a department belongs to the specified tenant.
         Raises ValueError if the department does not exist under that tenant.
-        Called on every create/update that sets dept_id — prevents cross-tenant
+        Called on every create/update that sets dept_id - prevents cross-tenant
         data linkage even if the DB-level composite FK is not yet enforced.
         """
         result = await self.session.execute(

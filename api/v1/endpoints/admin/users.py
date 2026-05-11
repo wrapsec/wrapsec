@@ -62,7 +62,7 @@ async def _log_admin_event(
     user_agent:     str  | None      = None,
 ) -> None:
     """
-    Inserts an admin_event row. Best-effort — never raises.
+    Inserts an admin_event row. Best-effort - never raises.
     Called after DB commit. Uses the same session (post-commit is safe).
     If logging fails, logs internally and continues.
     """
@@ -113,8 +113,8 @@ def _validate_role_dept_consistency(role: str, dept_id) -> str | None:
     Returns error message string if invalid, None if valid.
 
     Rules (both directions enforced):
-        role = ADMIN     → dept_id MUST be None
-        role != ADMIN    → dept_id MUST NOT be None
+        role = ADMIN     -> dept_id MUST be None
+        role != ADMIN    -> dept_id MUST NOT be None
     """
     if role == "ADMIN" and dept_id is not None:
         return "ADMIN users must not have a dept_id."
@@ -237,7 +237,7 @@ async def list_users(
 ) -> JSONResponse:
     """
     Lists all users for the tenant.
-    Scoped to principal.tenant_id — never cross-tenant.
+    Scoped to principal.tenant_id - never cross-tenant.
 
     Auth: JWT + ADMIN role required.
     """
@@ -298,10 +298,10 @@ async def update_user(
     - dept_id must belong to same tenant
 
     Side effects:
-    - role changed    → token_version++, admin_event: role_changed
-    - dept changed    → token_version++, admin_event: dept_changed
-    - deactivated     → token_version++, admin_event: user_deactivated
-    - reactivated     → no token_version change, admin_event: user_reactivated
+    - role changed    -> token_version++, admin_event: role_changed
+    - dept changed    -> token_version++, admin_event: dept_changed
+    - deactivated     -> token_version++, admin_event: user_deactivated
+    - reactivated     -> no token_version change, admin_event: user_reactivated
 
     Auth: JWT + ADMIN role required.
     """
@@ -391,7 +391,7 @@ async def update_user(
 
     try:
         updated = await repo.update(user_id, data)
-        # Do NOT commit yet — session invalidation must be atomic with the update.
+        # Do NOT commit yet - session invalidation must be atomic with the update.
     except ValueError as e:
         logger.warning("user update rejected: %s", e)
         return JSONResponse(
@@ -399,7 +399,7 @@ async def update_user(
             content={"error": {"code": "INVALID_REQUEST", "message": "Invalid request parameters."}},
         )
 
-    # Session invalidation — commits the user update + invalidation atomically.
+    # Session invalidation - commits the user update + invalidation atomically.
     invalidate_session = (
         new_role is not None or
         "dept_id" in data or
@@ -407,11 +407,11 @@ async def update_user(
     )
     if invalidate_session:
         await AuthService().logout_all_sessions(user_id, db)
-        # logout_all_sessions() issues db.commit() — user update is now persisted.
+        # logout_all_sessions() issues db.commit() - user update is now persisted.
     else:
         await db.commit()
 
-    # Admin event logging — one event per change type, post-commit, best-effort
+    # Admin event logging - one event per change type, post-commit, best-effort
     target_uuid = user_id
     post_dept_id = updated.dept_id  # post-update value for dept_id rows
 

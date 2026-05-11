@@ -3,7 +3,7 @@
 # WrapSec v1.0 | AI Security Gateway - https://wrapsec.com
 
 """
-Base HTTP layer — request construction, header building, timeout resolution,
+Base HTTP layer - request construction, header building, timeout resolution,
 error mapping from HTTP status to typed exceptions.
 
 Shared by client.py (sync) and async_client.py (async).
@@ -39,7 +39,7 @@ from wrapsec.exceptions import (
 
 logger = logging.getLogger("wrapsec.http")
 
-# Single constant — the ONLY place /v1 is defined in the SDK
+# Single constant - the ONLY place /v1 is defined in the SDK
 # Spec: Section 6.5
 BASE_PATH        = "/v1"
 DEFAULT_BASE_URL = "http://localhost:8000"
@@ -48,7 +48,7 @@ DEFAULT_BASE_URL = "http://localhost:8000"
 def build_headers(api_key: str) -> dict[str, str]:
     """
     Build the standard request headers for every WrapSec API call.
-    Uses x-api-key (not Bearer) — matches WrapSec API auth convention.
+    Uses x-api-key (not Bearer) - matches WrapSec API auth convention.
     Generates a unique idempotency key per request.
     """
     return {
@@ -67,9 +67,9 @@ def resolve_timeout(
 ) -> int:
     """
     Resolve timeout using strict is not None chain.
-    Never uses falsy check — timeout=0 would cause indefinite hangs.
+    Never uses falsy check - timeout=0 would cause indefinite hangs.
 
-    Priority: method argument → client default → config → fallback (30s)
+    Priority: method argument -> client default -> config -> fallback (30s)
 
     Spec: Section 7 (Timeout Resolution)
     """
@@ -91,7 +91,7 @@ def map_response_error(
 ) -> WrapSecError:
     """
     Map an HTTP error status code to the appropriate typed exception.
-    Returns the exception — does not raise. Caller decides when to raise.
+    Returns the exception - does not raise. Caller decides when to raise.
 
     Spec: Section 8 (SDK Error Mapping), Section 15 (HTTP Error Handling)
     """
@@ -99,7 +99,7 @@ def map_response_error(
     if response_data:
         err = response_data.get("error", {})
         error_detail = err.get("message", "") if isinstance(err, dict) else ""
-        # FastAPI returns {"detail": "..."} for unhandled 404s — surface that too
+        # FastAPI returns {"detail": "..."} for unhandled 404s - surface that too
         if not error_detail and isinstance(response_data.get("detail"), str):
             error_detail = response_data["detail"]
 
@@ -164,9 +164,9 @@ def execute_request(
 
     Raises typed WrapSecError subclasses on all error conditions.
     Raises WrapSecSystemError for timeout, connection, and JSON parse errors.
-    Does NOT retry — retry is handled by core/retry.py.
+    Does NOT retry - retry is handled by core/retry.py.
 
-    Spec: Section 3 (core/http.py — shared by sync and async clients)
+    Spec: Section 3 (core/http.py - shared by sync and async clients)
     """
     try:
         resp = requests.request(
@@ -218,9 +218,9 @@ async def execute_request_async(
     Returns the parsed JSON body.
 
     Raises the same typed exceptions as execute_request.
-    Does NOT retry — retry is handled by core/retry.py (with_retry_async).
+    Does NOT retry - retry is handled by core/retry.py (with_retry_async).
 
-    Spec: Section 3 (core/http.py — shared by sync and async clients)
+    Spec: Section 3 (core/http.py - shared by sync and async clients)
     """
     try:
         async with httpx.AsyncClient(timeout=timeout) as client:

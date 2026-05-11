@@ -118,7 +118,7 @@ async def get_proxy_interaction(
                 return not_found
     else:
         # Non-admin: must own the interaction. Interactions with no key_id are
-        # system/admin records — never accessible to non-admin callers.
+        # system/admin records - never accessible to non-admin callers.
         if not item.key_id or item.key_id != request.state.key_id:
             return not_found
 

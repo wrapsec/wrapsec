@@ -13,7 +13,7 @@ from config.settings import get_settings as _get_settings
 
 logger = logging.getLogger("wrapsec.auth")
 
-# Dedicated NullPool engine for auth_event writes — kept at module level so the
+# Dedicated NullPool engine for auth_event writes - kept at module level so the
 # engine object is not re-created on every login attempt. NullPool still opens
 # a fresh DB connection per session; dispose() is never needed at this scope.
 _auth_settings    = _get_settings()
@@ -46,12 +46,12 @@ async def _log_auth_event(
     Inserts an auth_event row using a separate NullPool DB session.
 
     Non-blocking: independent session, never touches the request session.
-    Best-effort: exceptions are logged and suppressed — never affect auth flow.
-    Session is always closed in finally block — NullPool does not pool connections.
+    Best-effort: exceptions are logged and suppressed - never affect auth flow.
+    Session is always closed in finally block - NullPool does not pool connections.
 
     tenant_id / user_id:
-        Known user   → set from user record
-        Unknown user → both None (user not found, cannot resolve tenant)
+        Known user   -> set from user record
+        Unknown user -> both None (user not found, cannot resolve tenant)
     """
     from db.repositories.auth_event import AuthEventRepository
     from domain.enums import AuthEventAction as _Action, AuthFailureReason as _Reason
@@ -104,7 +104,7 @@ class AuthService:
         """
         Full login flow.
 
-        ip_address and user_agent are optional — passed from the request for
+        ip_address and user_agent are optional - passed from the request for
         auth_events logging. Login succeeds regardless of their presence.
 
         auth_events logging is non-blocking: uses _log_auth_event() which
@@ -246,7 +246,7 @@ class AuthService:
             )
             raise InvalidTokenException()
 
-        # expires_at is stored as naive UTC — compare against datetime.utcnow()
+        # expires_at is stored as naive UTC - compare against datetime.utcnow()
         if token_rec.expires_at and token_rec.expires_at < datetime.utcnow():
             await rt_repo.revoke(token_hash)
             await db.commit()
@@ -329,7 +329,7 @@ class AuthService:
         Revokes refresh token and logs LOGOUT with reason.
 
         reason: pre-validated by endpoint (LogoutReason enum).
-        Invalid values are normalized to "manual" at endpoint level —
+        Invalid values are normalized to "manual" at endpoint level -
         service trusts the reason passed in.
 
         Logging: non-blocking _log_auth_event(), best-effort.
@@ -410,7 +410,7 @@ class AuthService:
             "password_hash":         hash_password(new_password),
             "force_password_change": False,
         })
-        # No intermediate commit — password hash update and session invalidation
+        # No intermediate commit - password hash update and session invalidation
         # (token_version increment + refresh token revocations) must be committed
         # atomically. logout_all_sessions() issues the single commit.
         await self.logout_all_sessions(user_id, db)

@@ -3,7 +3,7 @@ from interfaces.base_llm import BaseLLMClient
 
 
 async def get_llm_settings_from_db() -> dict:
-    """Load LLM settings from DB — falls back to .env defaults. Decrypts stored API key."""
+    """Load LLM settings from DB - falls back to .env defaults. Decrypts stored API key."""
     try:
         import os
         if os.getenv("TESTING") == "true":
@@ -22,7 +22,7 @@ async def get_llm_settings_from_db() -> dict:
                 try:
                     result["api_key"] = decrypt(enc_record["enc"], get_settings().secret_key)
                 except ValueError:
-                    pass  # Decryption failure — fall back to env var
+                    pass  # Decryption failure - fall back to env var
 
             return result
     except Exception:

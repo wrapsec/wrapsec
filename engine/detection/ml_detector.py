@@ -56,21 +56,21 @@ class MLDetector(BaseDetector):
         try:
             raw = MODEL_PATH.read_bytes()
 
-            # Integrity check — refuse to unpickle if hash file exists and mismatches.
+            # Integrity check - refuse to unpickle if hash file exists and mismatches.
             # pickle.load() executes arbitrary code; a tampered model is an RCE vector.
             if MODEL_HASH_PATH.exists():
                 expected = MODEL_HASH_PATH.read_text().strip().lower()
                 actual   = hashlib.sha256(raw).hexdigest().lower()
                 if actual != expected:
                     logger.error(
-                        "ML model integrity check FAILED — "
-                        "expected=%s actual=%s path=%s — refusing to load",
+                        "ML model integrity check FAILED - "
+                        "expected=%s actual=%s path=%s - refusing to load",
                         expected[:16] + "...", actual[:16] + "...", MODEL_PATH,
                     )
                     return
             else:
                 logger.error(
-                    "ML model integrity file not found at %s — refusing to load. "
+                    "ML model integrity file not found at %s - refusing to load. "
                     "pickle.loads without verification is an RCE vector. "
                     "Generate the hash with: sha256sum %s > %s",
                     MODEL_HASH_PATH, MODEL_PATH, MODEL_HASH_PATH,

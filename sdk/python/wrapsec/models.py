@@ -22,8 +22,8 @@ class ScanResult:
     Result of a single scan request (POST /v1/ai/request).
 
     decision        : "ALLOW" | "BLOCK" | "SANITIZE"
-    risk_score      : overall risk level (0.0–1.0) — threshold used for decision
-    confidence      : detection model confidence (0.0–1.0), distinct from risk_score
+    risk_score      : overall risk level (0.0-1.0) - threshold used for decision
+    confidence      : detection model confidence (0.0-1.0), distinct from risk_score
     primary_reason  : detector that triggered the decision
     sanitized_input : cleaned input, only present when decision == "SANITIZE"
     output          : LLM response, only present when execution_mode == "proxy"
@@ -91,8 +91,8 @@ class AuditLog:
     """
     A single audit log entry returned from GET /v1/audit/logs.
 
-    risk_score      : overall risk level (0.0–1.0), distinct from confidence
-    confidence      : detection model confidence (0.0–1.0)
+    risk_score      : overall risk level (0.0-1.0), distinct from confidence
+    confidence      : detection model confidence (0.0-1.0)
     severity        : CRITICAL | HIGH | MEDIUM | LOW (SIEM triage level)
     output_decision : scan decision on the LLM output (proxy mode only)
     provider/model  : LLM provider and model used (proxy mode only)
@@ -133,7 +133,7 @@ class AuditLog:
     policy_source:        str | None
     input_hash:           str | None
 
-    # Proxy mode — None for scan_only requests
+    # Proxy mode - None for scan_only requests
     output_decision:      str | None = None
     provider:             str | None = None
     model:                str | None = None
@@ -145,7 +145,7 @@ class AuditLog:
             created_at           = data.get("timestamp", data.get("created_at", "")),
             decision             = data.get("decision", ""),
             primary_reason       = data.get("primary_reason", ""),
-            # risk_score and confidence are separate — never substitute one for the other
+            # risk_score and confidence are separate - never substitute one for the other
             risk_score           = float(data.get("risk_score", 0.0)),
             confidence           = float(data.get("confidence", 0.0)),
             confidence_band      = data.get("confidence_band", ""),
@@ -179,10 +179,10 @@ class AuditStats:
     Aggregated statistics returned from GET /v1/audit/stats.
 
     severity_counts breaks down requests by SIEM severity level:
-        CRITICAL — guardrail blocks (PII, toxicity) or risk_score >= 0.9
-        HIGH     — other blocks or SYSTEM_ERROR
-        MEDIUM   — sanitized requests
-        LOW      — allowed requests
+        CRITICAL - guardrail blocks (PII, toxicity) or risk_score >= 0.9
+        HIGH     - other blocks or SYSTEM_ERROR
+        MEDIUM   - sanitized requests
+        LOW      - allowed requests
     """
 
     total_requests:  int

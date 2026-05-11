@@ -3,17 +3,17 @@
 # WrapSec v1.0 | AI Security Gateway - https://wrapsec.com
 
 """
-Dataset collection — professional, peer-reviewed security datasets.
+Dataset collection - professional, peer-reviewed security datasets.
 
 Academic citations:
-  NeurIPS 2023  — HackAPrompt (Schulhoff et al.)
-  NeurIPS 2024  — JailbreakBench (Chao et al.)
-  ACL 2022      — Measuring Hate Speech (Kennedy et al., UC Berkeley)
-  ACL 2022      — ToxiGen (Hartvigsen et al., Microsoft Research)
-  Stanford CRFM — Alpaca (Taori et al.)
-  deepset AI    — Prompt Injections
-  AllenAI       — WildGuard (Han et al.)
-  ai4privacy    — PII Masking 300k
+  NeurIPS 2023  - HackAPrompt (Schulhoff et al.)
+  NeurIPS 2024  - JailbreakBench (Chao et al.)
+  ACL 2022      - Measuring Hate Speech (Kennedy et al., UC Berkeley)
+  ACL 2022      - ToxiGen (Hartvigsen et al., Microsoft Research)
+  Stanford CRFM - Alpaca (Taori et al.)
+  deepset AI    - Prompt Injections
+  AllenAI       - WildGuard (Han et al.)
+  ai4privacy    - PII Masking 300k
 
 Target: 1,500 samples per class × 7 classes = 10,500 total
 Balance: 1:1 ratio across all classes
@@ -37,10 +37,10 @@ import pandas as pd
 
 logger = logging.getLogger("wrapsec.ml.collect")
 
-# Target samples per class — balanced 1:1
+# Target samples per class - balanced 1:1
 MAX_PER_CLASS = 1500
 
-# Label mapping — must match train_ml_model.py and ml_detector.py
+# Label mapping - must match train_ml_model.py and ml_detector.py
 LABEL_MAP = {
     "BENIGN":            0,
     "PROMPT_INJECTION":  1,
@@ -77,7 +77,7 @@ def _is_valid(text: str, min_len: int = 10, max_len: int = 1000) -> bool:
 
 def collect_benign(max_samples: int = MAX_PER_CLASS) -> list[Sample]:
     """
-    Stanford Alpaca — safe instruction-following dataset.
+    Stanford Alpaca - safe instruction-following dataset.
     Taori et al., Stanford CRFM, 2023.
     License: Apache 2.0
     """
@@ -105,9 +105,9 @@ def collect_benign(max_samples: int = MAX_PER_CLASS) -> list[Sample]:
 def collect_prompt_injection(max_samples: int = MAX_PER_CLASS) -> list[Sample]:
     """
     Sources:
-    1. deepset/prompt-injections — deepset AI, Apache 2.0
-    2. hackaprompt/hackaprompt-dataset — NeurIPS 2023 (Schulhoff et al.)
-    3. fmops/prompt-injection — fallback
+    1. deepset/prompt-injections - deepset AI, Apache 2.0
+    2. hackaprompt/hackaprompt-dataset - NeurIPS 2023 (Schulhoff et al.)
+    3. fmops/prompt-injection - fallback
     """
     from datasets import load_dataset
     samples = []
@@ -125,7 +125,7 @@ def collect_prompt_injection(max_samples: int = MAX_PER_CLASS) -> list[Sample]:
     except Exception as e:
         logger.warning(f"Failed to load deepset/prompt-injections: {e}")
 
-    # Source 2: HackAPrompt — NeurIPS 2023
+    # Source 2: HackAPrompt - NeurIPS 2023
     try:
         logger.info("Loading hackaprompt/hackaprompt-dataset (NeurIPS 2023)...")
         ds      = load_dataset("hackaprompt/hackaprompt-dataset", split="train")
@@ -165,9 +165,9 @@ def collect_prompt_injection(max_samples: int = MAX_PER_CLASS) -> list[Sample]:
 def collect_jailbreak(max_samples: int = MAX_PER_CLASS) -> list[Sample]:
     """
     Sources:
-    1. allenai/wildguard — AllenAI, Apache 2.0
-    2. JailbreakBench/JBB-Behaviors — NeurIPS 2024 (Chao et al.)
-    3. jackhhao/jailbreak-classification — fallback
+    1. allenai/wildguard - AllenAI, Apache 2.0
+    2. JailbreakBench/JBB-Behaviors - NeurIPS 2024 (Chao et al.)
+    3. jackhhao/jailbreak-classification - fallback
     """
     from datasets import load_dataset
     samples = []
@@ -187,7 +187,7 @@ def collect_jailbreak(max_samples: int = MAX_PER_CLASS) -> list[Sample]:
     except Exception as e:
         logger.warning(f"Failed to load allenai/wildguard: {e}")
 
-    # Source 2: JailbreakBench — NeurIPS 2024
+    # Source 2: JailbreakBench - NeurIPS 2024
     try:
         logger.info("Loading JailbreakBench/JBB-Behaviors (NeurIPS 2024)...")
         ds = load_dataset("JailbreakBench/JBB-Behaviors", "behaviors", split="harmful")
@@ -230,16 +230,16 @@ def collect_jailbreak(max_samples: int = MAX_PER_CLASS) -> list[Sample]:
 def collect_toxicity(max_samples: int = MAX_PER_CLASS) -> list[Sample]:
     """
     Sources:
-    1. ucberkeley-dlab/measuring-hate-speech — ACL 2022 (Kennedy et al.)
-    2. skg/toxigen-data — ACL 2022 (Hartvigsen et al., Microsoft Research)
+    1. ucberkeley-dlab/measuring-hate-speech - ACL 2022 (Kennedy et al.)
+    2. skg/toxigen-data - ACL 2022 (Hartvigsen et al., Microsoft Research)
     """
     from datasets import load_dataset
     samples = []
 
-    # Source 1: Jigsaw — Wikipedia CC0, WWW 2017 (load first)
+    # Source 1: Jigsaw - Wikipedia CC0, WWW 2017 (load first)
     samples.extend(collect_jigsaw_toxicity(max_samples))
 
-    # Source 2: UC Berkeley — ACL 2022
+    # Source 2: UC Berkeley - ACL 2022
     try:
         logger.info("Loading ucberkeley-dlab/measuring-hate-speech (ACL 2022)...")
         ds     = load_dataset("ucberkeley-dlab/measuring-hate-speech", split="train")
@@ -254,7 +254,7 @@ def collect_toxicity(max_samples: int = MAX_PER_CLASS) -> list[Sample]:
     except Exception as e:
         logger.warning(f"Failed to load ucberkeley-dlab: {e}")
 
-    # Source 2: ToxiGen — Microsoft Research, ACL 2022
+    # Source 2: ToxiGen - Microsoft Research, ACL 2022
     if len(samples) < max_samples:
         try:
             logger.info("Loading skg/toxigen-data (Microsoft Research, ACL 2022)...")
@@ -276,7 +276,7 @@ def collect_toxicity(max_samples: int = MAX_PER_CLASS) -> list[Sample]:
 
 def collect_jigsaw_toxicity(max_samples: int = MAX_PER_CLASS) -> list[Sample]:
     """
-    Jigsaw Toxic Comment Classification — Wikipedia Talk Pages.
+    Jigsaw Toxic Comment Classification - Wikipedia Talk Pages.
     Wulczyn et al., "Ex Machina: Personal Attacks Seen at Scale", WWW 2017.
     Source: Wikipedia CC0 (public domain)
     Publisher: Google Jigsaw + Wikimedia Foundation
@@ -285,7 +285,7 @@ def collect_jigsaw_toxicity(max_samples: int = MAX_PER_CLASS) -> list[Sample]:
     import pandas as pd
     path = Path(__file__).parent / "raw" / "jigsaw_train.csv"
     if not path.exists():
-        logger.warning(f"Jigsaw dataset not found at {path} — skipping")
+        logger.warning(f"Jigsaw dataset not found at {path} - skipping")
         return []
     try:
         logger.info("Loading Jigsaw toxic comments (Wikipedia CC0, WWW 2017)...")
@@ -315,7 +315,7 @@ def collect_jigsaw_toxicity(max_samples: int = MAX_PER_CLASS) -> list[Sample]:
 def collect_pii(max_samples: int = MAX_PER_CLASS) -> list[Sample]:
     """
     Sources:
-    1. ai4privacy/pii-masking-300k — CC BY 4.0, industry standard
+    1. ai4privacy/pii-masking-300k - CC BY 4.0, industry standard
     2. Curated internal samples
     """
     from datasets import load_dataset
@@ -597,14 +597,14 @@ def collect_all(
     Target: 1,500 samples per class × 7 classes = 10,500 total.
 
     Academic citations:
-      NeurIPS 2023  — HackAPrompt (Schulhoff et al.)
-      NeurIPS 2024  — JailbreakBench (Chao et al.)
-      ACL 2022      — Measuring Hate Speech (Kennedy et al., UC Berkeley)
-      ACL 2022      — ToxiGen (Hartvigsen et al., Microsoft Research)
-      Stanford CRFM — Alpaca (Taori et al.)
-      deepset AI    — Prompt Injections
-      AllenAI       — WildGuard (Han et al.)
-      ai4privacy    — PII Masking 300k
+      NeurIPS 2023  - HackAPrompt (Schulhoff et al.)
+      NeurIPS 2024  - JailbreakBench (Chao et al.)
+      ACL 2022      - Measuring Hate Speech (Kennedy et al., UC Berkeley)
+      ACL 2022      - ToxiGen (Hartvigsen et al., Microsoft Research)
+      Stanford CRFM - Alpaca (Taori et al.)
+      deepset AI    - Prompt Injections
+      AllenAI       - WildGuard (Han et al.)
+      ai4privacy    - PII Masking 300k
     """
     random.seed(seed)
 

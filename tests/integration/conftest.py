@@ -89,10 +89,10 @@ def standard_headers():
 async def _flush_test_redis_keys():
     """
     Flushes rate limit and auth lockout Redis keys before auth tests.
-    Rate limit key: rate_limit:{ip} — accumulates across tests from 127.0.0.1
+    Rate limit key: rate_limit:{ip} - accumulates across tests from 127.0.0.1
     Lockout keys: auth:failed:{email}, auth:locked:{email}
 
-    Uses KEYS — O(N) blocking command. Acceptable for test cleanup on a local
+    Uses KEYS - O(N) blocking command. Acceptable for test cleanup on a local
     Redis instance with a small keyspace. Never use KEYS in production code.
     """
     try:
@@ -110,14 +110,14 @@ async def _flush_test_redis_keys():
         if keys:
             await redis.delete(*keys)
     except Exception:
-        pass  # Redis unavailable — silently skip
+        pass  # Redis unavailable - silently skip
 
 
 # ── Auth fixtures ──────────────────────────────────────────────────────────────
 
 @pytest_asyncio.fixture(scope="function")
 async def auth_client():
-    """HTTP client against real app — no DB override."""
+    """HTTP client against real app - no DB override."""
     app.dependency_overrides.clear()
     # Flush rate limit keys before each auth test
     await _flush_test_redis_keys()

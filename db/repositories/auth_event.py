@@ -18,11 +18,11 @@ class AuthEventRepository(BaseRepository):
     Repository for auth_events table.
 
     Logging model: NON-BLOCKING. Must be called via BackgroundTasks or a
-    separate DB session — never the request session. Must not delay login response.
+    separate DB session - never the request session. Must not delay login response.
 
     tenant_id and user_id are NULLABLE:
-        Known user   → set both from user record
-        Unknown user → both None (user not found, tenant cannot be resolved)
+        Known user   -> set both from user record
+        Unknown user -> both None (user not found, tenant cannot be resolved)
         Prefer None over incorrect attribution. Never use sentinel values.
     """
 
@@ -44,12 +44,12 @@ class AuthEventRepository(BaseRepository):
         failure_reason must be None when success=True.
 
         tenant_id/user_id rules:
-            Login success          → tenant_id=user.tenant_id, user_id=user.id
-            Login fail (bad pwd)   → tenant_id=user.tenant_id, user_id=user.id
-            Login fail (inactive)  → tenant_id=user.tenant_id, user_id=user.id
-            Login fail (not found) → tenant_id=None, user_id=None
+            Login success          -> tenant_id=user.tenant_id, user_id=user.id
+            Login fail (bad pwd)   -> tenant_id=user.tenant_id, user_id=user.id
+            Login fail (inactive)  -> tenant_id=user.tenant_id, user_id=user.id
+            Login fail (not found) -> tenant_id=None, user_id=None
 
-        Uses flush() not commit() — caller owns the transaction and must commit.
+        Uses flush() not commit() - caller owns the transaction and must commit.
         This repository never commits so it composes safely in multi-step operations.
         """
         event = AuthEventModel(
@@ -80,7 +80,7 @@ class AuthEventRepository(BaseRepository):
         Returns (events, total_count).
 
         Note: rows with tenant_id=None (unknown user attempts) are excluded
-        from tenant-scoped queries — they have no tenant attribution.
+        from tenant-scoped queries - they have no tenant attribution.
         """
         query = select(AuthEventModel).where(
             AuthEventModel.tenant_id == tenant_id

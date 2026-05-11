@@ -19,13 +19,13 @@ logger = logging.getLogger("wrapsec.setup")
 
 router = APIRouter()
 
-# Once initialized this key is set permanently — no expiry needed.
+# Once initialized this key is set permanently - no expiry needed.
 # It is an immutable fact: a system that has users never becomes uninitialized.
 _CACHE_KEY = "setup:initialized"
 
 
 async def _mark_initialized() -> None:
-    """Write the initialized flag to Redis. Best-effort — never raises."""
+    """Write the initialized flag to Redis. Best-effort - never raises."""
     try:
         await get_redis().set(_CACHE_KEY, "1")
     except Exception as e:
@@ -54,24 +54,24 @@ class SetupStatusResponse(BaseModel):
 async def setup_status(db: AsyncSession = Depends(get_db)):
     """
     Returns whether the system has been initialized (first admin user exists).
-    Redis-cached after first initialization — zero DB load on subsequent calls.
-    Public endpoint — used by the dashboard to decide whether to show /setup.
+    Redis-cached after first initialization - zero DB load on subsequent calls.
+    Public endpoint - used by the dashboard to decide whether to show /setup.
     """
-    # Fast path — Redis cache hit means already initialized, skip DB entirely
+    # Fast path - Redis cache hit means already initialized, skip DB entirely
     try:
         cached = await asyncio.wait_for(get_redis().get(_CACHE_KEY), timeout=2.0)
         if cached:
             return SetupStatusResponse(initialized=True)
     except asyncio.TimeoutError:
-        logger.warning("setup cache read timed out — falling back to DB")
+        logger.warning("setup cache read timed out - falling back to DB")
     except Exception as e:
-        logger.warning("setup cache read failed: %s — falling back to DB", e)
+        logger.warning("setup cache read failed: %s - falling back to DB", e)
 
-    # Cache miss — check DB
+    # Cache miss - check DB
     try:
         tenant = await asyncio.wait_for(TenantRepository(db).get_default(), timeout=5.0)
     except asyncio.TimeoutError:
-        logger.warning("setup DB status check timed out — returning not initialized")
+        logger.warning("setup DB status check timed out - returning not initialized")
         return SetupStatusResponse(initialized=False)
 
     if not tenant:
@@ -80,7 +80,7 @@ async def setup_status(db: AsyncSession = Depends(get_db)):
     try:
         count = await asyncio.wait_for(UserRepository(db).count_by_tenant(tenant.id), timeout=5.0)
     except asyncio.TimeoutError:
-        logger.warning("setup DB user count timed out — returning not initialized")
+        logger.warning("setup DB user count timed out - returning not initialized")
         return SetupStatusResponse(initialized=False)
 
     initialized = count > 0
@@ -96,12 +96,12 @@ async def setup_status(db: AsyncSession = Depends(get_db)):
 async def complete_setup(body: SetupRequest, db: AsyncSession = Depends(get_db)):
     """
     Creates the first admin user. Only succeeds when no users exist.
-    Returns 404 once initialized — indistinguishable from a missing route.
-    Public endpoint — accessible without any API key or JWT.
+    Returns 404 once initialized - indistinguishable from a missing route.
+    Public endpoint - accessible without any API key or JWT.
     """
     tenant = await TenantRepository(db).get_default()
 
-    # Return 404 for all failure cases — never reveal system state to unauthenticated callers
+    # Return 404 for all failure cases - never reveal system state to unauthenticated callers
     if not tenant:
         raise HTTPException(status_code=404)
 
@@ -121,7 +121,7 @@ async def complete_setup(body: SetupRequest, db: AsyncSession = Depends(get_db))
     })
     await db.commit()
 
-    # Cache immediately — all future status checks are Redis-only
+    # Cache immediately - all future status checks are Redis-only
     await _mark_initialized()
 
     logger.info("setup first_admin_created email=%s", email)

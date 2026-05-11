@@ -1,5 +1,5 @@
 """
-Basic scan example — synchronous client.
+Basic scan example - synchronous client.
 
 Setup:
     pip install wrapsec-python

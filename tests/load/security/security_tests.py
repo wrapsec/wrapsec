@@ -5,14 +5,14 @@
 """
 WrapSec Security Tests
 ======================
-Not load tests — correctness tests run as part of pre-production checklist.
+Not load tests - correctness tests run as part of pre-production checklist.
 Each test is self-contained with clear PASS/FAIL output.
 
 Tests:
-  A. Cross-department isolation   — dept A key cannot see dept B data
-  B. RBAC enforcement             — role boundaries enforced
-  C. Trace ID leakage             — cross-dept trace lookup returns 404
-  D. Trial key restrictions       — input cap, rate limit, proxy disabled
+  A. Cross-department isolation   - dept A key cannot see dept B data
+  B. RBAC enforcement             - role boundaries enforced
+  C. Trace ID leakage             - cross-dept trace lookup returns 404
+  D. Trial key restrictions       - input cap, rate limit, proxy disabled
 
 Usage:
   python tests/load/security/security_tests.py

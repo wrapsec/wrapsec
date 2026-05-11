@@ -25,19 +25,19 @@ def create_access_token(user: "UserModel") -> str:
     Creates a short-lived JWT access token for a dashboard user.
 
     Claims and their purposes:
-        sub        — user UUID string (JWT subject — standard claim)
-        type       — "access": rejects refresh tokens used as access tokens
-        ver        — user.token_version: detects session invalidation
-        role       — user.role: used by RBAC dependencies (require_role)
-        tenant_id  — security boundary: cross-validated against DB in middleware
-        dept_id    — isolation boundary: None for ADMIN, str UUID for others
-        aud        — ACCESS_TOKEN_AUDIENCE: cross-service token reuse prevention
-        iat        — issued-at (standard JWT)
-        exp        — expiry (standard JWT)
+        sub        - user UUID string (JWT subject - standard claim)
+        type       - "access": rejects refresh tokens used as access tokens
+        ver        - user.token_version: detects session invalidation
+        role       - user.role: used by RBAC dependencies (require_role)
+        tenant_id  - security boundary: cross-validated against DB in middleware
+        dept_id    - isolation boundary: None for ADMIN, str UUID for others
+        aud        - ACCESS_TOKEN_AUDIENCE: cross-service token reuse prevention
+        iat        - issued-at (standard JWT)
+        exp        - expiry (standard JWT)
 
     Deliberately excluded:
-        email       — unnecessary exposure if token is logged
-        permissions — not enforced in v1 (roles only)
+        email       - unnecessary exposure if token is logged
+        permissions - not enforced in v1 (roles only)
     """
     _settings = get_settings()
     now     = datetime.now(timezone.utc)
@@ -61,11 +61,11 @@ def create_refresh_token() -> tuple[str, str]:
     Creates an opaque refresh token pair.
     Returns: (raw_token, token_hash)
 
-    raw_token  — 32 random bytes, URL-safe base64
+    raw_token  - 32 random bytes, URL-safe base64
                  Sent to client ONCE via httpOnly cookie.
                  NEVER stored server-side (not in DB, not in Redis, not in logs).
 
-    token_hash — SHA-256(raw_token.encode())
+    token_hash - SHA-256(raw_token.encode())
                  Stored in refresh_tokens.token_hash.
                  Raw token cannot be reconstructed from hash.
 
@@ -81,15 +81,15 @@ def decode_access_token(token: str) -> dict:
     Decodes and validates a JWT access token.
 
     Validates in order:
-        1. Signature  — HMAC-SHA256 with secret_key
-        2. Expiry     — exp claim not in the past
-        3. Audience   — aud == ACCESS_TOKEN_AUDIENCE
-        4. Type       — type == "access" (rejects refresh tokens used as access)
-        5. Required   — sub, tenant_id, role, ver all present and non-null
+        1. Signature  - HMAC-SHA256 with secret_key
+        2. Expiry     - exp claim not in the past
+        3. Audience   - aud == ACCESS_TOKEN_AUDIENCE
+        4. Type       - type == "access" (rejects refresh tokens used as access)
+        5. Required   - sub, tenant_id, role, ver all present and non-null
 
     Error handling (R4 fix):
         Full error detail logged internally at WARNING level.
-        Generic message raised to caller — caller MUST NOT pass details to client.
+        Generic message raised to caller - caller MUST NOT pass details to client.
         Prevents token oracle attacks where error message reveals validation state.
 
     Raises: InvalidTokenError with generic message on any failure.
@@ -105,7 +105,7 @@ def decode_access_token(token: str) -> dict:
         )
     except InvalidTokenError as e:
         logger.warning("auth token_decode_failed reason=%s", str(e))
-        raise InvalidTokenError("Token validation failed")  # generic — no details to client
+        raise InvalidTokenError("Token validation failed")  # generic - no details to client
 
     if payload.get("type") != "access":
         logger.warning(

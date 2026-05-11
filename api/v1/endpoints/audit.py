@@ -85,7 +85,7 @@ async def _enrich(
     """
     Batch-resolve dept names, app names, and proxy interaction data
     for a paginated result set. Three PK-indexed lookups on small ID sets.
-    IDs come from already tenant-scoped audit rows — no cross-tenant leakage.
+    IDs come from already tenant-scoped audit rows - no cross-tenant leakage.
     """
     from sqlalchemy import cast, String
 
@@ -153,7 +153,7 @@ async def get_audit_logs(
 ):
     """
     Returns a paginated, filterable list of audit log entries.
-    Non-admin keys are always scoped to their own dept_id and tenant_id — any
+    Non-admin keys are always scoped to their own dept_id and tenant_id - any
     dept_id/tenant_id query parameters from non-admin callers are ignored.
     """
     scope     = get_audit_scope(request)
@@ -216,7 +216,7 @@ async def get_audit_stats(
         to_dt     = _parse_dt(to),
     )
 
-    # Fetch severity counts — direct query for SIEM-compatible dashboard metrics
+    # Fetch severity counts - direct query for SIEM-compatible dashboard metrics
     sev_where = []
     if tenant_id:
         sev_where.append(AuditLogModel.tenant_id == tenant_id)
@@ -263,7 +263,7 @@ async def get_audit_stats(
         reverse=True,
     )
 
-    # Severity breakdown — for SIEM compatibility and dashboard triage
+    # Severity breakdown - for SIEM compatibility and dashboard triage
     sev_map        = stats.get("severities_map", {})
     severity_counts = {
         "CRITICAL": sev_map.get("CRITICAL", 0),
@@ -296,7 +296,7 @@ async def get_attribution_report(
     _principal: Principal    = Depends(get_current_principal),
 ):
     """
-    Returns attribution summary — requests grouped by key, department,
+    Returns attribution summary - requests grouped by key, department,
     and application. Useful for security review and capacity planning.
     Supports from/to date filtering (ISO format) for time-scoped reports.
     """
@@ -342,7 +342,7 @@ async def get_attribution_report(
         for row in key_result
     ]
 
-    # By department — scoped to same dept filter as rest of attribution
+    # By department - scoped to same dept filter as rest of attribution
     dept_query = select(
         AuditLogModel.dept_id,
         func.count().label("total"),
@@ -453,7 +453,7 @@ async def get_analytics(
         func.avg(AuditLogModel.latency_ms).label("avg_latency_ms"),
     )
 
-    # Apply filters — always scoped for non-admin keys
+    # Apply filters - always scoped for non-admin keys
     if scope.get("tenant_id"):
         stmt = stmt.where(AuditLogModel.tenant_id == scope["tenant_id"])
     if dept_id:
@@ -554,7 +554,7 @@ async def export_audit_logs(
     output = io.StringIO()
     writer = csv.writer(output)
 
-    # Header — ip_address is hashed, user_id truncated (GDPR compliance)
+    # Header - ip_address is hashed, user_id truncated (GDPR compliance)
     writer.writerow([
         "trace_id", "timestamp", "decision", "risk_score",
         "confidence", "confidence_band", "primary_reason",

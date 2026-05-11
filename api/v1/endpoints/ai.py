@@ -105,27 +105,27 @@ async def ai_request(
     Main AI security scan endpoint.
 
     Processing order:
-      1. Debug mode guard — only admin keys may request debug output.
-      2. Debug rate limit — separate 10/min bucket prevents model fingerprinting.
-      3. Trial key restrictions — input size cap and proxy mode blocked.
-      4. Trial rate limit — stricter per-minute limit applied on top of global middleware limit.
-      5. Semantic cache lookup — returns cached result on hit, skips pipeline.
-      6. Policy resolution — resolves effective thresholds and detection layers for the
+      1. Debug mode guard - only admin keys may request debug output.
+      2. Debug rate limit - separate 10/min bucket prevents model fingerprinting.
+      3. Trial key restrictions - input size cap and proxy mode blocked.
+      4. Trial rate limit - stricter per-minute limit applied on top of global middleware limit.
+      5. Semantic cache lookup - returns cached result on hit, skips pipeline.
+      6. Policy resolution - resolves effective thresholds and detection layers for the
          request's tenant/dept/app scope.
-      7. Detection pipeline — runs via GatewayService (rule, ML, LLM layers as configured).
-      8. Audit log write — persists full decision record to audit_logs.
-      9. Metrics recording — non-blocking; errors are swallowed.
-     10. Semantic cache write — caches successful responses for future identical inputs.
+      7. Detection pipeline - runs via GatewayService (rule, ML, LLM layers as configured).
+      8. Audit log write - persists full decision record to audit_logs.
+      9. Metrics recording - non-blocking; errors are swallowed.
+     10. Semantic cache write - caches successful responses for future identical inputs.
 
     Auth: any valid principal (API key).
     """
     if body.options.debug and not getattr(request.state, "is_admin", False):
         raise DebugForbiddenError()
 
-    # Debug rate limit — separate bucket, tighter than global limit.
+    # Debug rate limit - separate bucket, tighter than global limit.
     # Prevents model fingerprinting: an attacker with a stolen admin key
     # cannot probe 60 inputs/min to calibrate below-threshold payloads.
-    # Fails open if Redis unavailable — consistent with other rate limit checks.
+    # Fails open if Redis unavailable - consistent with other rate limit checks.
     if body.options.debug:
         try:
             from cache.rate_limit_store import is_rate_limited
@@ -143,10 +143,10 @@ async def ai_request(
         except Exception:
             pass  # Fail open if Redis unavailable
 
-    # Trial key restrictions — enforced after auth, key_type is available here
+    # Trial key restrictions - enforced after auth, key_type is available here
     key_type = getattr(request.state, "key_type", "live")
     if key_type == "trial":
-        # Input size cap — stricter than the global max_input_chars limit
+        # Input size cap - stricter than the global max_input_chars limit
         if len(body.input) > settings.trial_max_input_chars:
             from errors.exceptions import ValidationError
             raise ValidationError(
@@ -159,7 +159,7 @@ async def ai_request(
             from errors.exceptions import ForbiddenError
             raise ForbiddenError("Proxy mode is not available for trial keys.")
 
-        # Trial rate limit — enforced here since rate_limit middleware runs before auth
+        # Trial rate limit - enforced here since rate_limit middleware runs before auth
         # Global rate limit (60/min) is already enforced by middleware
         # We enforce the stricter trial limit (10/min) here using the same Redis store
         try:
@@ -219,9 +219,9 @@ async def ai_request(
         app_id    = getattr(request.state, "app_id",    None),
     )
 
-    # Per-app rate limit — enforced when app_id is known and rate_limit_override is set.
+    # Per-app rate limit - enforced when app_id is known and rate_limit_override is set.
     # Uses a separate per-app bucket so the global middleware bucket is unaffected.
-    # Fails open if Redis is unavailable — consistent with all other rate limit checks.
+    # Fails open if Redis is unavailable - consistent with all other rate limit checks.
     _app_id = getattr(request.state, "app_id", None)
     if _app_id:
         _app_rate_limit = policy.get("rate_limit", {}).get("per_minute")

@@ -3,7 +3,7 @@
 # WrapSec v1.0 | AI Security Gateway - https://wrapsec.com
 
 """
-WrapSec CLI — root click group.
+WrapSec CLI - root click group.
 All subcommands registered here.
 
 Spec reference: Section 2.1 (cli/main.py), Section 13.1 (command set)
@@ -19,7 +19,7 @@ import click
 from wrapsec import __version__
 
 
-# ── SIGPIPE guard — Unix only ───────────────────────────────────────────────
+# ── SIGPIPE guard - Unix only ───────────────────────────────────────────────
 # Spec: Section 14.3
 if hasattr(signal, "SIGPIPE"):
     signal.signal(signal.SIGPIPE, signal.SIG_DFL)
@@ -38,7 +38,7 @@ if sys.platform == "win32" and hasattr(sys.stdin, "reconfigure"):
 @click.version_option(__version__, prog_name="wrapsec")
 @click.pass_context
 def cli(ctx: click.Context) -> None:
-    """WrapSec CLI — AI Security Gateway
+    """WrapSec CLI - AI Security Gateway
 
     Scan and validate LLM inputs before sending to models.
 
@@ -50,7 +50,7 @@ def cli(ctx: click.Context) -> None:
 
     \b
     Security note:
-      Avoid passing sensitive content as CLI arguments — they are stored
+      Avoid passing sensitive content as CLI arguments - they are stored
       in shell history. Use stdin instead:
         echo "sensitive text" | wrapsec scan
 

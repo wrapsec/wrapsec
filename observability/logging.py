@@ -11,7 +11,7 @@ from config.settings import get_settings
 settings = get_settings()
 
 
-# Extra fields that must never appear in structured logs — accidental inclusion
+# Extra fields that must never appear in structured logs - accidental inclusion
 # of secrets via logger.info(..., extra={...}) would write them to log streams.
 _SENSITIVE_EXTRAS = frozenset({
     "api_key", "secret_key", "secret", "password", "passwd",
@@ -48,7 +48,7 @@ class JSONFormatter(logging.Formatter):
         if hasattr(record, "trace_id"):
             log_entry["trace_id"] = record.trace_id
 
-        # Add extra fields — skip standard logging internals and sensitive keys
+        # Add extra fields - skip standard logging internals and sensitive keys
         for key, value in record.__dict__.items():
             if key in _SENSITIVE_EXTRAS:
                 continue
@@ -88,7 +88,7 @@ def setup_logging() -> None:
         handler.setFormatter(JSONFormatter())
     else:
         handler.setFormatter(logging.Formatter(
-            "%(asctime)s %(levelname)s %(name)s — %(message)s"
+            "%(asctime)s %(levelname)s %(name)s - %(message)s"
         ))
 
     root_logger.addHandler(handler)

@@ -5,7 +5,7 @@
 import logging
 from contextvars import ContextVar
 
-# Context variable — trace ID flows through async context
+# Context variable - trace ID flows through async context
 _trace_id_var: ContextVar[str] = ContextVar("trace_id", default="")
 
 

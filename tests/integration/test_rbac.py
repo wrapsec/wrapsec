@@ -17,7 +17,7 @@ settings = get_settings()
 
 @pytest.mark.asyncio
 async def test_api_key_wins_when_both_headers_sent(auth_client, auth_setup):
-    """x-api-key always wins — JWT is ignored even if valid."""
+    """x-api-key always wins - JWT is ignored even if valid."""
     token    = auth_setup["admin_token"]
     response = await auth_client.get(
         "/v1/auth/me",
@@ -231,7 +231,7 @@ async def test_last_admin_cannot_be_deactivated(auth_client, auth_setup):
     )
     assert response.status_code == 400
     message = response.json()["error"]["message"].lower()
-    # Either self-deactivation guard or last-admin guard fires — both are correct
+    # Either self-deactivation guard or last-admin guard fires - both are correct
     assert "deactivate" in message
 
 

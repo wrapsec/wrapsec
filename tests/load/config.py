@@ -31,7 +31,7 @@ PURCHASE_DEPT_ID = _os.environ.get("WRAPSEC_PURCHASE_DEPT_ID", "")
 FINANCE_DEPT_ID  = _os.environ.get("WRAPSEC_FINANCE_DEPT_ID",  "")
 
 # ── Performance thresholds ────────────────────────────────────────────────────
-# These are PASS/FAIL gates — tests fail if breached
+# These are PASS/FAIL gates - tests fail if breached
 THRESHOLDS = {
     "scan_fast_p50_ms":    10,    # scan-only fast mode median
     "scan_fast_p95_ms":    30,    # scan-only fast mode 95th percentile
@@ -48,31 +48,31 @@ PROFILES = {
         "users":       1,
         "spawn_rate":  1,
         "duration":    "30s",
-        "description": "Single user — smoke test",
+        "description": "Single user - smoke test",
     },
     "sustained": {
         "users":       33,
         "spawn_rate":  5,
         "duration":    "10m",
-        "description": "33 RPS sustained — normal peak load",
+        "description": "33 RPS sustained - normal peak load",
     },
     "burst": {
         "users":       100,
         "spawn_rate":  100,    # instant ramp
         "duration":    "2m",
-        "description": "100 RPS burst — morning spike",
+        "description": "100 RPS burst - morning spike",
     },
     "soak": {
         "users":       30,
         "spawn_rate":  5,
         "duration":    "60m",
-        "description": "30 RPS soak — 1 hour stability test",
+        "description": "30 RPS soak - 1 hour stability test",
     },
     "stress": {
         "users":       200,
         "spawn_rate":  10,     # ramp over ~20s
         "duration":    "5m",
-        "description": "Ramp to 200 RPS — find breaking point",
+        "description": "Ramp to 200 RPS - find breaking point",
     },
 }
 

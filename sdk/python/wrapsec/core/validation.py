@@ -3,9 +3,9 @@
 # WrapSec v1.0 | AI Security Gateway - https://wrapsec.com
 
 """
-Input validation — length limits, token estimate, charset normalisation.
+Input validation - length limits, token estimate, charset normalisation.
 
-Called by client before sending to API — never duplicated in CLI commands.
+Called by client before sending to API - never duplicated in CLI commands.
 
 Spec reference: Section 3 (core/validation.py), Section 13.2 (scan token limit note)
 """
@@ -19,7 +19,7 @@ import unicodedata
 # Hard limit matching the API's client-side enforcement
 MAX_INPUT_CHARS = 8000
 
-# Server-side heuristic: ceil(len / 2) > 4000 → 422
+# Server-side heuristic: ceil(len / 2) > 4000 -> 422
 # CJK and dense text may be rejected below 8000 chars
 TOKEN_HEURISTIC_LIMIT = 4000
 
@@ -46,9 +46,9 @@ def validate_input(text: str) -> str:
       - text is empty after normalization
       - text exceeds MAX_INPUT_CHARS
 
-    Returns the validated text (does not normalize — call normalize_text first).
+    Returns the validated text (does not normalize - call normalize_text first).
 
-    Spec: Section 13.2 — token limit note, Section 3 — validation in core/
+    Spec: Section 13.2 - token limit note, Section 3 - validation in core/
     """
     if not text:
         raise ValueError("Input is empty.")
@@ -67,7 +67,7 @@ def validate_input(text: str) -> str:
 def estimate_tokens(text: str) -> int:
     """
     Estimate token count using the server's heuristic: ceil(len / 2).
-    Used for warnings — not enforced client-side.
+    Used for warnings - not enforced client-side.
     """
     return math.ceil(len(text) / 2)
 

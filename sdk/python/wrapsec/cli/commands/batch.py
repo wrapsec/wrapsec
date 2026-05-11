@@ -3,13 +3,13 @@
 # WrapSec v1.0 | AI Security Gateway - https://wrapsec.com
 
 """
-wrapsec batch — scan prompts from a file.
+wrapsec batch - scan prompts from a file.
 
 Spec reference: Section 13.2 (wrapsec batch), Section 11.3 (Batch Exit Code Priority)
 
 Key rules:
-  - File path only — no inline text argument (security rule 2)
-  - Streamed line by line — never fully loaded into memory
+  - File path only - no inline text argument (security rule 2)
+  - Streamed line by line - never fully loaded into memory
   - Empty lines and # comments skipped
   - Max file size: 10MB
   - Max line length: 8000 chars (longer lines skipped with warning)
@@ -75,7 +75,7 @@ LARGE_FILE_WARN = 100                 # lines
 @click.option(
     "--summary",
     is_flag=True,
-    help="Show counts only — no individual scores or trace IDs. Recommended for CI.",
+    help="Show counts only - no individual scores or trace IDs. Recommended for CI.",
 )
 @click.option(
     "--json", "json_output",
@@ -100,7 +100,7 @@ def batch(
 ) -> None:
     """Scan prompts from FILE (one prompt per line).
 
-    FILE is streamed line by line — never fully loaded into memory.
+    FILE is streamed line by line - never fully loaded into memory.
     Empty lines and lines starting with # are skipped.
 
     \b
@@ -110,14 +110,14 @@ def batch(
 
     \b
     Exit code priority: ERROR (1) > BLOCK (2) > SUCCESS (0)
-    An error means some prompts were not scanned — results are incomplete.
+    An error means some prompts were not scanned - results are incomplete.
 
     \b
     Examples:
       wrapsec batch prompts.txt
       wrapsec batch prompts.txt --delay 100 --summary
       wrapsec batch prompts.txt --json > results.jsonl
-      wrapsec batch prompts.txt --quiet   # CI — exit code only
+      wrapsec batch prompts.txt --quiet   # CI - exit code only
     """
     # Validate timeout at CLI level
     if timeout is not None and timeout < 1:
@@ -125,7 +125,7 @@ def batch(
         sys.exit(1)
 
     # Check file size before starting
-    # Resolve symlink for size check too — consistent with the open() below
+    # Resolve symlink for size check too - consistent with the open() below
     file_size = os.path.getsize(Path(file).resolve())
     if file_size > MAX_FILE_BYTES:
         mb = file_size / (1024 * 1024)
@@ -141,13 +141,13 @@ def batch(
         )
         sys.exit(1)
 
-    # Large-file warning — estimate from file size to avoid a second open.
+    # Large-file warning - estimate from file size to avoid a second open.
     # Average line length of ~50 chars gives a conservative over-estimate.
     if not quiet and not json_output:
         estimated_lines = file_size // 50
         if estimated_lines > LARGE_FILE_WARN and delay == 0:
             click.echo(
-                f"Warning: large file — potentially many prompts with no delay.\n"
+                f"Warning: large file - potentially many prompts with no delay.\n"
                 f"Consider --delay 100 to avoid rate limiting.",
                 err=True,
             )
@@ -176,7 +176,7 @@ def batch(
 
     signal.signal(signal.SIGINT, _sigint)
 
-    # Fix #8 — resolve symlinks before opening.
+    # Fix #8 - resolve symlinks before opening.
     # click.Path(exists=True) confirms the path exists but does not resolve
     # symlinks. A symlink could silently point to a file outside the intended
     # directory (e.g. /etc/passwd, ~/.ssh/id_rsa). resolve() follows all
@@ -241,7 +241,7 @@ def batch(
                     allowed += 1
 
                 if json_output:
-                    # JSONL — one object per line, independently parseable
+                    # JSONL - one object per line, independently parseable
                     # Spec: Section 13.2 (batch JSON output format)
                     sys.stdout.write(json.dumps(scan_result_to_dict(result)) + "\n")
                     sys.stdout.flush()

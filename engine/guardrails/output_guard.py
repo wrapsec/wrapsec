@@ -51,7 +51,7 @@ class OutputGuard:
     In proxy mode, returns a full ALLOW/BLOCK/SANITIZE decision.
     In scan-only mode, existing callers use only was_sanitized and sanitized_text.
 
-    Decision logic (thresholds from settings — OUTPUT_BLOCK_THRESHOLD / OUTPUT_SANITIZE_THRESHOLD):
+    Decision logic (thresholds from settings - OUTPUT_BLOCK_THRESHOLD / OUTPUT_SANITIZE_THRESHOLD):
       pii_score >= output_block_threshold    -> BLOCK    (severe PII, response not returned)
       pii_score >= output_sanitize_threshold -> SANITIZE (PII redacted, response returned)
       otherwise                              -> ALLOW    (clean, response returned as-is)

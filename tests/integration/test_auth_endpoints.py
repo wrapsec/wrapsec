@@ -70,7 +70,7 @@ async def test_login_wrong_password_401(auth_client, auth_setup):
 
 @pytest.mark.asyncio
 async def test_login_wrong_email_same_message(auth_client, auth_setup):
-    """Same error message for wrong email and wrong password — no enumeration."""
+    """Same error message for wrong email and wrong password - no enumeration."""
     response = await auth_client.post(
         "/v1/auth/login",
         json={"email": "nonexistent-xyz@test.com", "password": "TestPass1!"},
@@ -121,7 +121,7 @@ async def test_me_returns_user_data(auth_client, auth_setup):
 
 @pytest.mark.asyncio
 async def test_me_rejected_with_api_key(auth_client, auth_setup):
-    """/me requires JWT — API key must be rejected with 403."""
+    """/me requires JWT - API key must be rejected with 403."""
     response = await auth_client.get(
         "/v1/auth/me",
         headers={"x-api-key": settings.admin_api_key},

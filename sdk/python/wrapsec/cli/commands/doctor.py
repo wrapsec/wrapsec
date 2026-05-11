@@ -3,10 +3,10 @@
 # WrapSec v1.0 | AI Security Gateway - https://wrapsec.com
 
 """
-wrapsec ping — network connectivity check (no auth).
-wrapsec doctor — full health, auth, and version check.
+wrapsec ping - network connectivity check (no auth).
+wrapsec doctor - full health, auth, and version check.
 
-Doctor is resilient — a failed check never aborts remaining checks.
+Doctor is resilient - a failed check never aborts remaining checks.
 Missing or unexpected response fields show "Unknown", not a crash.
 
 Spec reference: Section 13.2 (wrapsec ping, wrapsec doctor),
@@ -29,7 +29,7 @@ from wrapsec.config.loader import (
 )
 from wrapsec.exceptions import WrapSecError
 
-# Expected API version — matches BASE_PATH "/v1"
+# Expected API version - matches BASE_PATH "/v1"
 EXPECTED_API_VERSION = "v1"
 COMPATIBLE_API_VERSIONS = {"1.0.0", "1.0.1", "1.1.0"}  # semantic versions from /health/config
 
@@ -38,7 +38,7 @@ COMPATIBLE_API_VERSIONS = {"1.0.0", "1.0.1", "1.1.0"}  # semantic versions from 
 def ping() -> None:
     """Check if the WrapSec API is reachable.
 
-    Tests network connectivity only — does NOT validate your API key.
+    Tests network connectivity only - does NOT validate your API key.
     Use 'wrapsec doctor' for a full auth and health check.
 
     Fixed timeout: 5 seconds.
@@ -58,11 +58,11 @@ def ping() -> None:
     reachable = client.health_live()
 
     if reachable:
-        click.secho("✔ WrapSec API is reachable", fg="green")
+        click.secho(" WrapSec API is reachable", fg="green")
         sys.exit(0)
     else:
         click.secho(
-            f"❌ Cannot reach WrapSec API.\n"
+            f" Cannot reach WrapSec API.\n"
             f"   Check your network connection and base_url.\n"
             f"   Run 'wrapsec doctor' for detailed diagnostics.",
             fg="red",
@@ -75,7 +75,7 @@ def ping() -> None:
 def doctor() -> None:
     """Full connectivity, authentication, and version check.
 
-    Runs all checks independently — a failed check never aborts
+    Runs all checks independently - a failed check never aborts
     remaining checks. Missing response fields show 'Unknown'.
 
     \b
@@ -89,7 +89,7 @@ def doctor() -> None:
       7. Timeout configuration
 
     \b
-    Version mismatch: warning only — never blocks execution.
+    Version mismatch: warning only - never blocks execution.
     """
     cfg      = load_config()
     all_ok   = True
@@ -106,7 +106,7 @@ def doctor() -> None:
         source = get_config_source("api_key")
         click.secho(f"   API key:      {mask_api_key(cfg.api_key)} [{source}]", fg="green")
     else:
-        click.secho("   API key:      ✗ not set", fg="red")
+        click.secho("   API key:       not set", fg="red")
         click.echo("   Run: wrapsec config set api_key wsk_live_...")
         all_ok = False
 
@@ -122,9 +122,9 @@ def doctor() -> None:
 
     reachable = client.health_live()
     if reachable:
-        click.secho("   ✔ API reachable (/health/live)", fg="green")
+        click.secho("    API reachable (/health/live)", fg="green")
     else:
-        click.secho("   ✗ Cannot reach API", fg="red")
+        click.secho("    Cannot reach API", fg="red")
         click.echo(f"     Tried: {cfg.base_url}/health/live")
         click.echo("     Check network connection and WRAPSEC_BASE_URL.")
         all_ok = False
@@ -139,9 +139,9 @@ def doctor() -> None:
     health_data: dict = {}
     try:
         health_data = client.health_ready()
-        click.secho("   ✔ API key valid (/health/ready)", fg="green")
+        click.secho("    API key valid (/health/ready)", fg="green")
     except WrapSecError as e:
-        click.secho(f"   ✗ Auth failed: {e.message}", fg="red")
+        click.secho(f"    Auth failed: {e.message}", fg="red")
         all_ok = False
 
     # ── Check 4: Service health ─────────────────────────────────────────────
@@ -153,14 +153,14 @@ def doctor() -> None:
         pass
 
     if not checks:
-        click.echo("   — No health check data available")
+        click.echo("   - No health check data available")
     else:
         for svc, status in checks.items():
             # Resilient: handle unexpected types/missing fields
-            # Spec: Section 13.2 — missing fields show "Unknown"
+            # Spec: Section 13.2 - missing fields show "Unknown"
             status_str = str(status) if status is not None else "Unknown"
             ok = status_str.lower() == "ok"
-            icon  = "✔" if ok else "✗"
+            icon  = "" if ok else ""
             color = "green" if ok else "red"
             click.secho(f"   {icon} {svc:<15} {status_str}", fg=color)
             if not ok:
@@ -184,7 +184,7 @@ def doctor() -> None:
         click.echo(f"   ML detector:       {'enabled' if layers.get('ml') else 'disabled'}")
         click.echo(f"   LLM detector:      {'enabled' if layers.get('llm') else 'disabled'}")
     else:
-        click.echo("   — Configuration data unavailable")
+        click.echo("   - Configuration data unavailable")
 
     # ── Check 6: Version compatibility ─────────────────────────────────────
     click.echo("\n6. Version Compatibility")
@@ -196,8 +196,8 @@ def doctor() -> None:
     click.echo(f"   API version:   {api_version}")
 
     # API version from /health/config is a semantic version (e.g. "1.0.0")
-    # CLI expected API is a path version ("v1") — major version 1.x.x = v1 compatible
-    # Spec: Section 6.6 — version mismatch warning only, never blocks
+    # CLI expected API is a path version ("v1") - major version 1.x.x = v1 compatible
+    # Spec: Section 6.6 - version mismatch warning only, never blocks
     compatible = (
         api_version == "Unknown"
         or api_version.startswith("1.")   # 1.x.x = API v1 compatible
@@ -211,7 +211,7 @@ def doctor() -> None:
             err=True,
         )
     else:
-        click.secho(f"   ✔ Compatible ({api_version})", fg="green")
+        click.secho(f"    Compatible ({api_version})", fg="green")
 
     # ── Final summary ───────────────────────────────────────────────────────
     _print_final(all_ok)
@@ -220,8 +220,8 @@ def doctor() -> None:
 def _print_final(all_ok: bool) -> None:
     click.echo("")
     if all_ok:
-        click.secho("✔ All checks passed — WrapSec CLI is ready.", fg="green")
+        click.secho(" All checks passed - WrapSec CLI is ready.", fg="green")
         sys.exit(0)
     else:
-        click.secho("✗ Some checks failed — see above for details.", fg="red", err=True)
+        click.secho(" Some checks failed - see above for details.", fg="red", err=True)
         sys.exit(1)

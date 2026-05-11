@@ -12,7 +12,7 @@ from domain.enums import PrincipalType
 if TYPE_CHECKING:
     from db.models import APIKeyModel, UserModel
 
-# ── Role → permission strings ──────────────────────────────────────────────────
+# ── Role -> permission strings ──────────────────────────────────────────────────
 #
 # v1 ENFORCEMENT RULE:
 #   These permission strings are defined for FUTURE USE (v2+) ONLY.
@@ -20,7 +20,7 @@ if TYPE_CHECKING:
 #   has_permission() MUST NOT be called in any v1 endpoint guard.
 #   When v2 granular access control is implemented, replace require_role()
 #   with require_permission() at that time.
-#   Reviewers: this is intentional — do not flag as unused.
+#   Reviewers: this is intentional - do not flag as unused.
 #
 ROLE_PERMISSIONS: dict[str, list[str]] = {
     "ADMIN":     ["*"],
@@ -33,13 +33,13 @@ ROLE_PERMISSIONS: dict[str, list[str]] = {
 class Principal:
     id:           str             # "user:{uuid}" | "key:{key_id}" | "key:admin"
     type:         PrincipalType
-    tenant_id:    str             # NEVER None — enforced at construction (Layer 4)
+    tenant_id:    str             # NEVER None - enforced at construction (Layer 4)
     dept_id:      str | None      # None for ADMIN role only
     roles:        list[str]
-    permissions:  list[str]       # from ROLE_PERMISSIONS — v2+ use only, not enforced in v1
+    permissions:  list[str]       # from ROLE_PERMISSIONS - v2+ use only, not enforced in v1
     is_admin:     bool
     email:        str | None = None       # USER principals only
-    # Phase 3 extension points — always None in v1
+    # Phase 3 extension points - always None in v1
     agent_id:     str | None = None
     triggered_by: str | None = None
 
@@ -54,7 +54,7 @@ class Principal:
         v1 HARD GUARD (R6 fix):
             Raises NotImplementedError in v1 to prevent accidental use.
             All v1 access control uses has_role() exclusively.
-            If this is called in v1, it is a bug — fail loud, not silent.
+            If this is called in v1, it is a bug - fail loud, not silent.
 
         v2+:
             Remove the NotImplementedError guard.
@@ -62,16 +62,16 @@ class Principal:
             Implement the wildcard logic in the commented block below.
 
         Wildcards (for v2+ reference):
-            "*"         → matches everything
-            "scan:*"    → matches "scan:read", "scan:write"
-            "tool:db:*" → matches "tool:db:read", "tool:db:write"
+            "*"         -> matches everything
+            "scan:*"    -> matches "scan:read", "scan:write"
+            "tool:db:*" -> matches "tool:db:read", "tool:db:write"
         """
         raise NotImplementedError(
             "has_permission() is not enforced in v1. "
             "Use has_role() for all v1 access control. "
             "See ROLE_PERMISSIONS for v2+ permission strings."
         )
-        # v2+ implementation (unreachable in v1 — remove guard above when ready):
+        # v2+ implementation (unreachable in v1 - remove guard above when ready):
         # if "*" in self.permissions:
         #     return True
         # if permission in self.permissions:
@@ -96,13 +96,13 @@ def build_principal_from_user(user: UserModel) -> Principal:
     Using ValueError instead of assert: Python assert can be disabled
     with -O flag and must never be used for security checks.
 
-    UUID/string boundary: DB returns UUID objects — cast to str here.
+    UUID/string boundary: DB returns UUID objects - cast to str here.
     All downstream code (request.state, JWT, logs) uses string tenant_id.
     """
     if not user.tenant_id:
         raise ValueError(
-            f"User {user.id} has no tenant_id — cannot build Principal. "
-            "This is a data integrity issue — investigate immediately."
+            f"User {user.id} has no tenant_id - cannot build Principal. "
+            "This is a data integrity issue - investigate immediately."
         )
     return Principal(
         id          = str(user.id),
@@ -126,13 +126,13 @@ def build_principal_from_api_key(key: APIKeyModel) -> Principal:
     which fetches the default tenant from DB directly.
     This function is NEVER called for the admin key.
 
-    All DB rows in api_keys are non-admin application keys — all must have
+    All DB rows in api_keys are non-admin application keys - all must have
     tenant_id after the NOT NULL migration in add_users.sql.
     Raises ValueError (NOT assert) if tenant_id is missing.
     """
     if not key.tenant_id:
         raise ValueError(
-            f"API key {key.key_id} has no tenant_id — cannot build Principal. "
+            f"API key {key.key_id} has no tenant_id - cannot build Principal. "
             "Run migration add_users.sql to enforce NOT NULL on api_keys.tenant_id."
         )
     return Principal(

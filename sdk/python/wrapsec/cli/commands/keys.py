@@ -3,13 +3,13 @@
 # WrapSec v1.0 | AI Security Gateway - https://wrapsec.com
 
 """
-wrapsec keys list — list API keys. Read-only.
+wrapsec keys list - list API keys. Read-only.
 
-Does NOT show key secrets — they are never retrievable after creation.
-Does NOT support create or revoke — use the dashboard for those.
+Does NOT show key secrets - they are never retrievable after creation.
+Does NOT support create or revoke - use the dashboard for those.
 
 Spec reference: Section 13.2 (wrapsec keys list),
-                Section 22 (Non-Goals — no key creation or revocation via CLI)
+                Section 22 (Non-Goals - no key creation or revocation via CLI)
 """
 
 from __future__ import annotations
@@ -61,7 +61,7 @@ def keys_list(json_output: bool) -> None:
         sys.exit(1)
 
     if json_output:
-        # Never include key secret in JSON output — it's not in the response anyway
+        # Never include key secret in JSON output - it's not in the response anyway
         print_json(key_list)
         return
 

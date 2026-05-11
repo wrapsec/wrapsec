@@ -277,8 +277,8 @@ class TestValidation:
 
     def test_warn_if_dense_returns_string_for_long(self):
         warning = warn_if_dense("a" * 8001)
-        # Over limit is caught by validate_input — warn is for under-limit dense text
-        # Dense text at 7999 chars — token estimate = ceil(7999/2) = 4000
+        # Over limit is caught by validate_input - warn is for under-limit dense text
+        # Dense text at 7999 chars - token estimate = ceil(7999/2) = 4000
         warning = warn_if_dense("a" * 7999)
         assert warning is None or isinstance(warning, str)
 
@@ -722,7 +722,7 @@ class TestScanExecutionModeValidation:
         # Verify the body sent to with_retry includes both fields
         call_fn = mock_retry.call_args[0][0]  # the lambda
         # Check that the json body was built correctly by inspecting what mock received
-        # with_retry is called with a lambda — verify execution_mode in the captured body
+        # with_retry is called with a lambda - verify execution_mode in the captured body
         body = mock_retry.call_args[1] if mock_retry.call_args[1] else {}
         # The lambda captures body via closure; just verify result is PROXY_RESPONSE
         assert result.execution_mode == "proxy"

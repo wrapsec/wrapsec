@@ -86,7 +86,7 @@ async def test_record_increments_counter():
 
 @pytest.mark.asyncio
 async def test_failure_sets_ttl_via_pipeline():
-    """expire is always called in the pipeline (sliding window — intentional)."""
+    """expire is always called in the pipeline (sliding window - intentional)."""
     mock_redis, mock_pipe = _make_pipeline_mock(count_result=1)
     with patch("services.auth.lockout.get_redis", return_value=mock_redis):
         from services.auth.lockout import record_failure
@@ -96,7 +96,7 @@ async def test_failure_sets_ttl_via_pipeline():
 
 @pytest.mark.asyncio
 async def test_subsequent_failure_also_resets_ttl():
-    """Sliding window — expire is called on every failure, not just the first."""
+    """Sliding window - expire is called on every failure, not just the first."""
     mock_redis, mock_pipe = _make_pipeline_mock(count_result=2)
     with patch("services.auth.lockout.get_redis", return_value=mock_redis):
         from services.auth.lockout import record_failure

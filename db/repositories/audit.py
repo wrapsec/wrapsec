@@ -31,7 +31,7 @@ class AuditRepository(BaseRepository):
     ) -> AuditLogModel | None:
         """
         Dept-scoped trace_id lookup. Returns None if the record exists
-        but belongs to a different department — caller treats as 404.
+        but belongs to a different department - caller treats as 404.
         Used by all non-admin key requests to prevent cross-dept leakage.
         """
         result = await self.session.execute(
@@ -153,7 +153,7 @@ class AuditRepository(BaseRepository):
         if to_dt:
             filters.append(AuditLogModel.created_at <= to_dt)
 
-        # Single aggregation query for counts — avoids fetching all rows into memory
+        # Single aggregation query for counts - avoids fetching all rows into memory
         count_q = select(
             func.count().label("total"),
             func.sum(case((AuditLogModel.decision == "BLOCK",    1), else_=0)).label("block_count"),
@@ -174,14 +174,14 @@ class AuditRepository(BaseRepository):
                 "threats":        [],
             }
 
-        # Fetch only latency_ms, pre-sorted — used for avg/p95 by caller
+        # Fetch only latency_ms, pre-sorted - used for avg/p95 by caller
         lat_q = select(AuditLogModel.latency_ms).order_by(AuditLogModel.latency_ms)
         if filters:
             lat_q = lat_q.where(*filters)
         lat_rows  = (await self.session.execute(lat_q)).fetchall()
         latencies = [r[0] for r in lat_rows if r[0] is not None]
 
-        # Fetch only threats column — unnest JSONB arrays in Python
+        # Fetch only threats column - unnest JSONB arrays in Python
         threat_q = select(AuditLogModel.threats)
         if filters:
             threat_q = threat_q.where(*filters)

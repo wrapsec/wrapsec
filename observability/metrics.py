@@ -25,7 +25,7 @@ REQUEST_LATENCY = Histogram(
 # ── Security decision metrics ─────────────────────────────────
 SYSTEM_ERRORS = Counter(
     "wrapsec_system_errors_total",
-    "Total SYSTEM_ERROR decisions — detection pipeline failures requiring ops attention",
+    "Total SYSTEM_ERROR decisions - detection pipeline failures requiring ops attention",
     ["execution_mode"],
 )
 
@@ -97,7 +97,7 @@ CACHE_MISSES = Counter(
 )
 
 # ── Rate limit metrics ────────────────────────────────────────
-# No key_type label — rate limiting runs before auth middleware,
+# No key_type label - rate limiting runs before auth middleware,
 # so key_type is not reliably known at this point.
 RATE_LIMITED = Counter(
     "wrapsec_rate_limited_total",
@@ -105,7 +105,7 @@ RATE_LIMITED = Counter(
 )
 
 
-# ── Label allowlists — CRITICAL for cardinality safety ────────
+# ── Label allowlists - CRITICAL for cardinality safety ────────
 # Only values in these sets are accepted as metric labels.
 # Unexpected values are replaced with "unknown" to prevent:
 #   1. Unbounded cardinality crashing Prometheus
@@ -148,7 +148,7 @@ def record_request(
     """Record metrics for a completed gateway request.
 
     All label values are validated against allowlists before use.
-    Unknown values are replaced with 'unknown' — never raises.
+    Unknown values are replaced with 'unknown' - never raises.
     """
     safe_decision  = _safe(decision,       _VALID_DECISIONS,       "ALLOW")
     safe_det_mode  = _safe(detection_mode, _VALID_DETECTION_MODES, "fast")
@@ -168,11 +168,11 @@ def record_request(
         execution_mode = safe_exe_mode,
     ).observe(latency_ms)
 
-    # Track SYSTEM_ERROR separately — ops health signal
+    # Track SYSTEM_ERROR separately - ops health signal
     if primary_reason == "SYSTEM_ERROR":
         SYSTEM_ERRORS.labels(execution_mode=safe_exe_mode).inc()
 
-    # Track BLOCK and SANITIZE by reason — validated reason only
+    # Track BLOCK and SANITIZE by reason - validated reason only
     if safe_decision == "BLOCK" and safe_reason != "unknown":
         BLOCKED_TOTAL.labels(
             primary_reason = safe_reason,
@@ -204,7 +204,7 @@ def record_proxy_request(
     provider:         str  = "unknown",
 ) -> None:
     """Record metrics for a completed proxy request.
-    Provider is validated against allowlist — never accepts arbitrary strings.
+    Provider is validated against allowlist - never accepts arbitrary strings.
     """
     safe_status   = _safe(execution_status, _VALID_EXECUTION_STATUSES, "unknown")
     safe_provider = _safe(provider.lower(), _VALID_PROVIDERS, "unknown")
@@ -218,7 +218,7 @@ def record_proxy_request(
 
 def record_rate_limit() -> None:
     """Record a rate limit rejection.
-    key_type intentionally omitted — rate limit runs before auth,
+    key_type intentionally omitted - rate limit runs before auth,
     so key_type is not reliably known at this point.
     """
     RATE_LIMITED.inc()

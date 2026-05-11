@@ -27,8 +27,8 @@ class InputGuard:
     Orchestrates guardrail checks on input text.
 
     Guardrails (in evaluation order):
-      1. PII — detects + redacts sensitive personal data
-      2. Toxicity — extracts toxicity signal from ML result
+      1. PII - detects + redacts sensitive personal data
+      2. Toxicity - extracts toxicity signal from ML result
 
     Note: Toxicity detector is called AFTER ML detection in service.py.
     InputGuard.inspect_toxicity() is called separately with the ML result.
@@ -99,4 +99,4 @@ class InputGuard:
             )
         except Exception as e:
             logger.error(f"InputGuard toxicity failed: {e}")
-            return guard_result  # Return unchanged — fail open
+            return guard_result  # Return unchanged - fail open

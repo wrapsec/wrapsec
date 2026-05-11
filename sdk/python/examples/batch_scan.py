@@ -1,5 +1,5 @@
 """
-Batch scan example — scan a list of prompts from a file.
+Batch scan example - scan a list of prompts from a file.
 
 Setup:
     pip install wrapsec-python

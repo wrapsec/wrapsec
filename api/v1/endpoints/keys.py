@@ -57,14 +57,14 @@ async def create_key(
 ):
     """
     Creates an API key. Scope resolution follows a three-tier chain:
-      app_id provided  → derive dept + tenant from the app record
-      dept_id provided → derive tenant from the dept record
-      neither          → use the authenticated principal's tenant/dept
+      app_id provided  -> derive dept + tenant from the app record
+      dept_id provided -> derive tenant from the dept record
+      neither          -> use the authenticated principal's tenant/dept
 
     The raw key value is returned once and cannot be retrieved again.
     Auth: JWT + ADMIN role required.
     """
-    # Tenant must be known before any key is created — keys without a tenant
+    # Tenant must be known before any key is created - keys without a tenant
     # bypass tenant isolation checks in every downstream auth path.
     if not request.state.tenant_id:
         from errors.exceptions import WrapSecError
@@ -86,7 +86,7 @@ async def create_key(
     api_key = generate_api_key(body.key_type)
     key_id  = generate_key_id()
 
-    # Resolve app → dept → tenant chain
+    # Resolve app -> dept -> tenant chain
     app_id    = None
     dept_id   = None
     tenant_id = None
@@ -109,7 +109,7 @@ async def create_key(
         dept_id   = dept.id
         tenant_id = dept.tenant_id
     else:
-        # No scope specified — use authenticated tenant (guaranteed non-None by guard above)
+        # No scope specified - use authenticated tenant (guaranteed non-None by guard above)
         tenant_id = uuid.UUID(request.state.tenant_id)
         if request.state.dept_id:
             dept_id = uuid.UUID(request.state.dept_id)
@@ -294,11 +294,11 @@ async def rotate_key(
     principal: Principal    = Depends(require_admin()),
 ):
     """
-    Rotate an API key — generates a new secret while preserving all metadata.
+    Rotate an API key - generates a new secret while preserving all metadata.
     Old key remains valid for grace_period_minutes to allow graceful migration.
     After grace period, old key is automatically revoked.
 
-    Returns the new key secret — shown once, store securely.
+    Returns the new key secret - shown once, store securely.
     """
     repo   = ApiKeyRepository(db)
     record = await repo.get_by_key_id(key_id)
@@ -323,7 +323,7 @@ async def rotate_key(
                 status_code=400,
             )
         else:
-            # Grace period expired — key is effectively dead
+            # Grace period expired - key is effectively dead
             return JSONResponse(
                 content={"error": {"code": "KEY_EXPIRED", "message": (
                     "This key's grace period has expired and it is no longer valid. "
@@ -334,17 +334,17 @@ async def rotate_key(
 
     key_type = getattr(record, "key_type", "live") or "live"
 
-    # Generate new key once with the correct prefix — do NOT generate twice.
+    # Generate new key once with the correct prefix - do NOT generate twice.
     # A second generate_api_key() call would orphan the first hash in the DB.
     new_api_key = generate_api_key(key_type)
     new_key_id  = generate_key_id()
     new_hash    = _hash_key(new_api_key)
 
     # Calculate grace period expiry for old key
-    # Strip timezone — DB column is TIMESTAMP WITHOUT TIME ZONE
+    # Strip timezone - DB column is TIMESTAMP WITHOUT TIME ZONE
     grace_expires = (datetime.now(timezone.utc) + timedelta(minutes=body.grace_period_minutes)).replace(tzinfo=None)
 
-    # Create new key with same metadata — key_type is preserved on rotation
+    # Create new key with same metadata - key_type is preserved on rotation
     new_record = await repo.create({
         "key_id":    new_key_id,
         "name":      record.name,
@@ -357,7 +357,7 @@ async def rotate_key(
         "tenant_id": record.tenant_id,
     })
 
-    # Set old key to expire at end of grace period — both changes in one commit
+    # Set old key to expire at end of grace period - both changes in one commit
     record.expires_at = grace_expires
     await db.commit()
 

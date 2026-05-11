@@ -27,14 +27,14 @@ class RiskScorer:
     """
     Aggregates detection scores from all layers into a unified risk score.
 
-    Architecture — two separate concerns:
+    Architecture - two separate concerns:
 
-    Detection layers (probabilistic — identify malicious intent):
+    Detection layers (probabilistic - identify malicious intent):
       rule_score, ml_score, llm_score
-      Weighted aggregation → detection_risk_score
+      Weighted aggregation -> detection_risk_score
       Weights: rule=0.40, ml=0.30, llm=0.30
 
-    Guardrail layers (deterministic — enforce data protection):
+    Guardrail layers (deterministic - enforce data protection):
       pii_score (and future: toxicity, bias)
       Evaluated independently by the policy engine
       NEVER mixed into the detection risk score
@@ -45,8 +45,8 @@ class RiskScorer:
       Prevents a strong signal from being diluted by lower scores.
     """
 
-    # Detection layer weights — must sum to 1.0
-    # PII is excluded — it is a guardrail, not a detector
+    # Detection layer weights - must sum to 1.0
+    # PII is excluded - it is a guardrail, not a detector
     WEIGHT_RULE = 0.40
     WEIGHT_ML   = 0.30
     WEIGHT_LLM  = 0.30
@@ -69,14 +69,14 @@ class RiskScorer:
             pii_score      = pii_result.score
             toxicity_score = toxicity_result.score if toxicity_result else 0.0
 
-            # Detection risk score — detectors only, no PII
+            # Detection risk score - detectors only, no PII
             weighted = (
                 rule_score * self.WEIGHT_RULE +
                 ml_score   * self.WEIGHT_ML   +
                 llm_score  * self.WEIGHT_LLM
             )
 
-            # Boost — prevent strong signal from being diluted
+            # Boost - prevent strong signal from being diluted
             # Only detection layer scores contribute to boost
             detection_scores = [rule_score, ml_score, llm_score]
             max_score        = max(detection_scores)
@@ -118,7 +118,7 @@ class RiskScorer:
             )
 
         except Exception as e:
-            # Fail closed — a scoring failure must not produce a permissive result.
+            # Fail closed - a scoring failure must not produce a permissive result.
             # RiskScore(1.0) ensures PolicyEngine blocks the request rather than
             # allowing it through with a false score of zero.
             logger.error("RiskScorer failed: %s", e, exc_info=True)

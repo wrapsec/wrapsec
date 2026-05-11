@@ -34,11 +34,11 @@ class BaseDetector(ABC):
     @property
     @abstractmethod
     def name(self) -> str:
-        """Detector name — used in logs and traces."""
+        """Detector name - used in logs and traces."""
 
     @abstractmethod
     def detect(self, text: str) -> DetectionResult:
         """
         Run detection on input text.
-        Must never raise — return DetectionResult.clean() on failure.
+        Must never raise - return DetectionResult.clean() on failure.
         """

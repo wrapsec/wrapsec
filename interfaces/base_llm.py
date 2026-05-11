@@ -20,13 +20,13 @@ class BaseLLMClient(ABC):
     """
     Abstract LLM client interface.
     All providers must implement this interface.
-    Engine uses this — never calls providers directly.
+    Engine uses this - never calls providers directly.
     """
 
     @property
     @abstractmethod
     def provider(self) -> str:
-        """Provider name — ollama | openai | groq"""
+        """Provider name - ollama | openai | groq"""
 
     @abstractmethod
     async def complete(
@@ -39,9 +39,9 @@ class BaseLLMClient(ABC):
     ) -> LLMResponse:
         """
         Send a completion request to the LLM provider.
-        Must never raise — return empty LLMResponse on failure.
+        Must never raise - return empty LLMResponse on failure.
         """
 
     @abstractmethod
     async def is_available(self) -> bool:
-        """Health check — returns True if provider is reachable."""
+        """Health check - returns True if provider is reachable."""

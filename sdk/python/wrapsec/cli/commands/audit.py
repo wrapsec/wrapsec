@@ -3,7 +3,7 @@
 # WrapSec v1.0 | AI Security Gateway - https://wrapsec.com
 
 """
-wrapsec audit — read-only audit log commands.
+wrapsec audit - read-only audit log commands.
 
 All commands are strictly read-only.
 No mutation or control-plane logic.
@@ -39,7 +39,7 @@ def _get_client() -> Client:
 def audit() -> None:
     """Query audit logs. All commands are read-only.
 
-    Scope is bounded by the API key used —
+    Scope is bounded by the API key used -
     admin key sees all requests, standard key sees only its own.
     """
 
@@ -128,16 +128,16 @@ def audit_list(
     click.echo("-" * 130)
     for log in logs:
         color   = {"BLOCK": "red", "SANITIZE": "yellow", "ALLOW": "green"}.get(log.decision)
-        reason  = (log.primary_reason or "—")[:30]
-        source  = (log.source or "—")[:18]
-        mode    = (log.execution_mode or "—")[:10]
-        created = str(log.created_at)[:19] if log.created_at else "—"
+        reason  = (log.primary_reason or "-")[:30]
+        source  = (log.source or "-")[:18]
+        mode    = (log.execution_mode or "-")[:10]
+        created = str(log.created_at)[:19] if log.created_at else "-"
         click.secho(
             f"{log.trace_id:<32}  "
             f"{log.decision:<10}  "
             f"{reason:<30}  "
             f"{round(log.confidence, 2):<4.2f}  "
-            f"{log.confidence_band or '—':<6}  "
+            f"{log.confidence_band or '-':<6}  "
             f"{mode:<10}  "
             f"{source:<18}  "
             f"{created}",

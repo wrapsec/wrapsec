@@ -9,9 +9,9 @@ WrapSec Proxy Mode Example
 Demonstrates how to use WrapSec as a drop-in replacement for the OpenAI API.
 
 The only changes from a standard OpenAI SDK integration:
-  1. api_key  → your WrapSec key (not your OpenAI key)
-  2. base_url → your WrapSec instance
-  3. model    → prefix with provider name (e.g. "openai/gpt-4o")
+  1. api_key  -> your WrapSec key (not your OpenAI key)
+  2. base_url -> your WrapSec instance
+  3. model    -> prefix with provider name (e.g. "openai/gpt-4o")
 
 Setup:
   pip install -e ./sdk/python openai fastapi uvicorn httpx
@@ -40,7 +40,7 @@ LLM_MODEL        = os.environ.get("LLM_MODEL", "openai/gpt-4o-mini")
 if not WRAPSEC_API_KEY:
     raise RuntimeError("WRAPSEC_API_KEY not set. Set it with: export WRAPSEC_API_KEY=wsk_live_...")
 
-# Point the OpenAI client at WrapSec — only change from standard integration
+# Point the OpenAI client at WrapSec - only change from standard integration
 client = OpenAI(
     api_key  = WRAPSEC_API_KEY,
     base_url = f"{WRAPSEC_BASE_URL}/v1",
@@ -115,7 +115,7 @@ async def chat(body: ChatRequest):
         )
 
         raw_response = response._raw_response
-        # Use `or None` instead of "UNKNOWN" fallback — headers are always
+        # Use `or None` instead of "UNKNOWN" fallback - headers are always
         # present on successful responses. None signals a missing/unexpected value.
         input_dec    = raw_response.headers.get("x-wrapsec-input-decision")   or None
         output_dec   = raw_response.headers.get("x-wrapsec-output-decision")  or None

@@ -13,26 +13,26 @@ integrations. It is never returned in scan responses (POST /v1/ai/request
 or POST /v1/chat/completions) to avoid giving attackers evasion signals.
 
 Severity levels:
-    CRITICAL  — High confidence attack OR any guardrail block
-                (guardrail blocks identified by _GUARDRAIL_BLOCK suffix —
+    CRITICAL  - High confidence attack OR any guardrail block
+                (guardrail blocks identified by _GUARDRAIL_BLOCK suffix -
                 future guardrails like toxicity are automatically covered)
-    HIGH      — Detection-based block with lower confidence
+    HIGH      - Detection-based block with lower confidence
                 OR SYSTEM_ERROR (ops attention required)
-    MEDIUM    — Any sanitization (threat detected but mitigated)
-    LOW       — Clean input allowed through
+    MEDIUM    - Any sanitization (threat detected but mitigated)
+    LOW       - Clean input allowed through
 
 To update the severity model (e.g. adjust CRITICAL threshold, add new
 levels), edit compute_severity() below. All callers import from this
-module — no other files need to change.
+module - no other files need to change.
 """
 
 # Threshold above which a detection-based BLOCK is escalated to CRITICAL.
-# Intentionally hardcoded — this is a classification boundary for SIEM output,
+# Intentionally hardcoded - this is a classification boundary for SIEM output,
 # distinct from block_threshold/sanitize_threshold which gate request decisions.
 # If block_threshold changes significantly, review this constant too.
 CRITICAL_RISK_THRESHOLD = 0.9
 
-# Severity levels — ordered from highest to lowest for reference
+# Severity levels - ordered from highest to lowest for reference
 SEVERITY_LEVELS = ["CRITICAL", "HIGH", "MEDIUM", "LOW"]
 
 
@@ -46,7 +46,7 @@ def compute_severity(
 
     Args:
         decision:       BLOCK / SANITIZE / ALLOW
-        risk_score:     0.0–1.0 (detection only — guardrail blocks = 0.0)
+        risk_score:     0.0-1.0 (detection only - guardrail blocks = 0.0)
         primary_reason: e.g. RULE_DETECTOR, PII_GUARDRAIL_BLOCK, SYSTEM_ERROR
 
     Returns:
@@ -57,13 +57,13 @@ def compute_severity(
           risk_score, because risk_score is always 0.0 on guardrail paths.
           Guardrail blocks are identified by the _GUARDRAIL_BLOCK suffix,
           which covers all current and future guardrail types automatically.
-        - SYSTEM_ERROR returns HIGH — not CRITICAL (no confirmed threat)
+        - SYSTEM_ERROR returns HIGH - not CRITICAL (no confirmed threat)
           but requires immediate ops attention.
-        - risk_score = 0.0 does NOT mean safe — always check decision +
+        - risk_score = 0.0 does NOT mean safe - always check decision +
           primary_reason per core_concepts.md.
     """
     if decision == "BLOCK":
-        # Guardrail block — always CRITICAL regardless of risk_score
+        # Guardrail block - always CRITICAL regardless of risk_score
         # (risk_score is 0.0 on all guardrail paths by design)
         if primary_reason and primary_reason.endswith("_GUARDRAIL_BLOCK"):
             return "CRITICAL"
@@ -83,5 +83,5 @@ def compute_severity(
     if decision == "SANITIZE":
         return "MEDIUM"
 
-    # ALLOW — clean input
+    # ALLOW - clean input
     return "LOW"

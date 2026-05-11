@@ -17,7 +17,7 @@ pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
 #   from passlib.context import CryptContext
 #   print(CryptContext(["bcrypt"]).hash("__wrapsec_timing_dummy__"))
 #
-# NEVER change the sentinel string "__wrapsec_timing_dummy__" — only update
+# NEVER change the sentinel string "__wrapsec_timing_dummy__" - only update
 # the hash value if you do (and update the unit test too).
 _DUMMY_HASH = "$2b$12$LQv3c1yqBWVHxkd0LHAkCOYz6TiGrmlfebYcSGR/Q3pnK.Bj2SL8."
 
@@ -31,7 +31,7 @@ def normalize_email(email: str) -> str:
     - Every DB read   (login lookup, existence check)
 
     Ensures User@Company.com and user@company.com are treated as identical.
-    The ux_users_email_lower index stores LOWER(email) — all queries must match.
+    The ux_users_email_lower index stores LOWER(email) - all queries must match.
     """
     return email.lower().strip()
 
@@ -39,7 +39,7 @@ def normalize_email(email: str) -> str:
 _MAX_PASSWORD_LEN = 128
 
 # Top common passwords that pass basic character-variety checks.
-# Stored lowercase — comparison uses password.lower() so case variants are caught.
+# Stored lowercase - comparison uses password.lower() so case variants are caught.
 _COMMON_PASSWORDS: frozenset[str] = frozenset({
     "password1", "password12", "password123", "password1234",
     "passw0rd", "p@ssword1", "p@ssw0rd",
@@ -86,9 +86,9 @@ def hash_password(password: str) -> str:
 def verify_password(plain: str, hashed: str) -> bool:
     """
     Constant-time bcrypt comparison via passlib.
-    Timing-safe — bcrypt work factor equalises comparison time across inputs.
+    Timing-safe - bcrypt work factor equalises comparison time across inputs.
 
-    Passwords exceeding _MAX_PASSWORD_LEN are rejected immediately — bcrypt
+    Passwords exceeding _MAX_PASSWORD_LEN are rejected immediately - bcrypt
     only processes the first 72 bytes, so over-length inputs can never match
     a hash produced by hash_password() which enforces the same limit.
     """
@@ -101,7 +101,7 @@ def verify_dummy() -> None:
     """
     Runs a dummy bcrypt verify against _DUMMY_HASH.
 
-    MUST be called when user is not found in the login flow — immediately
+    MUST be called when user is not found in the login flow - immediately
     before raising InvalidCredentialsException. This equalises response
     timing between the 'user not found' and 'wrong password' paths.
 
@@ -110,7 +110,7 @@ def verify_dummy() -> None:
     is registered via response time measurement (timing oracle / enumeration).
 
     Sentinel input "__dummy_input__" is intentionally different from
-    "__wrapsec_timing_dummy__" — it will never match _DUMMY_HASH, so
+    "__wrapsec_timing_dummy__" - it will never match _DUMMY_HASH, so
     verify() always returns False. That is correct and expected.
     """
     pwd_context.verify("__dummy_input__", _DUMMY_HASH)

@@ -1,4 +1,4 @@
-# WrapSec CLI — Command Reference
+# WrapSec CLI - Command Reference
 
 > CLI behavior follows [Core Concepts](core_concepts.md) for decision semantics and SYSTEM_ERROR handling.
 
@@ -43,14 +43,14 @@ wrapsec scan "hello world"
 
 | Code | Meaning |
 |---|---|
-| `0` | ALLOW or SANITIZE — input accepted |
+| `0` | ALLOW or SANITIZE - input accepted |
 | `1` | CLI error, network failure, auth error, rate limit, SYSTEM_ERROR |
-| `2` | BLOCK — input rejected by security policy |
+| `2` | BLOCK - input rejected by security policy |
 
 Network and server errors (5xx, timeout, connection failure) are retried up to 3 times with exponential backoff before exit 1 is returned. A CLI exit 1 on infrastructure errors means retries have already been exhausted.
 
 **SYSTEM_ERROR and exit codes:**
-When the API returns `primary_reason = SYSTEM_ERROR`, the API decision is `ALLOW` — the detection pipeline failed and the system defaults to allowing the request. The CLI treats this as exit code `1` (failure) regardless of the ALLOW decision. This is intentional — a failed detection is not a safe detection. Applications must not forward input to an LLM when `SYSTEM_ERROR` is returned. See `wrapsec scan` output for how SYSTEM_ERROR is surfaced.
+When the API returns `primary_reason = SYSTEM_ERROR`, the API decision is `ALLOW` - the detection pipeline failed and the system defaults to allowing the request. The CLI treats this as exit code `1` (failure) regardless of the ALLOW decision. This is intentional - a failed detection is not a safe detection. Applications must not forward input to an LLM when `SYSTEM_ERROR` is returned. See `wrapsec scan` output for how SYSTEM_ERROR is surfaced.
 
 Exit codes apply to all commands and all output modes (`--quiet`, `--json`).
 
@@ -92,9 +92,9 @@ wrapsec config set timeout 30
 Invalid values are rejected immediately:
 
 ```
-❌ api_key must start with 'wsk_live_', got 'invalid_key'...   exit 1
-❌ timeout must be at least 1 second, got 0                   exit 1
-❌ base_url must start with http:// or https://, got 'not-a-url'  exit 1
+no api_key must start with 'wsk_live_', got 'invalid_key'...   exit 1
+no timeout must be at least 1 second, got 0                   exit 1
+no base_url must start with http:// or https://, got 'not-a-url'  exit 1
 ```
 
 ### `wrapsec config get`
@@ -144,12 +144,12 @@ wrapsec ping
 ```
 
 ```
-✔ WrapSec API is reachable    exit 0
+ WrapSec API is reachable    exit 0
 ```
 
 - Calls `/health/live` only
 - Fixed timeout: 5 seconds (not configurable)
-- **Does NOT validate your API key** — use `wrapsec doctor` for auth verification
+- **Does NOT validate your API key** - use `wrapsec doctor` for auth verification
 
 **Docker health check:**
 ```dockerfile
@@ -177,15 +177,15 @@ WrapSec Doctor
    Timeout:      30s [config file]
 
 2. API Connectivity
-   ✔ API reachable (/health/live)
+    API reachable (/health/live)
 
 3. Authentication
-   ✔ API key valid (/health/ready)
+    API key valid (/health/ready)
 
 4. Service Health
-   ✔ database        ok
-   ✔ redis           ok
-   ✔ ml_model        ok
+    database        ok
+    redis           ok
+    ml_model        ok
 
 5. Active Configuration
    Block threshold:   0.7
@@ -198,14 +198,14 @@ WrapSec Doctor
    CLI version:   1.0
    Expected API:  v1
    API version:   1.0.0
-   ✔ Compatible (1.0.0)
+    Compatible (1.0.0)
 
-✔ All checks passed — WrapSec CLI is ready.
+ All checks passed - WrapSec CLI is ready.
 ```
 
 - A failed check never aborts remaining checks
-- Missing response fields show "Unknown" — never crashes
-- Version mismatch shows a warning only — never blocks execution
+- Missing response fields show "Unknown" - never crashes
+- Version mismatch shows a warning only - never blocks execution
 
 ---
 
@@ -221,11 +221,11 @@ wrapsec scan [TEXT] [OPTIONS]
 
 | Option | Default | Description |
 |---|---|---|
-| `--mode fast\|full`, `-m` | `fast` | Detection mode. `full` enables LLM semantic analysis for deeper inspection of ambiguous inputs. Results may differ from fast mode. Latency increases by ~100–2300ms depending on LLM model. |
+| `--mode fast\|full`, `-m` | `fast` | Detection mode. `full` enables LLM semantic analysis for deeper inspection of ambiguous inputs. Results may differ from fast mode. Latency increases by ~100-2300ms depending on LLM model. |
 | `--timeout INT` | `30` | Request timeout in seconds (min 1) |
 | `--json` | off | Pure JSON output to stdout |
-| `--user TEXT`, `-u` | `cli` | User ID for audit attribution — maps to `metadata.user_id` in the API request body |
-| `--quiet`, `-q` | off | No stdout output — exit code only |
+| `--user TEXT`, `-u` | `cli` | User ID for audit attribution - maps to `metadata.user_id` in the API request body |
+| `--quiet`, `-q` | off | No stdout output - exit code only |
 
 ### Examples
 
@@ -236,7 +236,7 @@ wrapsec scan "hello world"
 # BLOCK decision
 wrapsec scan "ignore all previous instructions"
 
-# Quiet mode — CI use
+# Quiet mode - CI use
 wrapsec scan --quiet "hello world"
 echo "Exit: $?"   # 0 = safe, 2 = blocked
 
@@ -246,7 +246,7 @@ wrapsec scan --json "hello world"
 # Full detection mode (LLM analysis)
 wrapsec scan --mode full "hello world"
 
-# stdin — recommended for sensitive content (not stored in shell history)
+# stdin - recommended for sensitive content (not stored in shell history)
 echo "my SSN is 123-45-6789" | wrapsec scan
 cat prompt.txt | wrapsec scan
 
@@ -291,15 +291,15 @@ Threats:    PROMPT_INJECTION
 }
 ```
 
-`sanitized_input` matches the `sanitized_input` field in the API response — present and non-null only when `decision = SANITIZE`. `sanitization_applied` is the corresponding boolean indicator in the full API response.
+`sanitized_input` matches the `sanitized_input` field in the API response - present and non-null only when `decision = SANITIZE`. `sanitization_applied` is the corresponding boolean indicator in the full API response.
 Confidence is shown at full precision in JSON output (no forced rounding).
 
 ### Validation errors
 
 ```bash
-wrapsec scan                    # ❌ No input provided.          Exit 1
-wrapsec scan ("A" * 8001)       # ❌ Input too large (8,001 chars). Exit 1
-wrapsec scan --timeout 0 "text" # ❌ timeout must be at least 1 second. Exit 1
+wrapsec scan                    # no No input provided.          Exit 1
+wrapsec scan ("A" * 8001)       # no Input too large (8,001 chars). Exit 1
+wrapsec scan --timeout 0 "text" # no timeout must be at least 1 second. Exit 1
 ```
 
 > ⚠ **Shell history warning:** CLI arguments are stored in shell history.  
@@ -316,9 +316,9 @@ wrapsec batch FILE [OPTIONS]
 ```
 
 - Empty lines and lines starting with `#` are skipped
-- File is streamed line by line — never fully loaded into memory
+- File is streamed line by line - never fully loaded into memory
 - BOM characters are stripped automatically (Windows UTF-8 compatibility)
-- **File path only** — no inline text argument
+- **File path only** - no inline text argument
 
 ### Options
 
@@ -328,9 +328,9 @@ wrapsec batch FILE [OPTIONS]
 | `--timeout INT` | `30` | Per-request timeout in seconds (min 1) |
 | `--delay INT` | `0` | Milliseconds between requests |
 | `--limit INT` | all | Max lines to process |
-| `--summary` | off | Show counts only — no individual scores or trace IDs |
+| `--summary` | off | Show counts only - no individual scores or trace IDs |
 | `--json` | off | JSONL output (one JSON object per line) |
-| `--quiet` | off | No stdout — exit code only |
+| `--quiet` | off | No stdout - exit code only |
 
 ### Limits
 
@@ -343,7 +343,7 @@ wrapsec batch FILE [OPTIONS]
 
 `ERROR (1)` > `BLOCK (2)` > `SUCCESS (0)`
 
-An error means some prompts were not scanned — results are incomplete.
+An error means some prompts were not scanned - results are incomplete.
 
 ### Examples
 
@@ -354,7 +354,7 @@ wrapsec batch prompts.txt
 # Summary only (recommended for CI)
 wrapsec batch prompts.txt --summary
 
-# Quiet — exit code only
+# Quiet - exit code only
 wrapsec batch prompts.txt --quiet
 
 # JSONL output
@@ -498,7 +498,7 @@ Source:         wrapsec-python
 
 Nonexistent trace ID returns exit 1:
 ```
-❌ Audit record not found: req_nonexistent_trace_id_xyz    exit 1
+no Audit record not found: req_nonexistent_trace_id_xyz    exit 1
 ```
 
 ### `wrapsec audit stats`
@@ -546,7 +546,7 @@ wrapsec settings get --json
 
 **Output:**
 ```
-Gateway Configuration (read-only — change via dashboard)
+Gateway Configuration (read-only - change via dashboard)
 =======================================================
 
 Detection Thresholds:
@@ -554,9 +554,9 @@ Detection Thresholds:
   Sanitize threshold:  0.4
 
 Detection Layers:
-  RULE    ✔ enabled
-  ML      ✔ enabled
-  LLM     ✔ enabled
+  RULE     enabled
+  ML       enabled
+  LLM      enabled
 
 LLM Configuration:
   Provider:    ollama
@@ -573,7 +573,7 @@ Rate Limit:
 ## 8. `wrapsec keys list`
 
 List API keys visible to the current key. **Read-only.**  
-To create, rotate, or revoke keys, use the dashboard — these operations require JWT + ADMIN login.
+To create, rotate, or revoke keys, use the dashboard - these operations require JWT + ADMIN login.
 
 `GET /v1/keys` accepts API key authentication. All write operations (`POST`, `PUT`, `DELETE`) on keys require JWT + ADMIN and cannot be performed from the CLI.
 
@@ -590,24 +590,24 @@ key_bc861e102a45           test key             2026-04-16    2026-04-16
 key_52066e5606ae           Finance Bot Key      2026-04-10    Never
 ```
 
-Does NOT show key secrets — they are never retrievable after creation.
+Does NOT show key secrets - they are never retrievable after creation.
 
 ---
 
 ## CI Usage Patterns
 
 ```bash
-# Single scan — exit code only
+# Single scan - exit code only
 wrapsec scan --quiet "$(cat prompt.txt)"
 [ $? -eq 2 ] && echo "Blocked" >&2 && exit 1
 
 # JSON output for parsing
 wrapsec scan --json "text" | jq .decision
 
-# Batch — summary only (no scores logged)
+# Batch - summary only (no scores logged)
 wrapsec batch prompts.txt --summary --quiet
 
-# Batch — JSONL for downstream processing
+# Batch - JSONL for downstream processing
 wrapsec batch prompts.txt --json > results.jsonl
 cat results.jsonl | jq .decision
 
@@ -628,11 +628,11 @@ wrapsec config clear --force
 ## Security Notes
 
 ```
-1. Never pass sensitive content as CLI arguments — stored in shell history
+1. Never pass sensitive content as CLI arguments - stored in shell history
    DANGEROUS: wrapsec scan "my SSN is 123-45-6789"
    SAFE:      echo "my SSN is 123-45-6789" | wrapsec scan
 
-2. API key is always masked in output — never printed in plain text
+2. API key is always masked in output - never printed in plain text
 
 3. --json exposes trace_id, confidence scores, and primary_reason
    Use --quiet in CI pipelines when only exit code is needed
@@ -651,26 +651,26 @@ wrapsec config clear --force
 ## What the CLI Does NOT Do
 
 ```
-✗ Create, rotate, or revoke API keys (requires JWT + ADMIN — use dashboard)
-✗ Change security thresholds or detection policy (requires JWT + ADMIN — use dashboard)
-✗ Manage departments or applications
-✗ Manage users, roles, or passwords (use the dashboard)
-✗ JWT-based login or session management (CLI uses API keys only)
-✗ Expose internal scoring details or layer weights
-✗ Collect telemetry or transmit data externally
+ Create, rotate, or revoke API keys (requires JWT + ADMIN - use dashboard)
+ Change security thresholds or detection policy (requires JWT + ADMIN - use dashboard)
+ Manage departments or applications
+ Manage users, roles, or passwords (use the dashboard)
+ JWT-based login or session management (CLI uses API keys only)
+ Expose internal scoring details or layer weights
+ Collect telemetry or transmit data externally
 ```
 
-These actions belong in the dashboard, where every change is authenticated, audited, and attributable. The CLI authenticates exclusively with API keys — JWT auth is not supported.
+These actions belong in the dashboard, where every change is authenticated, audited, and attributable. The CLI authenticates exclusively with API keys - JWT auth is not supported.
 
 ## Known Behaviour Notes
 
 ```
 latency_ms in scan output
-  Real gateway processing time — sourced directly from the API response.
+  Real gateway processing time - sourced directly from the API response.
   Mapping by execution mode:
-    scan_only → processing.latency_ms (detection pipeline time only)
-    proxy     → total_latency_ms (end-to-end: detection + provider + output scan)
-  Values typically 1–10ms for scan_only fast mode, 100–2300ms with full mode or proxy.
+    scan_only -> processing.latency_ms (detection pipeline time only)
+    proxy     -> total_latency_ms (end-to-end: detection + provider + output scan)
+  Values typically 1-10ms for scan_only fast mode, 100-2300ms with full mode or proxy.
   For a full proxy latency breakdown, use: wrapsec audit get <trace_id>
 
 confidence in human vs JSON output
@@ -680,20 +680,20 @@ confidence in human vs JSON output
 
 batch on Windows (PowerShell)
   PowerShell Out-File -Encoding utf8 adds a BOM character.
-  The CLI strips BOM automatically — no action needed.
+  The CLI strips BOM automatically - no action needed.
 
 --mode full
   Sends detection_mode=full to the API which invokes LLM analysis.
   Output fields are identical to fast mode.
-  Latency increases by ~100–2300ms depending on the configured LLM.
+  Latency increases by ~100-2300ms depending on the configured LLM.
 
 "Reason" in human output
   The human-readable output label "Reason:" corresponds to the API field `primary_reason`.
-  JSON output uses `primary_reason` directly — no label difference.
+  JSON output uses `primary_reason` directly - no label difference.
   Example: human shows "Reason: RULE_DETECTOR", JSON shows "primary_reason": "RULE_DETECTOR"
 ```
 
 ---
 
 *WrapSec CLI Command Reference*  
-*Version 1.0 — May 2026*
+*Version 1.0 - May 2026*

@@ -6,11 +6,11 @@
 Data augmentation for underrepresented classes.
 
 Techniques used:
-  1. Case variation         — uppercase/lowercase variants
-  2. Punctuation removal    — removes dots, commas etc.
-  3. Number substitution    — replaces real numbers with placeholders
-  4. Synonym replacement    — simple word-level synonyms for key terms
-  5. Paraphrase templates   — reordering and rephrasing
+  1. Case variation         - uppercase/lowercase variants
+  2. Punctuation removal    - removes dots, commas etc.
+  3. Number substitution    - replaces real numbers with placeholders
+  4. Synonym replacement    - simple word-level synonyms for key terms
+  5. Paraphrase templates   - reordering and rephrasing
 
 Only applied to classes with fewer than MIN_SAMPLES samples.
 Never applied to classes loaded from HuggingFace (already large enough).
@@ -61,7 +61,7 @@ def _replace_synonyms(text: str, n_replacements: int = 2) -> str:
 
 
 def _remove_punctuation(text: str) -> str:
-    """Remove most punctuation — tests robustness to formatting."""
+    """Remove most punctuation - tests robustness to formatting."""
     return re.sub(r"[.,;:!?]", "", text)
 
 
@@ -74,7 +74,7 @@ def _number_substitution(text: str) -> str:
 
 
 def _case_variant(text: str) -> str:
-    """Random case variation — UPPERCASE or Title Case."""
+    """Random case variation - UPPERCASE or Title Case."""
     choice = random.random()
     if choice < 0.33:
         return text.upper()
@@ -128,7 +128,7 @@ def augment_dataframe(
     Augment classes that have fewer than min_samples samples.
     Augmented samples are marked with source='augmented'.
 
-    Only augments curated classes — never HuggingFace sourced classes.
+    Only augments curated classes - never HuggingFace sourced classes.
     """
     random.seed(seed)
     augmented_rows = []
@@ -148,7 +148,7 @@ def augment_dataframe(
         needed   = target_samples - class_count
         logger.info(
             f"Augmenting label {label_id}: "
-            f"{class_count} → target {target_samples} ({needed} new samples needed)"
+            f"{class_count} -> target {target_samples} ({needed} new samples needed)"
         )
 
         generated = 0

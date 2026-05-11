@@ -38,7 +38,7 @@ REDACTION_MASKS = {
 class PIIRedactor:
     """
     Redacts PII from text by replacing matches with type-specific masks.
-    Stateless — returns a new sanitised string, never modifies in place.
+    Stateless - returns a new sanitised string, never modifies in place.
     """
 
     def redact(self, text: str) -> tuple[str, list[str]]:
@@ -61,7 +61,7 @@ class PIIRedactor:
             return redacted, redacted_types
 
         except Exception as e:
-            # Fail closed — do not return the original text, which may contain
+            # Fail closed - do not return the original text, which may contain
             # unredacted PII. Re-raise so the caller (gateway service) treats
             # this as an error and blocks the request rather than passing raw
             # PII to the client.

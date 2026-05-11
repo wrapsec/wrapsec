@@ -10,7 +10,7 @@ Open a GitHub issue with:
 - Expected vs actual behaviour
 - WrapSec version and environment details
 
-For security vulnerabilities, see [SECURITY.md](SECURITY.md) — do not open a public issue.
+For security vulnerabilities, see [SECURITY.md](SECURITY.md) - do not open a public issue.
 
 ## Development Setup
 
@@ -50,4 +50,4 @@ All contributions must pass CI checks before merging.
 
 - Python: `ruff` for linting and formatting (`ruff check . && ruff format .`)
 - TypeScript: `tsc --noEmit` must pass
-- Keep changes focused — one concern per PR
+- Keep changes focused - one concern per PR

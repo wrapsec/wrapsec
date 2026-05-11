@@ -1,1 +1,1 @@
-# Internal module — not part of public API
+# Internal module - not part of public API

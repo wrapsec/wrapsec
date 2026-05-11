@@ -22,8 +22,8 @@ class IdempotencyMiddleware(BaseHTTPMiddleware):
     Idempotency-Key header support for POST /v1/ai/request.
 
     If a request includes an Idempotency-Key header:
-      First request  → process normally, cache response in Redis
-      Repeat request → return cached response immediately
+      First request  -> process normally, cache response in Redis
+      Repeat request -> return cached response immediately
 
     Cache key: SHA-256(idempotency_key + body_hash)
     TTL:       idempotency_window_secs (default 60s, configurable via settings)
@@ -32,7 +32,7 @@ class IdempotencyMiddleware(BaseHTTPMiddleware):
     Prevents duplicate BLOCK/SANITIZE decisions on client retries.
     Returns X-Idempotency-Replayed: true header on cache hits.
 
-    If Redis is unavailable → processes normally (fail open).
+    If Redis is unavailable -> processes normally (fail open).
     Only caches non-5xx responses.
     """
 
@@ -55,8 +55,8 @@ class IdempotencyMiddleware(BaseHTTPMiddleware):
 
         # Scope idempotency to the authenticated caller.
         # Without this, two different callers using the same Idempotency-Key
-        # value would collide — dept A could receive dept B's cached response.
-        # If key_id is absent (unauthenticated), skip idempotency entirely —
+        # value would collide - dept A could receive dept B's cached response.
+        # If key_id is absent (unauthenticated), skip idempotency entirely -
         # we cannot scope the key safely without an identity.
         key_id = getattr(request.state, "key_id", None)
         if not key_id:
@@ -70,17 +70,17 @@ class IdempotencyMiddleware(BaseHTTPMiddleware):
             redis = get_redis()
 
             # Atomically claim this idempotency slot before processing.
-            # SET NX ensures only one concurrent request can claim the key —
+            # SET NX ensures only one concurrent request can claim the key -
             # eliminates the TOCTOU race between GET and later SET.
             claimed = await redis.set(hash_key, body_hash, nx=True, ex=get_settings().idempotency_window_secs)
 
             if not claimed:
-                # Key exists — check for conflict or cached replay
+                # Key exists - check for conflict or cached replay
                 stored_hash = await redis.get(hash_key)
                 if stored_hash and stored_hash != body_hash:
-                    # Same idempotency key — different body → CONFLICT
+                    # Same idempotency key - different body -> CONFLICT
                     logger.warning(
-                        f"Idempotency conflict — "
+                        f"Idempotency conflict - "
                         f"key={idempotency_key[:12]}... "
                         f"body hash mismatch"
                     )
@@ -96,11 +96,11 @@ class IdempotencyMiddleware(BaseHTTPMiddleware):
                         },
                     )
 
-                # Same key + same body → return cached response if available
+                # Same key + same body -> return cached response if available
                 cached = await redis.get(response_key)
                 if cached:
                     logger.info(
-                        f"Idempotency hit — "
+                        f"Idempotency hit - "
                         f"key={idempotency_key[:12]}... "
                         f"path={request.url.path}"
                     )
@@ -113,10 +113,10 @@ class IdempotencyMiddleware(BaseHTTPMiddleware):
                     return response
 
                 # Concurrent in-flight request claimed the key but hasn't stored
-                # a response yet — fall through and process normally.
+                # a response yet - fall through and process normally.
 
         except Exception as e:
-            logger.warning(f"Idempotency cache check failed: {e} — processing normally")
+            logger.warning(f"Idempotency cache check failed: {e} - processing normally")
 
         # ── Process request ───────────────────────────────────
         # Reconstruct receive callable since we consumed the body
@@ -127,7 +127,7 @@ class IdempotencyMiddleware(BaseHTTPMiddleware):
         response         = await call_next(request)
 
         # ── Cache response ────────────────────────────────────
-        # Only cache successful responses — not 5xx errors
+        # Only cache successful responses - not 5xx errors
         if response.status_code < 500:
             try:
                 redis = get_redis()
@@ -140,19 +140,19 @@ class IdempotencyMiddleware(BaseHTTPMiddleware):
                 response_data = json.loads(response_body)
 
                 # hash_key was set atomically before processing via SET NX.
-                # Only store the response — no hash_key race possible here.
+                # Only store the response - no hash_key race possible here.
                 await redis.setex(response_key, get_settings().idempotency_window_secs, json.dumps({
                     "body":        response_data,
                     "status_code": response.status_code,
                 }))
 
                 logger.debug(
-                    f"Idempotency cached — "
+                    f"Idempotency cached - "
                     f"key={idempotency_key[:12]}... "
                     f"ttl={get_settings().idempotency_window_secs}s"
                 )
 
-                # Reconstruct response — body iterator was consumed
+                # Reconstruct response - body iterator was consumed
                 return JSONResponse(
                     content     = response_data,
                     status_code = response.status_code,

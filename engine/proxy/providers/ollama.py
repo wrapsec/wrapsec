@@ -41,7 +41,7 @@ class OllamaProxyProvider(BaseProxyProvider):
     ) -> ProviderResponse:
         """
         Forward a chat request to Ollama and translate the response to
-        OpenAI format. kwargs are not forwarded — Ollama has a different
+        OpenAI format. kwargs are not forwarded - Ollama has a different
         parameter structure. Full kwargs passthrough is planned.
         """
         start = time.monotonic()

@@ -1,5 +1,5 @@
 """
-Audit query example — list logs, get stats, export CSV.
+Audit query example - list logs, get stats, export CSV.
 
 Setup:
     pip install wrapsec-python

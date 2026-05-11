@@ -33,7 +33,7 @@ async def seed_default_tenant() -> None:
     """
     Ensures a default tenant exists. Required for fresh Docker deployments
     before the /setup page or bootstrap_admin can create users.
-    Idempotent — skips silently if the tenant already exists.
+    Idempotent - skips silently if the tenant already exists.
     """
     import logging
     logger = logging.getLogger("wrapsec.seed")
@@ -61,11 +61,11 @@ async def seed_default_tenant() -> None:
 async def bootstrap_admin() -> None:
     """
     Creates the first admin user if ADMIN_EMAIL and ADMIN_PASSWORD are set in
-    .env AND the users table is empty. Skips silently if either var is unset —
+    .env AND the users table is empty. Skips silently if either var is unset -
     in that case the dashboard /setup page handles first-user creation.
 
-    Runs on every startup — skips silently if users already exist.
-    Non-fatal — system starts even if bootstrap fails.
+    Runs on every startup - skips silently if users already exist.
+    Non-fatal - system starts even if bootstrap fails.
     """
     import logging
 
@@ -74,9 +74,9 @@ async def bootstrap_admin() -> None:
     try:
         _settings = get_settings()
 
-        # Skip if env vars not configured — /setup page handles first-user creation
+        # Skip if env vars not configured - /setup page handles first-user creation
         if not _settings.admin_email or not _settings.admin_password:
-            logger.info("bootstrap skipped — ADMIN_EMAIL/ADMIN_PASSWORD not set; "
+            logger.info("bootstrap skipped - ADMIN_EMAIL/ADMIN_PASSWORD not set; "
                         "use the dashboard /setup page to create the first admin user")
             return
 
@@ -90,19 +90,19 @@ async def bootstrap_admin() -> None:
         async with AsyncSessionFactory() as db:
             tenant = await TenantRepository(db).get_default()
             if not tenant:
-                logger.error("bootstrap no_default_tenant — skipping admin creation")
+                logger.error("bootstrap no_default_tenant - skipping admin creation")
                 return
 
             user_repo = UserRepository(db)
             if await user_repo.count_by_tenant(tenant.id) > 0:
-                return  # Users already exist — skip silently
+                return  # Users already exist - skip silently
 
             email = normalize_email(_settings.admin_email)
 
             try:
                 validate_password_strength(_settings.admin_password)
             except ValueError as e:
-                logger.error("bootstrap admin_password_too_weak: %s — skipping", e)
+                logger.error("bootstrap admin_password_too_weak: %s - skipping", e)
                 return
 
             await user_repo.create({
@@ -119,7 +119,7 @@ async def bootstrap_admin() -> None:
 
     except Exception as e:
         logger.error("bootstrap failed: %s", e)
-        # Non-fatal — system continues to start
+        # Non-fatal - system continues to start
 
 
 @asynccontextmanager
@@ -158,8 +158,8 @@ app = FastAPI(
     lifespan    = lifespan,
 )
 
-# ── Middleware — order matters, outermost registered last ─────
-# Request flow: Trace → RateLimit → Auth → Idempotency → Logging → endpoint
+# ── Middleware - order matters, outermost registered last ─────
+# Request flow: Trace -> RateLimit -> Auth -> Idempotency -> Logging -> endpoint
 # Idempotency must be after Auth so key_id is available in request.state
 app.add_middleware(LoggingMiddleware)
 app.add_middleware(IdempotencyMiddleware)
@@ -168,7 +168,7 @@ app.add_middleware(RateLimitMiddleware)
 app.add_middleware(TraceMiddleware)
 
 # ── CORS ──────────────────────────────────────────────────────
-# RFC 6454: allow_credentials=True with allow_origins=["*"] is invalid —
+# RFC 6454: allow_credentials=True with allow_origins=["*"] is invalid -
 # browsers reject this combination. Credentials are only sent when origins
 # are explicitly listed via CORS_ALLOWED_ORIGINS in .env.
 _cors_origins     = _startup_settings.cors_allowed_origins

@@ -11,7 +11,7 @@ Last updated: May 2026
 
 ## Authentication
 
-WrapSec supports two authentication methods. Both resolve to identical internal state — downstream code is auth-agnostic.
+WrapSec supports two authentication methods. Both resolve to identical internal state - downstream code is auth-agnostic.
 
 ### API Key
 
@@ -21,14 +21,14 @@ x-api-key: your-api-key
 
 Used by applications and services. Three key types:
 
-**Admin key** — full access. All endpoints. No dept scoping.
+**Admin key** - full access. All endpoints. No dept scoping.
 
-**Standard key** (`wsk_live_...`) — scoped to the department/application the key belongs to. `tenant_id` is always derived from the key — never from request body.
+**Standard key** (`wsk_live_...`) - scoped to the department/application the key belongs to. `tenant_id` is always derived from the key - never from request body.
 
-**Trial key** (`wsk_trial_...`) — restricted for demos.
+**Trial key** (`wsk_trial_...`) - restricted for demos.
 - Input cap: 500 characters
 - Rate limit: 10 req/min (enforced at endpoint level)
-- Proxy mode: disabled — returns `403 trial_proxy_disabled`
+- Proxy mode: disabled - returns `403 trial_proxy_disabled`
 
 ### JWT Bearer
 
@@ -45,7 +45,7 @@ Used by dashboard users. Issued via `POST /v1/auth/login`.
 
 **Session timeouts (dashboard):**
 - JWT hard expiry: 30 min (server-enforced)
-- Inactivity timeout: 15 min (client-enforced, dashboard only) — warning at 2 min remaining
+- Inactivity timeout: 15 min (client-enforced, dashboard only) - warning at 2 min remaining
 - Silent refresh: on any 401, dashboard attempts `POST /api/auth/refresh` before redirecting to login
 
 **Header precedence:** `x-api-key` always wins. If both headers are present, JWT is ignored.
@@ -54,31 +54,31 @@ Used by dashboard users. Issued via `POST /v1/auth/login`.
 
 | Endpoints | API key | JWT |
 |---|---|---|
-| `GET /health`, `/health/ready`, `/health/live` | ❌ public | ❌ public |
-| `GET /metrics` | 🔑 Bearer `METRICS_TOKEN` (falls back to `ADMIN_API_KEY`) | 🔑 Bearer `METRICS_TOKEN` |
-| `GET /health/config` | ✅ any key | ✅ any role |
-| `POST /v1/auth/login`, `POST /v1/auth/refresh` | ❌ public/cookie | ❌ public/cookie |
-| `POST /v1/auth/logout`, `GET /v1/auth/me`, `POST /v1/auth/change-password` | ❌ | ✅ any role |
-| `POST /v1/ai/request`, `POST /v1/chat/completions` | ✅ | ✅ any role |
-| `GET /v1/ai/requests/{trace_id}` | ✅ | ✅ any role |
-| `GET /v1/audit/*` | ✅ | ✅ any role |
-| `GET /v1/proxy/interactions/*` | ✅ | ✅ any role |
-| `GET /v1/settings/*` | ✅ | ✅ any role |
-| `PUT /v1/settings/*` | ❌ | ✅ ADMIN only |
-| `GET/PUT/DELETE /v1/settings/proxy*` | ✅ | ✅ any role |
-| `GET /v1/keys` | ✅ | ✅ any role |
-| `GET /v1/keys/{id}` | ✅ | ✅ any role |
-| `POST /v1/keys`, `PUT /v1/keys/{id}`, `DELETE /v1/keys/{id}`, `POST /v1/keys/{id}/rotate` | ❌ | ✅ ADMIN only |
-| `GET /v1/admin/tenant`, `GET /v1/admin/departments/*`, `GET /v1/admin/applications/*` | ✅ | ✅ any role |
-| `PUT /v1/admin/tenant` | ❌ | ✅ ADMIN only |
-| `POST/PUT/DELETE /v1/admin/departments/*` | ❌ | ✅ ADMIN only |
-| `POST/PUT/DELETE /v1/admin/applications/*` | ❌ | ✅ ADMIN only |
-| `ALL /v1/admin/users/*` | ❌ | ✅ ADMIN only |
+| `GET /health`, `/health/ready`, `/health/live` | no public | no public |
+| `GET /metrics` | token Bearer `METRICS_TOKEN` (falls back to `ADMIN_API_KEY`) | token Bearer `METRICS_TOKEN` |
+| `GET /health/config` | yes any key | yes any role |
+| `POST /v1/auth/login`, `POST /v1/auth/refresh` | no public/cookie | no public/cookie |
+| `POST /v1/auth/logout`, `GET /v1/auth/me`, `POST /v1/auth/change-password` | no | yes any role |
+| `POST /v1/ai/request`, `POST /v1/chat/completions` | yes | yes any role |
+| `GET /v1/ai/requests/{trace_id}` | yes | yes any role |
+| `GET /v1/audit/*` | yes | yes any role |
+| `GET /v1/proxy/interactions/*` | yes | yes any role |
+| `GET /v1/settings/*` | yes | yes any role |
+| `PUT /v1/settings/*` | no | yes ADMIN only |
+| `GET/PUT/DELETE /v1/settings/proxy*` | yes | yes any role |
+| `GET /v1/keys` | yes | yes any role |
+| `GET /v1/keys/{id}` | yes | yes any role |
+| `POST /v1/keys`, `PUT /v1/keys/{id}`, `DELETE /v1/keys/{id}`, `POST /v1/keys/{id}/rotate` | no | yes ADMIN only |
+| `GET /v1/admin/tenant`, `GET /v1/admin/departments/*`, `GET /v1/admin/applications/*` | yes | yes any role |
+| `PUT /v1/admin/tenant` | no | yes ADMIN only |
+| `POST/PUT/DELETE /v1/admin/departments/*` | no | yes ADMIN only |
+| `POST/PUT/DELETE /v1/admin/applications/*` | no | yes ADMIN only |
+| `ALL /v1/admin/users/*` | no | yes ADMIN only |
 
 **Notes:**
-- `GET /v1/keys` requires auth but accepts API key — CLI `wrapsec keys list` uses this
-- `PUT /v1/settings/*` requires JWT + ADMIN — admin API key not accepted
-- `/v1/settings/proxy*` scoped per `key_id` — JWT and API key each see their own config
+- `GET /v1/keys` requires auth but accepts API key - CLI `wrapsec keys list` uses this
+- `PUT /v1/settings/*` requires JWT + ADMIN - admin API key not accepted
+- `/v1/settings/proxy*` scoped per `key_id` - JWT and API key each see their own config
 - All write endpoints on admin resources require JWT (no API key writes)
 
 ---
@@ -90,11 +90,11 @@ Used by dashboard users. Issued via `POST /v1/auth/login`.
 |---|---|---|
 | `GET` | Read resource | `GET /v1/admin/users` |
 | `POST` | Create resource or action | `POST /v1/admin/users` |
-| `PATCH` | Partial update — only provided fields are changed | `PATCH /v1/admin/users/{id}` |
-| `PUT` | Full replacement — replaces the entire resource | `PUT /v1/settings/thresholds` |
+| `PATCH` | Partial update - only provided fields are changed | `PATCH /v1/admin/users/{id}` |
+| `PUT` | Full replacement - replaces the entire resource | `PUT /v1/settings/thresholds` |
 | `DELETE` | Remove or deactivate resource | `DELETE /v1/keys/{id}` |
 
-WrapSec uses `PATCH` for user updates and `PUT` for settings and configuration. These are not interchangeable — `PATCH` validates the final combined state of all provided fields, while `PUT` replaces the full resource.
+WrapSec uses `PATCH` for user updates and `PUT` for settings and configuration. These are not interchangeable - `PATCH` validates the final combined state of all provided fields, while `PUT` replaces the full resource.
 
 ---
 
@@ -105,9 +105,9 @@ WrapSec uses `PATCH` for user updates and `PUT` for settings and configuration. 
 | Header | Description |
 |---|---|
 | `x-api-key` | API key authentication |
-| `Authorization` | `Bearer {jwt_token}` — dashboard user auth |
+| `Authorization` | `Bearer {jwt_token}` - dashboard user auth |
 | `Content-Type` | `application/json` for POST/PUT |
-| `Idempotency-Key` | UUID — idempotent `POST /v1/ai/request` only |
+| `Idempotency-Key` | UUID - idempotent `POST /v1/ai/request` only |
 
 **Response:**
 
@@ -125,9 +125,9 @@ WrapSec uses `PATCH` for user updates and `PUT` for settings and configuration. 
 
 | Limit | Value | Enforcement |
 |---|---|---|
-| Max characters | 8,000 | Schema → 422 |
-| Estimated token limit | 4,000 | `ceil(len/2) > 4000` → 422 |
-| Max payload | 64KB | Nginx → 413 |
+| Max characters | 8,000 | Schema -> 422 |
+| Estimated token limit | 4,000 | `ceil(len/2) > 4000` -> 422 |
+| Max payload | 64KB | Nginx -> 413 |
 
 ---
 
@@ -157,16 +157,16 @@ Security and proxy errors additionally include a `wrapsec` key:
 | Code | HTTP | Meaning |
 |---|---|---|
 | `UNAUTHORIZED` | 401 | Missing or invalid credentials |
-| `INVALID_CREDENTIALS` | 401 | Wrong email or password (same message for both — no enumeration) |
-| `ACCOUNT_DISABLED` | 401 | User `is_active = false` — always returned to the client when login is rejected due to a deactivated account |
-| `SESSION_INVALIDATED` | 401 | Token version mismatch — re-login required |
+| `INVALID_CREDENTIALS` | 401 | Wrong email or password (same message for both - no enumeration) |
+| `ACCOUNT_DISABLED` | 401 | User `is_active = false` - always returned to the client when login is rejected due to a deactivated account |
+| `SESSION_INVALIDATED` | 401 | Token version mismatch - re-login required |
 | `FORBIDDEN` | 403 | Valid credentials, insufficient role |
 | `PASSWORD_CHANGE_REQUIRED` | 403 | Must change password before accessing this resource |
 | `NOT_FOUND` | 404 | Resource does not exist |
 | `CONFLICT` | 409 | Duplicate (e.g. email already registered) |
 | `IDEMPOTENCY_CONFLICT` | 409 | Same Idempotency-Key, different body |
 | `VALIDATION_ERROR` | 422 | Body failed validation |
-| `ACCOUNT_LOCKED` | 429 | Too many failed login attempts — includes `retry_after` seconds |
+| `ACCOUNT_LOCKED` | 429 | Too many failed login attempts - includes `retry_after` seconds |
 | `RATE_LIMITED` | 429 | Rate limit exceeded |
 | `INTERNAL_ERROR` | 500 | Unexpected server error |
 | `input_blocked` | 400 | Proxy: input blocked by policy |
@@ -183,7 +183,7 @@ Security and proxy errors additionally include a `wrapsec` key:
 
 ## Idempotency
 
-`POST /v1/ai/request` supports `Idempotency-Key`. Scoped per API key — two keys with the same value do not collide.
+`POST /v1/ai/request` supports `Idempotency-Key`. Scoped per API key - two keys with the same value do not collide.
 
 | Scenario | Behaviour |
 |---|---|
@@ -191,7 +191,7 @@ Security and proxy errors additionally include a `wrapsec` key:
 | Same key + same body | Return cached response, `X-Idempotency-Replayed: true` |
 | Same key + different body | `409 IDEMPOTENCY_CONFLICT` |
 
-`POST /v1/chat/completions` does **not** support idempotency — provider calls have side effects.
+`POST /v1/chat/completions` does **not** support idempotency - provider calls have side effects.
 
 ---
 
@@ -199,7 +199,7 @@ Security and proxy errors additionally include a `wrapsec` key:
 
 ### GET /v1/setup/status
 
-Returns whether the system has been initialized. Used by the dashboard to determine whether to redirect to `/setup` on first visit. Redis-cached after initialization — no DB load on subsequent calls.
+Returns whether the system has been initialized. Used by the dashboard to determine whether to redirect to `/setup` on first visit. Redis-cached after initialization - no DB load on subsequent calls.
 
 **Auth:** Public.
 
@@ -212,7 +212,7 @@ Returns whether the system has been initialized. Used by the dashboard to determ
 
 ### POST /v1/setup
 
-Creates the first admin user. Only succeeds when no users exist. Returns `404` once initialized — permanently self-disabled after first use.
+Creates the first admin user. Only succeeds when no users exist. Returns `404` once initialized - permanently self-disabled after first use.
 
 **Auth:** Public.
 
@@ -228,7 +228,7 @@ Creates the first admin user. Only succeeds when no users exist. Returns `404` o
 
 **Response `404`:** System already initialized.
 
-**Response `422`:** Validation error — weak password or invalid email.
+**Response `422`:** Validation error - weak password or invalid email.
 
 ---
 
@@ -274,15 +274,15 @@ Sets cookie: `refresh_token=<raw>; HttpOnly; Secure; SameSite=Strict; Path=/v1/a
 
 | Code | HTTP | Condition |
 |---|---|---|
-| `INVALID_CREDENTIALS` | 401 | Wrong email or wrong password — same message for both |
-| `ACCOUNT_DISABLED` | 401 | User `is_active = false` — always returned to the client when login is rejected due to a deactivated account |
+| `INVALID_CREDENTIALS` | 401 | Wrong email or wrong password - same message for both |
+| `ACCOUNT_DISABLED` | 401 | User `is_active = false` - always returned to the client when login is rejected due to a deactivated account |
 | `ACCOUNT_LOCKED` | 429 | 5 failed attempts. Body includes `retry_after` seconds. |
 
 ---
 
 ### POST /v1/auth/refresh
 
-Issues a new access token using the refresh token cookie. Rotates the refresh token — old token is immediately revoked.
+Issues a new access token using the refresh token cookie. Rotates the refresh token - old token is immediately revoked.
 
 **Auth:** httpOnly cookie (`refresh_token`, `Path=/v1/auth`). No body required.
 
@@ -319,7 +319,7 @@ Revokes the refresh token. Access token expires naturally (max 30 min residual).
 
 `reason` values: `manual` (default) | `inactivity` | `expired`
 
-Invalid reason values are normalized to `manual` — never returns 400 for bad reason.
+Invalid reason values are normalized to `manual` - never returns 400 for bad reason.
 Reason is stored in `auth_events.failure_reason` for audit and debugging.
 
 **Response 200:**
@@ -327,7 +327,7 @@ Reason is stored in `auth_events.failure_reason` for audit and debugging.
 {"message": "Logged out successfully."}
 ```
 
-Idempotent — safe to call multiple times.
+Idempotent - safe to call multiple times.
 
 ---
 
@@ -388,7 +388,7 @@ All `/v1/admin/users` endpoints require **JWT + ADMIN role**. API keys cannot ac
 
 ### POST /v1/admin/users
 
-Creates a new dashboard user. `force_password_change` is always set to `true` — user must change password on first login.
+Creates a new dashboard user. `force_password_change` is always set to `true` - user must change password on first login.
 
 **Request:**
 ```json
@@ -417,13 +417,13 @@ Creates a new dashboard user. `force_password_change` is always set to `true` �
 }
 ```
 
-**Errors:** `409 CONFLICT` — email already registered. `400 INVALID_REQUEST` — weak password, invalid role, missing dept_id, dept from different tenant.
+**Errors:** `409 CONFLICT` - email already registered. `400 INVALID_REQUEST` - weak password, invalid role, missing dept_id, dept from different tenant.
 
 ---
 
 ### GET /v1/admin/users
 
-Lists all users for the tenant. Scoped to caller's `tenant_id` — never cross-tenant.
+Lists all users for the tenant. Scoped to caller's `tenant_id` - never cross-tenant.
 
 **Query params:** `role`, `is_active`, `limit` (default 50), `offset`
 
@@ -459,7 +459,7 @@ Returns a single user. Returns `404` if user belongs to a different tenant.
 
 ### PATCH /v1/admin/users/{user_id}
 
-Partially updates `role`, `dept_id`, or `is_active`. All fields optional — only provided fields are updated. Validation is performed on the **final state** (combined role + dept_id), not individual fields independently.
+Partially updates `role`, `dept_id`, or `is_active`. All fields optional - only provided fields are updated. Validation is performed on the **final state** (combined role + dept_id), not individual fields independently.
 
 **Request:**
 ```json
@@ -467,8 +467,8 @@ Partially updates `role`, `dept_id`, or `is_active`. All fields optional — onl
 ```
 
 **Validation rules:**
-- `role = ADMIN` → `dept_id` must be absent or null
-- `role != ADMIN` → `dept_id` must not be null
+- `role = ADMIN` -> `dept_id` must be absent or null
+- `role != ADMIN` -> `dept_id` must not be null
 - `dept_id` must belong to the same tenant as the user
 
 **Side effects by field:**
@@ -518,12 +518,12 @@ Scan-only mode. Inspect input, get a security decision, then forward to your LLM
 **Request:**
 ```json
 {
-  "input":          "string — required, 1–8000 chars",
+  "input":          "string - required, 1-8000 chars",
   "detection_mode": "fast | full  (default: fast)",
   "execution_mode": "scan_only  (default)",
   "metadata": {
-    "user_id": "string — optional, self-reported, stored in audit",
-    "source":  "string — optional, audit label"
+    "user_id": "string - optional, self-reported, stored in audit",
+    "source":  "string - optional, audit label"
   },
   "options": {
     "debug": false
@@ -534,8 +534,8 @@ Scan-only mode. Inspect input, get a security decision, then forward to your LLM
 `debug: true` requires the admin key. Returns extra `debug` block with per-layer scores.
 
 **detection_mode:**
-- `fast` — rule + ML only (~5ms)
-- `full` — rule + ML + LLM semantic (~100–500ms additional)
+- `fast` - rule + ML only (~5ms)
+- `full` - rule + ML + LLM semantic (~100-500ms additional)
 
 **Response 200:**
 ```json
@@ -560,7 +560,7 @@ Scan-only mode. Inspect input, get a security decision, then forward to your LLM
 
 `sanitized_input` is present only when `decision = SANITIZE`. Use it instead of the original input when forwarding to your LLM.
 
-`policy_source` is **not** in the scan response — it appears only in `GET /v1/ai/requests/{trace_id}`.
+`policy_source` is **not** in the scan response - it appears only in `GET /v1/ai/requests/{trace_id}`.
 
 **Decision values:** `ALLOW` | `BLOCK` | `SANITIZE`
 
@@ -582,9 +582,9 @@ Scan-only mode. Inspect input, get a security decision, then forward to your LLM
 
 | Band | Range |
 |---|---|
-| `HIGH` | 0.7 – 1.0 |
-| `MEDIUM` | 0.4 – 0.7 |
-| `LOW` | 0.0 – 0.4 |
+| `HIGH` | 0.7 - 1.0 |
+| `MEDIUM` | 0.4 - 0.7 |
+| `LOW` | 0.0 - 0.4 |
 
 **`SYSTEM_ERROR` behaviour:** Returns `decision = ALLOW`, `confidence = 0.0`, `confidence_band = LOW`. Clients **must not** forward to LLM when `primary_reason = SYSTEM_ERROR`.
 
@@ -600,7 +600,7 @@ Retrieve a stored request by trace ID. For proxy requests, joins `proxy_interact
 
 **Scoping:** Non-admin identities can only retrieve records from their own department. Cross-department lookups return `404 NOT_FOUND`.
 
-**Response 200 — scan_only:**
+**Response 200 - scan_only:**
 ```json
 {
   "trace_id":       "req_01knzhh81wrwg2r8r7wnwq139y",
@@ -641,7 +641,7 @@ Retrieve a stored request by trace ID. For proxy requests, joins `proxy_interact
 }
 ```
 
-**Response 200 — proxy request (adds `proxy` key):**
+**Response 200 - proxy request (adds `proxy` key):**
 ```json
 {
   "trace_id":       "req_01...",
@@ -680,16 +680,16 @@ Note: `input_decision` is absent from the `proxy` block. The top-level `decision
 | Status | Condition |
 |---|---|
 | `SUCCESS` | Input ALLOW/SANITIZE, provider responded, output ALLOW/SANITIZE |
-| `BLOCKED` | Input was BLOCK — provider never called |
+| `BLOCKED` | Input was BLOCK - provider never called |
 | `OUTPUT_BLOCKED` | Input clean, provider responded, output was BLOCK |
 | `FAILED` | Provider call failed (network/auth/HTTP 5xx) |
 | `TIMEOUT` | Provider did not respond within `timeout_seconds` |
 
-**`input_raw` field:** Stores text according to `DATA_STORAGE_MODE` — not always the original unmodified text. In `masked` mode it contains PII-redacted text.
+**`input_raw` field:** Stores text according to `DATA_STORAGE_MODE` - not always the original unmodified text. In `masked` mode it contains PII-redacted text.
 
 ---
 
-## Proxy — AI Interaction Firewall
+## Proxy - AI Interaction Firewall
 
 WrapSec acts as a drop-in replacement for the OpenAI API.
 
@@ -698,12 +698,12 @@ WrapSec acts as a drop-in replacement for the OpenAI API.
 client = OpenAI(api_key="sk-openai-...", base_url="https://api.openai.com/v1")
 response = client.chat.completions.create(model="gpt-4o", messages=[...])
 
-# After — point at WrapSec
+# After - point at WrapSec
 client = OpenAI(api_key="wsk_live_...", base_url="http://localhost:8000/v1")
 response = client.chat.completions.create(model="openai/gpt-4o", messages=[...])
 ```
 
-**Model format:** `{provider}/{model}` — always required. Examples: `openai/gpt-4o`, `ollama/gemma3:4b`.
+**Model format:** `{provider}/{model}` - always required. Examples: `openai/gpt-4o`, `ollama/gemma3:4b`.
 
 ### POST /v1/chat/completions
 
@@ -729,14 +729,14 @@ response = client.chat.completions.create(model="openai/gpt-4o", messages=[...])
 
 **WrapSec response headers:**
 
-`X-WrapSec-Trace-Id` is present on **every** response from this endpoint — including early error exits (invalid model format, trial key rejection, provider config errors). All other headers are present only when the request reached the detection pipeline.
+`X-WrapSec-Trace-Id` is present on **every** response from this endpoint - including early error exits (invalid model format, trial key rejection, provider config errors). All other headers are present only when the request reached the detection pipeline.
 
 | Header | Description |
 |---|---|
-| `X-WrapSec-Trace-Id` | ULID trace ID — always present |
+| `X-WrapSec-Trace-Id` | ULID trace ID - always present |
 | `X-WrapSec-Input-Decision` | `ALLOW` / `BLOCK` / `SANITIZE` |
 | `X-WrapSec-Input-Primary-Reason` | Primary reason for input decision |
-| `X-WrapSec-Input-Confidence` | Input confidence (0.0–1.0) |
+| `X-WrapSec-Input-Confidence` | Input confidence (0.0-1.0) |
 | `X-WrapSec-Input-Sanitized` | `true` if input was sanitized |
 | `X-WrapSec-Output-Decision` | `ALLOW` / `BLOCK` / `SANITIZE` |
 | `X-WrapSec-Output-Sanitized` | `true` if output was sanitized |
@@ -895,7 +895,7 @@ Configure the LLM provider for proxy mode. One configuration per API key. Replac
 
 `api_key` is required for `openai` and `custom` providers. `ollama` does not require one.
 
-Provider API key is encrypted AES-256-GCM at rest. Never returned in responses — masked as `sk-...7890`.
+Provider API key is encrypted AES-256-GCM at rest. Never returned in responses - masked as `sk-...7890`.
 
 **Response 200:**
 ```json
@@ -935,15 +935,15 @@ Tests connectivity to the configured provider.
 }
 ```
 
-When unreachable, `reachable: false` and an `error` string are returned — still HTTP 200.
+When unreachable, `reachable: false` and an `error` string are returned - still HTTP 200.
 
 ---
 
 ## Audit
 
-All audit endpoints scope non-admin identities to their own department — the `dept_id` query param is ignored for non-admin callers.
+All audit endpoints scope non-admin identities to their own department - the `dept_id` query param is ignored for non-admin callers.
 
-**Date parameters (`from`, `to`):** All audit endpoints that accept date filters require ISO 8601 format (e.g. `2026-01-15T00:00:00Z`). Malformed values return `400 INVALID_REQUEST` — they are not silently ignored. Empty or absent values apply no date filter.
+**Date parameters (`from`, `to`):** All audit endpoints that accept date filters require ISO 8601 format (e.g. `2026-01-15T00:00:00Z`). Malformed values return `400 INVALID_REQUEST` - they are not silently ignored. Empty or absent values apply no date filter.
 
 ### GET /v1/audit/logs
 
@@ -1037,7 +1037,7 @@ Aggregate statistics for a time range.
 | `MEDIUM` | `SANITIZE` (any reason) |
 | `LOW` | `ALLOW` |
 
-Severity is computed at write time and stored in `audit_logs.severity`. Never returned in scan responses — audit and SIEM use only.
+Severity is computed at write time and stored in `audit_logs.severity`. Never returned in scan responses - audit and SIEM use only.
 
 ### GET /v1/audit/attribution
 
@@ -1176,7 +1176,7 @@ Enables or disables rule, ML, and LLM detection layers.
 
 ### GET /v1/settings/llm
 
-Returns LLM detector configuration (detection layer only — separate from proxy provider).
+Returns LLM detector configuration (detection layer only - separate from proxy provider).
 
 **Response 200:**
 ```json
@@ -1185,7 +1185,7 @@ Returns LLM detector configuration (detection layer only — separate from proxy
 
 ### PUT /v1/settings/llm
 
-Updates LLM detector configuration. Provider must be `ollama`, `openai`, or `groq`. Timeout 5–120 seconds.
+Updates LLM detector configuration. Provider must be `ollama`, `openai`, or `groq`. Timeout 5-120 seconds.
 
 **Request:**
 ```json
@@ -1239,7 +1239,7 @@ Updates the global rate limit for live keys. Takes effect within 5 minutes (Redi
 
 ### GET /v1/settings/storage
 
-Returns data storage mode and proxy text retention period. Read-only — configured via environment variables.
+Returns data storage mode and proxy text retention period. Read-only - configured via environment variables.
 
 **Response 200:**
 ```json
@@ -1252,7 +1252,7 @@ Returns data storage mode and proxy text retention period. Read-only — configu
 |---|---|
 | `full` | Store text as-is |
 | `masked` | PII-redact before storing (production default) |
-| `none` | Never persist text — always `null` |
+| `none` | Never persist text - always `null` |
 
 Text is purged (set to `null`) after `retention_days_proxy` days regardless of mode. Security metadata (decisions, threats, scores) is retained permanently.
 
@@ -1262,7 +1262,7 @@ Text is purged (set to `null`) after `retention_days_proxy` days regardless of m
 
 ### POST /v1/keys
 
-Creates a new API key. Returns the raw key value once — store it securely, it cannot be retrieved again.
+Creates a new API key. Returns the raw key value once - store it securely, it cannot be retrieved again.
 
 **Request:**
 ```json
@@ -1413,7 +1413,7 @@ Returns the default tenant configuration.
 
 ### PUT /v1/admin/tenant
 
-Updates tenant name, description, contact email, or global policy. All fields are optional — only provided fields are updated.
+Updates tenant name, description, contact email, or global policy. All fields are optional - only provided fields are updated.
 
 `global_policy` is schema-validated. Accepted structure (all sub-fields optional):
 
@@ -1497,7 +1497,7 @@ Returns aggregated request statistics for the department.
 
 ### GET /v1/admin/departments/{dept_id}/policy
 
-Returns the fully resolved effective policy for the department. Merges: system defaults → DB settings → department override.
+Returns the fully resolved effective policy for the department. Merges: system defaults -> DB settings -> department override.
 
 **Response 200:**
 ```json
@@ -1556,7 +1556,7 @@ Deactivates an application (`is_active = false`).
 
 ### GET /v1/admin/applications/{app_id}/policy
 
-Returns the fully resolved effective policy. Merges: system → DB settings → department → application.
+Returns the fully resolved effective policy. Merges: system -> DB settings -> department -> application.
 
 **Response 200:**
 ```json
@@ -1640,7 +1640,7 @@ Active configuration snapshot. Does not expose API keys or secrets.
 
 Prometheus exposition format. Requires `Authorization: Bearer <token>`.
 
-Token resolution order: `METRICS_TOKEN` env var → `ADMIN_API_KEY` (fallback). Set a dedicated `METRICS_TOKEN` in production so your Prometheus scraper does not need the admin key.
+Token resolution order: `METRICS_TOKEN` env var -> `ADMIN_API_KEY` (fallback). Set a dedicated `METRICS_TOKEN` in production so your Prometheus scraper does not need the admin key.
 
 Scrape at `http://host:8000/metrics`. Returns `401` if no valid Bearer token is provided.
 
@@ -1665,7 +1665,7 @@ Per API key / JWT user. Redis sliding window, key: `rate_limit:{client_ip}` (fal
 
 ## Failure Modes
 
-**All detectors fail (SYSTEM_ERROR — fail open):**
+**All detectors fail (SYSTEM_ERROR - fail open):**
 ```json
 {
   "decision":             "ALLOW",
@@ -1688,96 +1688,96 @@ Clients **must not** forward to LLM when `primary_reason = SYSTEM_ERROR`.
 | Single occurrence | Any | Log and investigate |
 | Rate > 0.1% | Over 5 min | Page on-call |
 | Rate > 1% | Over 1 min | Immediate incident |
-| All requests | Any | Service outage — escalate |
+| All requests | Any | Service outage - escalate |
 
 ---
 
 ## Decision Model Reference
 
 ```
-risk_score   = weighted combination of rule, ML, LLM scores (0.0–1.0)
+risk_score   = weighted combination of rule, ML, LLM scores (0.0-1.0)
                PII guardrail can BLOCK with risk_score=0.0
                Always use decision as the authoritative verdict
 
-confidence   = agreement between active detectors (0.0–1.0)
+confidence   = agreement between active detectors (0.0-1.0)
                Not probability of attack
-               Single-detector paths may yield confidence=1.0 — expected
+               Single-detector paths may yield confidence=1.0 - expected
 
 SYSTEM_ERROR = detectors failed (exception, timeout, internal error)
                Always returns decision=ALLOW
                Always returns confidence=0.0, confidence_band=LOW
-               Client must treat as failure — never forward to LLM
+               Client must treat as failure - never forward to LLM
 ```
 
 ---
 
 ## Changelog
 
-### V1.6 (May 2026) — First-run Setup + Hardening
+### V1.6 (May 2026) - First-run Setup + Hardening
 
-- `GET /v1/setup/status` — initialization check, Redis-cached after first use
-- `POST /v1/setup` — creates first admin user on fresh install, permanently self-disables after use
-- `ADMIN_EMAIL` / `ADMIN_PASSWORD` are now optional — setup page is the primary first-run flow
+- `GET /v1/setup/status` - initialization check, Redis-cached after first use
+- `POST /v1/setup` - creates first admin user on fresh install, permanently self-disables after use
+- `ADMIN_EMAIL` / `ADMIN_PASSWORD` are now optional - setup page is the primary first-run flow
 - `/metrics` endpoint now requires `Authorization: Bearer <token>` (METRICS_TOKEN or ADMIN_API_KEY)
 - CORS `allow_credentials` only enabled when `CORS_ALLOWED_ORIGINS` is explicitly configured
 - All hardcoded detection thresholds moved to `config/settings.py` (configurable via env vars)
 
 ---
 
-### V1.5 (May 2026) — Session Hardening + Auth Observability
+### V1.5 (May 2026) - Session Hardening + Auth Observability
 
 **Auth event observability (backend):**
 - `auth_events` expanded: `logout`, `token_refresh_success`, `token_refresh_failed`, `session_expired` action values added
 - New `failure_reason` values: `token_invalid`, `inactivity`, `manual`, `expired`, `refresh_failed`, `session_invalidated`
-- `POST /v1/auth/logout` now accepts optional `{ reason }` body — logged in auth_events
-- Middleware logs `session_expired` on token failure — skipped when no token present, skipped for `/v1/auth/refresh` path
-- NullPool session pattern enforced — explicit `session.close()` in finally block
+- `POST /v1/auth/logout` now accepts optional `{ reason }` body - logged in auth_events
+- Middleware logs `session_expired` on token failure - skipped when no token present, skipped for `/v1/auth/refresh` path
+- NullPool session pattern enforced - explicit `session.close()` in finally block
 
 **Endpoint auth hardening:**
 - All endpoints now have explicit FastAPI auth dependencies (no implicit middleware-only auth)
-- `PUT /v1/settings/*` — changed from admin API key to JWT + ADMIN only (breaking)
-- `POST/PUT/DELETE /v1/admin/departments/*` and `/applications/*` — now JWT + ADMIN only
-- `GET /v1/admin/departments/*`, `/applications/*`, `/tenant` — now accept API key (read)
-- `GET /v1/keys` — remains API key-accessible (CLI needs this)
-- `POST/PUT/DELETE /v1/keys/*` — JWT + ADMIN only
-- `/health/config` — now requires auth (exposes system config)
+- `PUT /v1/settings/*` - changed from admin API key to JWT + ADMIN only (breaking)
+- `POST/PUT/DELETE /v1/admin/departments/*` and `/applications/*` - now JWT + ADMIN only
+- `GET /v1/admin/departments/*`, `/applications/*`, `/tenant` - now accept API key (read)
+- `GET /v1/keys` - remains API key-accessible (CLI needs this)
+- `POST/PUT/DELETE /v1/keys/*` - JWT + ADMIN only
+- `/health/config` - now requires auth (exposes system config)
 
 **Dashboard session hardening:**
 - Inactivity timeout: 15 min, warning modal at 2 min, `logout("inactivity")` on expiry
-- Silent refresh: 401 → attempt refresh → retry once → redirect to login
+- Silent refresh: 401 -> attempt refresh -> retry once -> redirect to login
 - Three refresh guards: url check, `_retried` flag, `isLoggingOut` flag
 - `/api/*` excluded from Next.js middleware redirect (was causing HTML parse errors)
-- Proxy route guarantees JSON on all error paths — no HTML ever returned
-- API key cookie maxAge: 24h → 8h
-- All cookies httpOnly — auth mode detected via `GET /api/auth/session` server route
+- Proxy route guarantees JSON on all error paths - no HTML ever returned
+- API key cookie maxAge: 24h -> 8h
+- All cookies httpOnly - auth mode detected via `GET /api/auth/session` server route
 
 **Security hardening (env vars):**
-- `METRICS_TOKEN` — dedicated Bearer token for `/metrics` endpoint scraping. Falls back to `ADMIN_API_KEY` if unset. `/metrics` is no longer unauthenticated.
-- `TRUSTED_PROXY_IPS` — comma-separated list of trusted reverse proxy IPs/CIDRs. `x-forwarded-for` is only trusted for audit log attribution when the direct connection IP matches this list. Leave empty (default) to always use the direct connection IP — safe when not behind a proxy. Example: `TRUSTED_PROXY_IPS=10.0.0.1,172.16.0.0/12`
+- `METRICS_TOKEN` - dedicated Bearer token for `/metrics` endpoint scraping. Falls back to `ADMIN_API_KEY` if unset. `/metrics` is no longer unauthenticated.
+- `TRUSTED_PROXY_IPS` - comma-separated list of trusted reverse proxy IPs/CIDRs. `x-forwarded-for` is only trusted for audit log attribution when the direct connection IP matches this list. Leave empty (default) to always use the direct connection IP - safe when not behind a proxy. Example: `TRUSTED_PROXY_IPS=10.0.0.1,172.16.0.0/12`
 
 **New internal docs:**
-- `docs/internal/session_management.md` — session lifecycle reference
+- `docs/internal/session_management.md` - session lifecycle reference
 
 ---
 
-### V1.4 (April 2026) — User Management
+### V1.4 (April 2026) - User Management
 
 **Breaking change:**
-- `PUT /v1/admin/users/{id}` → `PATCH /v1/admin/users/{id}` (partial update semantics)
+- `PUT /v1/admin/users/{id}` -> `PATCH /v1/admin/users/{id}` (partial update semantics)
 
 **User management additions:**
-- Self-deactivation guard — admin cannot deactivate their own account
-- Final state validation on PATCH — role + dept_id consistency validated on combined result
-- `dept_id` must belong to same tenant — validated on every create/update
-- `role = ADMIN` → `dept_id` forced null; `role != ADMIN` → `dept_id` required (both directions)
-- `token_version` incremented on role change, dept change, deactivation — NOT on reactivation
+- Self-deactivation guard - admin cannot deactivate their own account
+- Final state validation on PATCH - role + dept_id consistency validated on combined result
+- `dept_id` must belong to same tenant - validated on every create/update
+- `role = ADMIN` -> `dept_id` forced null; `role != ADMIN` -> `dept_id` required (both directions)
+- `token_version` incremented on role change, dept change, deactivation - NOT on reactivation
 
 **New DB tables:**
-- `admin_events` — logs all user management actions (user_created, role_changed, dept_changed, user_deactivated, user_reactivated, password_reset). Synchronous, post-commit, best-effort.
-- `auth_events` — logs login success and failure. Non-blocking, separate DB session, best-effort. `tenant_id` nullable (null when user not found).
+- `admin_events` - logs all user management actions (user_created, role_changed, dept_changed, user_deactivated, user_reactivated, password_reset). Synchronous, post-commit, best-effort.
+- `auth_events` - logs login success and failure. Non-blocking, separate DB session, best-effort. `tenant_id` nullable (null when user not found).
 
 **New error codes:**
-- `ACCOUNT_INACTIVE` — login failure when `is_active = false`
+- `ACCOUNT_INACTIVE` - login failure when `is_active = false`
 
 **auth_events action values:** `login_success`, `login_failed`, `logout`, `token_refresh_success`, `token_refresh_failed`, `session_expired`
 
@@ -1785,76 +1785,76 @@ SYSTEM_ERROR = detectors failed (exception, timeout, internal error)
 
 See `docs/internal/session_management.md` for full logging ownership rules.
 
-Note: `account_inactive` is the `auth_events.failure_reason` value when `is_active = false`. The API error code returned to the client is always `ACCOUNT_DISABLED` — `ACCOUNT_INACTIVE` never appears in API responses.
+Note: `account_inactive` is the `auth_events.failure_reason` value when `is_active = false`. The API error code returned to the client is always `ACCOUNT_DISABLED` - `ACCOUNT_INACTIVE` never appears in API responses.
 
 **DB schema:**
-- `admin_events` table — tenant_id, dept_id (nullable), actor_user_id, target_user_id, action, metadata (JSONB), ip_address, user_agent
-- `auth_events` table — tenant_id (nullable), user_id (nullable), action, success, failure_reason, ip_address, user_agent
-- `users.ck_users_dept_required` → `ck_users_dept_required_v2` (both directions enforced)
+- `admin_events` table - tenant_id, dept_id (nullable), actor_user_id, target_user_id, action, metadata (JSONB), ip_address, user_agent
+- `auth_events` table - tenant_id (nullable), user_id (nullable), action, success, failure_reason, ip_address, user_agent
+- `users.ck_users_dept_required` -> `ck_users_dept_required_v2` (both directions enforced)
 
 ---
 
-### V1.3 (April 2026) — JWT + RBAC
+### V1.3 (April 2026) - JWT + RBAC
 
 **New endpoints (+10):**
-- `POST /v1/auth/login` — email/password login, JWT + httpOnly cookie
-- `POST /v1/auth/refresh` — rotate refresh token, new access token
-- `POST /v1/auth/logout` — revoke refresh token
-- `GET  /v1/auth/me` — current user profile
-- `POST /v1/auth/change-password` — change password, invalidate all sessions
-- `POST /v1/admin/users` — create dashboard user (ADMIN only)
-- `GET  /v1/admin/users` — list users
-- `GET  /v1/admin/users/{id}` — get user
-- `PATCH /v1/admin/users/{id}` — update user (partial, see V1.4 for breaking change note)
-- `POST /v1/admin/users/{id}/reset-password` — admin password reset
+- `POST /v1/auth/login` - email/password login, JWT + httpOnly cookie
+- `POST /v1/auth/refresh` - rotate refresh token, new access token
+- `POST /v1/auth/logout` - revoke refresh token
+- `GET  /v1/auth/me` - current user profile
+- `POST /v1/auth/change-password` - change password, invalidate all sessions
+- `POST /v1/admin/users` - create dashboard user (ADMIN only)
+- `GET  /v1/admin/users` - list users
+- `GET  /v1/admin/users/{id}` - get user
+- `PATCH /v1/admin/users/{id}` - update user (partial, see V1.4 for breaking change note)
+- `POST /v1/admin/users/{id}/reset-password` - admin password reset
 
 **Authentication changes:**
 - JWT Bearer now accepted on all scan/audit/proxy endpoints alongside API key
 - Header precedence: `x-api-key` always wins over `Authorization: Bearer`
-- `principal_type` added to `audit_logs` — `api_key` | `user`
+- `principal_type` added to `audit_logs` - `api_key` | `user`
 
 **Security features:**
-- Token versioning — session invalidated immediately on password/role change
-- Account lockout — 5 failed attempts → 15 min lockout (Redis TTL)
+- Token versioning - session invalidated immediately on password/role change
+- Account lockout - 5 failed attempts -> 15 min lockout (Redis TTL)
 - `force_password_change` enforced at middleware level
-- Last-admin protection — cannot deactivate/demote last active ADMIN
-- Timing equalisation — prevents email enumeration via response time
+- Last-admin protection - cannot deactivate/demote last active ADMIN
+- Timing equalisation - prevents email enumeration via response time
 
 **DB schema:**
-- `users` table — id, tenant_id, dept_id, email, password_hash, role, is_active, force_password_change, token_version
-- `refresh_tokens` table — token_hash (SHA-256), token_version, expires_at, revoked_at
+- `users` table - id, tenant_id, dept_id, email, password_hash, role, is_active, force_password_change, token_version
+- `refresh_tokens` table - token_hash (SHA-256), token_version, expires_at, revoked_at
 - `audit_logs.principal_type` column added
 - `api_keys.tenant_id` enforced NOT NULL
 
 **New error codes:** `INVALID_CREDENTIALS`, `ACCOUNT_DISABLED`, `ACCOUNT_LOCKED`, `SESSION_INVALIDATED`, `PASSWORD_CHANGE_REQUIRED`, `CONFLICT`
 
-**Total endpoints:** 53 → 63
+**Total endpoints:** 53 -> 63
 
 ---
 
-### V1.2 (April 2026) — Security & Isolation
+### V1.2 (April 2026) - Security & Isolation
 
 - Dept scoping on all audit endpoints and `GET /v1/ai/requests/{trace_id}`
-- `severity` field in `audit_logs` — CRITICAL / HIGH / MEDIUM / LOW
-- Trial keys (`wsk_trial_...`) — 500 char input cap, 10 req/min, proxy disabled
-- `POST /v1/keys/{key_id}/rotate` — grace period key rotation
-- `GET/PUT /v1/settings/rate_limit` — DB-backed live key rate limit
+- `severity` field in `audit_logs` - CRITICAL / HIGH / MEDIUM / LOW
+- Trial keys (`wsk_trial_...`) - 500 char input cap, 10 req/min, proxy disabled
+- `POST /v1/keys/{key_id}/rotate` - grace period key rotation
+- `GET/PUT /v1/settings/rate_limit` - DB-backed live key rate limit
 - Application-level policy overrides wired into resolution chain
-- Toxicity guardrail — `TOXICITY_GUARDRAIL_BLOCK` / `TOXICITY_GUARDRAIL_SANITIZE`
-- `api_keys.key_type` column — `live` | `trial`
+- Toxicity guardrail - `TOXICITY_GUARDRAIL_BLOCK` / `TOXICITY_GUARDRAIL_SANITIZE`
+- `api_keys.key_type` column - `live` | `trial`
 - Idempotency scoped per API key
 
 ---
 
-### V1.1 (April 2026) — Proxy Mode
+### V1.1 (April 2026) - Proxy Mode
 
-- `POST /v1/chat/completions` — OpenAI-compatible proxy
+- `POST /v1/chat/completions` - OpenAI-compatible proxy
 - Provider support: OpenAI, Groq, Azure, Together AI, Ollama, custom
 - AES-256-GCM encrypted provider API keys
 - Input + output PII guardrail
 - `X-WrapSec-*` response headers
 - `DATA_STORAGE_MODE`: full / masked / none
-- `proxy_interactions` table — full lifecycle data
+- `proxy_interactions` table - full lifecycle data
 
 ---
 

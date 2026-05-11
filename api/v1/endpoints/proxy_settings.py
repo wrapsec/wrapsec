@@ -150,7 +150,7 @@ async def get_proxy_settings(
 ):
     """
     Returns the proxy provider config for the current API key.
-    The provider API key is always masked in the response — never returned in plaintext.
+    The provider API key is always masked in the response - never returned in plaintext.
     404 if no provider has been configured.
     """
     key_id = request.state.key_id
@@ -269,7 +269,7 @@ async def get_proxy_health(
 ):
     """
     Tests live connectivity to the configured LLM provider.
-    Always returns HTTP 200 — reachable=true/false indicates the provider status.
+    Always returns HTTP 200 - reachable=true/false indicates the provider status.
     Ollama: GET /api/tags. OpenAI-compatible: GET /models with Authorization header.
     Timeout for the connectivity check is fixed at 10 seconds.
     """

@@ -3,13 +3,13 @@
 # WrapSec v1.0 | AI Security Gateway - https://wrapsec.com
 
 """
-wrapsec settings get — show active gateway configuration.
+wrapsec settings get - show active gateway configuration.
 
 Read-only. No write operations.
 Distinct from `wrapsec config` which manages the CLI's own config file.
 
 Spec reference: Section 13.2 (wrapsec settings get),
-                Section 22 (Non-Goals — no write operations via CLI)
+                Section 22 (Non-Goals - no write operations via CLI)
 """
 
 from __future__ import annotations
@@ -76,13 +76,13 @@ def settings_get(json_output: bool) -> None:
     llm         = data.get("llm", {})
     rate_limit  = data.get("rate_limit", {})
 
-    click.echo("Gateway Configuration (read-only — change via dashboard)")
+    click.echo("Gateway Configuration (read-only - change via dashboard)")
     click.echo("=" * 55)
 
     # Thresholds
     click.echo("\nDetection Thresholds:")
-    click.echo(f"  Block threshold:     {thresholds.get('block_threshold', '—')}")
-    click.echo(f"  Sanitize threshold:  {thresholds.get('sanitize_threshold', '—')}")
+    click.echo(f"  Block threshold:     {thresholds.get('block_threshold', '-')}")
+    click.echo(f"  Sanitize threshold:  {thresholds.get('sanitize_threshold', '-')}")
 
     # Detection layers
     click.echo("\nDetection Layers:")
@@ -90,19 +90,19 @@ def settings_get(json_output: bool) -> None:
         enabled = layers.get(layer)
         name    = layer.replace("_enabled", "").upper()
         if enabled is True:
-            click.secho(f"  {name:<6}  ✔ enabled", fg="green")
+            click.secho(f"  {name:<6}   enabled", fg="green")
         elif enabled is False:
-            click.secho(f"  {name:<6}  ✗ disabled", fg="yellow")
+            click.secho(f"  {name:<6}   disabled", fg="yellow")
         else:
-            click.echo(f"  {name:<6}  — unknown")
+            click.echo(f"  {name:<6}  - unknown")
 
     # LLM
     click.echo("\nLLM Configuration:")
-    click.echo(f"  Provider:    {llm.get('provider', '—')}")
-    click.echo(f"  Model:       {llm.get('model', '—')}")
-    click.echo(f"  Timeout:     {llm.get('timeout', '—')}s")
-    click.echo(f"  LLM trigger: {llm.get('llm_trigger', '—')}")
+    click.echo(f"  Provider:    {llm.get('provider', '-')}")
+    click.echo(f"  Model:       {llm.get('model', '-')}")
+    click.echo(f"  Timeout:     {llm.get('timeout', '-')}s")
+    click.echo(f"  LLM trigger: {llm.get('llm_trigger', '-')}")
 
     # Rate limit
     click.echo("\nRate Limit:")
-    click.echo(f"  Live keys:   {rate_limit.get('per_minute', '—')} req/min ({rate_limit.get('source', '—')})")
+    click.echo(f"  Live keys:   {rate_limit.get('per_minute', '-')} req/min ({rate_limit.get('source', '-')})")

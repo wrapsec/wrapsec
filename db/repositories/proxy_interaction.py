@@ -10,7 +10,7 @@ from db.repositories.base import BaseRepository
 
 
 class ProxyInteractionRepository(BaseRepository):
-    # No create() method — proxy interaction rows are written directly in the proxy
+    # No create() method - proxy interaction rows are written directly in the proxy
     # endpoint (_log_interaction) using db.add() for performance. Any validation
     # that would live here must be maintained in that write path instead.
 
@@ -32,7 +32,7 @@ class ProxyInteractionRepository(BaseRepository):
     ) -> tuple[list[ProxyInteractionModel], int]:
         query = select(ProxyInteractionModel)
 
-        # Scope to tenant — subquery on api_keys since ProxyInteractionModel has no tenant_id
+        # Scope to tenant - subquery on api_keys since ProxyInteractionModel has no tenant_id
         if tenant_id is not None:
             tenant_keys = select(APIKeyModel.key_id).where(
                 APIKeyModel.tenant_id == tenant_id

@@ -2,10 +2,10 @@
 
 All notable changes to WrapSec are documented here.
 
-## [1.0.0] — 2026-05-05
+## [1.0.0] - 2026-05-05
 
 ### Added
-- AI Security Gateway — REST API for inspecting and proxying LLM requests
+- AI Security Gateway - REST API for inspecting and proxying LLM requests
 - Rule-based, ML, and LLM-backed threat detection pipeline
 - Threat categories: PROMPT_INJECTION, JAILBREAK, MALICIOUS_INTENT, DATA_EXFILTRATION, PII, TOXICITY
 - Output guard for PII scanning and redaction on LLM responses

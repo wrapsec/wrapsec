@@ -1,5 +1,5 @@
 """
-WrapSec Python SDK — AI Security Gateway client.
+WrapSec Python SDK - AI Security Gateway client.
 
 Public API surface. Everything listed in __all__ is stable and versioned.
 Breaking changes to anything in __all__ require a MAJOR version bump.

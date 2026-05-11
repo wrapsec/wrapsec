@@ -14,8 +14,8 @@ Supports two LLM providers (switchable via LLM_PROVIDER env var):
   - OpenAI  (or any OpenAI-compatible endpoint)
 
 Architecture:
-  User input → WrapSec scan → ALLOW/SANITIZE → LLM → response
-                            → BLOCK → reject (LLM never called)
+  User input -> WrapSec scan -> ALLOW/SANITIZE -> LLM -> response
+                            -> BLOCK -> reject (LLM never called)
 
 Setup:
   pip install -e ./sdk/python fastapi uvicorn httpx
@@ -121,10 +121,10 @@ async def chat(body: ChatRequest):
 
     Flow:
       1. Scan with WrapSec
-      2. BLOCK        → 400, LLM never called
-      3. SYSTEM_ERROR → 503, LLM never called (fail closed)
-      4. SANITIZE     → call LLM with sanitized input
-      5. ALLOW        → call LLM with original input
+      2. BLOCK        -> 400, LLM never called
+      3. SYSTEM_ERROR -> 503, LLM never called (fail closed)
+      4. SANITIZE     -> call LLM with sanitized input
+      5. ALLOW        -> call LLM with original input
       6. Return LLM response
 
     All error responses follow the standard WrapSec format:
@@ -138,12 +138,12 @@ async def chat(body: ChatRequest):
             user = body.user_id,
         )
     except WrapSecAuthError:
-        logger.error("WrapSec auth failed — check WRAPSEC_API_KEY")
+        logger.error("WrapSec auth failed - check WRAPSEC_API_KEY")
         return JSONResponse(
             status_code = 500,
             content     = _error(
                 code    = "system_error",
-                message = "Security scanning unavailable — configuration error.",
+                message = "Security scanning unavailable - configuration error.",
             ),
         )
     except WrapSecRateLimitError:
@@ -156,8 +156,8 @@ async def chat(body: ChatRequest):
             ),
         )
     except WrapSecError as e:
-        # Infrastructure failure — fail closed, never send unscanned input to LLM
-        logger.error(f"WrapSec error: {e} — failing closed")
+        # Infrastructure failure - fail closed, never send unscanned input to LLM
+        logger.error(f"WrapSec error: {e} - failing closed")
         return JSONResponse(
             status_code = 503,
             content     = _error(
@@ -166,12 +166,12 @@ async def chat(body: ChatRequest):
             ),
         )
 
-    # Step 2: SYSTEM_ERROR — scanner ran but result unreliable (confidence = 0.0)
+    # Step 2: SYSTEM_ERROR - scanner ran but result unreliable (confidence = 0.0)
     # This is a valid scan result, not an exception. Fail closed.
     if scan_result.primary_reason == "SYSTEM_ERROR":
         logger.error(
             f"WrapSec SYSTEM_ERROR | trace_id={scan_result.trace_id} "
-            f"decision={scan_result.decision} — failing closed"
+            f"decision={scan_result.decision} - failing closed"
         )
         return JSONResponse(
             status_code = 503,
@@ -259,7 +259,7 @@ async def chat(body: ChatRequest):
 async def chat_batch(body: BatchRequest):
     """
     Scan and process multiple messages independently.
-    BLOCK and SYSTEM_ERROR messages are skipped — others are sent to LLM.
+    BLOCK and SYSTEM_ERROR messages are skipped - others are sent to LLM.
     Returns per-message results including decision, reason, threats, and trace_id.
     """
     results = []
@@ -282,7 +282,7 @@ async def chat_batch(body: BatchRequest):
             })
             continue
 
-        # SYSTEM_ERROR — skip, do not forward to LLM
+        # SYSTEM_ERROR - skip, do not forward to LLM
         if scan_result.primary_reason == "SYSTEM_ERROR":
             logger.error(f"SYSTEM_ERROR in batch | index={i} trace_id={scan_result.trace_id}")
             results.append({

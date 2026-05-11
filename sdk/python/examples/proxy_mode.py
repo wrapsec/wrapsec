@@ -1,5 +1,5 @@
 """
-Proxy mode example — scan + forward to LLM in one call.
+Proxy mode example - scan + forward to LLM in one call.
 
 Requires:
     - A configured LLM provider (via PUT /v1/settings/proxy or dashboard)
@@ -29,6 +29,6 @@ print(f"Trace ID:        {result.trace_id}")
 print(f"Execution mode:  {result.execution_mode}")
 
 if result.is_blocked:
-    print("Request was blocked — no LLM response.")
+    print("Request was blocked - no LLM response.")
 elif result.output:
     print(f"\nLLM response:\n{result.output}")

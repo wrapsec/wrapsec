@@ -3,7 +3,7 @@
 # WrapSec v1.0 | AI Security Gateway - https://wrapsec.com
 
 """
-wrapsec scan — scan a single prompt for security risks.
+wrapsec scan - scan a single prompt for security risks.
 
 Spec reference: Section 13.2 (wrapsec scan), Section 11 (Exit Codes),
                 Section 12 (Output Modes), Section 10.4 (Security Rules)
@@ -59,7 +59,7 @@ from wrapsec.cli._spinner import Spinner, should_show_spinner
     "--json", "json_output",
     is_flag=True,
     help="Output pure JSON to stdout. No spinner, no extra text. "
-         "Note: exposes trace_id and scores — use --quiet in CI when possible.",
+         "Note: exposes trace_id and scores - use --quiet in CI when possible.",
 )
 @click.option(
     "--user", "-u",
@@ -108,7 +108,7 @@ def scan(
       wrapsec scan --quiet "text"   # CI usage
     """
     # Validate timeout early at CLI level
-    # Spec: Section 7 — validation at CLI and SDK level
+    # Spec: Section 7 - validation at CLI and SDK level
     if timeout is not None and timeout < 1:
         print_error(f"timeout must be at least 1 second, got {timeout}")
         sys.exit(1)
@@ -153,7 +153,7 @@ def scan(
     spinner = Spinner("Scanning") if should_show_spinner(json_output, quiet) else None
 
     # Register SIGINT handler to clean up spinner
-    # Spec: Section 12.2 — SIGINT must stop spinner before exit
+    # Spec: Section 12.2 - SIGINT must stop spinner before exit
     def _sigint_handler(sig: int, frame: object) -> None:
         if spinner:
             spinner.stop()
@@ -178,7 +178,7 @@ def scan(
     except Exception as e:
         if spinner:
             spinner.stop()
-        # Fix #4 — log full exception internally, show generic message to user.
+        # Fix #4 - log full exception internally, show generic message to user.
         # Full exception text may contain internal paths, module names, or
         # server responses that should not be exposed to end users.
         logger.error("Unexpected error during scan: %s", e, exc_info=True)
@@ -186,8 +186,8 @@ def scan(
         sys.exit(1)
 
     finally:
-        # Always stop spinner — even if exception was raised
-        # Spec: Section 12.2 — try/finally MUST call stop()
+        # Always stop spinner - even if exception was raised
+        # Spec: Section 12.2 - try/finally MUST call stop()
         if spinner:
             spinner.stop()
 
@@ -198,7 +198,7 @@ def scan(
     exit_code = get_scan_exit_code(result)
 
     if json_output:
-        # Pure JSON to stdout — nothing else
+        # Pure JSON to stdout - nothing else
         # Spec: Section 12.4
         print_json(scan_result_to_dict(result))
         sys.exit(exit_code)

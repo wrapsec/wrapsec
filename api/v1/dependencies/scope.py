@@ -15,11 +15,11 @@ def get_audit_scope(request: Request) -> dict:
     """
     Returns tenant/dept filter kwargs for the current principal's audit scope.
 
-    Admin     : empty dict — caller-supplied query filters apply as-is.
-    Non-admin : {"tenant_id": ..., "dept_id": ...} — identity always wins,
+    Admin     : empty dict - caller-supplied query filters apply as-is.
+    Non-admin : {"tenant_id": ..., "dept_id": ...} - identity always wins,
                 any tenant_id/dept_id from the query string are ignored.
 
-    Usage with repo.list() — admin query params pass through, non-admin are fixed:
+    Usage with repo.list() - admin query params pass through, non-admin are fixed:
         scope     = get_audit_scope(request)
         tenant_id = scope.get("tenant_id", tenant_id)
         dept_id   = scope.get("dept_id",   dept_id)
@@ -48,8 +48,8 @@ async def get_scoped_audit_record(
     """
     Fetches a single audit record by trace_id, enforcing the principal's scope.
 
-    Admin             : unscoped — can see any record.
-    Non-admin + dept  : dept-scoped (primary path — all non-admin keys have dept_id).
+    Admin             : unscoped - can see any record.
+    Non-admin + dept  : dept-scoped (primary path - all non-admin keys have dept_id).
     Non-admin no dept : tenant-scoped (defensive fallback for edge cases).
     """
     is_admin = getattr(request.state, "is_admin", False)

@@ -22,7 +22,7 @@ class BaseMLModel(ABC):
 
     @abstractmethod
     def predict(self, text: str) -> MLPrediction:
-        """Run prediction — must never raise."""
+        """Run prediction - must never raise."""
 
     @abstractmethod
     def is_ready(self) -> bool:

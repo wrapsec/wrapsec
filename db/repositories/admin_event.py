@@ -18,13 +18,13 @@ class AdminEventRepository(BaseRepository):
     Repository for admin_events table.
 
     Logging model: synchronous, post-commit, within the same request lifecycle.
-    Best-effort — caller wraps insert() in try/except and continues on failure.
+    Best-effort - caller wraps insert() in try/except and continues on failure.
 
     All writes must use enum-controlled action values (AdminEventAction).
     dept_id rules:
-        Tenant-scoped actions → dept_id = None
-        Dept-scoped actions   → dept_id = target user's dept_id AFTER update
-        For dept_changed      → dept_id = new_dept_id
+        Tenant-scoped actions -> dept_id = None
+        Dept-scoped actions   -> dept_id = target user's dept_id AFTER update
+        For dept_changed      -> dept_id = new_dept_id
     """
 
     async def insert(
@@ -41,14 +41,14 @@ class AdminEventRepository(BaseRepository):
         """
         Inserts a single admin event row.
 
-        action must be a value from AdminEventAction enum — enforced by type hint.
+        action must be a value from AdminEventAction enum - enforced by type hint.
         dept_id = None for tenant-scoped actions (settings changes, dept creation).
         dept_id = target user's post-update dept_id for user management actions.
 
         metadata key conventions (must be consistent per action type):
-            role_changed  → {"old_role": "...", "new_role": "..."}
-            dept_changed  → {"old_dept_id": "...", "new_dept_id": "..."}
-            user_created  → {"role": "...", "dept_id": "..."}
+            role_changed  -> {"old_role": "...", "new_role": "..."}
+            dept_changed  -> {"old_dept_id": "...", "new_dept_id": "..."}
+            user_created  -> {"role": "...", "dept_id": "..."}
 
         Never include passwords, tokens, or secrets in metadata.
         """

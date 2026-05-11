@@ -34,7 +34,7 @@ class WrapSecError(Exception):
 class WrapSecAuthError(WrapSecError):
     """
     Raised on HTTP 401 (invalid/revoked key) or 403 (insufficient permissions).
-    Never retried — auth errors are permanent.
+    Never retried - auth errors are permanent.
 
     Spec: Section 8, Section 15
     """
@@ -43,7 +43,7 @@ class WrapSecAuthError(WrapSecError):
 class WrapSecRateLimitError(WrapSecError):
     """
     Raised on HTTP 429 (rate limit exceeded).
-    Never retried — retrying worsens the situation.
+    Never retried - retrying worsens the situation.
 
     Spec: Section 8, Section 9
     """
@@ -54,7 +54,7 @@ class WrapSecSystemError(WrapSecError):
     Raised on HTTP 5xx, timeout, connection error, or invalid JSON response.
     Retried up to 3 times with exponential backoff before being raised.
 
-    Also used when primary_reason == "SYSTEM_ERROR" in a scan response —
+    Also used when primary_reason == "SYSTEM_ERROR" in a scan response -
     the CLI exits with code 1 in that case (not code 2).
 
     Spec: Section 8, Section 9, Section 11.2
@@ -66,7 +66,7 @@ class WrapSecBlockError(WrapSecError):
     Available for callers who prefer exception-based flow for BLOCK decisions.
 
     IMPORTANT: The SDK never raises this automatically.
-    client.scan() always returns ScanResult — callers check result.decision.
+    client.scan() always returns ScanResult - callers check result.decision.
     Raise this manually if your application prefers exception handling:
 
         result = client.scan(text)

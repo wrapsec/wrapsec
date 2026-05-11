@@ -5,7 +5,7 @@
 """
 WrapSec asynchronous HTTP client.
 
-Mirrors client.py exactly — same public methods, same behaviour.
+Mirrors client.py exactly - same public methods, same behaviour.
 Uses httpx for async HTTP instead of requests.
 Delegates retry to core/retry.py (with_retry_async).
 
@@ -168,7 +168,7 @@ class AsyncClient:
         """
         Retrieve the full audit record for a single request by trace ID.
         Includes proxy enrichment data when execution_mode is "proxy".
-        Scoped to the caller's dept/tenant — 404 if out of scope.
+        Scoped to the caller's dept/tenant - 404 if out of scope.
 
         Returns a raw dict (structure varies by execution_mode).
         """
@@ -191,7 +191,7 @@ class AsyncClient:
     ) -> bytes:
         """
         Export audit logs as CSV bytes for compliance reporting (up to 10,000 rows).
-        Scope is bounded by the API key used — non-admin keys are limited to their dept.
+        Scope is bounded by the API key used - non-admin keys are limited to their dept.
 
         Returns raw CSV bytes. Write to a file or decode as needed:
             data = await client.audit_export()
@@ -299,7 +299,7 @@ class AsyncClient:
     async def health_live(self, timeout: int = 5) -> bool:
         """
         Check if the API is reachable (/health/live). No auth required.
-        Fixed default timeout: 5s — matches sync client interface.
+        Fixed default timeout: 5s - matches sync client interface.
         """
         try:
             async with httpx.AsyncClient(timeout=timeout) as c:
@@ -311,7 +311,7 @@ class AsyncClient:
     async def health_ready(self, timeout: int = 5) -> dict[str, Any]:
         """
         Check full service health (/health/ready). Auth required.
-        Fixed default timeout: 5s — matches sync client interface.
+        Fixed default timeout: 5s - matches sync client interface.
         """
         api_key = self._require_api_key()
         async with httpx.AsyncClient(timeout=timeout) as c:

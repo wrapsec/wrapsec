@@ -252,7 +252,7 @@ async def get_department_stats(
         .where(AuditLogModel.dept_id == dept_id)
     ) or 0.0
 
-    # Top threats — aggregate in Python to avoid JSON/JSONB type issues
+    # Top threats - aggregate in Python to avoid JSON/JSONB type issues
     threats_result = await db.execute(
         sa_select(AuditLogModel.threats)
         .where(AuditLogModel.dept_id == dept_id)
@@ -296,7 +296,7 @@ async def get_department_policy(
 ):
     """
     Returns the fully resolved effective policy for this department.
-    Merges: system defaults → tenant global → department override.
+    Merges: system defaults -> tenant global -> department override.
     Useful for compliance verification.
     """
     from services.policy_resolver import resolve_policy
@@ -347,7 +347,7 @@ async def update_department(
 ):
     """
     Partially updates a department. Only fields present in the request body are applied.
-    Explicitly set null values (e.g. policy_override=null) are also applied — use this
+    Explicitly set null values (e.g. policy_override=null) are also applied - use this
     to clear a department's policy override back to tenant-level defaults.
     Auth: JWT + ADMIN role required.
     """
@@ -356,7 +356,7 @@ async def update_department(
     if not existing or str(existing.tenant_id) != request.state.tenant_id:
         raise NotFoundError("department", dept_id)
     # Use exclude_unset=True so explicitly set null values (e.g. policy_override=null)
-    # are included — filtering "if v is not None" would silently drop them
+    # are included - filtering "if v is not None" would silently drop them
     data = body.model_dump(exclude_unset=True)
     record = await repo.update(uuid.UUID(dept_id), data)
     if not record:
@@ -393,7 +393,7 @@ async def update_dept_llm_override(
     """
     Set or clear the LLM detection override for a department.
     When set, this dept's requests use the specified LLM provider/model/key for threat detection.
-    api_key is encrypted before storage — never stored or returned in plaintext.
+    api_key is encrypted before storage - never stored or returned in plaintext.
     Set clear=true to remove the override and inherit the global LLM configuration.
     Auth: JWT + ADMIN role required.
     """

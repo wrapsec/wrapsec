@@ -21,7 +21,7 @@ from config.settings import get_settings
 settings = get_settings()
 
 
-# ── PostgreSQL bootstrap — runs once per session ──────────────────────────────
+# ── PostgreSQL bootstrap - runs once per session ──────────────────────────────
 
 @pytest_asyncio.fixture(scope="session", autouse=True)
 async def _postgres_db_setup():
@@ -55,7 +55,7 @@ async def _postgres_db_setup():
 
     await engine.dispose()
 
-# ── SQLite — for tests that don't need JWT/users ──────────────────────────────
+# ── SQLite - for tests that don't need JWT/users ──────────────────────────────
 TEST_DATABASE_URL = "sqlite+aiosqlite:///./test.db"
 
 
@@ -109,7 +109,7 @@ def standard_headers():
 
 
 # ── Session factory for JWT fixtures ─────────────────────────────────────────
-# Use the same AsyncSessionFactory the app uses — guarantees insert and login
+# Use the same AsyncSessionFactory the app uses - guarantees insert and login
 # hit the exact same database. Creating a separate NullPool engine risks
 # connecting to a different DB if settings.database_url varies by context.
 
@@ -118,13 +118,13 @@ def _pg_session_factory():
     return AsyncSessionFactory
 
 
-# ── admin_jwt_headers — uses PostgreSQL, cleans up after itself ───────────────
+# ── admin_jwt_headers - uses PostgreSQL, cleans up after itself ───────────────
 
 @pytest_asyncio.fixture
 async def admin_jwt_headers():
     """
     Creates a real admin user in PostgreSQL and generates a valid JWT token
-    using create_access_token directly — no login endpoint call.
+    using create_access_token directly - no login endpoint call.
 
     Why direct token generation (not login endpoint):
         Tests using admin_jwt_headers also use the `client` fixture, which
@@ -180,7 +180,7 @@ async def admin_jwt_headers():
         await db.commit()
 
 
-# ── auth_setup + auth_client — for test_rbac.py ──────────────────────────────
+# ── auth_setup + auth_client - for test_rbac.py ──────────────────────────────
 
 @pytest_asyncio.fixture(scope="function")
 async def auth_setup():
@@ -289,7 +289,7 @@ async def auth_setup():
 async def auth_client():
     """
     HTTP client for JWT/RBAC tests.
-    Does NOT override get_db — uses the real PostgreSQL database
+    Does NOT override get_db - uses the real PostgreSQL database
     so the auth middleware can look up users by UUID.
     """
     async with AsyncClient(

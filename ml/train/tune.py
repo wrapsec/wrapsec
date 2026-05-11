@@ -8,7 +8,7 @@ Hyperparameter tuning for the TF-IDF + Logistic Regression pipeline.
 Uses GridSearchCV with stratified k-fold.
 Tunes: C (regularisation), ngram_range, max_features.
 
-Only run when explicitly called — not part of the default training pipeline.
+Only run when explicitly called - not part of the default training pipeline.
 Default parameters in pipeline.py are already well-calibrated.
 """
 

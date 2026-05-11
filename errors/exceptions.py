@@ -74,11 +74,11 @@ class DebugForbiddenError(ForbiddenError):
         super().__init__("debug mode requires admin credentials")
 
 
-# ── Auth — JWT/session (new for JWT+RBAC) ─────────────────────
+# ── Auth - JWT/session (new for JWT+RBAC) ─────────────────────
 class AuthenticationError(WrapSecError):
     """
-    Wrong email or wrong password — identical message for both.
-    Never reveal which was wrong — prevents user enumeration.
+    Wrong email or wrong password - identical message for both.
+    Never reveal which was wrong - prevents user enumeration.
     """
     code        = "INVALID_CREDENTIALS"
     status_code = 401
@@ -116,9 +116,9 @@ class InvalidTokenException(WrapSecError):
 
 class SessionInvalidatedException(WrapSecError):
     """
-    token_version mismatch — session was invalidated after this token was issued.
+    token_version mismatch - session was invalidated after this token was issued.
     Triggered by: password change, role change, account deactivation, admin reset.
-    Client must re-authenticate — redirect to login.
+    Client must re-authenticate - redirect to login.
     """
     code        = "SESSION_INVALIDATED"
     status_code = 401
@@ -128,7 +128,7 @@ class SessionInvalidatedException(WrapSecError):
 
 class PasswordChangedException(WrapSecError):
     """
-    force_password_change = True — user must change password before proceeding.
+    force_password_change = True - user must change password before proceeding.
     Returned on all endpoints except /v1/auth/change-password, /v1/auth/logout,
     /v1/auth/me when this flag is set.
     """

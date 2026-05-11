@@ -1,5 +1,5 @@
 """
-Async scan example — AsyncClient for use in async applications.
+Async scan example - AsyncClient for use in async applications.
 
 Setup:
     pip install wrapsec-python

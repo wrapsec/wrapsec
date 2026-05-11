@@ -1,4 +1,4 @@
-# WrapSec — Architecture Specification
+# WrapSec - Architecture Specification
 
 > This document builds on [Core Concepts](core_concepts.md) as the canonical behavior definition.
 
@@ -14,14 +14,14 @@ WrapSec is a production-grade AI security gateway. It operates as a security lay
 
 WrapSec supports two execution modes:
 
-- **Scan-only** — inspect and decide. The calling application forwards the prompt to the LLM itself.
-- **Proxy** — inspect, decide, and forward. WrapSec forwards the prompt to the LLM provider on the application's behalf, enforcing security on both input and output.
+- **Scan-only** - inspect and decide. The calling application forwards the prompt to the LLM itself.
+- **Proxy** - inspect, decide, and forward. WrapSec forwards the prompt to the LLM provider on the application's behalf, enforcing security on both input and output.
 
 ---
 
 ## Design Principles
 
-**Detection vs guardrails — two independent subsystems**
+**Detection vs guardrails - two independent subsystems**
 
 Detection (rule, ML, LLM) and guardrails (PII) are architecturally, mathematically, and operationally separate. They are stored in separate database columns, evaluated independently, and never mixed in scoring.
 
@@ -43,19 +43,19 @@ These are produced by mutually exclusive code paths. `NO_THREAT_DETECTED` is onl
 
 **SYSTEM_ERROR client contract**
 
-At the engine level, `SYSTEM_ERROR` returns `decision=ALLOW` because detection did not confirm a threat. However, all clients — applications, SDKs, examples — must treat `primary_reason=SYSTEM_ERROR` as a failure condition and must not forward input to an LLM. The distinction between engine-level decision and application-level handling is intentional: the engine reports what it knows; the client enforces safety.
+At the engine level, `SYSTEM_ERROR` returns `decision=ALLOW` because detection did not confirm a threat. However, all clients - applications, SDKs, examples - must treat `primary_reason=SYSTEM_ERROR` as a failure condition and must not forward input to an LLM. The distinction between engine-level decision and application-level handling is intentional: the engine reports what it knows; the client enforces safety.
 
-**All failure paths → LOW confidence**
+**All failure paths -> LOW confidence**
 
 Detection failure, guardrail failure, and gateway exceptions all produce `confidence=0.0` and `confidence_band=LOW`. There is no failure path that produces a non-LOW confidence.
 
 **Conservative input limits**
 
-8,000 characters + heuristic token limit `ceil(len/2) > 4000` → 422. Safe for English and CJK. Full tiktoken in V1.2.
+8,000 characters + heuristic token limit `ceil(len/2) > 4000` -> 422. Safe for English and CJK. Full tiktoken in V1.2.
 
 **Idempotency with conflict detection**
 
-Same key + same body → cached response. Same key + different body → 409 CONFLICT. This matches Stripe/AWS idempotency standards.
+Same key + same body -> cached response. Same key + different body -> 409 CONFLICT. This matches Stripe/AWS idempotency standards.
 
 **Zero breaking changes**
 
@@ -78,27 +78,27 @@ Calling Application
         ▼
 WrapSec API (FastAPI, port 8000)
 ┌──────────────────────────────────────────────────┐
-│  Trace → RateLimit → Auth → Idempotency → Log   │
+│  Trace -> RateLimit -> Auth -> Idempotency -> Log   │
 │                                                  │
 │  Policy resolver                                 │
-│  system → tenant → department → application      │
+│  system -> tenant -> department -> application      │
 │                                                  │
 │  Gateway Service                                 │
 │  ├── InputGuard    PII detection + redaction     │
-│  ├── RuleDetector  try/catch → detection_failed  │
-│  ├── MLDetector    try/catch → detection_failed  │
-│  ├── LLMDetector   try/catch → detection_failed  │
+│  ├── RuleDetector  try/catch -> detection_failed  │
+│  ├── MLDetector    try/catch -> detection_failed  │
+│  ├── LLMDetector   try/catch -> detection_failed  │
 │  ├── RiskScorer    rule+ml+llm (PII excluded)    │
 │  └── PolicyEngine  BLOCK / SANITIZE / ALLOW      │
 └──────────────────────────────────────────────────┘
         │
         ├── audit_logs (decision, scores, threats)
         │
-        └── Response → Calling Application
+        └── Response -> Calling Application
                (application forwards to LLM itself)
 ```
 
-### Proxy Mode — AI Interaction Firewall
+### Proxy Mode - AI Interaction Firewall
 
 ```
 Calling Application
@@ -108,12 +108,12 @@ Calling Application
         ▼
 WrapSec API (FastAPI, port 8000)
 ┌──────────────────────────────────────────────────┐
-│  Trace → RateLimit → Auth → Log                  │
+│  Trace -> RateLimit -> Auth -> Log                  │
 │                                                  │
 │  Input Guard                                     │
 │  ├── Detection pipeline (same as scan-only)      │
-│  ├── BLOCK  → return 400, provider never called  │
-│  └── SANITIZE → redact PII before forwarding     │
+│  ├── BLOCK  -> return 400, provider never called  │
+│  └── SANITIZE -> redact PII before forwarding     │
 │                                                  │
 │  Provider Layer                                  │
 │  ├── OpenAI / OpenAI-compatible (Groq, Azure)    │
@@ -122,8 +122,8 @@ WrapSec API (FastAPI, port 8000)
 │                                                  │
 │  Output Guard                                    │
 │  ├── PII scan on provider response               │
-│  ├── BLOCK  → return 400, response suppressed    │
-│  └── SANITIZE → redact PII before returning      │
+│  ├── BLOCK  -> return 400, response suppressed    │
+│  └── SANITIZE -> redact PII before returning      │
 └──────────────────────────────────────────────────┘
         │
         ├── proxy_interactions (full lifecycle)
@@ -131,10 +131,10 @@ WrapSec API (FastAPI, port 8000)
         │     threats, provider, model, latency
         │     (* subject to DATA_STORAGE_MODE)
         │
-        ├── audit_logs (FK → proxy_interactions.id)
+        ├── audit_logs (FK -> proxy_interactions.id)
         │     execution_mode=proxy, unified view
         │
-        └── OpenAI-compatible response → Application
+        └── OpenAI-compatible response -> Application
                + X-WrapSec-* headers on every response
 ```
 
@@ -143,13 +143,13 @@ WrapSec API (FastAPI, port 8000)
 Every proxy request writes to two tables atomically:
 
 ```
-proxy_interactions → id (UUID, primary key)
-audit_logs         → proxy_interaction_id = proxy_interactions.id (FK)
+proxy_interactions -> id (UUID, primary key)
+audit_logs         -> proxy_interaction_id = proxy_interactions.id (FK)
 
 GET /v1/ai/requests/:trace_id
-  → reads audit_logs
-  → LEFT JOIN proxy_interactions ON proxy_interaction_id
-  → returns unified response with "proxy" key
+  -> reads audit_logs
+  -> LEFT JOIN proxy_interactions ON proxy_interaction_id
+  -> returns unified response with "proxy" key
 ```
 
 **Latency storage rule:**
@@ -167,19 +167,19 @@ proxy_interactions.total_latency_ms      = total end-to-end wall time (canonical
 ## Proxy Request Lifecycle
 
 ```
-1. Parse model string:  "openai/gpt-4o" → provider=openai, model=gpt-4o
+1. Parse model string:  "openai/gpt-4o" -> provider=openai, model=gpt-4o
 2. Load provider config from DB (provider_api_key is AES-256-GCM encrypted)
 3. Extract scan target: last user message (default) or all user messages
 4. Run detection pipeline (same as scan_only mode)
 5. Input decision:
-   BLOCK    → log, return 400, provider never called
-   SANITIZE → redact PII in messages, forward sanitized text
-   ALLOW    → forward messages unchanged
+   BLOCK    -> log, return 400, provider never called
+   SANITIZE -> redact PII in messages, forward sanitized text
+   ALLOW    -> forward messages unchanged
 6. Provider call (OpenAI / Ollama / custom endpoint)
 7. Output guard: scan provider response for PII
-   BLOCK    → log, return 400, response suppressed
-   SANITIZE → redact PII, return sanitized response
-   ALLOW    → return response unchanged
+   BLOCK    -> log, return 400, response suppressed
+   SANITIZE -> redact PII, return sanitized response
+   ALLOW    -> return response unchanged
 8. Log to proxy_interactions + audit_logs (dual write, atomic)
 9. Return OpenAI-compatible response + X-WrapSec-* headers
 ```
@@ -204,7 +204,7 @@ proxy_interactions.total_latency_ms      = total end-to-end wall time (canonical
 |---|---|---|
 | `full` | Stored as-is | Development, debugging |
 | `masked` | PII redacted before storing (default) | Production |
-| `none` | NULL — text never persisted | Strict compliance |
+| `none` | NULL - text never persisted | Strict compliance |
 
 Metadata (decisions, threats, scores, latency, execution_status) is **always retained** regardless of mode. Text is purged via the retention worker after `DATA_RETENTION_DAYS_PROXY` days (default: 7).
 
@@ -217,24 +217,24 @@ tenant (root)
 │
 ├── global_policy
 │     thresholds:   block=0.7, sanitize=0.4      (detection)
-│     guardrails:   pii.block=0.7, pii.san=0.4   (PII — independent)
+│     guardrails:   pii.block=0.7, pii.san=0.4   (PII - independent)
 │
 ├── departments
 │     ├── Finance
 │     │     policy_override:
 │     │       thresholds.block           = 0.5   (detection only)
-│     │       guardrails.pii.block       = 0.6   (PII — independent)
-│     │     → Finance Bot:  wsk_live_fin_...
-│     │     → ERP System:   wsk_live_erp_...
+│     │       guardrails.pii.block       = 0.6   (PII - independent)
+│     │     -> Finance Bot:  wsk_live_fin_...
+│     │     -> ERP System:   wsk_live_erp_...
 │     ├── HR
 │     │     policy_override:
 │     │       thresholds.block           = 0.5
 │     │       detection.llm_enabled      = false
-│     │     → HR System:    wsk_live_hr_...
+│     │     -> HR System:    wsk_live_hr_...
 │     └── Engineering
 │           policy_override:
 │             thresholds.block           = 0.75
-│           → Code Assistant: wsk_live_eng_...
+│           -> Code Assistant: wsk_live_eng_...
 ```
 
 ---
@@ -257,7 +257,7 @@ tenant (root)
 ### Threshold Decoupling in Code
 
 ```python
-# In ai.py and proxy.py — after policy resolution
+# In ai.py and proxy.py - after policy resolution
 block_threshold    = policy["thresholds"]["block"]
 sanitize_threshold = policy["thresholds"]["sanitize"]
 
@@ -265,7 +265,7 @@ pii_policy             = policy.get("guardrails", {}).get("pii", {})
 pii_block_threshold    = pii_policy.get("block_threshold",    None)
 pii_sanitize_threshold = pii_policy.get("sanitize_threshold", None)
 
-# Passed as separate parameters — never shared
+# Passed as separate parameters - never shared
 gateway.process(
     block_threshold        = block_threshold,
     sanitize_threshold     = sanitize_threshold,
@@ -276,31 +276,31 @@ gateway.process(
 
 ### Policy Resolution Order
 
-**Updated in V1.2** — `global_policy` on the tenant table is no longer applied in policy resolution. It is kept in the DB for future use but not read. DB settings table is now the authoritative source for all global settings.
+**Updated in V1.2** - `global_policy` on the tenant table is no longer applied in policy resolution. It is kept in the DB for future use but not read. DB settings table is now the authoritative source for all global settings.
 
 **Guardrail pipeline (V1.2):**
 ```
-Input → PII guardrail (regex, ~<1ms)
-      → RuleDetector / MLDetector / LLMDetector
-      → Toxicity guardrail (reads ML label 6, ~0ms additional)
-      → RiskScorer (detection scores only — guardrails excluded)
-      → PolicyEngine: PII score → Toxicity score → Detection risk_score
+Input -> PII guardrail (regex, ~<1ms)
+      -> RuleDetector / MLDetector / LLMDetector
+      -> Toxicity guardrail (reads ML label 6, ~0ms additional)
+      -> RiskScorer (detection scores only - guardrails excluded)
+      -> PolicyEngine: PII score -> Toxicity score -> Detection risk_score
 ```
 Each guardrail has independent thresholds configurable per dept/app via `policy_override`.
 
 ```
 system_defaults() (.env)
   ↓
-DB settings table (thresholds, layers, llm, rate_limit)  ← authoritative global values
+DB settings table (thresholds, layers, llm, rate_limit)  <- authoritative global values
   ↓
-dept.policy_override  ← per-dept overrides (null = inherit)
+dept.policy_override  <- per-dept overrides (null = inherit)
   ↓
-app.policy_override   ← per-app overrides (null = inherit)
+app.policy_override   <- per-app overrides (null = inherit)
   ↓
-resolved_policy → split:
-  detection thresholds → thresholds.block / thresholds.sanitize
-  PII thresholds       → guardrails.pii.block_threshold / sanitize_threshold
-  rate_limit           → rate_limit.per_minute
+resolved_policy -> split:
+  detection thresholds -> thresholds.block / thresholds.sanitize
+  PII thresholds       -> guardrails.pii.block_threshold / sanitize_threshold
+  rate_limit           -> rate_limit.per_minute
 ```
 
 ---
@@ -411,7 +411,7 @@ CREATE TABLE audit_logs (
     severity             VARCHAR(10),  -- CRITICAL | HIGH | MEDIUM | LOW
     -- Computed at write time from decision + risk_score + primary_reason
     -- Logic: domain/value_objects/severity.py
-    -- Never returned in scan responses — audit and SIEM use only
+    -- Never returned in scan responses - audit and SIEM use only
     -- Proxy link
     proxy_interaction_id UUID REFERENCES proxy_interactions(id),  -- NULL for scan_only
     created_at           TIMESTAMP DEFAULT NOW()
@@ -495,10 +495,10 @@ CREATE TABLE settings (
 - Datasource: Prometheus (provisioned via `infrastructure/grafana/datasources/prometheus.yml`)
 - Dashboards: Security Overview, Latency & Performance, Threat Intelligence
 - Dashboard JSONs: `infrastructure/grafana/dashboards/`
-- Note: Grafana 12 has file provisioning issues — pin to 10.4.0 for production
+- Note: Grafana 12 has file provisioning issues - pin to 10.4.0 for production
 
 ### Metrics (`observability/metrics.py`)
-All metric labels are validated against allowlists (`_safe()`) before use — no unbounded cardinality, no user data in labels.
+All metric labels are validated against allowlists (`_safe()`) before use - no unbounded cardinality, no user data in labels.
 
 | Metric | Type | Labels | Description |
 |---|---|---|---|
@@ -511,13 +511,13 @@ All metric labels are validated against allowlists (`_safe()`) before use — no
 | `wrapsec_proxy_execution_total` | Counter | execution_status | Proxy outcomes |
 | `wrapsec_proxy_latency_ms` | Histogram | execution_status | Proxy E2E latency |
 | `wrapsec_layer_score` | Histogram | layer | Rule/ML/LLM scores |
-| `wrapsec_cache_hits_total` | Counter | — | Semantic cache hits |
-| `wrapsec_cache_misses_total` | Counter | — | Semantic cache misses |
-| `wrapsec_rate_limited_total` | Counter | — | Rate limit rejections |
+| `wrapsec_cache_hits_total` | Counter | - | Semantic cache hits |
+| `wrapsec_cache_misses_total` | Counter | - | Semantic cache misses |
+| `wrapsec_rate_limited_total` | Counter | - | Rate limit rejections |
 
 ### Background Retention Worker
-- `workers/tasks.py` — cleanup logic
-- `workers/queue.py` — APScheduler wiring
+- `workers/tasks.py` - cleanup logic
+- `workers/queue.py` - APScheduler wiring
 - Schedule: daily at 02:00 UTC (configurable via `RETENTION_WORKER_HOUR`, `RETENTION_WORKER_MINUTE`)
 - Disable: `RETENTION_WORKER_ENABLED=false`
 - Manual fallback: `python scripts/cleanup_audit_logs.py`
@@ -531,26 +531,26 @@ All metric labels are validated against allowlists (`_safe()`) before use — no
    hash_key     = SHA-256(idem_key) + ":hash"
    response_key = SHA-256(idem_key) + ":resp"
 
-   stored_hash exists + body_hash MATCHES → return cached (X-Idempotency-Replayed: true)
-   stored_hash exists + body_hash DIFFERS → 409 CONFLICT (IDEMPOTENCY_CONFLICT)
-   stored_hash missing                    → process + store both keys (TTL: 60s)
+   stored_hash exists + body_hash MATCHES -> return cached (X-Idempotency-Replayed: true)
+   stored_hash exists + body_hash DIFFERS -> 409 CONFLICT (IDEMPOTENCY_CONFLICT)
+   stored_hash missing                    -> process + store both keys (TTL: 60s)
 
 2. Rate limit (per API key)
    key_id used as Redis rate limit identifier
    X-RateLimit-Limit/Remaining/Reset on every response
 
 3. Auth middleware
-   SHA-256(api_key) → look up api_keys by hash → validate not revoked
+   SHA-256(api_key) -> look up api_keys by hash -> validate not revoked
    Load key.app_id, key.dept_id, key.tenant_id, key.key_type
    Accepted prefixes: wsk_live_ (standard), wsk_trial_ (restricted), admin key
-   Sets request.state.key_type — used by endpoints for trial restrictions
+   Sets request.state.key_type - used by endpoints for trial restrictions
 
 4. Entity validation
    assert key.dept_id   == app.dept_id
    assert key.tenant_id == dept.tenant_id
-   Failure → 401 + security log
+   Failure -> 401 + security log
 
-5. Bearer JWT auth (alternative to step 3 — mutually exclusive)
+5. Bearer JWT auth (alternative to step 3 - mutually exclusive)
    HS256 access tokens, 30 min expiry, audience=wrapsec-dashboard
    Validates: signature, expiry, type=access, ver==users.token_version
    tenant_id cross-validated against DB value on every request
@@ -566,19 +566,19 @@ All metric labels are validated against allowlists (`_safe()`) before use — no
    pii_st        = policy["guardrails"]["pii"]["sanitize_threshold"]
 
 8. Gateway processing
-   Per-detector try/catch → sets detection_failed=True on any failure
+   Per-detector try/catch -> sets detection_failed=True on any failure
    PolicyEngine receives all 4 thresholds as separate parameters
 
 9. Primary reason (strict order)
-   if detection_failed → SYSTEM_ERROR
-   elif guardrail      → PII_GUARDRAIL_BLOCK/SANITIZE
-   elif max_score > 0  → RULE/ML/LLM_DETECTOR
-   else                → NO_THREAT_DETECTED
+   if detection_failed -> SYSTEM_ERROR
+   elif guardrail      -> PII_GUARDRAIL_BLOCK/SANITIZE
+   elif max_score > 0  -> RULE/ML/LLM_DETECTOR
+   else                -> NO_THREAT_DETECTED
 
 10. Confidence
-   SYSTEM_ERROR paths   → 0.0 (LOW) always
-   Guardrail paths      → tiered 0.70–0.95
-   Detection paths      → scaled inverse variance
+   SYSTEM_ERROR paths   -> 0.0 (LOW) always
+   Guardrail paths      -> tiered 0.70-0.95
+   Detection paths      -> scaled inverse variance
 ```
 
 ---
@@ -587,9 +587,9 @@ All metric labels are validated against allowlists (`_safe()`) before use — no
 
 | Limit | Value | Enforcement | Notes |
 |---|---|---|---|
-| Max characters | 8,000 | Schema Field → 422 | |
-| Estimated token limit | 4,000 | `ceil(len/2) > 4000` → 422 | CJK-safe |
-| Max payload | 64KB | Nginx → 413 | |
+| Max characters | 8,000 | Schema Field -> 422 | |
+| Estimated token limit | 4,000 | `ceil(len/2) > 4000` -> 422 | CJK-safe |
+| Max payload | 64KB | Nginx -> 413 | |
 | Max audit export rows | 10,000 | Param validation | |
 | Retention min | 7 days | Settings validation | |
 | Retention max | 3,650 days | Settings validation | 10 years |
@@ -605,12 +605,12 @@ Scope:  POST /v1/ai/request only
 TTL:    60 seconds
 
 Two Redis keys:
-  idempotency:{SHA256(key)}:hash → body_hash of original request
-  idempotency:{SHA256(key)}:resp → cached response JSON
+  idempotency:{SHA256(key)}:hash -> body_hash of original request
+  idempotency:{SHA256(key)}:resp -> cached response JSON
 
-Same key + same body  → cached response (X-Idempotency-Replayed: true)
-Same key + diff body  → 409 CONFLICT (IDEMPOTENCY_CONFLICT)
-Redis unavailable     → fail open (processes normally)
+Same key + same body  -> cached response (X-Idempotency-Replayed: true)
+Same key + diff body  -> 409 CONFLICT (IDEMPOTENCY_CONFLICT)
+Redis unavailable     -> fail open (processes normally)
 Only caches non-5xx responses
 ```
 
@@ -625,9 +625,9 @@ Only caches non-5xx responses
 | PII guardrail fails | BLOCK | LOW (0.0) | `SYSTEM_ERROR` | fail closed |
 | Gateway exception | BLOCK | LOW (0.0) | `SYSTEM_ERROR` | fail closed |
 | LLM timeout (detection) | continues | from rule+ML | RULE/ML | degraded |
-| Provider timeout (proxy) | 504 | — | — | input decision preserved in headers |
-| Provider unreachable (proxy) | 502 | — | — | input decision preserved in headers |
-| Redis unavailable | allows | — | — | idempotency + rate limit disabled |
+| Provider timeout (proxy) | 504 | - | - | input decision preserved in headers |
+| Provider unreachable (proxy) | 502 | - | - | input decision preserved in headers |
+| Redis unavailable | allows | - | - | idempotency + rate limit disabled |
 
 ---
 
@@ -660,68 +660,68 @@ Total: 53 endpoints
 ### Implemented
 
 ```
-✅ Rule, ML, LLM detectors with per-detector try/catch
-✅ Toxicity guardrail — independent thresholds, reads ML label 6, ~0ms additional latency
-✅ PII guardrail (22+ entity types, input + output)
-✅ Guardrail-first enforcement — PII → Toxicity → Detection pipeline
-✅ Guardrail thresholds DECOUPLED from detection thresholds
-✅ detection_failed flag — SYSTEM_ERROR always distinct from NO_THREAT_DETECTED
-✅ All failure paths: confidence=0.0, band=LOW, primary_reason=SYSTEM_ERROR
-✅ Input: 8000 char limit + ceil(len/2)>4000 token heuristic → 422
-✅ risk_score = rule*0.40 + ml*0.30 + llm*0.30 (PII excluded)
-✅ Primary reason — 7 values, strict priority order
-✅ Confidence: scaled inverse variance + tiered guardrail + failure=0.0
-✅ decision_version — "v1.0"
-✅ sanitization_applied — explicit boolean
-✅ Idempotency-Key (60s TTL, 409 on conflict, scoped per API key)
-✅ ULID trace IDs
-✅ Rate limiting per API key, X-RateLimit-* headers
-✅ Audit log retention configurable via Settings UI (DB)
-✅ Policy resolution: system → tenant → department
-✅ Proxy mode — POST /v1/chat/completions (OpenAI-compatible)
-✅ Provider support — OpenAI, OpenAI-compatible, Ollama
-✅ Provider API keys encrypted AES-256-GCM at rest
-✅ Input + output PII enforcement in proxy mode
-✅ Dual write — proxy_interactions + audit_logs (FK linked)
-✅ Unified requests view — GET /v1/ai/requests/:trace_id joins both tables
-✅ Configurable storage modes — full | masked | none
-✅ Background retention worker — APScheduler, daily 02:00 UTC
-✅ Severity classification — CRITICAL/HIGH/MEDIUM/LOW stored in DB
-✅ trace_id lookup dept-scoped — cross-dept returns 404
-✅ All audit endpoints dept-scoped
-✅ Composite indexes — tenant+dept+time, severity+time, key+time
-✅ JWT authentication — HS256 access tokens (30 min), refresh token rotation, token versioning
-✅ Dashboard session hardening — 15 min inactivity timeout, silent refresh, isLoggingOut guard
-✅ TRUSTED_PROXY_IPS — configurable trusted reverse proxy IPs for X-Forwarded-For
-✅ METRICS_TOKEN — optional bearer token authentication for GET /metrics
-✅ Admin user management endpoints — CRUD + toggle-active, ADMIN role required
-✅ Node.js SDK v1.0.0 — full parity with Python SDK, Express/Fastify middleware included
-✅ Python SDK v1.0.0 — typed client, async client, CLI (`wrapsec scan`, `wrapsec doctor`)
-✅ First-run setup page — `/setup` creates first admin on fresh install, self-disables after use
-✅ 53 API endpoints
-✅ Next.js dashboard
+yes Rule, ML, LLM detectors with per-detector try/catch
+yes Toxicity guardrail - independent thresholds, reads ML label 6, ~0ms additional latency
+yes PII guardrail (22+ entity types, input + output)
+yes Guardrail-first enforcement - PII -> Toxicity -> Detection pipeline
+yes Guardrail thresholds DECOUPLED from detection thresholds
+yes detection_failed flag - SYSTEM_ERROR always distinct from NO_THREAT_DETECTED
+yes All failure paths: confidence=0.0, band=LOW, primary_reason=SYSTEM_ERROR
+yes Input: 8000 char limit + ceil(len/2)>4000 token heuristic -> 422
+yes risk_score = rule*0.40 + ml*0.30 + llm*0.30 (PII excluded)
+yes Primary reason - 7 values, strict priority order
+yes Confidence: scaled inverse variance + tiered guardrail + failure=0.0
+yes decision_version - "v1.0"
+yes sanitization_applied - explicit boolean
+yes Idempotency-Key (60s TTL, 409 on conflict, scoped per API key)
+yes ULID trace IDs
+yes Rate limiting per API key, X-RateLimit-* headers
+yes Audit log retention configurable via Settings UI (DB)
+yes Policy resolution: system -> tenant -> department
+yes Proxy mode - POST /v1/chat/completions (OpenAI-compatible)
+yes Provider support - OpenAI, OpenAI-compatible, Ollama
+yes Provider API keys encrypted AES-256-GCM at rest
+yes Input + output PII enforcement in proxy mode
+yes Dual write - proxy_interactions + audit_logs (FK linked)
+yes Unified requests view - GET /v1/ai/requests/:trace_id joins both tables
+yes Configurable storage modes - full | masked | none
+yes Background retention worker - APScheduler, daily 02:00 UTC
+yes Severity classification - CRITICAL/HIGH/MEDIUM/LOW stored in DB
+yes trace_id lookup dept-scoped - cross-dept returns 404
+yes All audit endpoints dept-scoped
+yes Composite indexes - tenant+dept+time, severity+time, key+time
+yes JWT authentication - HS256 access tokens (30 min), refresh token rotation, token versioning
+yes Dashboard session hardening - 15 min inactivity timeout, silent refresh, isLoggingOut guard
+yes TRUSTED_PROXY_IPS - configurable trusted reverse proxy IPs for X-Forwarded-For
+yes METRICS_TOKEN - optional bearer token authentication for GET /metrics
+yes Admin user management endpoints - CRUD + toggle-active, ADMIN role required
+yes Node.js SDK v1.0.0 - full parity with Python SDK, Express/Fastify middleware included
+yes Python SDK v1.0.0 - typed client, async client, CLI (`wrapsec scan`, `wrapsec doctor`)
+yes First-run setup page - `/setup` creates first admin on fresh install, self-disables after use
+yes 53 API endpoints
+yes Next.js dashboard
 ```
 
 ### Planned
 
 ```
-→ Per-model token counting with tiktoken (replaces heuristic)
-→ Application-level policy overrides (placeholder active)
-→ API key rotation with grace period
-→ Cursor-based pagination
-→ Per-key storage mode override
+-> Per-model token counting with tiktoken (replaces heuristic)
+-> Application-level policy overrides (placeholder active)
+-> API key rotation with grace period
+-> Cursor-based pagination
+-> Per-key storage mode override
 ```
 
 ### Future
 
 ```
-→ WildGuard over-refusal / under-refusal detection (behavior_flag)
-→ Output evaluation engine (output_flags)
-→ Security Events feed and alerting
-→ Role-based policy overrides
-→ Human review queue for LOW confidence
-→ SaaS multi-tenancy
-→ SDK, webhooks, streaming
+-> WildGuard over-refusal / under-refusal detection (behavior_flag)
+-> Output evaluation engine (output_flags)
+-> Security Events feed and alerting
+-> Role-based policy overrides
+-> Human review queue for LOW confidence
+-> SaaS multi-tenancy
+-> SDK, webhooks, streaming
 ```
 
 ---
@@ -732,9 +732,9 @@ Total: 53 endpoints
 
 | Auth method | Status | Notes |
 |---|---|---|
-| `x-api-key: wsk_live_...` | ✅ Active | Standard key — scoped to dept/app |
-| `x-api-key: <admin_key>` | ✅ Active | Admin key — full access, no dept scope |
-| `Authorization: Bearer <jwt>` | ✅ Active | Dashboard users — HS256, 30 min access tokens |
+| `x-api-key: wsk_live_...` | yes Active | Standard key - scoped to dept/app |
+| `x-api-key: <admin_key>` | yes Active | Admin key - full access, no dept scope |
+| `Authorization: Bearer <jwt>` | yes Active | Dashboard users - HS256, 30 min access tokens |
 
 ### Request State Identity
 
@@ -749,14 +749,14 @@ request.state.tenant_id = str(key_record.tenant_id) if key_record.tenant_id else
 request.state.is_admin  = False  # True for admin key only
 ```
 
-Admin keys have `dept_id = None` — they access all data unscoped.
+Admin keys have `dept_id = None` - they access all data unscoped.
 
 ### Dept Scoping Rules
 
 | Endpoint | Non-admin key | Admin key |
 |---|---|---|
-| `GET /v1/ai/requests/{trace_id}` | Own dept only — cross-dept returns 404 | Unrestricted |
-| `GET /v1/audit/logs` | Own dept only — caller `dept_id` param ignored | Any dept or all |
+| `GET /v1/ai/requests/{trace_id}` | Own dept only - cross-dept returns 404 | Unrestricted |
+| `GET /v1/audit/logs` | Own dept only - caller `dept_id` param ignored | Any dept or all |
 | `GET /v1/audit/stats` | Own tenant only | Any tenant or all |
 | `GET /v1/audit/attribution` | Own dept only | Any dept or all |
 | `GET /v1/audit/analytics` | Own dept only | Any dept or all |
@@ -777,13 +777,13 @@ Two different API keys using the same `Idempotency-Key` value never collide.
 `audit_logs.severity` is computed at write time. Logic in `domain/value_objects/severity.py`.
 
 ```
-CRITICAL — BLOCK + (risk_score >= 0.9 OR primary_reason ends with _GUARDRAIL_BLOCK)
-HIGH     — BLOCK + risk_score < 0.9 OR primary_reason = SYSTEM_ERROR
-MEDIUM   — SANITIZE (any reason)
-LOW      — ALLOW
+CRITICAL - BLOCK + (risk_score >= 0.9 OR primary_reason ends with _GUARDRAIL_BLOCK)
+HIGH     - BLOCK + risk_score < 0.9 OR primary_reason = SYSTEM_ERROR
+MEDIUM   - SANITIZE (any reason)
+LOW      - ALLOW
 ```
 
-The `_GUARDRAIL_BLOCK` suffix pattern covers all current and future guardrail types automatically. Severity is never returned in scan responses — audit and SIEM use only.
+The `_GUARDRAIL_BLOCK` suffix pattern covers all current and future guardrail types automatically. Severity is never returned in scan responses - audit and SIEM use only.
 
 ---
 
@@ -791,25 +791,25 @@ The `_GUARDRAIL_BLOCK` suffix pattern covers all current and future guardrail ty
 
 | Issue | Decision | Status |
 |---|---|---|
-| SYSTEM_ERROR vs NO_THREAT_DETECTED | Mutually exclusive code paths, strict priority | ✅ All paths correct |
-| Threshold coupling | Fully decoupled — separate policy paths + parameters | ✅ Implemented |
-| Token limit | Heuristic ceil(len/2) for V1.1, tiktoken in V1.2 | ✅ Implemented |
-| Idempotency conflict | 409 CONFLICT on same key + different body | ✅ Implemented |
-| Idempotency scoping | Scoped per API key — no cross-key collisions | ✅ Implemented |
-| Entity relationship validation | Assert key→app→dept→tenant | ✅ Auth middleware |
-| tenant_id in metadata | Removed — always from API key | ✅ Security fix |
-| Audit retention | DB-configurable, default 30 days | ✅ Implemented |
-| Guardrail failure | Fail closed (BLOCK + SYSTEM_ERROR) | ✅ Implemented |
-| LLM timeout | Graceful degradation per mode | ✅ Implemented |
-| Proxy text storage | Configurable mode (full/masked/none) + retention TTL | ✅ Implemented |
-| Provider API keys | AES-256-GCM encrypted at rest, never returned in API | ✅ Implemented |
-| audit_logs vs proxy_interactions | Separate tables, FK linked, unified via GET /v1/ai/requests | ✅ Implemented |
-| Bearer JWT auth | Fully implemented — HS256, refresh rotation, token versioning | ✅ Implemented |
-| Cross-dept trace_id leak | Scoped by dept_id — cross-dept returns 404 | ✅ Fixed |
-| Audit endpoints unscoped | All audit endpoints enforce dept_id from request.state | ✅ Fixed |
-| Severity classification | CRITICAL/HIGH/MEDIUM/LOW — stored in DB, SIEM-ready | ✅ Implemented |
-| audit_logs.threats type | Migrated JSON → JSONB for GIN indexing | ✅ Migrated |
-| api_keys NULL dept/tenant | CHECK constraint — non-admin keys must have tenant+dept | ✅ Enforced |
+| SYSTEM_ERROR vs NO_THREAT_DETECTED | Mutually exclusive code paths, strict priority | yes All paths correct |
+| Threshold coupling | Fully decoupled - separate policy paths + parameters | yes Implemented |
+| Token limit | Heuristic ceil(len/2) for V1.1, tiktoken in V1.2 | yes Implemented |
+| Idempotency conflict | 409 CONFLICT on same key + different body | yes Implemented |
+| Idempotency scoping | Scoped per API key - no cross-key collisions | yes Implemented |
+| Entity relationship validation | Assert key->app->dept->tenant | yes Auth middleware |
+| tenant_id in metadata | Removed - always from API key | yes Security fix |
+| Audit retention | DB-configurable, default 30 days | yes Implemented |
+| Guardrail failure | Fail closed (BLOCK + SYSTEM_ERROR) | yes Implemented |
+| LLM timeout | Graceful degradation per mode | yes Implemented |
+| Proxy text storage | Configurable mode (full/masked/none) + retention TTL | yes Implemented |
+| Provider API keys | AES-256-GCM encrypted at rest, never returned in API | yes Implemented |
+| audit_logs vs proxy_interactions | Separate tables, FK linked, unified via GET /v1/ai/requests | yes Implemented |
+| Bearer JWT auth | Fully implemented - HS256, refresh rotation, token versioning | yes Implemented |
+| Cross-dept trace_id leak | Scoped by dept_id - cross-dept returns 404 | yes Fixed |
+| Audit endpoints unscoped | All audit endpoints enforce dept_id from request.state | yes Fixed |
+| Severity classification | CRITICAL/HIGH/MEDIUM/LOW - stored in DB, SIEM-ready | yes Implemented |
+| audit_logs.threats type | Migrated JSON -> JSONB for GIN indexing | yes Migrated |
+| api_keys NULL dept/tenant | CHECK constraint - non-admin keys must have tenant+dept | yes Enforced |
 
 ---
 

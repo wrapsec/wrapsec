@@ -4,7 +4,7 @@
 
 ```
 tests/load/
-  config.py                  Shared config — keys, thresholds, prompts
+  config.py                  Shared config - keys, thresholds, prompts
   locustfile.py              All load test scenarios (Locust)
   security/
     security_tests.py        Security correctness tests (plain Python)
@@ -35,12 +35,12 @@ curl http://127.0.0.1:8000/health/live
 Always run in this order:
 
 ```
-1. Security tests     (correctness — fast, ~30 seconds)
-2. Baseline           (smoke — 1 user, 30 seconds)
+1. Security tests     (correctness - fast, ~30 seconds)
+2. Baseline           (smoke - 1 user, 30 seconds)
 3. Sustained          (10 minutes)
 4. Burst              (2 minutes)
-5. Soak               (60 minutes — optional pre-production)
-6. Stress             (5 minutes — find breaking point)
+5. Soak               (60 minutes - optional pre-production)
+6. Stress             (5 minutes - find breaking point)
 ```
 
 Never run Soak or Stress on a system that hasn't passed Security + Baseline.
@@ -68,7 +68,7 @@ Tests cover:
 
 ## Load tests
 
-### 1. Baseline — smoke test (run first)
+### 1. Baseline - smoke test (run first)
 
 ```powershell
 locust -f tests/load/locustfile.py BaselineUser `
@@ -80,9 +80,9 @@ Pass: all requests 200, p95 < 50ms, 0 failures.
 
 ---
 
-### 2. Sustained load — 33 RPS for 10 minutes
+### 2. Sustained load - 33 RPS for 10 minutes
 
-**With web UI (recommended — watch live):**
+**With web UI (recommended - watch live):**
 ```powershell
 locust -f tests/load/locustfile.py SustainedUser `
   --host http://127.0.0.1:8000
@@ -105,7 +105,7 @@ Pass criteria:
 
 ---
 
-### 3. Burst — 100 users for 2 minutes
+### 3. Burst - 100 users for 2 minutes
 
 ```powershell
 locust -f tests/load/locustfile.py BurstUser `
@@ -120,7 +120,7 @@ Pass criteria:
 
 ---
 
-### 4. Soak — 30 RPS for 60 minutes
+### 4. Soak - 30 RPS for 60 minutes
 
 ```powershell
 locust -f tests/load/locustfile.py SoakUser `
@@ -146,7 +146,7 @@ Pass criteria:
 
 ---
 
-### 5. Stress — find breaking point
+### 5. Stress - find breaking point
 
 ```powershell
 locust -f tests/load/locustfile.py StressUser `
@@ -155,7 +155,7 @@ locust -f tests/load/locustfile.py StressUser `
   --csv=tests/load/results/stress
 ```
 
-No pass/fail — record the RPS where errors start. This is your capacity ceiling.
+No pass/fail - record the RPS where errors start. This is your capacity ceiling.
 
 ---
 
@@ -164,9 +164,9 @@ No pass/fail — record the RPS where errors start. This is your capacity ceilin
 | Scenario | p50 target | p95 target | p99 limit | Error rate |
 |---|---|---|---|---|
 | Scan fast (sustained) | < 10ms | < 30ms | < 100ms | < 0.1% |
-| Scan fast (burst)     | —      | < 100ms | —        | < 1% |
-| Scan full mode        | —      | < 800ms | —        | < 0.1% |
-| Proxy mode            | —      | < 1500ms | —       | < 0.1% |
+| Scan fast (burst)     | -      | < 100ms | -        | < 1% |
+| Scan full mode        | -      | < 800ms | -        | < 0.1% |
+| Proxy mode            | -      | < 1500ms | -       | < 0.1% |
 
 ---
 

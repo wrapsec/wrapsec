@@ -39,15 +39,15 @@ class GatewayService:
     Full pipeline orchestration.
 
     Flow:
-      1. Input guard    — PII detection + redaction
-      2. Rule detector  — regex/heuristic patterns
-      3. ML detector    — TF-IDF + LogisticRegression
-      4. LLM detector   — semantic analysis (conditional)
-      5. Risk scorer    — weighted aggregation
-      6. Policy engine  — BLOCK / SANITIZE / ALLOW
-      7. LLM execution  — proxy mode only, skipped if BLOCK
-      8. Output guard   — PII check on LLM response
-      9. Audit log      — SHA-256 hashed input
+      1. Input guard    - PII detection + redaction
+      2. Rule detector  - regex/heuristic patterns
+      3. ML detector    - TF-IDF + LogisticRegression
+      4. LLM detector   - semantic analysis (conditional)
+      5. Risk scorer    - weighted aggregation
+      6. Policy engine  - BLOCK / SANITIZE / ALLOW
+      7. LLM execution  - proxy mode only, skipped if BLOCK
+      8. Output guard   - PII check on LLM response
+      9. Audit log      - SHA-256 hashed input
     """
 
     def __init__(self):
@@ -105,7 +105,7 @@ class GatewayService:
         _settings = get_settings()
 
         # Use provided settings or fall back to config defaults
-        # Use is-None check — 0.0 is a valid threshold and must not fall back
+        # Use is-None check - 0.0 is a valid threshold and must not fall back
         if block_threshold is None:
             block_threshold = _settings.block_threshold
         if sanitize_threshold is None:
@@ -117,7 +117,7 @@ class GatewayService:
             input_result    = self._input_guard.inspect(request.input)
             effective_input = input_result.sanitized_text or request.input
 
-            # ── Step 2: Rule detection (CPU-bound → thread) ──
+            # ── Step 2: Rule detection (CPU-bound -> thread) ──
             detection_failed = False
             try:
                 if rule_enabled:
@@ -131,7 +131,7 @@ class GatewayService:
                 rule_result      = DetectionResult.clean("rule_detector")
                 detection_failed = True
 
-            # ── Step 3: ML detection (CPU-bound → thread) ────
+            # ── Step 3: ML detection (CPU-bound -> thread) ────
             try:
                 if ml_enabled:
                     ml_result = await asyncio.to_thread(
@@ -145,10 +145,10 @@ class GatewayService:
                 detection_failed = True
 
             # ── Step 3.5: Toxicity guardrail (after ML) ─────────
-            # Toxicity signal is extracted from ML result — no new inference
+            # Toxicity signal is extracted from ML result - no new inference
             input_result = self._input_guard.inspect_toxicity(input_result, ml_result)
 
-            # ── Step 4: LLM detection (async I/O → direct await)
+            # ── Step 4: LLM detection (async I/O -> direct await)
             # Only invoke LLM detector if:
             # - detection_mode is FULL
             # - any score exceeds the trigger threshold
@@ -165,7 +165,7 @@ class GatewayService:
                 and pre_score >= _settings.llm_trigger_threshold
             ):
                 logger.debug(
-                    f"LLM detector triggered — pre_score={pre_score:.2f} "
+                    f"LLM detector triggered - pre_score={pre_score:.2f} "
                     f"trace_id={request.trace_id}"
                 )
                 try:
@@ -219,7 +219,7 @@ class GatewayService:
                     llm_settings=llm_settings,
                 )
 
-                # Output guard — check LLM response for PII
+                # Output guard - check LLM response for PII
                 output_result = self._output_guard.inspect(raw_output)
                 output        = output_result.sanitized_text or raw_output
 
@@ -313,7 +313,7 @@ class GatewayService:
             )
 
             logger.info(
-                f"Gateway processed — "
+                f"Gateway processed - "
                 f"trace_id={request.trace_id} "
                 f"decision={policy.decision.value} "
                 f"score={scoring.final_score.value:.2f} "

@@ -3,7 +3,7 @@
 # WrapSec v1.0 | AI Security Gateway - https://wrapsec.com
 
 """
-WrapSec — System Performance Monitor
+WrapSec - System Performance Monitor
 ======================================
 Collects system metrics during load testing:
   - API process: CPU%, memory (RSS/VMS), open file descriptors
@@ -140,7 +140,7 @@ def pg_long_queries() -> int:
 
 def main():
     print(f"\nWrapSec System Monitor")
-    print(f"Sampling every {SAMPLE_INTERVAL}s — press Ctrl+C to stop\n")
+    print(f"Sampling every {SAMPLE_INTERVAL}s - press Ctrl+C to stop\n")
 
     # History for summary
     api_cpu:     list[float] = []
@@ -247,9 +247,9 @@ def main():
               f"min={min(api_mem_mb):.1f}MB")
         mem_growth = max(api_mem_mb) - min(api_mem_mb)
         if mem_growth > 50:
-            print(f"    ⚠ Memory grew {mem_growth:.0f}MB — possible leak")
+            print(f"    ⚠ Memory grew {mem_growth:.0f}MB - possible leak")
         else:
-            print(f"    ✔ Memory stable (grew {mem_growth:.0f}MB)")
+            print(f"     Memory stable (grew {mem_growth:.0f}MB)")
 
     if sys_cpu:
         print(f"\n  System CPU:")
@@ -263,9 +263,9 @@ def main():
               f"max={max(pg_conns)}  "
               f"min={min(pg_conns)}")
         if max(pg_conns) > 20:
-            print(f"    ⚠ Peak connections {max(pg_conns)} — check pool size")
+            print(f"    ⚠ Peak connections {max(pg_conns)} - check pool size")
         else:
-            print(f"    ✔ Connections healthy")
+            print(f"     Connections healthy")
 
     if redis_ops:
         print(f"\n  Redis:")
@@ -279,22 +279,22 @@ def main():
     pg_conn_ok  = max(pg_conns) < 25  if pg_conns else True
     mem_stable  = (max(api_mem_mb) - min(api_mem_mb)) < 50 if api_mem_mb else True
 
-    print(f"    API CPU  < 80%:    {'✔ PASS' if api_cpu_ok  else '✗ FAIL'} (max={max(api_cpu):.1f}%  if api_cpu else 'N/A')")
-    print(f"    API MEM  < 500MB:  {'✔ PASS' if api_mem_ok  else '✗ FAIL'} (max={max(api_mem_mb):.1f}MB if api_mem_mb else 'N/A')")
-    print(f"    PG conns < 25:     {'✔ PASS' if pg_conn_ok  else '✗ FAIL'} (max={max(pg_conns) if pg_conns else 'N/A'})")
-    print(f"    Memory stable:     {'✔ PASS' if mem_stable  else '✗ FAIL'}")
+    print(f"    API CPU  < 80%:    {' PASS' if api_cpu_ok  else ' FAIL'} (max={max(api_cpu):.1f}%  if api_cpu else 'N/A')")
+    print(f"    API MEM  < 500MB:  {' PASS' if api_mem_ok  else ' FAIL'} (max={max(api_mem_mb):.1f}MB if api_mem_mb else 'N/A')")
+    print(f"    PG conns < 25:     {' PASS' if pg_conn_ok  else ' FAIL'} (max={max(pg_conns) if pg_conns else 'N/A'})")
+    print(f"    Memory stable:     {' PASS' if mem_stable  else ' FAIL'}")
     print()
 
 
 if __name__ == "__main__":
-    # First sample needs a baseline CPU reading — call cpu_percent once to initialise
+    # First sample needs a baseline CPU reading - call cpu_percent once to initialise
     psutil.cpu_percent(interval=None)
     proc = find_api_process()
     if proc:
         proc.cpu_percent(interval=None)
-        print(f"✔ API process found (PID {proc.pid})")
+        print(f" API process found (PID {proc.pid})")
     else:
-        print("⚠ API process not found — start the API first")
+        print("⚠ API process not found - start the API first")
         print("  Looking for: uvicorn api.main:app")
 
     time.sleep(0.5)  # let cpu_percent initialise

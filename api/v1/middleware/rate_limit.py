@@ -16,16 +16,16 @@ PUBLIC_PATHS = {"/health", "/health/ready", "/health/live", "/metrics"}
 async def _get_live_rate_limit() -> int:
     """
     Resolve the effective rate limit for live keys.
-    Priority: Redis cache → DB settings → .env default.
-    Cache TTL: 60 seconds — changes take effect immediately when updated via
+    Priority: Redis cache -> DB settings -> .env default.
+    Cache TTL: 60 seconds - changes take effect immediately when updated via
     PUT /v1/settings/rate_limit (which deletes the cache key), or within 1 minute
     for any node that hasn't yet received the invalidation.
-    In test mode — always returns .env default to avoid DB/Redis dependency.
+    In test mode - always returns .env default to avoid DB/Redis dependency.
     """
     import os
     _settings = get_settings()
 
-    # Skip cache/DB in test mode — avoids Redis/DB dependency in tests
+    # Skip cache/DB in test mode - avoids Redis/DB dependency in tests
     if os.getenv("TESTING") == "true":
         return _settings.rate_limit_per_minute
 
@@ -37,7 +37,7 @@ async def _get_live_rate_limit() -> int:
         if cached:
             return int(json.loads(cached).get("per_minute", _settings.rate_limit_per_minute))
 
-        # Cache miss — read from DB
+        # Cache miss - read from DB
         from db.session import AsyncSessionFactory
         from db.repositories.settings import SettingsRepository
         async with AsyncSessionFactory() as session:
@@ -48,7 +48,7 @@ async def _get_live_rate_limit() -> int:
                 await redis.setex(cache_key, 60, json.dumps(stored))
                 return limit
     except Exception:
-        pass  # Fail open — use .env default
+        pass  # Fail open - use .env default
 
     return _settings.rate_limit_per_minute
 
@@ -68,7 +68,7 @@ class RateLimitMiddleware(BaseHTTPMiddleware):
         if not get_settings().rate_limit_enabled:
             return await call_next(request)
 
-        # Rate limit per API key — more precise than per IP
+        # Rate limit per API key - more precise than per IP
         # Falls back to IP if no key (e.g. unauthenticated requests)
         api_key   = request.headers.get("x-api-key", "")
         key_id    = getattr(request.state, "key_id", None)
@@ -92,7 +92,7 @@ class RateLimitMiddleware(BaseHTTPMiddleware):
         )
 
         if is_limited:
-            # Record rate limit hit metric — no key_type label since auth hasn't run yet
+            # Record rate limit hit metric - no key_type label since auth hasn't run yet
             try:
                 from observability.metrics import record_rate_limit
                 record_rate_limit()

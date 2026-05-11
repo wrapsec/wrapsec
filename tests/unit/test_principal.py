@@ -67,10 +67,10 @@ def test_has_role_multiple_no_match():
     assert p.has_role("ADMIN", "DEVELOPER") is False
 
 
-# ── has_permission — v1 guard ──────────────────────────────────────────────────
+# ── has_permission - v1 guard ──────────────────────────────────────────────────
 
 def test_has_permission_raises_not_implemented_in_v1():
-    """has_permission() must NOT be callable in v1 — fail loud."""
+    """has_permission() must NOT be callable in v1 - fail loud."""
     p = Principal(
         id="u1", type=PrincipalType.USER, tenant_id="t1", dept_id=None,
         roles=["ADMIN"], permissions=["*"], is_admin=True,
@@ -172,12 +172,12 @@ def test_build_api_key_dept_id_string_when_present():
 def test_user_principal_id_is_uuid_string():
     user      = _make_user_model()
     principal = build_principal_from_user(user)
-    # principal.id = str(user.id) — prefixing to "user:{uuid}" done in middleware
+    # principal.id = str(user.id) - prefixing to "user:{uuid}" done in middleware
     assert principal.id == str(user.id)
 
 
 def test_api_key_principal_id_is_key_id():
     key       = _make_api_key_model()
     principal = build_principal_from_api_key(key)
-    # principal.id = key.key_id — prefixing to "key:{key_id}" done in middleware
+    # principal.id = key.key_id - prefixing to "key:{key_id}" done in middleware
     assert principal.id == key.key_id

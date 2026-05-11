@@ -92,7 +92,7 @@ class AuditLogModel(Base):
     ip_address         = Column(String(50),  nullable=True)
     user_agent         = Column(String(255), nullable=True)
     attribution_verified = Column(Boolean,   nullable=False, default=False)
-    # String columns intentionally — no ForeignKey to preserve audit history after
+    # String columns intentionally - no ForeignKey to preserve audit history after
     # entity deletion (tenant/dept/app can be deactivated or removed without losing logs).
     app_id         = Column(String(50),  nullable=True)
     dept_id        = Column(String(50),  nullable=True)
@@ -142,7 +142,7 @@ class APIKeyModel(Base):
 
     __table_args__ = (
         # Only enforced in PostgreSQL (production). SQLite (used in tests) silently
-        # skips this constraint — test scenarios that create invalid API key rows
+        # skips this constraint - test scenarios that create invalid API key rows
         # will not be caught until the production schema is exercised.
         CheckConstraint(
             "is_admin = true OR (tenant_id IS NOT NULL AND dept_id IS NOT NULL)",
@@ -215,17 +215,17 @@ class ProxyInteractionModel(Base):
 
 class UserModel(Base):
     """
-    Dashboard users — human operators authenticating via JWT.
+    Dashboard users - human operators authenticating via JWT.
     API key users (applications/services) are in APIKeyModel and do not have rows here.
 
-    Tenant boundary: tenant_id NOT NULL — enforced at DB level (Layer 1).
-    dept_id NULL valid ONLY for ADMIN — enforced by ck_users_dept_required_v2 (both directions):
-        role = ADMIN     → dept_id MUST be NULL
-        role != ADMIN    → dept_id MUST NOT be NULL
-    dept_id must belong to same tenant — validated in UserRepository.create/update().
+    Tenant boundary: tenant_id NOT NULL - enforced at DB level (Layer 1).
+    dept_id NULL valid ONLY for ADMIN - enforced by ck_users_dept_required_v2 (both directions):
+        role = ADMIN     -> dept_id MUST be NULL
+        role != ADMIN    -> dept_id MUST NOT be NULL
+    dept_id must belong to same tenant - validated in UserRepository.create/update().
 
     Email uniqueness: case-insensitive via ux_users_email_lower (LOWER(email)) index.
-    Always stored lowercase — normalize_email() must be called before every write.
+    Always stored lowercase - normalize_email() must be called before every write.
 
     token_version: incremented by logout_all_sessions() to immediately invalidate all JWTs.
     Triggered by: password change, role change, dept change, deactivation, admin reset.
@@ -253,9 +253,9 @@ class UserModel(Base):
             "role IN ('ADMIN', 'DEVELOPER', 'VIEWER')",
             name="ck_users_role",
         ),
-        # Updated in add_user_management.sql — enforces BOTH directions:
-        #   role = ADMIN     → dept_id MUST be NULL
-        #   role != ADMIN    → dept_id MUST NOT be NULL
+        # Updated in add_user_management.sql - enforces BOTH directions:
+        #   role = ADMIN     -> dept_id MUST be NULL
+        #   role != ADMIN    -> dept_id MUST NOT be NULL
         CheckConstraint(
             "(role = 'ADMIN' AND dept_id IS NULL) OR (role != 'ADMIN' AND dept_id IS NOT NULL)",
             name="ck_users_dept_required_v2",
@@ -266,10 +266,10 @@ class UserModel(Base):
 class RefreshTokenModel(Base):
     """
     Opaque refresh tokens for JWT session management.
-    Raw token NEVER stored — only SHA-256(raw) persisted.
+    Raw token NEVER stored - only SHA-256(raw) persisted.
     Rotation: every use revokes old token and creates new one.
     Race condition prevention: get_by_hash() uses SELECT FOR UPDATE.
-    token_version: stores user.token_version at issuance — mismatch means session invalidated.
+    token_version: stores user.token_version at issuance - mismatch means session invalidated.
     Cleanup: two clauses run daily (expires+revoked, and 90-day absolute cutoff).
     """
     __tablename__ = "refresh_tokens"
@@ -293,20 +293,20 @@ class RefreshTokenModel(Base):
 
 class AdminEventModel(Base):
     """
-    Administrative action log — one row per admin action.
+    Administrative action log - one row per admin action.
     Separate from audit_logs (AI security events) and auth_events (login tracking).
 
     Logging: synchronous, post-commit, same request lifecycle. Best-effort.
-    If logging fails → log internally, do not fail request.
+    If logging fails -> log internally, do not fail request.
 
     action must be a value from AdminEventAction enum (domain/enums.py).
     dept_id = NULL for tenant-scoped actions, target user's dept_id (post-update) for user actions.
     For dept_changed: dept_id = new_dept_id; metadata contains old_dept_id and new_dept_id.
 
     metadata keys must be consistent per action type:
-        role_changed  → {"old_role": "...", "new_role": "..."}
-        dept_changed  → {"old_dept_id": "...", "new_dept_id": "..."}
-        user_created  → {"role": "...", "dept_id": "..."}
+        role_changed  -> {"old_role": "...", "new_role": "..."}
+        dept_changed  -> {"old_dept_id": "...", "new_dept_id": "..."}
+        user_created  -> {"role": "...", "dept_id": "..."}
     Never store passwords, tokens, or secrets in metadata.
     """
     __tablename__ = "admin_events"
@@ -332,14 +332,14 @@ class AdminEventModel(Base):
 
 class AuthEventModel(Base):
     """
-    Authentication event log — one row per login attempt.
+    Authentication event log - one row per login attempt.
     Separate from audit_logs (AI security events) and admin_events (admin actions).
 
     Logging: non-blocking, best-effort. Must use BackgroundTasks or separate DB session.
     Must NOT use the request session. Must NOT delay login response.
 
-    tenant_id NULLABLE — NULL when user not found (cannot resolve tenant).
-    user_id   NULLABLE — NULL when user not found.
+    tenant_id NULLABLE - NULL when user not found (cannot resolve tenant).
+    user_id   NULLABLE - NULL when user not found.
     Prefer NULL over incorrect attribution. Never use sentinel values.
 
     action must be a value from AuthEventAction enum.

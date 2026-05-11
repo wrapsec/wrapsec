@@ -11,16 +11,16 @@ All other documentation (API, SDK, CLI, examples) must align with these definiti
 WrapSec evaluates input (and optionally output) and returns a **security decision**:
 
 ```text
-ALLOW     → safe to proceed
-BLOCK     → unsafe, must not proceed
-SANITIZE  → unsafe content redacted, safe to proceed with modified input
+ALLOW     -> safe to proceed
+BLOCK     -> unsafe, must not proceed
+SANITIZE  -> unsafe content redacted, safe to proceed with modified input
 ```
 
 In proxy mode:
 
 ```text
-decision          → input decision
-output_decision   → output decision (response validation)
+decision          -> input decision
+output_decision   -> output decision (response validation)
 ```
 
 ---
@@ -33,7 +33,7 @@ WrapSec may return:
 primary_reason = SYSTEM_ERROR
 ```
 
-SYSTEM_ERROR occurs when the detection pipeline fails (e.g., detector failure, timeout, or internal exception). This is distinct from a clean result — `NO_THREAT_DETECTED` is only returned when detection succeeds and all scores are 0.0.
+SYSTEM_ERROR occurs when the detection pipeline fails (e.g., detector failure, timeout, or internal exception). This is distinct from a clean result - `NO_THREAT_DETECTED` is only returned when detection succeeds and all scores are 0.0.
 
 **Important:**
 
@@ -48,9 +48,9 @@ SYSTEM_ERROR occurs when the detection pipeline fails (e.g., detector failure, t
 
 ```text
 Recommended behavior:
-- Middleware → fail open (allow request)
-- Applications / LLM apps → fail closed (reject request)
-- CLI → exit with error
+- Middleware -> fail open (allow request)
+- Applications / LLM apps -> fail closed (reject request)
+- CLI -> exit with error
 ```
 
 ---
@@ -68,7 +68,7 @@ Important:
 * Example:
 
 ```text
-PII detected → decision = SANITIZE
+PII detected -> decision = SANITIZE
 risk_score = 0.0
 ```
 
@@ -88,7 +88,7 @@ confidence reflects agreement between detectors, not probability of attack.
 Edge case:
 
 ```text
-Single detector → confidence = 1.0
+Single detector -> confidence = 1.0
 ```
 
 This reflects lack of disagreement, not absolute correctness
@@ -98,8 +98,8 @@ This reflects lack of disagreement, not absolute correctness
 ## Sanitization
 
 ```text
-sanitization_applied → boolean
-sanitized_input      → redacted content (if applicable)
+sanitization_applied -> boolean
+sanitized_input      -> redacted content (if applicable)
 ```
 
 Rules:
@@ -112,8 +112,8 @@ Use `sanitized_input` instead of the original input when forwarding to an LLM.
 ## Execution Modes
 
 ```text
-scan_only → WrapSec evaluates input only
-proxy     → WrapSec sits in request path and calls LLM
+scan_only -> WrapSec evaluates input only
+proxy     -> WrapSec sits in request path and calls LLM
 ```
 
 ---
@@ -152,15 +152,15 @@ trace_id = unique identifier for every request
 ## Latency
 
 ```text
-scan_only → latency = detection time
-proxy     → latency = total end-to-end time (WrapSec + provider)
+scan_only -> latency = detection time
+proxy     -> latency = total end-to-end time (WrapSec + provider)
 ```
 
 ---
 
 ## Severity Model
 
-`severity` is computed at write time and stored in `audit_logs`. It is never returned in scan responses — audit and SIEM use only.
+`severity` is computed at write time and stored in `audit_logs`. It is never returned in scan responses - audit and SIEM use only.
 
 | Severity | Condition |
 |---|---|
@@ -173,19 +173,19 @@ The `_GUARDRAIL_BLOCK` suffix covers all current and future guardrail types auto
 
 ## Toxicity Guardrail
 
-The toxicity guardrail reads the ML detector's toxicity confidence (label 6) directly — bypassing the detection risk_score weighting (0.30). This ensures high-confidence toxicity detections are enforced regardless of other detector scores.
+The toxicity guardrail reads the ML detector's toxicity confidence (label 6) directly - bypassing the detection risk_score weighting (0.30). This ensures high-confidence toxicity detections are enforced regardless of other detector scores.
 
-**Guardrail priority:** PII → Toxicity → Detection pipeline
+**Guardrail priority:** PII -> Toxicity -> Detection pipeline
 
 **primary_reason values:**
-- `TOXICITY_GUARDRAIL_BLOCK` — toxicity score >= block_threshold
-- `TOXICITY_GUARDRAIL_SANITIZE` — toxicity score >= sanitize_threshold
+- `TOXICITY_GUARDRAIL_BLOCK` - toxicity score >= block_threshold
+- `TOXICITY_GUARDRAIL_SANITIZE` - toxicity score >= sanitize_threshold
 
-**Training data:** Jigsaw (Wikipedia CC0, WWW 2017), UC Berkeley Measuring Hate Speech (ACL 2022), ToxiGen — Microsoft Research (ACL 2022)
+**Training data:** Jigsaw (Wikipedia CC0, WWW 2017), UC Berkeley Measuring Hate Speech (ACL 2022), ToxiGen - Microsoft Research (ACL 2022)
 
 **Configurable per dept/app** via `guardrails.toxicity.block_threshold` / `sanitize_threshold` in `policy_override`.
 
-Severity is never returned in scan responses — this is intentional (evasion prevention). It is available in:
+Severity is never returned in scan responses - this is intentional (evasion prevention). It is available in:
 - `GET /v1/audit/logs` response items
 - `GET /v1/ai/requests/{trace_id}` response
 

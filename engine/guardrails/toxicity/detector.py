@@ -10,17 +10,17 @@ Extracts the toxicity score from the ML detector result.
 The ML model (TF-IDF + LogReg) is trained on:
   - Jigsaw Toxic Comment Classification (Wikipedia CC0, WWW 2017)
   - UC Berkeley Measuring Hate Speech (ACL 2022)
-  - ToxiGen — Microsoft Research (ACL 2022)
+  - ToxiGen - Microsoft Research (ACL 2022)
 Label 6 = TOXICITY in the ML classifier.
 
 This guardrail operates independently of the detection risk score.
 It reads the ML toxicity confidence directly and applies its own threshold
-via the PolicyEngine — same pattern as PIIDetector.
+via the PolicyEngine - same pattern as PIIDetector.
 
 Why a guardrail and not just detection:
   ML toxicity score is weighted at 0.30 in the risk scorer.
-  A 0.9 confident toxicity detection produces risk_score = 0.27 — below
-  the default sanitize threshold of 0.4 — and would be ALLOWED.
+  A 0.9 confident toxicity detection produces risk_score = 0.27 - below
+  the default sanitize threshold of 0.4 - and would be ALLOWED.
   The guardrail bypasses this dilution by reading the raw ML confidence.
 
 Categories covered by the training data:
@@ -38,11 +38,11 @@ from domain.enums import ThreatCategory
 class ToxicityDetector:
     """
     Extracts toxicity score from the ML detector result.
-    Stateless — reads from existing ML result, no additional inference.
+    Stateless - reads from existing ML result, no additional inference.
     Fast: ~0ms (no new computation, just score extraction).
     """
 
-    # Score boundaries — same scale as PII detector
+    # Score boundaries - same scale as PII detector
     MIN_SCORE = 0.0
     MAX_SCORE = 1.0
 

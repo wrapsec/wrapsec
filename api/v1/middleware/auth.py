@@ -33,10 +33,10 @@ PUBLIC_PATHS = {
     "/docs",
     "/redoc",
     "/openapi.json",
-    "/v1/auth/login",    # login is public — no auth required
-    "/v1/auth/refresh",  # refresh uses httpOnly cookie — no Bearer required
-    "/v1/setup",         # first-run setup — public, self-disables after first user created
-    "/v1/setup/status",  # initialization check — public
+    "/v1/auth/login",    # login is public - no auth required
+    "/v1/auth/refresh",  # refresh uses httpOnly cookie - no Bearer required
+    "/v1/setup",         # first-run setup - public, self-disables after first user created
+    "/v1/setup/status",  # initialization check - public
 }
 
 # Paths where middleware must NOT log SESSION_EXPIRED
@@ -97,7 +97,7 @@ def get_client_ip(request: Request) -> str:
 def _unauthorized(request: Request, reason: str) -> JSONResponse:
     """
     Returns 401 JSONResponse. Always logs reason and path.
-    Every auth rejection is visible in logs — no silent 401s.
+    Every auth rejection is visible in logs - no silent 401s.
     """
     logger.warning(
         "auth rejected reason=%s path=%s method=%s",
@@ -123,7 +123,7 @@ async def _log_session_expired(
 
     Attempts to extract user_id and tenant_id from the token payload
     even if the token is expired or invalid (decode without expiry check).
-    If extraction fails, logs with NULL context — never skips logging.
+    If extraction fails, logs with NULL context - never skips logging.
 
     Non-blocking: NullPool session, best-effort, always closes in finally.
     Must NOT be called when no token is present (noise from health checks).
@@ -185,7 +185,7 @@ async def _log_session_expired(
         await session.close()
 
 
-_USER_CACHE_TTL = 1800  # seconds — matches JWT access token expiry
+_USER_CACHE_TTL = 1800  # seconds - matches JWT access token expiry
 _USER_DB_ERROR  = object()  # sentinel: DB/Redis failure, distinct from "user not found"
 
 
@@ -196,9 +196,9 @@ async def _get_user_cached(user_uuid: UUID, user_id_str: str):
     Cache is invalidated in logout_all_sessions() whenever token_version changes.
 
     Return values:
-      SimpleNamespace / ORM user — found (cache hit or DB hit)
-      None                       — user does not exist in DB
-      _USER_DB_ERROR             — DB/Redis failure (caller returns 500-equivalent)
+      SimpleNamespace / ORM user - found (cache hit or DB hit)
+      None                       - user does not exist in DB
+      _USER_DB_ERROR             - DB/Redis failure (caller returns 500-equivalent)
     """
     import json
     from types import SimpleNamespace
@@ -216,7 +216,7 @@ async def _get_user_cached(user_uuid: UUID, user_id_str: str):
         except Exception as e:
             logger.debug("auth user cache read failed user_id=%s error=%s", user_id_str, e)
 
-    # Cache miss or test mode — DB lookup
+    # Cache miss or test mode - DB lookup
     from db.repositories.user import UserRepository
     try:
         engine, session_ctx = await _get_db_session()
@@ -228,7 +228,7 @@ async def _get_user_cached(user_uuid: UUID, user_id_str: str):
         logger.error("auth JWT db_lookup_failed user_id=%s error=%s", user_id_str, e)
         return _USER_DB_ERROR
 
-    # Write to cache (production only — skip in tests)
+    # Write to cache (production only - skip in tests)
     if user and not _TESTING:
         try:
             from cache.redis_client import get_redis
@@ -256,7 +256,7 @@ async def _get_db_session():
     Production: uses AsyncSessionFactory (pooled, efficient)
     Testing: uses NullPool engine (no cross-loop pool poisoning)
 
-    NullPool opens/closes a fresh connection each time — slightly slower
+    NullPool opens/closes a fresh connection each time - slightly slower
     but completely safe when each pytest test function gets its own event loop.
     """
     if _TESTING:
@@ -273,15 +273,15 @@ async def _get_db_session():
 
 class AuthMiddleware(BaseHTTPMiddleware):
     """
-    Dual-identity auth middleware — API key and JWT coexist.
+    Dual-identity auth middleware - API key and JWT coexist.
 
     Header precedence (absolute, no exceptions):
-        IF x-api-key present (non-empty after strip) → API key path
-        ELIF Authorization: Bearer ... → JWT path
-        ELSE → 401
+        IF x-api-key present (non-empty after strip) -> API key path
+        ELIF Authorization: Bearer ... -> JWT path
+        ELSE -> 401
 
-    API key always wins — JWT is ignored even if valid when x-api-key is present.
-    All paths set identical request.state fields — downstream code is auth-agnostic.
+    API key always wins - JWT is ignored even if valid when x-api-key is present.
+    All paths set identical request.state fields - downstream code is auth-agnostic.
     """
 
     async def dispatch(self, request: Request, call_next) -> Response:
@@ -305,7 +305,7 @@ class AuthMiddleware(BaseHTTPMiddleware):
         request.state.user_id        = None
         request.state.user_role      = None
 
-        # ── Header precedence — absolute rule ─────────────────────────────────
+        # ── Header precedence - absolute rule ─────────────────────────────────
         api_key = request.headers.get("x-api-key", "").strip()
         auth    = request.headers.get("authorization", "").strip()
 
@@ -349,7 +349,7 @@ class AuthMiddleware(BaseHTTPMiddleware):
         """
         Handles the hardcoded admin key.
         Production: fetches real tenant_id from DB.
-        Test mode: skips DB fetch → tenant_id = None (matches original behaviour).
+        Test mode: skips DB fetch -> tenant_id = None (matches original behaviour).
         """
         tenant_id = None
 
@@ -395,9 +395,9 @@ class AuthMiddleware(BaseHTTPMiddleware):
         """
         from services.auth.token import decode_access_token
 
-        # Step 1 — decode and validate JWT
+        # Step 1 - decode and validate JWT
         # ExpiredSignatureError must be caught BEFORE InvalidTokenError
-        # (it is a subclass — order is mandatory, never swap)
+        # (it is a subclass - order is mandatory, never swap)
         skip_logging = request.url.path in SKIP_AUTH_EVENT_LOGGING
         try:
             payload = decode_access_token(token)
@@ -410,7 +410,7 @@ class AuthMiddleware(BaseHTTPMiddleware):
                 await _log_session_expired(token, "token_invalid", request.url.path)
             return _unauthorized(request, "invalid_or_expired_token")
 
-        # Step 2 — parse sub claim
+        # Step 2 - parse sub claim
         user_id_str = payload.get("sub")
         try:
             user_uuid = UUID(user_id_str)
@@ -419,30 +419,30 @@ class AuthMiddleware(BaseHTTPMiddleware):
                            user_id_str, request.url.path)
             return _unauthorized(request, "invalid_token")
 
-        # Step 2a — load user (Redis cache → DB fallback)
+        # Step 2a - load user (Redis cache -> DB fallback)
         user = await _get_user_cached(user_uuid, user_id_str)
         if user is _USER_DB_ERROR:
             return _unauthorized(request, "internal_error")
 
-        # Step 2b — existence
+        # Step 2b - existence
         if not user:
             logger.warning("auth JWT user_not_found user_id=%s path=%s",
                            user_id_str, request.url.path)
             return _unauthorized(request, "invalid_token")
 
-        # Step 2c — active
+        # Step 2c - active
         if not user.is_active:
             logger.warning("auth JWT user_disabled user_id=%s path=%s",
                            user_id_str, request.url.path)
             return _unauthorized(request, "account_disabled")
 
-        # Step 2d — tenant_id present
+        # Step 2d - tenant_id present
         if not user.tenant_id:
             logger.error("auth JWT user_missing_tenant user_id=%s path=%s",
                          user_id_str, request.url.path)
             return _unauthorized(request, "invalid_token")
 
-        # Step 3 — cross-validate tenant_id
+        # Step 3 - cross-validate tenant_id
         if str(user.tenant_id) != payload.get("tenant_id"):
             logger.error(
                 "auth JWT tenant_mismatch user_id=%s "
@@ -452,7 +452,7 @@ class AuthMiddleware(BaseHTTPMiddleware):
             )
             return _unauthorized(request, "invalid_token")
 
-        # Step 3b — dept_id mismatch log (warning only)
+        # Step 3b - dept_id mismatch log (warning only)
         token_dept = payload.get("dept_id")
         db_dept    = str(user.dept_id) if user.dept_id else None
         if token_dept != db_dept:
@@ -461,7 +461,7 @@ class AuthMiddleware(BaseHTTPMiddleware):
                 user_id_str, token_dept, db_dept,
             )
 
-        # Step 4 — token version check
+        # Step 4 - token version check
         if payload.get("ver") != user.token_version:
             logger.warning(
                 "auth_event SESSION_EXPIRED user_id=%s reason=session_invalidated "
@@ -480,7 +480,7 @@ class AuthMiddleware(BaseHTTPMiddleware):
                 }},
             )
 
-        # Step 5 — populate request.state from DB values
+        # Step 5 - populate request.state from DB values
         request.state.principal_type = "user"
         request.state.key_id         = f"user:{user.id}"
         request.state.key_name       = user.email
@@ -492,7 +492,7 @@ class AuthMiddleware(BaseHTTPMiddleware):
         request.state.user_id        = str(user.id)
         request.state.user_role      = user.role
 
-        # Step 6 — force_password_change enforcement
+        # Step 6 - force_password_change enforcement
         if user.force_password_change and request.url.path not in FORCE_CHANGE_ALLOWED:
             return JSONResponse(
                 status_code=403,

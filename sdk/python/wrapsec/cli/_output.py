@@ -5,7 +5,7 @@
 """
 Shared output helpers for CLI commands.
 
-Internal module — not part of public API.
+Internal module - not part of public API.
 
 All errors go to stderr. Normal output goes to stdout.
 Spec: Section 10.4 rule 7
@@ -23,7 +23,7 @@ from wrapsec.models import ScanResult
 
 def print_error(message: str) -> None:
     """Print error message to stderr. Never to stdout."""
-    click.secho(f"❌ {message}", fg="red", err=True)
+    click.secho(f" {message}", fg="red", err=True)
 
 
 def print_warning(message: str) -> None:
@@ -33,12 +33,12 @@ def print_warning(message: str) -> None:
 
 def print_success(message: str) -> None:
     """Print success message to stdout."""
-    click.secho(f"✔ {message}", fg="green")
+    click.secho(f" {message}", fg="green")
 
 
 def print_json(data: object) -> None:
     """
-    Print pure JSON to stdout. Nothing else — no prefix, no suffix.
+    Print pure JSON to stdout. Nothing else - no prefix, no suffix.
     Spec: Section 12.4 (JSON mode contract)
     """
     click.echo(json.dumps(data, indent=2, default=str))
@@ -74,14 +74,14 @@ def format_scan_result_human(result: ScanResult, quiet: bool) -> None:
         click.echo(f"Threats:    {', '.join(result.threats)}")
 
     if result.decision == "SANITIZE":
-        # Never show sanitized_input content — just inform that redaction occurred
+        # Never show sanitized_input content - just inform that redaction occurred
         # Spec: Section 10.4 rule 4
         click.echo("Sanitized:  Input contained PII and was sanitized.")
 
     if result.is_system_error:
-        # Spec: Section 12.5 — explicit warning for SYSTEM_ERROR
+        # Spec: Section 12.5 - explicit warning for SYSTEM_ERROR
         print_warning(
-            f"Infrastructure error — detection did not complete. "
+            f"Infrastructure error - detection did not complete. "
             f"This result may be unreliable. "
             f"Contact your WrapSec administrator and reference trace ID: {result.trace_id}",
         )

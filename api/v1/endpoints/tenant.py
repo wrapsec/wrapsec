@@ -29,8 +29,8 @@ def _format(tenant, is_admin: bool = False) -> dict:
     return result
 
 
-# ── Policy schema — mirrors system_defaults() in policy_resolver.py ──────────
-# All fields optional — only provided keys are merged into the active policy.
+# ── Policy schema - mirrors system_defaults() in policy_resolver.py ──────────
+# All fields optional - only provided keys are merged into the active policy.
 # extra="forbid" rejects unknown keys, preventing injection of arbitrary fields.
 
 class _ThresholdsPolicy(BaseModel):
@@ -99,7 +99,7 @@ async def get_tenant(
     _principal: Principal    = Depends(get_current_principal),
 ):
     """
-    Returns tenant profile. global_policy is only returned to admin principals —
+    Returns tenant profile. global_policy is only returned to admin principals -
     non-admins see metadata without the security policy configuration.
     Auth: any valid principal.
     """

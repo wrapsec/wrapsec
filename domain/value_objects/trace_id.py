@@ -18,7 +18,7 @@ class TraceId:
     def _generate_ulid() -> str:
         """
         Generate a ULID-based identifier.
-        Lexicographically sortable by time — better for DB indexing
+        Lexicographically sortable by time - better for DB indexing
         and audit log ordering than random hex.
         Falls back to random hex if python-ulid not installed.
         """
@@ -26,7 +26,7 @@ class TraceId:
             from ulid import ULID
             return str(ULID()).lower()
         except ImportError:
-            # Fallback — full 128-bit random hex for collision safety
+            # Fallback - full 128-bit random hex for collision safety
             return uuid.uuid4().hex
 
     @property

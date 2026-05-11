@@ -84,10 +84,10 @@ class Client:
         """
         self._config: WrapSecConfig = load_config()
 
-        # Resolve api_key: constructor arg → env/file (already in config)
+        # Resolve api_key: constructor arg -> env/file (already in config)
         self._api_key: str | None = api_key if api_key is not None else self._config.api_key
 
-        # Resolve base_url: constructor arg → env/file → default
+        # Resolve base_url: constructor arg -> env/file -> default
         self._base_url: str = (
             (base_url or "").rstrip("/")
             or self._config.base_url
@@ -160,13 +160,13 @@ class Client:
         text:           The prompt or user input to scan. Max 8000 chars.
         mode:           "fast" (default) or "full" (adds LLM analysis, ~100-500ms extra).
         execution_mode: "scan_only" (default) or "proxy" (scan + forward to LLM provider).
-        model:          LLM model identifier — required when execution_mode="proxy".
+        model:          LLM model identifier - required when execution_mode="proxy".
         user:           User ID for audit attribution. Defaults to "sdk".
                         CLI overrides this with the --user flag or "cli".
         timeout:        Per-request timeout in seconds (min 1).
                         Overrides client default for this call only.
 
-        Returns ScanResult. BLOCK is not an exception — check result.decision.
+        Returns ScanResult. BLOCK is not an exception - check result.decision.
 
         Spec: Section 4, Section 8 (WrapSecBlockError not raised automatically)
         """
@@ -205,7 +205,7 @@ class Client:
         """
         Retrieve the full audit record for a single request by trace ID.
         Includes proxy enrichment data when execution_mode is "proxy".
-        Scoped to the caller's dept/tenant — 404 if out of scope.
+        Scoped to the caller's dept/tenant - 404 if out of scope.
 
         Returns a raw dict (structure varies by execution_mode).
         """
@@ -228,7 +228,7 @@ class Client:
     ) -> bytes:
         """
         Export audit logs as CSV bytes for compliance reporting (up to 10,000 rows).
-        Scope is bounded by the API key used — non-admin keys are limited to their dept.
+        Scope is bounded by the API key used - non-admin keys are limited to their dept.
 
         Returns raw CSV bytes. Write to a file or decode as needed:
             data = client.audit_export()
@@ -316,7 +316,7 @@ class Client:
     def audit_get(self, trace_id: str, timeout: int | None = None) -> AuditLog:
         """
         Retrieve a single audit log entry by trace ID. Read-only.
-        Uses the list endpoint with trace_id filter — no dedicated detail endpoint.
+        Uses the list endpoint with trace_id filter - no dedicated detail endpoint.
 
         Spec: Section 13.2 (wrapsec audit get)
         """
@@ -351,7 +351,7 @@ class Client:
     def settings_get(self, timeout: int | None = None) -> dict[str, Any]:
         """
         Retrieve active gateway configuration. Read-only.
-        Returns raw dict — no model wrapping (structure varies by config source).
+        Returns raw dict - no model wrapping (structure varies by config source).
 
         Spec: Section 13.2 (wrapsec settings get)
         """
@@ -369,7 +369,7 @@ class Client:
     def keys_list(self, timeout: int | None = None) -> list[dict[str, Any]]:
         """
         List API keys visible to the current key. Read-only.
-        Does NOT return key secrets — never retrievable after creation.
+        Does NOT return key secrets - never retrievable after creation.
 
         Spec: Section 13.2 (wrapsec keys list)
         """

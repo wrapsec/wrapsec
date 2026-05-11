@@ -29,9 +29,9 @@ class PolicyEngine:
       Guardrail scores never contribute to the detection risk score.
 
     Detection-based decision (applied only if no guardrail triggers):
-      score >= block_threshold    → BLOCK
-      score >= sanitize_threshold → SANITIZE
-      score <  sanitize_threshold → ALLOW
+      score >= block_threshold    -> BLOCK
+      score >= sanitize_threshold -> SANITIZE
+      score <  sanitize_threshold -> ALLOW
     """
 
     def __init__(self, rules: PolicyRules | None = None):
@@ -63,21 +63,21 @@ class PolicyEngine:
         try:
             score = risk_score.value
 
-            # Detection thresholds — use is-None check; 0.0 is a valid threshold
+            # Detection thresholds - use is-None check; 0.0 is a valid threshold
             bt = self.rules.block_threshold    if block_threshold    is None else block_threshold
             st = self.rules.sanitize_threshold if sanitize_threshold is None else sanitize_threshold
 
             if bt < st:
                 logger.warning(
                     f"PolicyEngine misconfiguration: block_threshold ({bt}) < "
-                    f"sanitize_threshold ({st}) — SANITIZE decision is unreachable"
+                    f"sanitize_threshold ({st}) - SANITIZE decision is unreachable"
                 )
 
             # PII guardrail thresholds
             pii_bt = pii_block_threshold    if pii_block_threshold    is not None else bt
             pii_st = pii_sanitize_threshold if pii_sanitize_threshold is not None else st
 
-            # Toxicity guardrail thresholds — default to same as detection
+            # Toxicity guardrail thresholds - default to same as detection
             tox_bt = toxicity_block_threshold    if toxicity_block_threshold    is not None else bt
             tox_st = toxicity_sanitize_threshold if toxicity_sanitize_threshold is not None else st
 
@@ -121,7 +121,7 @@ class PolicyEngine:
             )
 
         except Exception as e:
-            logger.error(f"PolicyEngine failed: {e} — defaulting to BLOCK")
+            logger.error(f"PolicyEngine failed: {e} - defaulting to BLOCK")
             return PolicyDecision(
                 decision   = DecisionType.BLOCK,
                 risk_score = risk_score,
@@ -133,7 +133,7 @@ class PolicyEngine:
         rules.validate()
         self.rules = rules
         logger.info(
-            f"PolicyEngine rules updated — "
+            f"PolicyEngine rules updated - "
             f"block={rules.block_threshold} "
             f"sanitize={rules.sanitize_threshold}"
         )
