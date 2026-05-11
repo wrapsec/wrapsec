@@ -8,6 +8,8 @@ Fixtures (auth_client, auth_setup) auto-injected from conftest.py.
 Users are created in PostgreSQL so JWT middleware can find them.
 """
 import pytest
+from sqlalchemy.ext.asyncio import create_async_engine, async_sessionmaker, AsyncSession
+from sqlalchemy.pool import NullPool
 from config.settings import get_settings
 
 settings = get_settings()
@@ -281,3 +283,371 @@ async def test_logout_success(auth_client, auth_setup):
 async def test_logout_requires_jwt(auth_client, auth_setup):
     response = await auth_client.post("/v1/auth/logout")
     assert response.status_code == 401
+
+
+@pytest.mark.asyncio
+async def test_logout_clears_refresh_cookie(auth_client, auth_setup):
+    """Logout must set refresh_token cookie to empty with max-age=0."""
+    email    = auth_setup["admin_user"].email
+    login_r  = await auth_client.post(
+        "/v1/auth/login",
+        json={"email": email, "password": "TestPass1!"},
+    )
+    assert login_r.status_code == 200
+    token    = login_r.json()["access_token"]
+
+    logout_r = await auth_client.post(
+        "/v1/auth/logout",
+        headers={"Authorization": f"Bearer {token}"},
+    )
+    assert logout_r.status_code == 200
+    set_cookie = logout_r.headers.get("set-cookie", "")
+    assert "refresh_token" in set_cookie
+    assert "max-age=0" in set_cookie.lower()
+
+
+# ── Account lockout ────────────────────────────────────────────────────────────
+
+@pytest.mark.asyncio
+async def test_login_lockout_after_max_attempts(auth_client, auth_setup):
+    """N wrong passwords lock the account - further attempts return 401."""
+    email = auth_setup["admin_user"].email
+    for _ in range(settings.auth_max_failed_attempts):
+        r = await auth_client.post(
+            "/v1/auth/login",
+            json={"email": email, "password": "WrongPass1!"},
+        )
+        assert r.status_code == 401
+
+    # Account now locked - correct password still returns 401
+    r = await auth_client.post(
+        "/v1/auth/login",
+        json={"email": email, "password": "TestPass1!"},
+    )
+    assert r.status_code == 401
+    assert r.json()["error"]["code"] == "INVALID_CREDENTIALS"
+
+
+@pytest.mark.asyncio
+async def test_login_lockout_does_not_leak_locked_status(auth_client, auth_setup):
+    """Locked account returns identical message to wrong password - no enumeration."""
+    email = auth_setup["dev_user"].email
+    for _ in range(settings.auth_max_failed_attempts):
+        await auth_client.post(
+            "/v1/auth/login",
+            json={"email": email, "password": "WrongPass1!"},
+        )
+
+    r = await auth_client.post(
+        "/v1/auth/login",
+        json={"email": email, "password": "TestPass1!"},
+    )
+    assert r.status_code == 401
+    assert r.json()["error"]["message"] == "Invalid email or password"
+
+
+@pytest.mark.asyncio
+async def test_login_lockout_clears_on_success(auth_client, auth_setup):
+    """Failure counter clears after a successful login."""
+    email = auth_setup["viewer_user"].email
+
+    # Fail one short of lockout
+    for _ in range(settings.auth_max_failed_attempts - 1):
+        await auth_client.post(
+            "/v1/auth/login",
+            json={"email": email, "password": "WrongPass1!"},
+        )
+
+    # Successful login - clears the counter
+    r = await auth_client.post(
+        "/v1/auth/login",
+        json={"email": email, "password": "TestPass1!"},
+    )
+    assert r.status_code == 200
+
+    # Wrong password again - counter reset, so no lockout yet
+    r = await auth_client.post(
+        "/v1/auth/login",
+        json={"email": email, "password": "WrongPass1!"},
+    )
+    assert r.status_code == 401
+    assert r.json()["error"]["code"] == "INVALID_CREDENTIALS"
+
+
+# ── Inactive user ──────────────────────────────────────────────────────────────
+
+@pytest.mark.asyncio
+async def test_login_inactive_user_401(auth_client, auth_setup):
+    """Inactive account returns 401 with identical message - no status leak."""
+    import uuid
+    from db.session import AsyncSessionFactory
+    from db.repositories.user import UserRepository
+    from db.models import UserModel, RefreshTokenModel
+    from services.auth.password import hash_password, normalize_email
+    from sqlalchemy import delete as sa_delete
+
+    tenant = auth_setup["tenant"]
+    dept   = auth_setup["dept"]
+    email  = normalize_email(f"inactive-{uuid.uuid4().hex[:6]}@test.com")
+
+    engine = create_async_engine(settings.database_url, poolclass=NullPool)
+    sf     = async_sessionmaker(bind=engine, class_=AsyncSession, expire_on_commit=False)
+    user_id = None
+    try:
+        async with sf() as db:
+            repo = UserRepository(db)
+            u    = await repo.create({
+                "tenant_id":             tenant.id,
+                "dept_id":               dept.id,
+                "email":                 email,
+                "password_hash":         hash_password("TestPass1!"),
+                "role":                  "VIEWER",
+                "force_password_change": False,
+                "is_active":             False,
+            })
+            await db.commit()
+            user_id = u.id
+    finally:
+        await engine.dispose()
+
+    r = await auth_client.post(
+        "/v1/auth/login",
+        json={"email": email, "password": "TestPass1!"},
+    )
+
+    # Cleanup
+    engine2 = create_async_engine(settings.database_url, poolclass=NullPool)
+    sf2     = async_sessionmaker(bind=engine2, class_=AsyncSession, expire_on_commit=False)
+    try:
+        async with sf2() as db:
+            await db.execute(sa_delete(RefreshTokenModel).where(RefreshTokenModel.user_id == user_id))
+            await db.execute(sa_delete(UserModel).where(UserModel.id == user_id))
+            await db.commit()
+    finally:
+        await engine2.dispose()
+
+    assert r.status_code == 401
+    assert r.json()["error"]["code"] == "INVALID_CREDENTIALS"
+    assert r.json()["error"]["message"] == "Invalid email or password"
+
+
+# ── Email normalisation ────────────────────────────────────────────────────────
+
+@pytest.mark.asyncio
+async def test_login_case_insensitive_email(auth_client, auth_setup):
+    """Login with uppercase email must succeed - email is normalised before lookup."""
+    email_lower = auth_setup["admin_user"].email
+    email_upper = email_lower.upper()
+    r = await auth_client.post(
+        "/v1/auth/login",
+        json={"email": email_upper, "password": "TestPass1!"},
+    )
+    assert r.status_code == 200
+
+
+@pytest.mark.asyncio
+async def test_login_email_whitespace_stripped(auth_client, auth_setup):
+    """Leading/trailing whitespace in email is stripped before lookup."""
+    email = auth_setup["admin_user"].email
+    r     = await auth_client.post(
+        "/v1/auth/login",
+        json={"email": f"  {email}  ", "password": "TestPass1!"},
+    )
+    assert r.status_code == 200
+
+
+# ── Token refresh ──────────────────────────────────────────────────────────────
+
+@pytest.mark.asyncio
+async def test_refresh_returns_new_access_token(auth_client, auth_setup):
+    """Refresh with valid cookie returns new access token."""
+    email   = auth_setup["admin_user"].email
+    login_r = await auth_client.post(
+        "/v1/auth/login",
+        json={"email": email, "password": "TestPass1!"},
+    )
+    assert login_r.status_code == 200
+    raw_cookie = login_r.cookies.get("refresh_token")
+    assert raw_cookie, "refresh_token cookie missing after login"
+
+    refresh_r = await auth_client.post(
+        "/v1/auth/refresh",
+        cookies={"refresh_token": raw_cookie},
+    )
+    assert refresh_r.status_code == 200
+    data = refresh_r.json()
+    assert "access_token" in data
+    assert data["token_type"] == "bearer"
+    assert "expires_in" in data
+
+
+@pytest.mark.asyncio
+async def test_refresh_rotates_cookie(auth_client, auth_setup):
+    """Refresh must set a new refresh_token cookie (token rotation)."""
+    email   = auth_setup["dev_user"].email
+    login_r = await auth_client.post(
+        "/v1/auth/login",
+        json={"email": email, "password": "TestPass1!"},
+    )
+    raw_cookie = login_r.cookies.get("refresh_token")
+
+    refresh_r = await auth_client.post(
+        "/v1/auth/refresh",
+        cookies={"refresh_token": raw_cookie},
+    )
+    assert refresh_r.status_code == 200
+    assert "refresh_token" in refresh_r.cookies
+
+
+@pytest.mark.asyncio
+async def test_refresh_old_token_rejected_after_rotation(auth_client, auth_setup):
+    """After rotation the original refresh token must be invalid."""
+    email   = auth_setup["viewer_user"].email
+    login_r = await auth_client.post(
+        "/v1/auth/login",
+        json={"email": email, "password": "TestPass1!"},
+    )
+    raw_cookie = login_r.cookies.get("refresh_token")
+
+    # First refresh - rotates token
+    r1 = await auth_client.post(
+        "/v1/auth/refresh",
+        cookies={"refresh_token": raw_cookie},
+    )
+    assert r1.status_code == 200
+
+    # Replaying original token must fail
+    r2 = await auth_client.post(
+        "/v1/auth/refresh",
+        cookies={"refresh_token": raw_cookie},
+    )
+    assert r2.status_code == 401
+
+
+@pytest.mark.asyncio
+async def test_refresh_without_cookie_401(auth_client, auth_setup):
+    """Refresh with no cookie returns 401."""
+    r = await auth_client.post("/v1/auth/refresh")
+    assert r.status_code == 401
+    assert r.json()["error"]["code"] == "INVALID_TOKEN"
+
+
+# ── Session invalidation ───────────────────────────────────────────────────────
+
+@pytest.mark.asyncio
+async def test_old_token_rejected_after_password_change(auth_client, auth_setup):
+    """JWT issued before password change must be rejected after change."""
+    email     = auth_setup["dev_user"].email
+    login_r   = await auth_client.post(
+        "/v1/auth/login",
+        json={"email": email, "password": "TestPass1!"},
+    )
+    old_token = login_r.json()["access_token"]
+
+    # Change password - increments token_version
+    await auth_client.post(
+        "/v1/auth/change-password",
+        json={"current_password": "TestPass1!", "new_password": "NewPass2026!"},
+        headers={"Authorization": f"Bearer {old_token}"},
+    )
+
+    # Old token must now be rejected
+    r = await auth_client.get(
+        "/v1/auth/me",
+        headers={"Authorization": f"Bearer {old_token}"},
+    )
+    assert r.status_code == 401
+
+
+# ── Admin password reset ───────────────────────────────────────────────────────
+
+@pytest.mark.asyncio
+async def test_admin_reset_password_sets_force_change(auth_client, auth_setup):
+    """Admin reset must set force_password_change=True and allow login."""
+    admin_token = auth_setup["admin_token"]
+    target_id   = str(auth_setup["dev_user"].id)
+    target_email = auth_setup["dev_user"].email
+
+    r = await auth_client.post(
+        f"/v1/admin/users/{target_id}/reset-password",
+        json={"new_password": "ResetPass1!"},
+        headers={"Authorization": f"Bearer {admin_token}"},
+    )
+    assert r.status_code == 200
+
+    # Login with new password must succeed
+    login_r = await auth_client.post(
+        "/v1/auth/login",
+        json={"email": target_email, "password": "ResetPass1!"},
+    )
+    assert login_r.status_code == 200
+    assert login_r.json()["force_password_change"] is True
+
+
+@pytest.mark.asyncio
+async def test_admin_reset_invalidates_existing_sessions(auth_client, auth_setup):
+    """Sessions active before admin reset must be rejected after."""
+    admin_token  = auth_setup["admin_token"]
+    target_email = auth_setup["viewer_user"].email
+    target_id    = str(auth_setup["viewer_user"].id)
+
+    # Get a valid token for the target user
+    login_r = await auth_client.post(
+        "/v1/auth/login",
+        json={"email": target_email, "password": "TestPass1!"},
+    )
+    old_token = login_r.json()["access_token"]
+
+    # Admin resets password - invalidates all sessions
+    await auth_client.post(
+        f"/v1/admin/users/{target_id}/reset-password",
+        json={"new_password": "ResetPass1!"},
+        headers={"Authorization": f"Bearer {admin_token}"},
+    )
+
+    # Old token must now be rejected
+    r = await auth_client.get(
+        "/v1/auth/me",
+        headers={"Authorization": f"Bearer {old_token}"},
+    )
+    assert r.status_code == 401
+
+
+@pytest.mark.asyncio
+async def test_admin_create_user_sets_force_password_change(auth_client, auth_setup):
+    """New users created by admin must have force_password_change=True."""
+    import uuid
+    from db.models import UserModel, RefreshTokenModel
+    from sqlalchemy import delete as sa_delete
+
+    admin_token = auth_setup["admin_token"]
+    dept_id     = str(auth_setup["dept"].id)
+    new_email   = f"newuser-{uuid.uuid4().hex[:6]}@test.com"
+
+    r = await auth_client.post(
+        "/v1/admin/users",
+        json={
+            "email":    new_email,
+            "password": "TempPass1!",
+            "role":     "DEVELOPER",
+            "dept_id":  dept_id,
+        },
+        headers={"Authorization": f"Bearer {admin_token}"},
+    )
+    assert r.status_code == 201
+    data = r.json()
+    assert data["force_password_change"] is True
+    new_user_id = uuid.UUID(data["id"])
+
+    # Cleanup
+    from db.models import AdminEventModel
+    engine = create_async_engine(settings.database_url, poolclass=NullPool)
+    sf     = async_sessionmaker(bind=engine, class_=AsyncSession, expire_on_commit=False)
+    try:
+        async with sf() as db:
+            await db.execute(sa_delete(RefreshTokenModel).where(RefreshTokenModel.user_id == new_user_id))
+            await db.execute(sa_delete(AdminEventModel).where(AdminEventModel.target_user_id == new_user_id))
+            await db.execute(sa_delete(UserModel).where(UserModel.id == new_user_id))
+            await db.commit()
+    finally:
+        await engine.dispose()
