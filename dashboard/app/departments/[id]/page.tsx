@@ -263,8 +263,8 @@ export default function DepartmentDetailPage() {
             {[
               { label: "Name",          value: dept.name },
               { label: "Slug",          value: dept.slug },
-              { label: "Description",   value: dept.description   || "—" },
-              { label: "Contact email", value: dept.contact_email || "—" },
+              { label: "Description",   value: dept.description   || "-" },
+              { label: "Contact email", value: dept.contact_email || "-" },
               { label: "Status",        value: dept.is_active ? "Active" : "Inactive" },
               { label: "Created",       value: new Date(dept.created_at).toLocaleDateString() },
             ].map(({ label, value }) => (
@@ -310,7 +310,7 @@ export default function DepartmentDetailPage() {
               </div>
               {dept.policy_override === null && (
                 <p className="text-xs text-slate-400 pt-1">
-                  No overrides set — this department uses the global policy.
+                  No overrides set - this department uses the global policy.
                 </p>
               )}
             </div>
@@ -496,7 +496,7 @@ export default function DepartmentDetailPage() {
                   ))}
                 </>
               ) : (
-                <p className="text-xs text-slate-400">No override — API keys must have their own proxy configuration.</p>
+                <p className="text-xs text-slate-400">No override - API keys must have their own proxy configuration.</p>
               )}
             </div>
           ) : (

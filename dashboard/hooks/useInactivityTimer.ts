@@ -10,7 +10,7 @@
  * Events tracked: mousemove, mousedown, keydown, touchstart, scroll,
  * visibilitychange (tab switching counts as inactivity when tab is hidden).
  *
- * On timeout: logout("inactivity") → redirect /login
+ * On timeout: logout("inactivity") -> redirect /login
  * See session_management.md §hooks/useInactivityTimer.ts
  */
 "use client"
@@ -58,7 +58,7 @@ export function useInactivityTimer() {
     showWarningRef.current = false
     setShowWarning(false)
 
-    // Warning timer — fires at TIMEOUT - WARNING threshold
+    // Warning timer - fires at TIMEOUT - WARNING threshold
     warningRef.current = setTimeout(() => {
       showWarningRef.current = true
       setShowWarning(true)
@@ -102,7 +102,7 @@ export function useInactivityTimer() {
       if (e.type === "visibilitychange" && document.visibilityState === "hidden") {
         return
       }
-      // Only reset if warning is not showing — once warning shows,
+      // Only reset if warning is not showing - once warning shows,
       // user must explicitly click "Stay logged in".
       // Use ref (not state) to avoid reading a stale closure value.
       if (!showWarningRef.current) {
@@ -120,7 +120,7 @@ export function useInactivityTimer() {
         window.removeEventListener(event, handleActivity)
       })
     }
-  }, [])   // run once on mount — startTimers ref is stable
+  }, [])   // run once on mount - startTimers ref is stable
 
   return { showWarning, secondsRemaining, resetTimer, logoutNow }
 }

@@ -2,7 +2,7 @@
 // Copyright (c) 2026 WrapSec. All rights reserved.
 // WrapSec v1.0 | AI Security Gateway - https://wrapsec.com
 /**
- * useTimeRange — shared time range hook for Overview and Analytics pages.
+ * useTimeRange - shared time range hook for Overview and Analytics pages.
  *
  * Supports preset ranges (24h, 7d, 30d, 90d) and a "custom" mode where
  * the caller provides explicit YYYY-MM-DD from/to dates.
@@ -34,13 +34,13 @@ interface UseTimeRangeResult {
   range:         TimeRange
   setRange:      (r: TimeRange) => void
   options:       TimeRange[]
-  from:          string             // debounced — use for API calls
-  to:            string             // debounced — use for API calls
+  from:          string             // debounced - use for API calls
+  to:            string             // debounced - use for API calls
   customFrom:    string             // raw input value for date picker
   customTo:      string             // raw input value for date picker
   setCustomFrom: (v: string) => void
   setCustomTo:   (v: string) => void
-  customError:   string | null      // validation message — show in UI when non-null
+  customError:   string | null      // validation message - show in UI when non-null
 }
 
 const DEFAULT_OPTIONS: TimeRange[] = ["24h", "7d", "30d"]

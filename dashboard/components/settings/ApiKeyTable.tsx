@@ -23,7 +23,7 @@ export function ApiKeyTable({ keys, onRevoke, onRotate, revoking, canWrite = tru
   if (keys.length === 0) {
     return (
       <div style={{ padding: "48px 16px", textAlign: "center" }}>
-        <div style={{ fontSize: "20px", marginBottom: "8px" }}>🔑</div>
+        <div style={{ fontSize: "20px", marginBottom: "8px" }}></div>
         <div style={{ fontSize: "13px", fontWeight: 600, color: "#374151", marginBottom: "4px" }}>No API keys yet</div>
         <div style={{ fontSize: "12px", color: "#9ca3af" }}>Create a key to start sending requests to the gateway</div>
       </div>
@@ -44,11 +44,11 @@ export function ApiKeyTable({ keys, onRevoke, onRotate, revoking, canWrite = tru
   return (
     <div className="space-y-3">
 
-      {/* New key banner — shown once after rotation */}
+      {/* New key banner - shown once after rotation */}
       {rotatedKey && (
         <div className="p-3 bg-emerald-50 border border-emerald-200 rounded-lg">
           <p className="text-xs font-semibold text-emerald-800 mb-1">
-            Key rotated — copy the new key now. It will not be shown again.
+            Key rotated - copy the new key now. It will not be shown again.
           </p>
           <div className="flex items-center gap-2">
             <code className="flex-1 text-xs font-mono text-emerald-900 bg-emerald-100 px-2 py-1.5 rounded break-all">
@@ -95,7 +95,7 @@ export function ApiKeyTable({ keys, onRevoke, onRotate, revoking, canWrite = tru
         <tbody>
           {keys.map((key) => {
             // Grace period is only active if expires_at is set AND in the future
-            // expires_at from API has no timezone — treat as UTC
+            // expires_at from API has no timezone - treat as UTC
             const inGrace = !!key.expires_at && new Date(key.expires_at + "Z") > new Date()
 
             return (
@@ -114,7 +114,7 @@ export function ApiKeyTable({ keys, onRevoke, onRotate, revoking, canWrite = tru
                         )}
                         {inGrace && (
                           <span className="text-xs px-1.5 py-0.5 rounded-full bg-amber-50 text-amber-700 border border-amber-200 whitespace-nowrap w-fit">
-                            Expiring — grace period active
+                            Expiring - grace period active
                           </span>
                         )}
                       </div>
@@ -129,7 +129,7 @@ export function ApiKeyTable({ keys, onRevoke, onRotate, revoking, canWrite = tru
                     {key.dept_name || (key.dept_id ? (
                       <span className="font-mono">{key.dept_id.slice(0, 8)}...</span>
                     ) : (
-                      <span className="text-slate-300">—</span>
+                      <span className="text-slate-300">-</span>
                     ))}
                   </td>
 
@@ -150,7 +150,7 @@ export function ApiKeyTable({ keys, onRevoke, onRotate, revoking, canWrite = tru
                   {/* Actions */}
                   <td className="py-3 text-right">
                     <div className="flex items-center justify-end gap-2">
-                      {/* Rotate — hidden for API key sessions */}
+                      {/* Rotate - hidden for API key sessions */}
                       {canWrite && <button
                         onClick={() => setGraceInput(key.key_id)}
                         disabled={rotating === key.key_id || !!revoking || inGrace}
@@ -163,7 +163,7 @@ export function ApiKeyTable({ keys, onRevoke, onRotate, revoking, canWrite = tru
                         {rotating === key.key_id ? "Rotating..." : "Rotate"}
                       </button>}
 
-                      {/* Revoke — hidden for API key sessions; two-step inline confirm */}
+                      {/* Revoke - hidden for API key sessions; two-step inline confirm */}
                       {canWrite && (
                         confirmRevoke === key.key_id ? (
                           <div className="flex items-center gap-2">
@@ -188,7 +188,7 @@ export function ApiKeyTable({ keys, onRevoke, onRotate, revoking, canWrite = tru
                             loading={revoking === key.key_id}
                             onClick={() => { setGraceInput(null); setConfirmRevoke(key.key_id) }}
                             title={inGrace
-                              ? "Immediately revokes this key — integrations still using it will stop working now"
+                              ? "Immediately revokes this key - integrations still using it will stop working now"
                               : "Revoke this key permanently"
                             }
                           >

@@ -19,7 +19,7 @@ import { getAuditLogs, exportAuditLogs, getDepartments } from "@/lib/api"
 function RequestsPageInner() {
   const searchParams = useSearchParams()
 
-  // URL param sanitisation — validated against constants derived from types.ts.
+  // URL param sanitisation - validated against constants derived from types.ts.
   // If decision/threat/mode types change, update VALID_* in lib/constants.ts.
   const sanitise     = (val: string | null, allowlist: string[]) =>
     val && allowlist.includes(val) ? val : ""
@@ -104,10 +104,10 @@ function RequestsPageInner() {
     <Shell title="Requests">
       <div style={{ display: "flex", flexDirection: "column", gap: "16px" }}>
 
-        {/* Toolbar row — filters left, actions right */}
+        {/* Toolbar row - filters left, actions right */}
         <div style={{ display: "flex", alignItems: "flex-start", gap: "12px" }}>
 
-          {/* Filters — takes all available space */}
+          {/* Filters - takes all available space */}
           <RequestFilters
             traceId={traceId}         decision={decision}
             threatCategory={threatCategory} executionMode={executionMode}
@@ -125,7 +125,7 @@ function RequestsPageInner() {
             onSortOrder={v => { setSortOrder(v as "asc" | "desc"); setOffset(0) }}
           />
 
-          {/* Actions — fixed right side */}
+          {/* Actions - fixed right side */}
           <div style={{
             display:        "flex",
             alignItems:     "center",
@@ -199,7 +199,7 @@ function RequestsPageInner() {
                     <circle style={{ opacity: 0.25 }} cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"/>
                     <path style={{ opacity: 0.75 }} fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z"/>
                   </svg>
-                  Exporting…
+                  Exporting
                 </>
               ) : (
                 <>

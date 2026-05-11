@@ -103,7 +103,7 @@ export default function SetupPage() {
         boxShadow: "0 25px 60px rgba(0,0,0,0.5), 0 0 0 1px rgba(255,255,255,0.08)",
       }}>
 
-        {/* Left panel — brand */}
+        {/* Left panel - brand */}
         <div style={{
           background: "linear-gradient(135deg, #0d1526 0%, #1a0a3d 100%)",
           backgroundImage: "radial-gradient(ellipse at 30% 40%, rgba(103,15,239,0.30) 0%, transparent 60%)",
@@ -142,13 +142,13 @@ export default function SetupPage() {
               Welcome to<br />WrapSec.
             </h2>
             <p style={{ fontSize: "13px", color: "rgba(255,255,255,0.45)", margin: 0, lineHeight: 1.6 }}>
-              Create your admin account to get started. This setup runs once — the page is disabled after your first login.
+              Create your admin account to get started. This setup runs once - the page is disabled after your first login.
             </p>
           </div>
 
           <div style={{ display: "flex", flexDirection: "column", gap: "10px" }}>
             {[
-              { icon: "M9 12l2 2 4-4m5.618-4.016A11.955 11.955 0 0112 2.944a11.955 11.955 0 01-8.618 3.04A12.02 12.02 0 003 9c0 5.591 3.824 10.29 9 11.622 5.176-1.332 9-6.03 9-11.622 0-1.042-.133-2.052-.382-3.016z", label: "No default credentials — you set your own" },
+              { icon: "M9 12l2 2 4-4m5.618-4.016A11.955 11.955 0 0112 2.944a11.955 11.955 0 01-8.618 3.04A12.02 12.02 0 003 9c0 5.591 3.824 10.29 9 11.622 5.176-1.332 9-6.03 9-11.622 0-1.042-.133-2.052-.382-3.016z", label: "No default credentials - you set your own" },
               { icon: "M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z", label: "Setup page permanently disabled after first use" },
               { icon: "M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z", label: "Full admin access from the start" },
             ].map(f => (
@@ -168,7 +168,7 @@ export default function SetupPage() {
           </div>
         </div>
 
-        {/* Right panel — form */}
+        {/* Right panel - form */}
         <div style={{
           background: "#111d35",
           padding: "52px 48px",
@@ -210,7 +210,7 @@ export default function SetupPage() {
               <input
                 type="password" value={password}
                 onChange={e => setPassword(e.target.value)}
-                placeholder="••••••••"
+                placeholder=""
                 autoComplete="new-password" disabled={loading}
                 style={INPUT}
                 onFocus={e => (e.target as HTMLInputElement).style.borderColor = "#670FEF"}
@@ -223,7 +223,7 @@ export default function SetupPage() {
                 type="password" value={confirm}
                 onChange={e => setConfirm(e.target.value)}
                 onKeyDown={e => e.key === "Enter" && handleSetup()}
-                placeholder="••••••••"
+                placeholder=""
                 autoComplete="new-password" disabled={loading}
                 style={INPUT}
                 onFocus={e => (e.target as HTMLInputElement).style.borderColor = "#670FEF"}
@@ -250,7 +250,7 @@ export default function SetupPage() {
                   <path style={{ opacity: 0.75 }} fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" />
                 </svg>
               )}
-              {loading ? "Setting up…" : "Create admin account"}
+              {loading ? "Setting up" : "Create admin account"}
             </button>
           </div>
 

@@ -14,7 +14,7 @@ const COOKIE_SECURE = process.env.COOKIE_SECURE === "true"
  * For JWT sessions: calls POST /v1/auth/logout to revoke refresh token.
  * Forwards reason from request body to backend for auth_events logging.
  *
- * Always clears cookies regardless of backend response — logout must
+ * Always clears cookies regardless of backend response - logout must
  * always succeed from the client's perspective.
  */
 export async function POST(request: NextRequest) {
@@ -30,10 +30,10 @@ export async function POST(request: NextRequest) {
       reason = body.reason
     }
   } catch {
-    // No body or invalid JSON — use default reason
+    // No body or invalid JSON - use default reason
   }
 
-  // Revoke refresh token at backend — forward both JWT (for auth) and
+  // Revoke refresh token at backend - forward both JWT (for auth) and
   // refresh_token cookie (for revocation). Without the cookie, backend
   // skips revocation and the token stays valid until natural expiry.
   if (jwtToken) {
@@ -51,13 +51,13 @@ export async function POST(request: NextRequest) {
         body:    JSON.stringify({ reason }),
       })
     } catch {
-      // Best effort — clear local cookies regardless
+      // Best effort - clear local cookies regardless
     }
   }
 
   const res = NextResponse.json({ success: true })
 
-  // Clear all auth cookies — always, regardless of backend response
+  // Clear all auth cookies - always, regardless of backend response
   const cookieOpts = {
     httpOnly: true,
     secure:   COOKIE_SECURE,

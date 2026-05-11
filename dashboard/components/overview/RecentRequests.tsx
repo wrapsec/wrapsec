@@ -13,7 +13,7 @@ const SEVERITY_STYLE: Record<string, React.CSSProperties> = {
 }
 
 function SeverityBadge({ severity }: { severity: string | null }) {
-  if (!severity) return <span style={{ color: "#d1d5db", fontSize: "12px" }}>—</span>
+  if (!severity) return <span style={{ color: "#d1d5db", fontSize: "12px" }}>-</span>
   const s = SEVERITY_STYLE[severity] ?? { color: "#6b7280", background: "#f9fafb", border: "1px solid #e5e7eb" }
   return (
     <span style={{
@@ -85,7 +85,7 @@ export function RecentRequests({ items, onSelect }: {
                 </td>
                 <td style={{ padding: "10px 16px" }}>
                   {item.threats.length === 0
-                    ? <span style={{ fontSize: "12px", color: "#d1d5db" }}>—</span>
+                    ? <span style={{ fontSize: "12px", color: "#d1d5db" }}>-</span>
                     : <div style={{ display: "flex", gap: "3px", flexWrap: "wrap" }}>
                         {item.threats.slice(0, 2).map(t => <ThreatBadge key={t} threat={t} />)}
                       </div>

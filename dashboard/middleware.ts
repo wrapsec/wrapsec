@@ -10,13 +10,13 @@ import type { NextRequest } from "next/server"
  * Route guard. Checks for any valid session cookie before allowing access.
  *
  * CRITICAL: /api/* paths must NEVER be intercepted by this middleware.
- * API routes handle their own auth and return JSON 401 — not HTML redirects.
+ * API routes handle their own auth and return JSON 401 - not HTML redirects.
  * Intercepting /api/* causes HTML to be returned instead of JSON, breaking
  * all error handling in the frontend (JSON.parse crash).
  *
  * Two valid session states:
- *   wrapsec_api_key — API key auth (existing flow)
- *   wrapsec_session — JWT auth indicator (httpOnly, set on JWT login)
+ *   wrapsec_api_key - API key auth (existing flow)
+ *   wrapsec_session - JWT auth indicator (httpOnly, set on JWT login)
  *
  * wrapsec_jwt is httpOnly and cannot be read here.
  * wrapsec_session is httpOnly and used only by server-side routes.
@@ -34,7 +34,7 @@ const PUBLIC_PATHS = [
 export function middleware(request: NextRequest) {
   const { pathname } = request.nextUrl
 
-  // MUST skip all /api/* routes — they handle own auth, return JSON
+  // MUST skip all /api/* routes - they handle own auth, return JSON
   if (pathname.startsWith("/api/")) {
     return NextResponse.next()
   }

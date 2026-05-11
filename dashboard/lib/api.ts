@@ -35,7 +35,7 @@ async function request<T>(
   // All requests go through Next.js proxy at /api/proxy
   // The proxy route reads wrapsec_api_key or wrapsec_jwt cookie server-side
   // and forwards the appropriate auth header to the backend.
-  // No auth header needed here — the proxy handles it.
+  // No auth header needed here - the proxy handles it.
   const proxyPath = `/api/proxy${path}`
 
   const response = await fetch(proxyPath, {
@@ -47,7 +47,7 @@ async function request<T>(
   })
 
   if (!response.ok) {
-    // ── 401 handling — attempt silent refresh, then redirect ──────────────
+    // ── 401 handling - attempt silent refresh, then redirect ──────────────
     if (response.status === 401 && typeof window !== "undefined") {
 
       // Guard 1: never retry the refresh request itself
@@ -64,7 +64,7 @@ async function request<T>(
         throw new Error("Session expired")
       }
 
-      // Guard 3: logout already in progress — skip refresh
+      // Guard 3: logout already in progress - skip refresh
       if (isLoggingOut) {
         window.location.href = "/login"
         throw new Error("Logging out")
@@ -82,7 +82,7 @@ async function request<T>(
       return request<T>(path, { ...options, _retried: true })
     }
 
-    // ── Non-401 errors — parse safely, show error (do NOT redirect) ───────
+    // ── Non-401 errors - parse safely, show error (do NOT redirect) ───────
     let errMessage = `HTTP ${response.status}`
     const contentType = response.headers.get("content-type") || ""
     if (contentType.includes("application/json")) {
@@ -90,20 +90,20 @@ async function request<T>(
         const error = await response.json()
         errMessage = error?.error?.message || errMessage
       } catch {
-        // not valid JSON — use status code message
+        // not valid JSON - use status code message
       }
     }
-    // 500/502/503 are server errors — user sees error, not login redirect
+    // 500/502/503 are server errors - user sees error, not login redirect
     throw new Error(errMessage)
   }
 
   return response.json()
 }
 
-// ── Setup (unauthenticated — first-run only) ──────────────────
+// ── Setup (unauthenticated - first-run only) ──────────────────
 export async function getSetupStatus(): Promise<{ initialized: boolean }> {
   const res = await fetch("/api/proxy/v1/setup/status")
-  if (!res.ok) return { initialized: true } // fail safe — don't redirect to setup on error
+  if (!res.ok) return { initialized: true } // fail safe - don't redirect to setup on error
   return res.json()
 }
 
@@ -699,7 +699,7 @@ export async function resetUserPassword(
   })
 }
 
-// ── Health — routed through Next.js proxy so it works in Docker ─
+// ── Health - routed through Next.js proxy so it works in Docker ─
 export async function getHealth(): Promise<HealthReadyResponse> {
   const response = await fetch("/api/proxy/health/ready")
   return response.json()

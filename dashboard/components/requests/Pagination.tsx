@@ -27,7 +27,7 @@ export function Pagination({ total, offset, limit, onChange }: PaginationProps) 
       <p style={{ fontSize: "12px", color: "#9ca3af", margin: 0 }}>
         Showing{" "}
         <span style={{ fontWeight: 600, color: "#374151" }}>
-          {(offset + 1).toLocaleString()}–{Math.min(offset + limit, total).toLocaleString()}
+          {(offset + 1).toLocaleString()}-{Math.min(offset + limit, total).toLocaleString()}
         </span>
         {" "}of{" "}
         <span style={{ fontWeight: 600, color: "#374151" }}>

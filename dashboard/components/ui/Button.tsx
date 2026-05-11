@@ -3,7 +3,7 @@
 // WrapSec v1.0 | AI Security Gateway - https://wrapsec.com
 import { cn } from "@/lib/utils"
 
-// Shared icon — import this wherever you need a + in a button
+// Shared icon - import this wherever you need a + in a button
 export function PlusIcon() {
   return (
     <svg style={{ width: 13, height: 13 }} fill="none" stroke="currentColor" strokeWidth={2.5} viewBox="0 0 24 24">

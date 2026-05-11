@@ -361,7 +361,7 @@ function ApiKeyActivityCard({ keys }: { keys: any }) {
                 {k.name}
               </p>
               <p style={{ fontSize: "10px", color: "#9ca3af", margin: "1px 0 0 0" }}>
-                {k.dept_name ?? "—"}
+                {k.dept_name ?? "-"}
               </p>
             </div>
             <div style={{ display: "flex", alignItems: "center", gap: "6px", flexShrink: 0 }}>
@@ -464,7 +464,7 @@ export default function OverviewPage() {
     <Shell title="Overview">
       <div style={{ display: "flex", flexDirection: "column", gap: "16px" }}>
 
-        {/* Time range selector — affects cards, donut, threats, severity */}
+        {/* Time range selector - affects cards, donut, threats, severity */}
         <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
           <p style={{ fontSize: "12px", color: "#9ca3af", margin: 0 }}>
             Request activity ·{" "}
@@ -488,7 +488,7 @@ export default function OverviewPage() {
           </div>
         </div>
 
-        {/* Row 1 — Request summary (time-scoped) */}
+        {/* Row 1 - Request summary (time-scoped) */}
         {stats
           ? <RequestCards stats={stats} from={from} to={to} />
           : <div style={{ display: "grid", gridTemplateColumns: "repeat(4, 1fr)", gap: "14px" }}>
@@ -504,7 +504,7 @@ export default function OverviewPage() {
             </div>
         }
 
-        {/* Row 2 — Donut + Threats (scrollable) + Latency */}
+        {/* Row 2 - Donut + Threats (scrollable) + Latency */}
         {stats && (
           <div style={{ display: "grid", gridTemplateColumns: "1fr 1.6fr 0.9fr", gap: "16px", alignItems: "stretch" }}>
             <DonutChart stats={stats} />
@@ -513,20 +513,20 @@ export default function OverviewPage() {
           </div>
         )}
 
-        {/* Row 3 — Infrastructure + Detection layers + API key activity */}
+        {/* Row 3 - Infrastructure + Detection layers + API key activity */}
         <div style={{ display: "grid", gridTemplateColumns: "1fr 1.4fr 1.4fr", gap: "16px" }}>
           <InfrastructureCard depts={depts} apps={apps} keys={keys} />
           <DetectionLayersCard byReason={byReason} />
           <ApiKeyActivityCard keys={keys} />
         </div>
 
-        {/* Row 4 — Recent requests */}
+        {/* Row 4 - Recent requests */}
         <RecentRequests
           items={logs?.items ?? []}
           onSelect={id => setSelectedId(id)}
         />
 
-        {/* Row 5 — Severity (secondary) */}
+        {/* Row 5 - Severity (secondary) */}
         {stats && <SeveritySummary counts={sev} />}
 
       </div>

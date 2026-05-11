@@ -76,7 +76,7 @@ export default function SystemPage() {
                 ].map(({ label, value }) => (
                   <div key={label} className="bg-slate-50 rounded-lg px-3 py-2.5">
                     <p className="text-xs text-slate-400 mb-0.5">{label}</p>
-                    <p className="text-sm font-mono text-slate-800">{String(value ?? "—")}</p>
+                    <p className="text-sm font-mono text-slate-800">{String(value ?? "-")}</p>
                   </div>
                 ))}
               </div>
@@ -118,12 +118,12 @@ export default function SystemPage() {
                 {[
                   { label: "Provider",    value: config.llm?.provider    },
                   { label: "Model",       value: config.llm?.model       },
-                  { label: "Timeout",     value: config.llm?.timeout ? `${config.llm.timeout}s` : "—" },
+                  { label: "Timeout",     value: config.llm?.timeout ? `${config.llm.timeout}s` : "-" },
                   { label: "LLM trigger", value: config.llm?.llm_trigger },
                 ].map(({ label, value }) => (
                   <div key={label} className="bg-slate-50 rounded-lg px-3 py-2.5">
                     <p className="text-xs text-slate-400 mb-0.5">{label}</p>
-                    <p className="text-sm font-mono text-slate-800">{String(value ?? "—")}</p>
+                    <p className="text-sm font-mono text-slate-800">{String(value ?? "-")}</p>
                   </div>
                 ))}
               </div>

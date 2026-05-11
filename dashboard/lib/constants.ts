@@ -31,7 +31,7 @@ export const CHART_COLORS = {
 export const POLL_INTERVAL = 10000 // 10 seconds
 
 export const PAGE_SIZE = 20
-// ── Valid URL param values — derived from existing constants ─────────────────
+// ── Valid URL param values - derived from existing constants ─────────────────
 // Single source of truth: if DECISION_COLORS or THREAT_LABELS change,
 // these update automatically. No separate maintenance needed.
 export const VALID_DECISIONS  = Object.keys(DECISION_COLORS)  // ["BLOCK", "SANITIZE", "ALLOW"]

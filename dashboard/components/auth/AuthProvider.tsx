@@ -8,10 +8,10 @@
  *
  * Manages JWT session state for the entire dashboard.
  * Wraps the app in a context that exposes:
- *   - currentUser  — the authenticated AuthUser or null
- *   - isLoading    — true while initAuth() is running on mount
- *   - login()      — authenticate + store token
- *   - logout()     — revoke refresh token + clear state
+ *   - currentUser  - the authenticated AuthUser or null
+ *   - isLoading    - true while initAuth() is running on mount
+ *   - login()      - authenticate + store token
+ *   - logout()     - revoke refresh token + clear state
  *
  * Token is stored in memory (never localStorage). On page refresh,
  * initAuth() silently restores the session via the httpOnly cookie.
@@ -125,7 +125,7 @@ export function useAuth(): AuthContextValue {
 }
 
 // Safe variant for components that may render outside AuthProvider during SSR.
-// Returns null when context is not available — callers must guard against null.
+// Returns null when context is not available - callers must guard against null.
 export function useAuthOptional(): AuthContextValue | null {
   return useContext(AuthContext)
 }

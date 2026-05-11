@@ -52,7 +52,7 @@ export async function POST(request: NextRequest) {
     path:     "/",
   })
 
-  // Keep session indicator alive — httpOnly matches login/route.ts
+  // Keep session indicator alive - httpOnly matches login/route.ts
   // Middleware reads this server-side via request.cookies; JS never needs it.
   res.cookies.set("wrapsec_session", "jwt", {
     httpOnly: true,
@@ -63,7 +63,7 @@ export async function POST(request: NextRequest) {
   })
 
   // Re-issue the rotated refresh token with Path=/api/auth (same as login/route.ts).
-  // Backend returns Path=/v1/auth — rewrite to BFF path so browser sends it here.
+  // Backend returns Path=/v1/auth - rewrite to BFF path so browser sends it here.
   const setCookie = response.headers.get("set-cookie")
   if (setCookie) {
     const tokenMatch  = setCookie.match(/refresh_token=([^;]+)/)

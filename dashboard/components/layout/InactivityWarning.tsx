@@ -9,9 +9,9 @@
  * Timer continues accurately while modal is open.
  *
  * Props:
- *   secondsRemaining — countdown value from useInactivityTimer
- *   onStay           — resets timer, closes modal
- *   onLogout         — logout("manual"), redirect /login
+ *   secondsRemaining - countdown value from useInactivityTimer
+ *   onStay           - resets timer, closes modal
+ *   onLogout         - logout("manual"), redirect /login
  */
 "use client"
 
@@ -35,7 +35,7 @@ export function InactivityWarning({
   onLogout,
 }: InactivityWarningProps) {
   return (
-    // Backdrop — blocks all interaction, cannot dismiss by clicking
+    // Backdrop - blocks all interaction, cannot dismiss by clicking
     <div style={{
       position:        "fixed",
       inset:           0,

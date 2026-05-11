@@ -250,9 +250,9 @@ export default function ApplicationDetailPage() {
               { label: "Slug",        value: app.slug },
               { label: "Department",  value: dept?.name || app.dept_id },
               { label: "Environment", value: app.environment },
-              { label: "Owner",       value: app.owner_name  || "—" },
-              { label: "Email",       value: app.owner_email || "—" },
-              { label: "Description", value: app.description || "—" },
+              { label: "Owner",       value: app.owner_name  || "-" },
+              { label: "Email",       value: app.owner_email || "-" },
+              { label: "Description", value: app.description || "-" },
               { label: "Status",      value: app.is_active ? "Active" : "Inactive" },
               { label: "Created",     value: new Date(app.created_at).toLocaleDateString() },
             ].map(({ label, value }) => (
@@ -302,11 +302,11 @@ export default function ApplicationDetailPage() {
               <div className="flex items-center justify-between pt-1 flex-wrap gap-2">
                 {hasOverride ? (
                   <p className="text-xs text-amber-600">
-                    Application-level override active — using different thresholds than the department.
+                    Application-level override active - using different thresholds than the department.
                   </p>
                 ) : (
                   <p className="text-xs text-slate-400">
-                    No overrides set — inheriting policy from {deptName}.
+                    No overrides set - inheriting policy from {deptName}.
                   </p>
                 )}
                 {hasOverride && isJwt && (
@@ -597,7 +597,7 @@ export default function ApplicationDetailPage() {
               subtitle="Keys scoped to this application"
             />
             <Link href="/settings/keys" className="text-xs text-blue-700 hover:underline whitespace-nowrap">
-              Manage keys →
+              Manage keys ->
             </Link>
           </div>
           {appKeys.length === 0 ? (

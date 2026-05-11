@@ -202,7 +202,7 @@ function TrendChart({ data, groupBy, onGroupByChange }: {
               return (
                 <div key={d.period}
                   style={{
-                    flex: 1, maxWidth: "80px",  // cap width — prevents month single-bar filling screen
+                    flex: 1, maxWidth: "80px",  // cap width - prevents month single-bar filling screen
                     display: "flex", flexDirection: "column", justifyContent: "flex-end",
                     height: "100%", cursor: "pointer",
                     opacity: hovered && !isHovered ? 0.35 : 1, transition: "opacity 0.1s",
@@ -346,7 +346,7 @@ function DetectionBreakdown({ byReason }: { byReason: { primary_reason: string; 
 function ConfidenceDistribution({ data }: { data: { band: string; count: number }[] }) {
   const total = data.reduce((s, d) => s + d.count, 0) || 1
   const BANDS = [
-    { band: "HIGH",   label: "High",   color: "#10b981", desc: "Decision is certain — no review needed" },
+    { band: "HIGH",   label: "High",   color: "#10b981", desc: "Decision is certain - no review needed" },
     { band: "MEDIUM", label: "Medium", color: "#f59e0b", desc: "Consider spot-checking" },
     { band: "LOW",    label: "Low",    color: "#f87171", desc: "Human review recommended" },
   ]
@@ -393,10 +393,10 @@ function PrimaryReasonBreakdown({ byReason }: { byReason: { primary_reason: stri
     RULE_DETECTOR:               "Rule detector",
     ML_DETECTOR:                 "ML classifier",
     LLM_DETECTOR:                "LLM semantic",
-    PII_GUARDRAIL_BLOCK:         "PII guardrail — block",
-    PII_GUARDRAIL_SANITIZE:      "PII guardrail — sanitize",
-    TOXICITY_GUARDRAIL_BLOCK:    "Toxicity guardrail — block",
-    TOXICITY_GUARDRAIL_SANITIZE: "Toxicity guardrail — sanitize",
+    PII_GUARDRAIL_BLOCK:         "PII guardrail - block",
+    PII_GUARDRAIL_SANITIZE:      "PII guardrail - sanitize",
+    TOXICITY_GUARDRAIL_BLOCK:    "Toxicity guardrail - block",
+    TOXICITY_GUARDRAIL_SANITIZE: "Toxicity guardrail - sanitize",
     NO_THREAT_DETECTED:          "No threat detected",
     SYSTEM_ERROR:                "System error",
   }
@@ -493,7 +493,7 @@ export default function AnalyticsPage() {
     options:      ["24h", "7d", "30d", "90d", "custom"],
   })
 
-  const ANALYTICS_REFRESH = 5 * 60 * 1000 // 5 minutes — historical data doesn't need live polling
+  const ANALYTICS_REFRESH = 5 * 60 * 1000 // 5 minutes - historical data doesn't need live polling
 
   const SWR_OPTS = {
     refreshInterval:   ANALYTICS_REFRESH,
@@ -566,7 +566,7 @@ export default function AnalyticsPage() {
               ))}
             </div>
 
-            {/* Custom date pickers — shown only when "custom" is active */}
+            {/* Custom date pickers - shown only when "custom" is active */}
             {timeRange === "custom" && (
               <div style={{ display: "flex", alignItems: "center", gap: "6px" }}>
                 <input
@@ -649,7 +649,7 @@ export default function AnalyticsPage() {
               .slice(0, 8)
               .map((r: any) => ({
                 name: appNames[r.app_id] || r.app_id || "No application",
-                sub: `${num(r.total)} requests · ${r.avg_latency_ms?.toFixed(0) ?? "—"}ms avg`,
+                sub: `${num(r.total)} requests · ${r.avg_latency_ms?.toFixed(0) ?? "-"}ms avg`,
                 blockRate: r.block_rate, total: r.total,
               }))}
           />
@@ -663,8 +663,8 @@ export default function AnalyticsPage() {
               .sort((a, b) => b.total - a.total)
               .slice(0, 10)
               .map(r => ({
-                name: r.source || r.key_id || "—",
-                sub: `${num(r.total)} requests · ${r.avg_latency_ms?.toFixed(0) ?? "—"}ms avg`,
+                name: r.source || r.key_id || "-",
+                sub: `${num(r.total)} requests · ${r.avg_latency_ms?.toFixed(0) ?? "-"}ms avg`,
                 blockRate: r.block_rate, total: r.total,
               }))}
           />

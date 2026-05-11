@@ -22,7 +22,7 @@ export function Shell({ title, children }: ShellProps) {
   const { showWarning, secondsRemaining, resetTimer, logoutNow } = useInactivityTimer()
 
   // Force-password-change users must change password before accessing any page.
-  // This mirrors ProtectedRoute — catches JWT users who navigate directly to a
+  // This mirrors ProtectedRoute - catches JWT users who navigate directly to a
   // Shell-wrapped page without going through ProtectedRoute first.
   // Guard against null: useAuthOptional() returns null during static prerendering.
   useEffect(() => {

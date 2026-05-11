@@ -6,7 +6,7 @@ import "./globals.css"
 import { SidebarProvider } from "@/contexts/SidebarContext"
 
 export const metadata: Metadata = {
-  title:       "WrapSec — AI Security Gateway",
+  title:       "WrapSec - AI Security Gateway",
   description: "AI Security Gateway for Intelligent Applications",
   icons: {
     icon:      "/wrapsec-logo.svg",

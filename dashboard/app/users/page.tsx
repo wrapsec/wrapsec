@@ -432,7 +432,7 @@ export default function UsersPage() {
                 {(usersData?.users ?? []).length === 0 ? (
                   <tr>
                     <td colSpan={6} className="px-5 py-14 text-center">
-                      <div style={{ fontSize: "20px", marginBottom: "8px" }}>👤</div>
+                      <div style={{ fontSize: "20px", marginBottom: "8px" }}></div>
                       <div className="text-sm font-semibold text-slate-700 mb-1">No users yet</div>
                       <div className="text-xs text-slate-400">Invite team members to give them dashboard access</div>
                     </td>
@@ -459,7 +459,7 @@ export default function UsersPage() {
                         <RoleBadge role={user.role} />
                       </td>
                       <td className="px-5 py-3 text-xs text-slate-500">
-                        {depts.find(d => d.id === user.dept_id)?.name ?? (user.dept_id ? user.dept_id.slice(0, 8) + "…" : "—")}
+                        {depts.find(d => d.id === user.dept_id)?.name ?? (user.dept_id ? user.dept_id.slice(0, 8) + "" : "-")}
                       </td>
                       <td className="px-5 py-3">
                         <StatusBadge active={user.is_active} />

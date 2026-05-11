@@ -17,7 +17,7 @@ interface TenantSettingsFormProps {
     global_policy?: Record<string, any>
   }
   onUpdated:      (t: any) => void
-  // Actual enforced values — from DB settings, not global_policy
+  // Actual enforced values - from DB settings, not global_policy
   // Passed from parent page which already fetches these via SWR
   blockThreshold?:    number
   sanitizeThreshold?: number
@@ -107,12 +107,12 @@ export function TenantSettingsForm({
         </div>
       </div>
 
-      {/* Enforced runtime values — from DB settings, not global_policy */}
+      {/* Enforced runtime values - from DB settings, not global_policy */}
       <div>
         <p className="text-xs font-medium text-slate-700 mb-1">
           Enforced runtime settings
           <span className="ml-2 text-xs text-slate-400 font-normal">
-            — actual values applied to all requests. Departments may override these below.
+            - actual values applied to all requests. Departments may override these below.
           </span>
         </p>
         <p className="text-xs text-amber-600 mb-3">
@@ -121,12 +121,12 @@ export function TenantSettingsForm({
         </p>
         <div className="grid grid-cols-3 gap-3">
           {[
-            { label: "Block threshold",    value: blockThreshold    ?? "—" },
-            { label: "Sanitize threshold", value: sanitizeThreshold ?? "—" },
-            { label: "Rate limit/min",     value: rateLimitPerMinute != null ? `${rateLimitPerMinute} (${rateLimitSource ?? "env"})` : "—" },
-            { label: "Rule detector",      value: ruleEnabled != null ? (ruleEnabled ? "Enabled" : "Disabled") : "—" },
-            { label: "ML detector",        value: mlEnabled   != null ? (mlEnabled   ? "Enabled" : "Disabled") : "—" },
-            { label: "LLM detector",       value: llmEnabled  != null ? (llmEnabled  ? "Enabled" : "Disabled") : "—" },
+            { label: "Block threshold",    value: blockThreshold    ?? "-" },
+            { label: "Sanitize threshold", value: sanitizeThreshold ?? "-" },
+            { label: "Rate limit/min",     value: rateLimitPerMinute != null ? `${rateLimitPerMinute} (${rateLimitSource ?? "env"})` : "-" },
+            { label: "Rule detector",      value: ruleEnabled != null ? (ruleEnabled ? "Enabled" : "Disabled") : "-" },
+            { label: "ML detector",        value: mlEnabled   != null ? (mlEnabled   ? "Enabled" : "Disabled") : "-" },
+            { label: "LLM detector",       value: llmEnabled  != null ? (llmEnabled  ? "Enabled" : "Disabled") : "-" },
           ].map(({ label, value }) => (
             <div key={label} className="bg-slate-50 rounded-lg px-3 py-2.5">
               <p className="text-xs text-slate-400 mb-0.5">{label}</p>
@@ -150,7 +150,7 @@ export function TenantSettingsForm({
           <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
             <Button size="sm" disabled>Save organisation settings</Button>
             <span style={{ fontSize: "11px", color: "#9ca3af" }}>
-              Requires admin login —{" "}
+              Requires admin login -{" "}
               <a href="/login" style={{ color: "#670FEF", textDecoration: "underline" }}>sign in with email</a>
             </span>
           </div>

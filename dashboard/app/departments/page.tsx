@@ -68,7 +68,7 @@ export default function DepartmentsPage() {
             <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
               <Button size="sm" disabled><PlusIcon /> Add department</Button>
               <span style={{ fontSize: "11px", color: "#9ca3af" }}>
-                Requires admin login —{" "}
+                Requires admin login -{" "}
                 <a href="/login" style={{ color: "#670FEF", textDecoration: "underline" }}>sign in with email</a>
               </span>
             </div>
@@ -167,7 +167,7 @@ export default function DepartmentsPage() {
                 {(data?.departments ?? []).length === 0 ? (
                   <tr>
                     <td colSpan={6} className="px-5 py-14 text-center">
-                      <div style={{ fontSize: "20px", marginBottom: "8px" }}>🏢</div>
+                      <div style={{ fontSize: "20px", marginBottom: "8px" }}></div>
                       <div className="text-sm font-semibold text-slate-700 mb-1">No departments yet</div>
                       <div className="text-xs text-slate-400">Create a department to organise your API keys and policy overrides</div>
                     </td>
@@ -187,8 +187,8 @@ export default function DepartmentsPage() {
                     <tr key={dept.id} className="border-b border-slate-50 hover:bg-slate-50 transition-colors">
                       <td className="px-5 py-3 font-medium text-slate-900">{dept.name}</td>
                       <td className="px-5 py-3 font-mono text-xs text-slate-500">{dept.slug}</td>
-                      <td className="px-5 py-3 text-xs text-slate-500">{dept.description || "—"}</td>
-                      <td className="px-5 py-3 text-xs text-slate-500">{dept.contact_email || "—"}</td>
+                      <td className="px-5 py-3 text-xs text-slate-500">{dept.description || "-"}</td>
+                      <td className="px-5 py-3 text-xs text-slate-500">{dept.contact_email || "-"}</td>
                       <td className="px-5 py-3">
                         {dept.policy_override ? (
                           <span className="text-xs px-2 py-0.5 rounded-full bg-blue-50 text-blue-700 border border-blue-200">

@@ -11,7 +11,7 @@ import { updateRateLimitSettings } from "@/lib/api"
 interface RateLimitSettingsFormProps {
   perMinute:  number
   source:     string
-  trialLimit?: number  // trial key rate limit — live limit must not go below this
+  trialLimit?: number  // trial key rate limit - live limit must not go below this
   onUpdated:  (perMinute: number, source: string) => void
 }
 
@@ -49,7 +49,7 @@ export function RateLimitSettingsForm({
   return (
     <div className="space-y-6">
 
-      {/* Live key rate limit — editable, DB-backed */}
+      {/* Live key rate limit - editable, DB-backed */}
       <div>
         <p className="text-xs font-semibold text-slate-500 uppercase tracking-wide mb-3">
           Live Key Rate Limit
@@ -102,11 +102,11 @@ export function RateLimitSettingsForm({
 
       <div className="border-t border-slate-100" />
 
-      {/* Trial key limits — read-only, env-configured */}
+      {/* Trial key limits - read-only, env-configured */}
       <div>
         <p className="text-xs font-semibold text-slate-500 uppercase tracking-wide mb-3">
           Trial Key Limits
-          <span className="ml-2 text-xs font-normal text-slate-400 normal-case">— read-only, configured via environment</span>
+          <span className="ml-2 text-xs font-normal text-slate-400 normal-case">- read-only, configured via environment</span>
         </p>
         <div className="grid grid-cols-3 gap-3">
           <div className="bg-slate-50 rounded-lg px-3 py-2.5">
@@ -141,13 +141,13 @@ export function RateLimitSettingsForm({
           <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
             <Button size="sm" disabled>Save rate limit</Button>
             <span style={{ fontSize: "11px", color: "#9ca3af" }}>
-              Requires admin login —{" "}
+              Requires admin login -{" "}
               <a href="/login" style={{ color: "#670FEF", textDecoration: "underline" }}>sign in with email</a>
             </span>
           </div>
         )}
         {saved && (
-          <span className="text-xs text-green-600">Saved — takes effect within 5 minutes</span>
+          <span className="text-xs text-green-600">Saved - takes effect within 5 minutes</span>
         )}
       </div>
 

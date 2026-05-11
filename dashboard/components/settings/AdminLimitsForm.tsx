@@ -76,7 +76,7 @@ export function AdminLimitsForm({
           </p>
           {!writeValid && (
             <p className="text-xs text-red-600">
-              {write < 5 ? "Minimum is 5 — lower values may lock out legitimate admins" : "Maximum is 200"}
+              {write < 5 ? "Minimum is 5 - lower values may lock out legitimate admins" : "Maximum is 200"}
             </p>
           )}
         </div>
@@ -122,7 +122,7 @@ export function AdminLimitsForm({
         <span>Source:</span>
         <span className="font-mono bg-slate-100 px-1.5 py-0.5 rounded text-slate-600">{source}</span>
         {source === "database" && (
-          <span>— overrides environment default, takes effect within 60 seconds</span>
+          <span>- overrides environment default, takes effect within 60 seconds</span>
         )}
       </div>
 
@@ -137,13 +137,13 @@ export function AdminLimitsForm({
           <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
             <Button size="sm" disabled>Save limits</Button>
             <span style={{ fontSize: "11px", color: "#9ca3af" }}>
-              Requires admin login —{" "}
+              Requires admin login -{" "}
               <a href="/login" style={{ color: "#670FEF", textDecoration: "underline" }}>sign in with email</a>
             </span>
           </div>
         )}
         {saved && (
-          <span className="text-xs text-green-600">Saved — takes effect within 60 seconds</span>
+          <span className="text-xs text-green-600">Saved - takes effect within 60 seconds</span>
         )}
       </div>
 

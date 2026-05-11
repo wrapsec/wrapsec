@@ -110,7 +110,7 @@ export function ThresholdForm({ thresholds, onUpdated }: ThresholdFormProps) {
           <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
             <Button size="sm" disabled>Save thresholds</Button>
             <span style={{ fontSize: "11px", color: "#9ca3af" }}>
-              Requires admin login —{" "}
+              Requires admin login -{" "}
               <a href="/login" style={{ color: "#670FEF", textDecoration: "underline" }}>sign in with email</a>
             </span>
           </div>

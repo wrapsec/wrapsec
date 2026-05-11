@@ -28,7 +28,7 @@ const SEVERITY_STYLE: Record<string, { color: string; bg: string; border: string
 }
 
 function SeverityBadge({ severity }: { severity: string | null }) {
-  if (!severity) return <span style={{ fontSize: "12px", color: "#d1d5db" }}>—</span>
+  if (!severity) return <span style={{ fontSize: "12px", color: "#d1d5db" }}>-</span>
   const s = SEVERITY_STYLE[severity] ?? SEVERITY_STYLE.LOW
   return (
     <span style={{
@@ -72,7 +72,7 @@ export function RequestsTable({ items, onSelect }: {
           {items.length === 0 ? (
             <tr>
               <td colSpan={HEADERS.length} style={{ padding: "56px 16px", textAlign: "center" }}>
-                <div style={{ fontSize: "20px", marginBottom: "8px" }}>🔍</div>
+                <div style={{ fontSize: "20px", marginBottom: "8px" }}></div>
                 <div style={{ fontSize: "13px", fontWeight: 600, color: "#374151", marginBottom: "4px" }}>No requests found</div>
                 <div style={{ fontSize: "12px", color: "#9ca3af" }}>Try adjusting your filters or expanding the time range</div>
               </td>
@@ -98,7 +98,7 @@ export function RequestsTable({ items, onSelect }: {
                 {item.output_decision && item.output_decision !== item.decision ? (
                   <div style={{ display: "flex", alignItems: "center", gap: "4px" }}>
                     <DecisionBadge decision={item.decision} size="sm" />
-                    <span style={{ fontSize: "10px", color: "#9ca3af" }}>→</span>
+                    <span style={{ fontSize: "10px", color: "#9ca3af" }}>-></span>
                     <DecisionBadge decision={item.output_decision} size="sm" />
                   </div>
                 ) : (
@@ -120,12 +120,12 @@ export function RequestsTable({ items, onSelect }: {
                     )}
                   </div>
                 ) : (
-                  <span style={{ fontSize: "12px", color: "#d1d5db" }}>—</span>
+                  <span style={{ fontSize: "12px", color: "#d1d5db" }}>-</span>
                 )}
               </td>
               <td style={{ padding: "10px 16px" }}>
                 {item.threats.length === 0
-                  ? <span style={{ fontSize: "12px", color: "#d1d5db" }}>—</span>
+                  ? <span style={{ fontSize: "12px", color: "#d1d5db" }}>-</span>
                   : <div style={{ display: "flex", flexWrap: "wrap", gap: "3px" }}>
                       {item.threats.map(t => <ThreatBadge key={t} threat={t} />)}
                     </div>

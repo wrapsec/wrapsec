@@ -60,7 +60,7 @@ export default function ApiKeysPage() {
             <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
               <Button size="sm" disabled><PlusIcon /> Create key</Button>
               <span style={{ fontSize: "11px", color: "#9ca3af" }}>
-                Requires admin login —{" "}
+                Requires admin login -{" "}
                 <a href="/login" style={{ color: "#670FEF", textDecoration: "underline" }}>sign in with email</a>
               </span>
             </div>

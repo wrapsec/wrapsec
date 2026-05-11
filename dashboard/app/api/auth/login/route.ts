@@ -11,15 +11,15 @@ const COOKIE_SECURE = process.env.COOKIE_SECURE === "true"
  *
  * Handles two auth modes:
  *
- * Mode A — API key (existing, unchanged):
+ * Mode A - API key (existing, unchanged):
  *   Body: { apiKey: "wrapsec_admin_key" }
  *   Validates against backend, sets wrapsec_api_key httpOnly cookie.
  *
- * Mode B — JWT email/password (new):
+ * Mode B - JWT email/password (new):
  *   Body: { email: "admin@example.com", password: "..." }
  *   Calls POST /v1/auth/login, receives JWT access token + refresh cookie.
  *   Stores access token in wrapsec_jwt httpOnly cookie (short-lived, 30 min).
- *   The refresh token cookie is set by the backend directly (Path=/v1/auth) —
+ *   The refresh token cookie is set by the backend directly (Path=/v1/auth) -
  *   it cannot be read here, but it persists in the browser for /v1/auth/* calls.
  */
 // Real client IP for forwarding to backend rate limiter.
@@ -65,7 +65,7 @@ export async function POST(request: NextRequest) {
       maxAge:   60 * 60 * 8,   // 8 hours
       path:     "/",
     })
-    // Clear any stale JWT credentials — only one auth mechanism active at a time
+    // Clear any stale JWT credentials - only one auth mechanism active at a time
     res.cookies.set("wrapsec_jwt",     "", { httpOnly: true, secure: COOKIE_SECURE, sameSite: "strict", maxAge: 0, path: "/" })
     res.cookies.set("wrapsec_session", "", { httpOnly: true, secure: COOKIE_SECURE, sameSite: "strict", maxAge: 0, path: "/" })
     res.cookies.set("refresh_token",   "", { httpOnly: true, secure: COOKIE_SECURE, sameSite: "strict", maxAge: 0, path: "/api/auth" })
@@ -110,7 +110,7 @@ export async function POST(request: NextRequest) {
       path:     "/",
     })
 
-    // Session indicator — httpOnly, used by middleware for route protection only
+    // Session indicator - httpOnly, used by middleware for route protection only
     res.cookies.set("wrapsec_session", "jwt", {
       httpOnly: true,
       secure:   COOKIE_SECURE,
@@ -120,7 +120,7 @@ export async function POST(request: NextRequest) {
     })
 
     // Re-issue the refresh token cookie scoped to the BFF auth path.
-    // The backend sets Path=/v1/auth — the browser won't send that cookie to
+    // The backend sets Path=/v1/auth - the browser won't send that cookie to
     // /api/auth/* routes. We parse the token value and max-age from the
     // backend set-cookie and re-store it with Path=/api/auth so the browser
     // includes it on /api/auth/refresh and /api/auth/logout requests.
@@ -139,7 +139,7 @@ export async function POST(request: NextRequest) {
       }
     }
 
-    // Clear any stale API key credential — only one auth mechanism active at a time
+    // Clear any stale API key credential - only one auth mechanism active at a time
     res.cookies.set("wrapsec_api_key", "", { httpOnly: true, secure: COOKIE_SECURE, sameSite: "strict", maxAge: 0, path: "/" })
     return res
   }

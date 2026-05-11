@@ -117,7 +117,7 @@ export default function ChangePasswordPage() {
             Password changed
           </p>
           <p style={{ fontSize: "13px", color: "rgba(255,255,255,0.40)", margin: 0 }}>
-            All sessions signed out. Redirecting to login…
+            All sessions signed out. Redirecting to login
           </p>
         </div>
       </div>
@@ -181,7 +181,7 @@ export default function ChangePasswordPage() {
                   {REQUIREMENTS.map(r => (
                     <li key={r.label} style={{ display: "flex", alignItems: "center", gap: "6px",
                       fontSize: "11px", color: r.test(next) ? "#10b981" : "rgba(255,255,255,0.30)" }}>
-                      <span style={{ fontSize: "10px" }}>{r.test(next) ? "✓" : "○"}</span>
+                      <span style={{ fontSize: "10px" }}>{r.test(next) ? "" : "○"}</span>
                       {r.label}
                     </li>
                   ))}
@@ -222,7 +222,7 @@ export default function ChangePasswordPage() {
                 transition: "opacity 0.15s",
                 boxShadow: "0 4px 16px rgba(103,15,239,0.35)",
               }}>
-                {loading ? "Saving…" : "Change password"}
+                {loading ? "Saving" : "Change password"}
               </button>
             </div>
           </form>

@@ -7,21 +7,21 @@
  * Auth utilities for the WrapSec dashboard.
  * Supports two auth modes that coexist:
  *
- * Mode A — API key (existing flow, unchanged):
- *   login(apiKey) → POST /api/auth/login with { apiKey }
+ * Mode A - API key (existing flow, unchanged):
+ *   login(apiKey) -> POST /api/auth/login with { apiKey }
  *   Sets wrapsec_api_key httpOnly cookie server-side.
  *
- * Mode B — JWT email/password (new):
- *   loginWithCredentials(email, password) → POST /api/auth/login with { email, password }
+ * Mode B - JWT email/password (new):
+ *   loginWithCredentials(email, password) -> POST /api/auth/login with { email, password }
  *   Sets wrapsec_jwt httpOnly cookie server-side (access token).
  *   Backend sets refresh_token httpOnly cookie (Path=/v1/auth).
  *
  * Both modes share the same logout() function.
- * All tokens live in httpOnly cookies — never in JS memory or localStorage.
+ * All tokens live in httpOnly cookies - never in JS memory or localStorage.
  */
 
 // ── isLoggingOut flag ────────────────────────────────────────────────────
-// Set to true before logout() fetch — prevents concurrent silent refresh
+// Set to true before logout() fetch - prevents concurrent silent refresh
 // from succeeding after logout decision is made.
 // Checked in api.ts request() before any refresh attempt.
 // See session_management.md Convention 42.
@@ -87,7 +87,7 @@ export async function refreshJWT(): Promise<boolean> {
    * the server-side route handler which sets wrapsec_jwt cookie.
    *
    * Note: we can't call POST /v1/auth/refresh through /api/proxy because
-   * the proxy reads wrapsec_jwt — which doesn't exist yet on page load.
+   * the proxy reads wrapsec_jwt - which doesn't exist yet on page load.
    * We call it through a dedicated route handler instead.
    */
   const response = await fetch("/api/auth/refresh", { method: "POST" })
@@ -123,7 +123,7 @@ export async function changePassword(
 export async function logout(
   reason: "manual" | "inactivity" | "expired" = "manual"
 ): Promise<void> {
-  isLoggingOut = true   // set BEFORE fetch — prevents concurrent refresh
+  isLoggingOut = true   // set BEFORE fetch - prevents concurrent refresh
   await fetch("/api/auth/logout", {
     method:  "POST",
     headers: { "Content-Type": "application/json" },
@@ -143,8 +143,8 @@ export class AuthError extends Error {
   }
 }
 
-// ── login(email, password) — used by AuthProvider ────────────────────────
-// AuthProvider imports this as authLogin(email, password) → LoginResponse
+// ── login(email, password) - used by AuthProvider ────────────────────────
+// AuthProvider imports this as authLogin(email, password) -> LoginResponse
 // Wraps loginWithCredentials to match AuthProvider's expected signature.
 
 export async function login(
@@ -176,13 +176,13 @@ export interface LoginResponse {
   user: AuthUser
 }
 
-// ── initAuth — silent session restore on page load ────────────────────────
+// ── initAuth - silent session restore on page load ────────────────────────
 // Called by AuthProvider on mount to restore session from httpOnly cookie.
 // Attempts refresh via /api/auth/refresh, then fetches current user.
 // Returns AuthUser on success, throws on failure.
 
 export async function initAuth(): Promise<AuthUser> {
-  isLoggingOut = false  // clear flag — a new session is being established
+  isLoggingOut = false  // clear flag - a new session is being established
   const refreshed = await fetch("/api/auth/refresh", { method: "POST" })
   if (!refreshed.ok) {
     throw new Error("No active session")
@@ -190,7 +190,7 @@ export async function initAuth(): Promise<AuthUser> {
   return getMe()
 }
 
-// ── getMe — fetch current user profile ────────────────────────────────────
+// ── getMe - fetch current user profile ────────────────────────────────────
 
 export async function getMe(): Promise<AuthUser> {
   const response = await fetch("/api/proxy/v1/auth/me", {
@@ -203,9 +203,9 @@ export async function getMe(): Promise<AuthUser> {
   return data as AuthUser
 }
 
-// ── getToken — not used (tokens in httpOnly cookies) ─────────────────────
+// ── getToken - not used (tokens in httpOnly cookies) ─────────────────────
 // Kept for backward compatibility with AuthProvider import.
-// Always returns null — tokens are never accessible to JS.
+// Always returns null - tokens are never accessible to JS.
 
 export function getToken(): null {
   return null

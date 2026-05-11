@@ -35,13 +35,13 @@ export function ProtectedRoute({
   useEffect(() => {
     if (isLoading) return
 
-    // No session — go to login
+    // No session - go to login
     if (!currentUser) {
       router.replace("/login")
       return
     }
 
-    // Must change password — only /change-password is allowed
+    // Must change password - only /change-password is allowed
     if (currentUser.force_password_change) {
       router.replace("/change-password")
       return
@@ -59,7 +59,7 @@ export function ProtectedRoute({
     }
   }, [isLoading, currentUser, isAdmin, isDeveloper, adminOnly, developerOnly, router])
 
-  // Loading — show nothing (or a spinner)
+  // Loading - show nothing (or a spinner)
   if (isLoading) {
     return (
       <div className="flex h-screen items-center justify-center">
@@ -68,7 +68,7 @@ export function ProtectedRoute({
     )
   }
 
-  // Not authenticated or wrong role — render nothing while redirect fires
+  // Not authenticated or wrong role - render nothing while redirect fires
   if (!currentUser) return null
   if (currentUser.force_password_change) return null
   if (adminOnly && !isAdmin) return null

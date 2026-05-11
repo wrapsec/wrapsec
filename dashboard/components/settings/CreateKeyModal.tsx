@@ -113,8 +113,8 @@ export function CreateKeyModal({ onCreated, onClose }: CreateKeyModalProps) {
                 onChange={(e) => setKeyType(e.target.value as "live" | "trial")}
                 className={selectClass}
               >
-                <option value="live">Live — full limits, proxy enabled</option>
-                <option value="trial">Trial — restricted limits, no proxy</option>
+                <option value="live">Live - full limits, proxy enabled</option>
+                <option value="trial">Trial - restricted limits, no proxy</option>
               </select>
               {keyType === "trial" && (
                 <p className="text-xs text-amber-600">
@@ -123,7 +123,7 @@ export function CreateKeyModal({ onCreated, onClose }: CreateKeyModalProps) {
               )}
             </div>
 
-            {/* Application — optional, only shown when dept is selected */}
+            {/* Application - optional, only shown when dept is selected */}
             {deptId && (
               <div className="flex flex-col gap-1">
                 <label className="text-xs font-medium text-slate-700">
@@ -134,7 +134,7 @@ export function CreateKeyModal({ onCreated, onClose }: CreateKeyModalProps) {
                   onChange={(e) => setAppId(e.target.value)}
                   className={selectClass}
                 >
-                  <option value="">No application — dept-scoped only</option>
+                  <option value="">No application - dept-scoped only</option>
                   {applications.map(a => (
                     <option key={a.id} value={a.id}>{a.name}</option>
                   ))}
@@ -164,7 +164,7 @@ export function CreateKeyModal({ onCreated, onClose }: CreateKeyModalProps) {
           <div className="space-y-4">
             <div className="p-3 bg-amber-50 border border-amber-200 rounded-lg">
               <p className="text-xs font-medium text-amber-800 mb-2">
-                Copy this key now — it will not be shown again
+                Copy this key now - it will not be shown again
               </p>
               <div className="flex items-center gap-2">
                 <p className="font-mono text-xs text-amber-900 break-all flex-1">

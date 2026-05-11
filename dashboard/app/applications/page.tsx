@@ -84,7 +84,7 @@ export default function ApplicationsPage() {
             <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
               <Button size="sm" disabled><PlusIcon /> Add application</Button>
               <span style={{ fontSize: "11px", color: "#9ca3af" }}>
-                Requires admin login —{" "}
+                Requires admin login -{" "}
                 <a href="/login" style={{ color: "#670FEF", textDecoration: "underline" }}>sign in with email</a>
               </span>
             </div>
@@ -193,7 +193,7 @@ export default function ApplicationsPage() {
                 {(data?.applications ?? []).length === 0 ? (
                   <tr>
                     <td colSpan={6} className="px-5 py-14 text-center">
-                      <div style={{ fontSize: "20px", marginBottom: "8px" }}>📦</div>
+                      <div style={{ fontSize: "20px", marginBottom: "8px" }}></div>
                       <div className="text-sm font-semibold text-slate-700 mb-1">No applications yet</div>
                       <div className="text-xs text-slate-400">Register an application to scope API keys and apply per-app policy overrides</div>
                     </td>
@@ -228,7 +228,7 @@ export default function ApplicationsPage() {
                           {app.environment}
                         </span>
                       </td>
-                      <td className="px-5 py-3 text-xs text-slate-500">{app.owner_name || "—"}</td>
+                      <td className="px-5 py-3 text-xs text-slate-500">{app.owner_name || "-"}</td>
                       <td className="px-5 py-3">
                         {app.policy_override ? (
                           <span className="text-xs px-2 py-0.5 rounded-full bg-blue-50 text-blue-700 border border-blue-200">Overridden</span>

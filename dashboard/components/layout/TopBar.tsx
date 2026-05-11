@@ -24,7 +24,7 @@ export function TopBar({ title }: { title: string }) {
         setUserEmail(d.email ?? null)
         setUserRole(d.role ?? null)
       } else if (res.status === 403) {
-        // API key session — /me requires JWT, 403 is expected and handled
+        // API key session - /me requires JWT, 403 is expected and handled
         setUserEmail("Admin Key")
         setUserRole("API KEY")
       }
@@ -51,7 +51,7 @@ export function TopBar({ title }: { title: string }) {
     try {
       await logout()
     } catch {
-      // Best effort — cookies are cleared server-side regardless
+      // Best effort - cookies are cleared server-side regardless
     }
     router.push("/login")
   }

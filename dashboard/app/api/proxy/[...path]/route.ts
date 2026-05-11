@@ -9,13 +9,13 @@ const API_BASE_URL = process.env.API_URL || process.env.NEXT_PUBLIC_API_URL || "
 /**
  * Catch-all proxy route.
  *
- * GUARANTEE: this route ALWAYS returns JSON — never HTML.
+ * GUARANTEE: this route ALWAYS returns JSON - never HTML.
  * All error paths are wrapped in try/catch with explicit JSON responses.
  * This prevents JSON.parse crashes in the frontend when sessions expire.
  *
  * Reads auth from httpOnly cookies (never from client JS):
- *   wrapsec_api_key → forwarded as x-api-key header
- *   wrapsec_jwt     → forwarded as Authorization: Bearer header
+ *   wrapsec_api_key -> forwarded as x-api-key header
+ *   wrapsec_jwt     -> forwarded as Authorization: Bearer header
  *
  * JWT wins if both present (required for admin write endpoints).
  * Returns 401 JSON if neither cookie is present.
@@ -40,8 +40,8 @@ async function handler(request: NextRequest) {
       )
     }
 
-    // JWT wins if both present — required for admin write endpoints
-    // Public paths may have no credentials at all — send empty auth headers
+    // JWT wins if both present - required for admin write endpoints
+    // Public paths may have no credentials at all - send empty auth headers
     const authHeaders: Record<string, string> = jwtToken
       ? { "Authorization": `Bearer ${jwtToken}` }
       : apiKey
@@ -69,7 +69,7 @@ async function handler(request: NextRequest) {
 
     const response = await fetch(target, options)
 
-    // Handle CSV export — return raw response, not JSON
+    // Handle CSV export - return raw response, not JSON
     const contentType = response.headers.get("content-type") || ""
     if (contentType.includes("text/csv")) {
       const blob = await response.blob()
@@ -82,7 +82,7 @@ async function handler(request: NextRequest) {
       })
     }
 
-    // JWT token expired — clear cookies and return JSON 401
+    // JWT token expired - clear cookies and return JSON 401
     if (response.status === 401 && jwtToken && !apiKey) {
       const res = NextResponse.json(
         { error: { code: "UNAUTHORIZED", message: "Session expired" } },
@@ -93,7 +93,7 @@ async function handler(request: NextRequest) {
       return res
     }
 
-    // Parse response as JSON — if backend returns non-JSON, return 502
+    // Parse response as JSON - if backend returns non-JSON, return 502
     const data = await response.json().catch(() => null)
     if (data === null) {
       return NextResponse.json(
@@ -105,8 +105,8 @@ async function handler(request: NextRequest) {
     return NextResponse.json(data, { status: response.status })
 
   } catch (error) {
-    // Catch-all — network failure, timeout, etc.
-    // Always return JSON — never let an exception bubble as HTML
+    // Catch-all - network failure, timeout, etc.
+    // Always return JSON - never let an exception bubble as HTML
     console.error("Proxy handler error:", error)
     return NextResponse.json(
       { error: { code: "INTERNAL_ERROR", message: "Internal proxy error" } },

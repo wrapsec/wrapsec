@@ -124,14 +124,14 @@ export function LLMSettingsForm({ settings, onUpdated }: LLMSettingsFormProps) {
           />
           <p className="text-xs text-slate-400">
             {provider === "ollama"
-              ? "Ollama server URL — use container hostname in Docker (not localhost)"
+              ? "Ollama server URL - use container hostname in Docker (not localhost)"
               : provider === "openai"
               ? "For Groq: https://api.groq.com/openai/v1 · For Together: https://api.together.xyz/v1"
               : "Provider endpoint URL (must be OpenAI-compatible)"}
           </p>
         </div>
 
-        {/* API key — openai / custom only */}
+        {/* API key - openai / custom only */}
         {provider !== "ollama" && (
           <div className="flex flex-col gap-1 col-span-2">
             <label className="text-xs font-medium text-slate-700">
@@ -167,7 +167,7 @@ export function LLMSettingsForm({ settings, onUpdated }: LLMSettingsFormProps) {
             onChange={(e) => { const v = parseInt(e.target.value); if (!isNaN(v)) setTimeout_(v) }}
             className="h-9 px-3 text-sm rounded-md border border-slate-200 bg-white text-slate-900 focus:outline-none focus:ring-2 focus:ring-purple-700 focus:border-purple-700"
           />
-          <p className="text-xs text-slate-400">Request timeout (5 – 120 seconds)</p>
+          <p className="text-xs text-slate-400">Request timeout (5 - 120 seconds)</p>
         </div>
       </div>
 
@@ -182,7 +182,7 @@ export function LLMSettingsForm({ settings, onUpdated }: LLMSettingsFormProps) {
           <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
             <Button size="sm" disabled>Save</Button>
             <span style={{ fontSize: "11px", color: "#9ca3af" }}>
-              Requires admin login —{" "}
+              Requires admin login -{" "}
               <a href="/login" style={{ color: "#670FEF", textDecoration: "underline" }}>sign in with email</a>
             </span>
           </div>

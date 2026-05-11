@@ -10,7 +10,7 @@ import { getSetupStatus } from "@/lib/api"
 
 type Tab = "credentials" | "apikey"
 
-// WrapSec logo mark — exact SVG from brand assets
+// WrapSec logo mark - exact SVG from brand assets
 function LogoMark({ size = 48 }: { size?: number }) {
   return (
     <svg width={size} height={size} viewBox="0 0 249 221" fill="none">
@@ -127,7 +127,7 @@ export default function LoginPage() {
         boxShadow: "0 25px 60px rgba(0,0,0,0.5), 0 0 0 1px rgba(255,255,255,0.08)",
       }}>
 
-        {/* Left panel — brand */}
+        {/* Left panel - brand */}
         <div style={{
           background: "linear-gradient(135deg, #0d1526 0%, #1a0a3d 100%)",
           backgroundImage: "radial-gradient(ellipse at 30% 40%, rgba(103,15,239,0.30) 0%, transparent 60%)",
@@ -178,7 +178,7 @@ export default function LoginPage() {
           <div style={{ display: "flex", flexDirection: "column", gap: "10px" }}>
             {[
               { icon: "M9 12l2 2 4-4m5.618-4.016A11.955 11.955 0 0112 2.944a11.955 11.955 0 01-8.618 3.04A12.02 12.02 0 003 9c0 5.591 3.824 10.29 9 11.622 5.176-1.332 9-6.03 9-11.622 0-1.042-.133-2.052-.382-3.016z", label: "Prompt injection & jailbreak detection" },
-              { icon: "M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z", label: "PII guardrail — 22+ entity types" },
+              { icon: "M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z", label: "PII guardrail - 22+ entity types" },
               { icon: "M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z", label: "Full audit trail & SIEM integration" },
             ].map(f => (
               <div key={f.label} style={{ display: "flex", alignItems: "center", gap: "10px" }}>
@@ -197,7 +197,7 @@ export default function LoginPage() {
           </div>
         </div>
 
-        {/* Right panel — form */}
+        {/* Right panel - form */}
         <div style={{
           background: "#111d35",
           padding: "52px 48px",
@@ -242,7 +242,7 @@ export default function LoginPage() {
                   type="password" value={password}
                   onChange={e => setPassword(e.target.value)}
                   onKeyDown={e => e.key === "Enter" && handleCredentials()}
-                  placeholder="••••••••"
+                  placeholder=""
                   autoComplete="off" disabled={loading}
                   style={INPUT}
                   onFocus={e => (e.target as HTMLInputElement).style.borderColor = "#670FEF"}
@@ -269,7 +269,7 @@ export default function LoginPage() {
                     <path style={{ opacity: 0.75 }} fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" />
                   </svg>
                 )}
-                {loading ? "Signing in…" : "Sign in"}
+                {loading ? "Signing in" : "Sign in"}
               </button>
             </div>
           )}
@@ -312,7 +312,7 @@ export default function LoginPage() {
                     <path style={{ opacity: 0.75 }} fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" />
                   </svg>
                 )}
-                {loading ? "Verifying…" : "Sign in"}
+                {loading ? "Verifying" : "Sign in"}
               </button>
             </div>
           )}

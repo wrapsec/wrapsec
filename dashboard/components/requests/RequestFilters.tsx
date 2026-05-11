@@ -93,7 +93,7 @@ export function RequestFilters({
     threatCategory && { label: threatCategory.replace(/_/g, " "), clear: () => onThreat("") },
     executionMode  && { label: executionMode.replace(/_/g, " "),  clear: () => onExecutionMode("") },
     deptId         && { label: deptName ?? deptId,                clear: () => onDeptId("") },
-    (from || to)   && { label: `${from || "…"} → ${to || "…"}`,  clear: () => { onFrom(""); onTo("") } },
+    (from || to)   && { label: `${from || ""} -> ${to || ""}`,  clear: () => { onFrom(""); onTo("") } },
   ].filter(Boolean) as { label: string; clear: () => void }[]
 
   return (
@@ -117,7 +117,7 @@ export function RequestFilters({
           <input
             type="text" value={traceId}
             onChange={e => onTraceId(e.target.value)}
-            placeholder="Search trace ID…"
+            placeholder="Search trace ID"
             style={{
               height: "32px", paddingLeft: "26px", paddingRight: "8px",
               fontSize: "12px", fontFamily: "inherit",
@@ -220,7 +220,7 @@ export function RequestFilters({
           />
           <button
             onClick={() => onSortOrder(sortOrder === "desc" ? "asc" : "desc")}
-            title={sortOrder === "desc" ? "Descending — click to switch" : "Ascending — click to switch"}
+            title={sortOrder === "desc" ? "Descending - click to switch" : "Ascending - click to switch"}
             style={{
               display: "flex", alignItems: "center", justifyContent: "center",
               width: 32, height: 32, borderRadius: "6px", flexShrink: 0,

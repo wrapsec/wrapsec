@@ -186,7 +186,7 @@ export function ProxySettingsForm({ config, onUpdated }: ProxySettingsFormProps)
             onChange={(e) => { const v = parseInt(e.target.value); if (!isNaN(v)) setTimeout_(v) }}
             className="h-9 px-3 text-sm rounded-md border border-slate-200 bg-white text-slate-900 focus:outline-none focus:ring-2 focus:ring-purple-700 focus:border-purple-700"
           />
-          <p className="text-xs text-slate-400">10 – 300 seconds</p>
+          <p className="text-xs text-slate-400">10 - 300 seconds</p>
         </div>
       </div>
 
@@ -224,7 +224,7 @@ export function ProxySettingsForm({ config, onUpdated }: ProxySettingsFormProps)
           <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
             <Button size="sm" disabled>Save</Button>
             <span style={{ fontSize: "11px", color: "#9ca3af" }}>
-              Requires admin login —{" "}
+              Requires admin login -{" "}
               <a href="/login" style={{ color: "#670FEF", textDecoration: "underline" }}>sign in with email</a>
             </span>
           </div>

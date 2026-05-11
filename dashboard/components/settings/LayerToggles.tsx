@@ -19,17 +19,17 @@ const LAYER_INFO = [
   {
     key:   "rule_enabled" as const,
     label: "Rule-based detection",
-    desc:  "Regex and heuristic patterns — fastest layer, ~0ms",
+    desc:  "Regex and heuristic patterns - fastest layer, ~0ms",
   },
   {
     key:   "ml_enabled" as const,
     label: "ML classifier",
-    desc:  "TF-IDF + LogisticRegression — probabilistic detection, ~5ms",
+    desc:  "TF-IDF + LogisticRegression - probabilistic detection, ~5ms",
   },
   {
     key:   "llm_enabled" as const,
     label: "LLM semantic analysis",
-    desc:  "LLM-based detection — most accurate, conditional invocation",
+    desc:  "LLM-based detection - most accurate, conditional invocation",
   },
 ]
 
@@ -119,7 +119,7 @@ export function LayerToggles({ layers, llmTrigger, onUpdated }: LayerTogglesProp
           <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
             <Button size="sm" disabled>Save layers</Button>
             <span style={{ fontSize: "11px", color: "#9ca3af" }}>
-              Requires admin login —{" "}
+              Requires admin login -{" "}
               <a href="/login" style={{ color: "#670FEF", textDecoration: "underline" }}>
                 sign in with email
               </a>

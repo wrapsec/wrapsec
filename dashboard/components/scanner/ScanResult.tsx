@@ -58,7 +58,7 @@ export function ScanResult({ result }: { result: GatewayResponse }) {
           <p className="text-xs text-slate-500 mb-1">Confidence</p>
           <div className="flex items-center gap-1.5">
             <p className="text-sm font-semibold text-slate-900">
-              {result.confidence !== null ? `${Math.round((result.confidence ?? 0) * 100)}%` : "—"}
+              {result.confidence !== null ? `${Math.round((result.confidence ?? 0) * 100)}%` : "-"}
             </p>
             <ConfidenceBadge band={result.confidence_band} />
           </div>

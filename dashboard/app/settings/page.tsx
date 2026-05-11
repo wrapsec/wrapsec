@@ -178,7 +178,7 @@ export default function SettingsPage() {
             <Card>
               <CardHeader
                 title="Admin Operation Limits"
-                subtitle="Security controls — rate limits for admin write operations and audit export"
+                subtitle="Security controls - rate limits for admin write operations and audit export"
               />
               <AdminLimitsForm
                 adminWrite={adminLimits?.admin_write_rate_limit ?? 20}

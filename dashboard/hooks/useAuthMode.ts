@@ -2,16 +2,16 @@
 // Copyright (c) 2026 WrapSec. All rights reserved.
 // WrapSec v1.0 | AI Security Gateway - https://wrapsec.com
 /**
- * useAuthMode — detects current auth mode via server-side API route.
+ * useAuthMode - detects current auth mode via server-side API route.
  *
  * Calls GET /api/auth/session which reads httpOnly cookies server-side.
- * Never reads document.cookie — all cookies remain httpOnly and JS-inaccessible.
+ * Never reads document.cookie - all cookies remain httpOnly and JS-inaccessible.
  *
  * Returns:
- *   isJwt     — logged in with JWT (email/password), write endpoints allowed
- *   isApiKey  — logged in with API key only, write endpoints rejected
- *   canWrite  — alias for isJwt
- *   loading   — true during initial fetch
+ *   isJwt     - logged in with JWT (email/password), write endpoints allowed
+ *   isApiKey  - logged in with API key only, write endpoints rejected
+ *   canWrite  - alias for isJwt
+ *   loading   - true during initial fetch
  */
 import { useState, useEffect } from "react"
 

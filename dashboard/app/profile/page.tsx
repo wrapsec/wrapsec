@@ -112,7 +112,7 @@ function ChangePasswordModal({ onClose }: { onClose: () => void }) {
                   <ul className="mt-1.5 space-y-1">
                     {REQUIREMENTS.map(r => (
                       <li key={r.label} className={`flex items-center gap-1.5 text-xs ${r.test(next) ? "text-green-600" : "text-slate-400"}`}>
-                        <span>{r.test(next) ? "✓" : "○"}</span>{r.label}
+                        <span>{r.test(next) ? "" : "○"}</span>{r.label}
                       </li>
                     ))}
                   </ul>
@@ -192,7 +192,7 @@ export default function ProfilePage() {
           />
 
           {loading ? (
-            <p className="text-sm text-slate-400">Loading…</p>
+            <p className="text-sm text-slate-400">Loading</p>
           ) : isApiKey ? (
             <p className="text-sm text-slate-400">
               You are signed in with an API key. Profile details are available
