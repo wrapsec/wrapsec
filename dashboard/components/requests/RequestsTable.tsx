@@ -98,7 +98,7 @@ export function RequestsTable({ items, onSelect }: {
                 {item.output_decision && item.output_decision !== item.decision ? (
                   <div style={{ display: "flex", alignItems: "center", gap: "4px" }}>
                     <DecisionBadge decision={item.decision} size="sm" />
-                    <span style={{ fontSize: "10px", color: "#9ca3af" }}>-></span>
+                    <span style={{ fontSize: "10px", color: "#9ca3af" }}>{'->'}</span>
                     <DecisionBadge decision={item.output_decision} size="sm" />
                   </div>
                 ) : (
