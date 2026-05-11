@@ -77,7 +77,6 @@ def settings_get(json_output: bool) -> None:
     rate_limit  = data.get("rate_limit", {})
 
     click.echo("Gateway Configuration (read-only - change via dashboard)")
-    click.echo("=" * 55)
 
     # Thresholds
     click.echo("\nDetection Thresholds:")

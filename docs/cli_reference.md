@@ -1,13 +1,11 @@
 # WrapSec CLI - Command Reference
 
-> CLI behavior follows [Core Concepts](core_concepts.md) for decision semantics and SYSTEM_ERROR handling.
+CLI behavior follows [Core Concepts](core_concepts.md) for decision semantics and SYSTEM_ERROR handling.
 
-Version: 1.0  
+Version: 1.0.0
 Last updated: May 2026
 
-> **Status:** Installation from source only. PyPI publication (`pip install wrapsec-python`) is pending.
-
----
+Installation from source only. PyPI publication (`pip install wrapsec-python`) is pending.
 
 ## Installation
 
@@ -17,8 +15,6 @@ pip install -e ./sdk/python
 
 # pip install wrapsec-python
 ```
-
----
 
 ## Quick Start
 
@@ -37,8 +33,6 @@ wrapsec doctor
 wrapsec scan "hello world"
 ```
 
----
-
 ## Exit Codes
 
 | Code | Meaning |
@@ -54,16 +48,12 @@ When the API returns `primary_reason = SYSTEM_ERROR`, the API decision is `ALLOW
 
 Exit codes apply to all commands and all output modes (`--quiet`, `--json`).
 
----
-
 ## Global Options
 
 ```bash
-wrapsec --version    # Show CLI version (1.0)
+wrapsec --version    # Show CLI version (1.0.0)
 wrapsec --help       # Show help
 ```
-
----
 
 ## 1. `wrapsec config`
 
@@ -89,12 +79,20 @@ wrapsec config set timeout 30
 | `base_url` | Gateway URL | Must start with `http://` or `https://` |
 | `timeout` | Request timeout in seconds | Integer, minimum 1 |
 
+On success:
+
+```
+  + api_key saved (wsk_li****2fck)
+  + base_url saved (http://localhost:8000)
+  + timeout saved (30)
+```
+
 Invalid values are rejected immediately:
 
 ```
-no api_key must start with 'wsk_live_', got 'invalid_key'...   exit 1
-no timeout must be at least 1 second, got 0                   exit 1
-no base_url must start with http:// or https://, got 'not-a-url'  exit 1
+  - api_key must start with 'wsk_live_', got 'invalid_key'   exit 1
+  - timeout must be at least 1 second, got 0                 exit 1
+  - base_url must start with http:// or https://             exit 1
 ```
 
 ### `wrapsec config get`
@@ -106,9 +104,9 @@ wrapsec config get
 ```
 Config file: C:\Users\...\AppData\Roaming\wrapsec\config.json
 
-  api_key     wsk_li****2fck    [config file]
-  base_url    http://localhost:8000    [config file]
-  timeout     30    [config file]
+  api_key     wsk_li****2fck                            [config file]
+  base_url    http://localhost:8000                     [config file]
+  timeout     30                                        [config file]
 ```
 
 API key is always masked. Each value shows its source: `[config file]`, `[environment variable]`, or `[default]`.
@@ -130,10 +128,7 @@ export WRAPSEC_BASE_URL=https://wrapsec.internal:8000
 export WRAPSEC_TIMEOUT=30
 ```
 
-> ⚠ `http://localhost:8000` is the **development default only**.  
-> Always set `WRAPSEC_BASE_URL` explicitly in production.
-
----
+Note: `http://localhost:8000` is the development default only. Always set `WRAPSEC_BASE_URL` explicitly in production.
 
 ## 2. `wrapsec ping`
 
@@ -144,19 +139,17 @@ wrapsec ping
 ```
 
 ```
- WrapSec API is reachable    exit 0
+WrapSec API is reachable    exit 0
 ```
 
 - Calls `/health/live` only
 - Fixed timeout: 5 seconds (not configurable)
-- **Does NOT validate your API key** - use `wrapsec doctor` for auth verification
+- Does NOT validate your API key - use `wrapsec doctor` for auth verification
 
 **Docker health check:**
 ```dockerfile
 HEALTHCHECK CMD wrapsec ping || exit 1
 ```
-
----
 
 ## 3. `wrapsec doctor`
 
@@ -167,47 +160,43 @@ wrapsec doctor
 ```
 
 ```
-WrapSec Doctor
-==================================================
+wrapsec doctor
 
-1. Configuration
-   Config file:  C:\Users\...\AppData\Roaming\wrapsec\config.json
-   API key:      wsk_li****2fck [config file]
-   Base URL:     http://localhost:8000 [config file]
-   Timeout:      30s [config file]
+  Configuration
+    config file   C:\Users\...\AppData\Roaming\wrapsec\config.json
+    api key       wsk_li****2fck  (config file)
+    base url      http://localhost:8000  (config file)
+    timeout       30s  (config file)
 
-2. API Connectivity
-    API reachable (/health/live)
+  Connectivity
+  + reachable    http://localhost:8000
 
-3. Authentication
-    API key valid (/health/ready)
+  Authentication
+  + api key valid
 
-4. Service Health
-    database        ok
-    redis           ok
-    ml_model        ok
+  Services
+  + database        ok
+  + redis           ok
+  + ml_model        ok
 
-5. Active Configuration
-   Block threshold:   0.7
-   Sanitize threshold:0.4
-   Rule detector:     enabled
-   ML detector:       enabled
-   LLM detector:      enabled
+  Active Configuration
+    block threshold   0.7
+    sanitize          0.4
+    rule detector     enabled
+    ml detector       enabled
+    llm detector      enabled
 
-6. Version Compatibility
-   CLI version:   1.0
-   Expected API:  v1
-   API version:   1.0.0
-    Compatible (1.0.0)
+  Version
+    cli   1.0.0
+    api   1.0.0
+  + compatible
 
- All checks passed - WrapSec CLI is ready.
+  all checks passed
 ```
 
 - A failed check never aborts remaining checks
-- Missing response fields show "Unknown" - never crashes
+- Missing response fields show "unknown" - never crashes
 - Version mismatch shows a warning only - never blocks execution
-
----
 
 ## 4. `wrapsec scan`
 
@@ -271,7 +260,7 @@ BLOCK:
 ```
 Decision:   BLOCK
 Reason:     RULE_DETECTOR
-Confidence: 0.75 (HIGH)
+Confidence: 0.8 (HIGH)
 Trace ID:   req_01kpc175tj4c1vgkqwfeavjt59
 Threats:    PROMPT_INJECTION
 ```
@@ -296,16 +285,13 @@ Confidence is shown at full precision in JSON output (no forced rounding).
 
 ### Validation errors
 
-```bash
-wrapsec scan                    # no No input provided.          Exit 1
-wrapsec scan ("A" * 8001)       # no Input too large (8,001 chars). Exit 1
-wrapsec scan --timeout 0 "text" # no timeout must be at least 1 second. Exit 1
+```
+  - No input provided.                        exit 1
+  - Input too large (8,001 chars).            exit 1
+  - timeout must be at least 1 second.        exit 1
 ```
 
-> ⚠ **Shell history warning:** CLI arguments are stored in shell history.  
-> Use stdin for sensitive content: `echo "text" | wrapsec scan`
-
----
+Note: CLI arguments are stored in shell history. Use stdin for sensitive content: `echo "text" | wrapsec scan`
 
 ## 5. `wrapsec batch`
 
@@ -395,17 +381,13 @@ Results:  5 scanned, 0 skipped
 {"decision": "ALLOW", "primary_reason": "NO_THREAT_DETECTED", "confidence": 1.0, "confidence_band": "HIGH", "trace_id": "req_...", "latency_ms": 1.6, ...}
 {"decision": "BLOCK", "primary_reason": "RULE_DETECTOR", "confidence": 0.75, "confidence_band": "HIGH", "trace_id": "req_...", "latency_ms": 1.18, ...}
 {"decision": "SANITIZE", "primary_reason": "PII_GUARDRAIL_SANITIZE", "confidence": 0.75, "sanitized_input": "my SSN is [SSN REDACTED]", ...}
-
-// latency_ms corresponds to processing.latency_ms in the API response.
-// scan_only: detection pipeline time. proxy: total end-to-end time (WrapSec + provider).
-// For full proxy latency breakdown use: wrapsec audit get <trace_id>
 ```
 
----
+`latency_ms` corresponds to `processing.latency_ms` in the API response. For scan_only: detection pipeline time. For proxy: total end-to-end time (WrapSec + provider). For a full proxy latency breakdown use: `wrapsec audit get <trace_id>`
 
 ## 6. `wrapsec audit`
 
-Query audit logs. All commands are **read-only**.  
+Query audit logs. All commands are **read-only**.
 Scope is bounded by the API key used.
 
 ### `wrapsec audit list`
@@ -498,7 +480,7 @@ Source:         wrapsec-python
 
 Nonexistent trace ID returns exit 1:
 ```
-no Audit record not found: req_nonexistent_trace_id_xyz    exit 1
+  - Audit record not found: req_nonexistent_trace_id_xyz    exit 1
 ```
 
 ### `wrapsec audit stats`
@@ -530,13 +512,11 @@ Top threats:
   DATA_EXFILTRATION    1
 ```
 
-Severity follows SIEM triage levels: CRITICAL (guardrail blocks or risk_score ≥ 0.9), HIGH (other blocks or SYSTEM_ERROR), MEDIUM (sanitized), LOW (allowed). The Severity section is omitted when all counts are zero.
-
----
+Severity follows SIEM triage levels: CRITICAL (guardrail blocks or risk_score >= 0.9), HIGH (other blocks or SYSTEM_ERROR), MEDIUM (sanitized), LOW (allowed). The Severity section is omitted when all counts are zero.
 
 ## 7. `wrapsec settings get`
 
-Show active gateway configuration. **Read-only.**  
+Show active gateway configuration. **Read-only.**
 To change any settings, use the dashboard.
 
 ```bash
@@ -547,7 +527,6 @@ wrapsec settings get --json
 **Output:**
 ```
 Gateway Configuration (read-only - change via dashboard)
-=======================================================
 
 Detection Thresholds:
   Block threshold:     0.7
@@ -568,11 +547,9 @@ Rate Limit:
   Live keys:   60 req/min (default)
 ```
 
----
-
 ## 8. `wrapsec keys list`
 
-List API keys visible to the current key. **Read-only.**  
+List API keys visible to the current key. **Read-only.**
 To create, rotate, or revoke keys, use the dashboard - these operations require JWT + ADMIN login.
 
 `GET /v1/keys` accepts API key authentication. All write operations (`POST`, `PUT`, `DELETE`) on keys require JWT + ADMIN and cannot be performed from the CLI.
@@ -591,8 +568,6 @@ key_52066e5606ae           Finance Bot Key      2026-04-10    Never
 ```
 
 Does NOT show key secrets - they are never retrievable after creation.
-
----
 
 ## CI Usage Patterns
 
@@ -623,8 +598,6 @@ wrapsec scan --quiet "text"
 wrapsec config clear --force
 ```
 
----
-
 ## Security Notes
 
 ```
@@ -645,8 +618,6 @@ wrapsec config clear --force
 6. The CLI never changes security thresholds or detection policy
    Use the dashboard for all configuration changes
 ```
-
----
 
 ## What the CLI Does NOT Do
 
@@ -674,9 +645,9 @@ latency_ms in scan output
   For a full proxy latency breakdown, use: wrapsec audit get <trace_id>
 
 confidence in human vs JSON output
-  Human output: rounded to 2 decimal places (e.g. 0.75). Applies to scan, batch, audit list, and audit get.
+  Scan human output: rounded to 1 decimal place (e.g. 0.8). Applies to scan and audit get.
+  Batch human output: rounded to 2 decimal places (e.g. 0.75). Applies to batch row output.
   JSON output: full precision as returned by the API (no forced rounding).
-  Example: human shows 0.75, JSON may show 0.75 or 0.7500 depending on API response.
 
 batch on Windows (PowerShell)
   PowerShell Out-File -Encoding utf8 adds a BOM character.
@@ -688,12 +659,10 @@ batch on Windows (PowerShell)
   Latency increases by ~100-2300ms depending on the configured LLM.
 
 "Reason" in human output
-  The human-readable output label "Reason:" corresponds to the API field `primary_reason`.
-  JSON output uses `primary_reason` directly - no label difference.
+  The human-readable output label "Reason:" corresponds to the API field primary_reason.
+  JSON output uses primary_reason directly - no label difference.
   Example: human shows "Reason: RULE_DETECTOR", JSON shows "primary_reason": "RULE_DETECTOR"
 ```
 
----
-
-*WrapSec CLI Command Reference*  
-*Version 1.0 - May 2026*
+WrapSec CLI Command Reference
+Version 1.0.0 - May 2026
