@@ -23,17 +23,17 @@ from wrapsec.models import ScanResult
 
 def print_error(message: str) -> None:
     """Print error message to stderr. Never to stdout."""
-    click.secho(f" {message}", fg="red", err=True)
+    click.secho(f"  - {message}", fg="red", err=True)
 
 
 def print_warning(message: str) -> None:
     """Print warning to stderr."""
-    click.secho(f"⚠ {message}", fg="yellow", err=True)
+    click.secho(f"  ! {message}", fg="yellow", err=True)
 
 
 def print_success(message: str) -> None:
     """Print success message to stdout."""
-    click.secho(f" {message}", fg="green")
+    click.secho(f"  + {message}", fg="green")
 
 
 def print_json(data: object) -> None:

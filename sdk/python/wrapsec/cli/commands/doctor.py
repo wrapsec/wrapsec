@@ -91,61 +91,63 @@ def doctor() -> None:
     \b
     Version mismatch: warning only - never blocks execution.
     """
-    cfg      = load_config()
-    all_ok   = True
+    cfg    = load_config()
+    all_ok = True
 
-    click.echo("WrapSec Doctor")
-    click.echo("=" * 50)
+    click.echo("")
+    click.secho("wrapsec doctor", bold=True)
 
-    # ── Check 1: Config file ────────────────────────────────────────────────
-    click.echo("\n1. Configuration")
+    # ── Check 1: Config ─────────────────────────────────────────────────────
+    click.echo("")
+    click.secho("  Configuration", bold=True)
     config_path = get_config_path()
-    click.echo(f"   Config file:  {config_path}")
+    click.echo(f"    config file   {config_path}")
 
     if cfg.api_key:
         source = get_config_source("api_key")
-        click.secho(f"   API key:      {mask_api_key(cfg.api_key)} [{source}]", fg="green")
+        click.echo(f"    api key       {mask_api_key(cfg.api_key)}  ({source})")
     else:
-        click.secho("   API key:       not set", fg="red")
-        click.echo("   Run: wrapsec config set api_key wsk_live_...")
+        click.secho("    api key       not set", fg="red")
+        click.echo("                  run: wrapsec config set api_key wsk_live_...")
         all_ok = False
 
     url_source = get_config_source("base_url")
-    click.echo(f"   Base URL:     {cfg.base_url} [{url_source}]")
+    click.echo(f"    base url      {cfg.base_url}  ({url_source})")
 
     timeout_source = get_config_source("timeout")
-    click.echo(f"   Timeout:      {cfg.timeout}s [{timeout_source}]")
+    click.echo(f"    timeout       {cfg.timeout}s  ({timeout_source})")
 
-    # ── Check 2: API reachable ──────────────────────────────────────────────
-    click.echo("\n2. API Connectivity")
+    # ── Check 2: Connectivity ───────────────────────────────────────────────
+    click.echo("")
+    click.secho("  Connectivity", bold=True)
     client = Client(api_key=cfg.api_key, base_url=cfg.base_url, timeout=cfg.timeout)
 
     reachable = client.health_live()
     if reachable:
-        click.secho("    API reachable (/health/live)", fg="green")
+        click.secho(f"  + reachable    {cfg.base_url}", fg="green")
     else:
-        click.secho("    Cannot reach API", fg="red")
-        click.echo(f"     Tried: {cfg.base_url}/health/live")
-        click.echo("     Check network connection and WRAPSEC_BASE_URL.")
+        click.secho(f"  - unreachable  {cfg.base_url}", fg="red")
+        click.echo("    check your network connection and base_url setting")
         all_ok = False
 
-    # ── Checks 3-5 require API to be reachable ──────────────────────────────
     if not reachable or not cfg.api_key:
         _print_final(all_ok)
         return
 
-    # ── Check 3: Auth valid ─────────────────────────────────────────────────
-    click.echo("\n3. Authentication")
+    # ── Check 3: Auth ───────────────────────────────────────────────────────
+    click.echo("")
+    click.secho("  Authentication", bold=True)
     health_data: dict = {}
     try:
         health_data = client.health_ready()
-        click.secho("    API key valid (/health/ready)", fg="green")
+        click.secho("  + api key valid", fg="green")
     except WrapSecError as e:
-        click.secho(f"    Auth failed: {e.message}", fg="red")
+        click.secho(f"  - auth failed   {e.message}", fg="red")
         all_ok = False
 
-    # ── Check 4: Service health ─────────────────────────────────────────────
-    click.echo("\n4. Service Health")
+    # ── Check 4: Services ───────────────────────────────────────────────────
+    click.echo("")
+    click.secho("  Services", bold=True)
     checks = {}
     try:
         checks = health_data.get("checks", {})
@@ -153,65 +155,55 @@ def doctor() -> None:
         pass
 
     if not checks:
-        click.echo("   - No health check data available")
+        click.echo("    no service data available")
     else:
         for svc, status in checks.items():
-            # Resilient: handle unexpected types/missing fields
-            # Spec: Section 13.2 - missing fields show "Unknown"
-            status_str = str(status) if status is not None else "Unknown"
-            ok = status_str.lower() == "ok"
-            icon  = "[ok]" if ok else "[!!]"
+            status_str = str(status) if status is not None else "unknown"
+            ok    = status_str.lower() == "ok"
             color = "green" if ok else "red"
-            click.secho(f"   {icon} {svc:<15} {status_str}", fg=color)
+            icon  = "+" if ok else "-"
+            click.secho(f"  {icon} {svc:<14} {status_str}", fg=color)
             if not ok:
                 all_ok = False
 
-    # ── Checks 5+6: fetch config once, reuse for both ──────────────────────
+    # ── Checks 5+6: fetch config once ──────────────────────────────────────
     config_data: dict = {}
     try:
         config_data = client.health_config()
     except Exception:
         pass
 
-    # ── Check 5: Configuration summary ─────────────────────────────────────
-    click.echo("\n5. Active Configuration")
+    # ── Check 5: Active config ──────────────────────────────────────────────
+    click.echo("")
+    click.secho("  Active Configuration", bold=True)
     if config_data:
         thresholds = config_data.get("thresholds", {})
         layers     = config_data.get("detection_layers", {})
-        click.echo(f"   Block threshold:   {thresholds.get('block', 'Unknown')}")
-        click.echo(f"   Sanitize threshold:{thresholds.get('sanitize', 'Unknown')}")
-        click.echo(f"   Rule detector:     {'enabled' if layers.get('rule') else 'disabled'}")
-        click.echo(f"   ML detector:       {'enabled' if layers.get('ml') else 'disabled'}")
-        click.echo(f"   LLM detector:      {'enabled' if layers.get('llm') else 'disabled'}")
+        click.echo(f"    block threshold   {thresholds.get('block', 'unknown')}")
+        click.echo(f"    sanitize          {thresholds.get('sanitize', 'unknown')}")
+        click.echo(f"    rule detector     {'enabled' if layers.get('rule') else 'disabled'}")
+        click.echo(f"    ml detector       {'enabled' if layers.get('ml') else 'disabled'}")
+        click.echo(f"    llm detector      {'enabled' if layers.get('llm') else 'disabled'}")
     else:
-        click.echo("   - Configuration data unavailable")
+        click.echo("    not available  (requires admin or scan key with config access)")
 
-    # ── Check 6: Version compatibility ─────────────────────────────────────
-    click.echo("\n6. Version Compatibility")
-    click.echo(f"   CLI version:   {__version__}")
-    click.echo(f"   Expected API:  {EXPECTED_API_VERSION}")
+    # ── Check 6: Version ────────────────────────────────────────────────────
+    click.echo("")
+    click.secho("  Version", bold=True)
+    api_version = config_data.get("version", "unknown") if config_data else "unknown"
+    click.echo(f"    cli   {__version__}")
+    click.echo(f"    api   {api_version}")
 
-    api_version = config_data.get("version", "Unknown") if config_data else "Unknown"
-
-    click.echo(f"   API version:   {api_version}")
-
-    # API version from /health/config is a semantic version (e.g. "1.0.0")
-    # CLI expected API is a path version ("v1") - major version 1.x.x = v1 compatible
-    # Spec: Section 6.6 - version mismatch warning only, never blocks
-    compatible = (
-        api_version == "Unknown"
-        or api_version.startswith("1.")   # 1.x.x = API v1 compatible
-    )
+    # 1.x.x = API v1 compatible. unknown = assume compatible.
+    compatible = api_version == "unknown" or api_version.startswith("1.")
     if not compatible:
         click.secho(
-            f"   [!!] Version mismatch: CLI expects API v1 (1.x.x), "
-            f"API reports {api_version}.\n"
-            f"     Some features may not work correctly.",
+            f"  ! version mismatch  CLI expects 1.x.x, API reports {api_version}",
             fg="yellow",
             err=True,
         )
     else:
-        click.secho(f"    Compatible ({api_version})", fg="green")
+        click.secho(f"  + compatible", fg="green")
 
     # ── Final summary ───────────────────────────────────────────────────────
     _print_final(all_ok)
@@ -220,8 +212,8 @@ def doctor() -> None:
 def _print_final(all_ok: bool) -> None:
     click.echo("")
     if all_ok:
-        click.secho(" All checks passed - WrapSec CLI is ready.", fg="green")
+        click.secho("  all checks passed", fg="green", bold=True)
         sys.exit(0)
     else:
-        click.secho(" Some checks failed - see above for details.", fg="red", err=True)
+        click.secho("  some checks failed - see above for details", fg="red", bold=True, err=True)
         sys.exit(1)
