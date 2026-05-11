@@ -151,19 +151,18 @@ def load_config() -> WrapSecConfig:
     )
 
     # base_url: env -> file -> default
+    _default_base_url  = str(DEFAULTS["base_url"])
+    _base_url_from_env  = os.environ.get("WRAPSEC_BASE_URL")
+    _base_url_from_file = file_config.get("base_url")
     base_url = (
-        os.environ.get("WRAPSEC_BASE_URL")
-        or file_config.get("base_url")
-        or str(DEFAULTS["base_url"])
+        _base_url_from_env
+        or _base_url_from_file
+        or _default_base_url
     )
 
-    # Fix #2 - warn loudly when using the localhost default.
-    # A developer who forgets to set WRAPSEC_BASE_URL in production
-    # silently sends all API keys and prompts to localhost, which either
-    # fails (connection refused) or - worse - hits an unexpected local service.
-    # We warn on stderr so the message is visible even with --quiet or --json.
-    _default_base_url = str(DEFAULTS["base_url"])
-    if base_url == _default_base_url:
+    # Warn only when falling back to the hardcoded default - not when the user
+    # has explicitly set localhost in their config file or env var.
+    if base_url == _default_base_url and not _base_url_from_env and not _base_url_from_file:
         logger.warning(
             "WrapSec base_url is using the development default (%s). "
             "Set WRAPSEC_BASE_URL or run: wrapsec config set base_url <your-instance-url>",

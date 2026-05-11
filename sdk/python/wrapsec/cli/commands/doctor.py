@@ -160,7 +160,7 @@ def doctor() -> None:
             # Spec: Section 13.2 - missing fields show "Unknown"
             status_str = str(status) if status is not None else "Unknown"
             ok = status_str.lower() == "ok"
-            icon  = "" if ok else ""
+            icon  = "[ok]" if ok else "[!!]"
             color = "green" if ok else "red"
             click.secho(f"   {icon} {svc:<15} {status_str}", fg=color)
             if not ok:
@@ -204,7 +204,7 @@ def doctor() -> None:
     )
     if not compatible:
         click.secho(
-            f"   ⚠ Version mismatch: CLI expects API v1 (1.x.x), "
+            f"   [!!] Version mismatch: CLI expects API v1 (1.x.x), "
             f"API reports {api_version}.\n"
             f"     Some features may not work correctly.",
             fg="yellow",
