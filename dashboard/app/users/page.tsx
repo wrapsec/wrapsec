@@ -418,6 +418,7 @@ export default function UsersPage() {
               <p className="text-xs text-slate-400">{fetchError?.message ?? "An unexpected error occurred"}</p>
             </div>
           ) : (
+            <div style={{ overflowY: "auto", maxHeight: "520px" }}>
             <table className="w-full text-sm">
               <thead>
                 <tr className="border-b border-slate-100 bg-slate-50">
@@ -448,7 +449,12 @@ export default function UsersPage() {
                       )
                     })
                     .map(user => (
-                    <tr key={user.id} className="border-b border-slate-50 hover:bg-slate-50 transition-colors">
+                    <tr
+                      key={user.id}
+                      className="border-b border-slate-50"
+                      onMouseEnter={e => (e.currentTarget as HTMLElement).style.background = "#f9fafb"}
+                      onMouseLeave={e => (e.currentTarget as HTMLElement).style.background = ""}
+                    >
                       <td className="px-5 py-3 font-medium text-slate-900">
                         {user.email}
                         {user.force_password_change && (
@@ -470,7 +476,9 @@ export default function UsersPage() {
                       <td className="px-5 py-3 text-right">
                         <button
                           onClick={() => setEditing(user)}
-                          className="text-xs text-blue-700 hover:underline"
+                          style={{ fontSize: "12px", color: "#1d4ed8", background: "none", border: "none", cursor: "pointer", padding: 0 }}
+                          onMouseEnter={e => (e.currentTarget as HTMLElement).style.textDecoration = "underline"}
+                          onMouseLeave={e => (e.currentTarget as HTMLElement).style.textDecoration = "none"}
                         >
                           Manage
                         </button>
@@ -480,6 +488,7 @@ export default function UsersPage() {
                 )}
               </tbody>
             </table>
+            </div>
           )}
         </Card>
       </div>

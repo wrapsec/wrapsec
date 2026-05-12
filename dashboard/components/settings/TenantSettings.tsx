@@ -109,15 +109,11 @@ export function TenantSettingsForm({
 
       {/* Enforced runtime values - from DB settings, not global_policy */}
       <div>
-        <p className="text-xs font-medium text-slate-700 mb-1">
+        <p className="text-xs font-medium text-slate-700 mb-3">
           Enforced runtime settings
           <span className="ml-2 text-xs text-slate-400 font-normal">
-            - actual values applied to all requests. Departments may override these below.
+            - Tenant-wide defaults. Departments may have their own overrides.
           </span>
-        </p>
-        <p className="text-xs text-amber-600 mb-3">
-          These are the currently enforced values. If a card below has been configured,
-          it overrides the environment default shown here.
         </p>
         <div className="grid grid-cols-3 gap-3">
           {[

@@ -86,6 +86,7 @@ export default function ApiKeysPage() {
                 <p className="text-xs text-slate-400">{fetchError?.message ?? "An unexpected error occurred"}</p>
               </div>
             ) : (
+              <div style={{ overflowY: "auto", maxHeight: "520px" }}>
               <ApiKeyTable
                 keys={(data?.keys ?? []).filter((k) => {
                   if (!search) return true
@@ -102,6 +103,7 @@ export default function ApiKeysPage() {
                 revoking={revoking}
                 canWrite={isJwt}
               />
+              </div>
             )}
           </div>
         </Card>

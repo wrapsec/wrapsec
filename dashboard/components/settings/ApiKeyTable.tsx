@@ -2,7 +2,6 @@
 // Copyright (c) 2026 WrapSec. All rights reserved.
 // WrapSec v1.0 | AI Security Gateway - https://wrapsec.com
 import { useState, Fragment } from "react"
-import { Button } from "@/components/ui/Button"
 import { ApiKey } from "@/lib/types"
 import { formatTimestamp, timeAgo } from "@/lib/utils"
 
@@ -100,7 +99,11 @@ export function ApiKeyTable({ keys, onRevoke, onRotate, revoking, canWrite = tru
 
             return (
               <Fragment key={key.key_id}>
-                <tr className="border-b border-slate-50">
+                <tr
+                  className="border-b border-slate-50"
+                  onMouseEnter={e => (e.currentTarget as HTMLElement).style.background = "#f9fafb"}
+                  onMouseLeave={e => (e.currentTarget as HTMLElement).style.background = ""}
+                >
 
                   {/* Name + badges */}
                   <td className="py-3 text-sm font-medium text-slate-900">
@@ -152,53 +155,70 @@ export function ApiKeyTable({ keys, onRevoke, onRotate, revoking, canWrite = tru
                     <div className="flex items-center justify-end gap-2">
                       {/* Rotate - hidden for API key sessions */}
                       {canWrite && <button
-                        onClick={() => setGraceInput(key.key_id)}
+                        onClick={() => { setConfirmRevoke(null); setGraceInput(key.key_id) }}
                         disabled={rotating === key.key_id || !!revoking || inGrace}
                         title={inGrace
                           ? "This key is already in its grace period. Rotate the new key instead."
                           : "Rotate this key and generate a new secret"
                         }
-                        className="text-xs text-slate-500 hover:text-blue-700 disabled:opacity-30 disabled:cursor-not-allowed transition-colors"
+                        style={{ fontSize: "12px", color: "#1d4ed8", background: "none", border: "none", cursor: "pointer", padding: 0, opacity: (rotating === key.key_id || !!revoking || inGrace) ? 0.3 : 1 }}
+                        onMouseEnter={e => { if (!(rotating === key.key_id || !!revoking || inGrace)) (e.currentTarget as HTMLElement).style.textDecoration = "underline" }}
+                        onMouseLeave={e => (e.currentTarget as HTMLElement).style.textDecoration = "none"}
                       >
                         {rotating === key.key_id ? "Rotating..." : "Rotate"}
                       </button>}
 
-                      {/* Revoke - hidden for API key sessions; two-step inline confirm */}
+                      {/* Revoke - hidden for API key sessions */}
                       {canWrite && (
-                        confirmRevoke === key.key_id ? (
-                          <div className="flex items-center gap-2">
-                            <span className="text-xs text-red-600 whitespace-nowrap">Revoke?</span>
-                            <button
-                              onClick={() => { setConfirmRevoke(null); onRevoke(key.key_id) }}
-                              className="text-xs font-medium text-red-600 hover:text-red-800 whitespace-nowrap"
-                            >
-                              Confirm
-                            </button>
-                            <button
-                              onClick={() => setConfirmRevoke(null)}
-                              className="text-xs text-slate-500 hover:text-slate-700"
-                            >
-                              Cancel
-                            </button>
-                          </div>
-                        ) : (
-                          <Button
-                            variant="danger"
-                            size="sm"
-                            loading={revoking === key.key_id}
-                            onClick={() => { setGraceInput(null); setConfirmRevoke(key.key_id) }}
-                            title={inGrace
-                              ? "Immediately revokes this key - integrations still using it will stop working now"
-                              : "Revoke this key permanently"
-                            }
-                          >
-                            {inGrace ? "Force revoke" : "Revoke"}
-                          </Button>
-                        )
+                        <button
+                          disabled={revoking === key.key_id}
+                          onClick={() => { setGraceInput(null); setConfirmRevoke(key.key_id) }}
+                          title={inGrace
+                            ? "Immediately revokes this key - integrations still using it will stop working now"
+                            : "Revoke this key permanently"
+                          }
+                          style={{ fontSize: "12px", color: "#dc2626", background: "none", border: "none", cursor: "pointer", padding: 0, opacity: revoking === key.key_id ? 0.3 : 1 }}
+                          onMouseEnter={e => { if (revoking !== key.key_id) (e.currentTarget as HTMLElement).style.textDecoration = "underline" }}
+                          onMouseLeave={e => (e.currentTarget as HTMLElement).style.textDecoration = "none"}
+                        >
+                          {revoking === key.key_id ? "Revoking..." : (inGrace ? "Force revoke" : "Revoke")}
+                        </button>
                       )}
                     </div>
                   </td>
                 </tr>
+
+                {/* Revoke confirmation row */}
+                {confirmRevoke === key.key_id && (
+                  <tr className="bg-red-50">
+                    <td colSpan={7} className="px-3 py-3">
+                      <div className="flex items-center gap-3">
+                        <p className="text-xs text-red-700 whitespace-nowrap">
+                          {inGrace
+                            ? "This will immediately revoke the key. Integrations still using it will stop working now."
+                            : "This will permanently revoke the key. This cannot be undone."
+                          }
+                        </p>
+                        <button
+                          onClick={() => { setConfirmRevoke(null); onRevoke(key.key_id) }}
+                          style={{ fontSize: "12px", fontWeight: 500, color: "#fff", background: "#dc2626", border: "none", cursor: "pointer", padding: "4px 12px", borderRadius: "4px", whiteSpace: "nowrap" }}
+                          onMouseEnter={e => (e.currentTarget as HTMLElement).style.background = "#b91c1c"}
+                          onMouseLeave={e => (e.currentTarget as HTMLElement).style.background = "#dc2626"}
+                        >
+                          {inGrace ? "Force revoke" : "Confirm revoke"}
+                        </button>
+                        <button
+                          onClick={() => setConfirmRevoke(null)}
+                          style={{ fontSize: "12px", color: "#6b7280", background: "none", border: "none", cursor: "pointer", padding: 0 }}
+                          onMouseEnter={e => (e.currentTarget as HTMLElement).style.color = "#374151"}
+                          onMouseLeave={e => (e.currentTarget as HTMLElement).style.color = "#6b7280"}
+                        >
+                          Cancel
+                        </button>
+                      </div>
+                    </td>
+                  </tr>
+                )}
 
                 {/* Grace period selector row */}
                 {graceInput === key.key_id && (
@@ -224,13 +244,17 @@ export function ApiKeyTable({ keys, onRevoke, onRotate, revoking, canWrite = tru
                             const sel = document.getElementById(`grace-${key.key_id}`) as HTMLSelectElement
                             handleRotateConfirm(key.key_id, parseInt(sel.value))
                           }}
-                          className="text-xs font-medium text-white bg-blue-700 hover:bg-blue-800 px-3 py-1 rounded transition-colors"
+                          style={{ fontSize: "12px", fontWeight: 500, color: "#fff", background: "#1d4ed8", border: "none", cursor: "pointer", padding: "4px 12px", borderRadius: "4px" }}
+                          onMouseEnter={e => (e.currentTarget as HTMLElement).style.background = "#1e40af"}
+                          onMouseLeave={e => (e.currentTarget as HTMLElement).style.background = "#1d4ed8"}
                         >
                           Confirm rotate
                         </button>
                         <button
                           onClick={() => setGraceInput(null)}
-                          className="text-xs text-slate-500 hover:text-slate-700"
+                          style={{ fontSize: "12px", color: "#6b7280", background: "none", border: "none", cursor: "pointer", padding: 0 }}
+                          onMouseEnter={e => (e.currentTarget as HTMLElement).style.color = "#374151"}
+                          onMouseLeave={e => (e.currentTarget as HTMLElement).style.color = "#6b7280"}
                         >
                           Cancel
                         </button>

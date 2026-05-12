@@ -597,7 +597,7 @@ export default function ApplicationDetailPage() {
               subtitle="Keys scoped to this application"
             />
             <Link href="/settings/keys" className="text-xs text-blue-700 hover:underline whitespace-nowrap">
-              Manage keys ->
+              {'Manage keys ->'}
             </Link>
           </div>
           {appKeys.length === 0 ? (

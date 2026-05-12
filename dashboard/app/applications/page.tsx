@@ -3,7 +3,7 @@
 // WrapSec v1.0 | AI Security Gateway - https://wrapsec.com
 "use client"
 
-import { useState } from "react"
+import { useState, Fragment } from "react"
 import { useAuthMode } from "@/hooks/useAuthMode"
 import useSWR from "swr"
 import { Shell } from "@/components/layout/Shell"
@@ -32,7 +32,10 @@ export default function ApplicationsPage() {
   const { data: deptData }               = useSWR("departments",   getDepartments)
 
   const handleCreate = async () => {
-    if (!name || !slug || !deptId) return
+    if (!name || !slug || !deptId) {
+      setError(!name ? "Name is required." : !slug ? "Slug is required." : "Please select a department.")
+      return
+    }
     setSaving(true)
     setError(null)
     try {
@@ -179,6 +182,7 @@ export default function ApplicationsPage() {
               <p className="text-xs text-slate-400">{fetchError?.message ?? "An unexpected error occurred"}</p>
             </div>
           ) : (
+            <div style={{ overflowY: "auto", maxHeight: "520px" }}>
             <table className="w-full text-sm">
               <thead>
                 <tr className="border-b border-slate-100 bg-slate-50">
@@ -211,69 +215,92 @@ export default function ApplicationsPage() {
                       )
                     })
                     .map((app) => (
-                    <tr key={app.id} className="border-b border-slate-50 hover:bg-slate-50 transition-colors">
-                      <td className="px-5 py-3">
-                        <p className="font-medium text-slate-900">{app.name}</p>
-                        <p className="text-xs text-slate-400 font-mono">{app.slug}</p>
-                      </td>
-                      <td className="px-5 py-3 text-xs text-slate-600">{deptName(app.dept_id)}</td>
-                      <td className="px-5 py-3">
-                        <span className={`text-xs px-2 py-0.5 rounded-full border ${
-                          app.environment === "production"
-                            ? "bg-green-50 text-green-700 border-green-200"
-                            : app.environment === "staging"
-                            ? "bg-amber-50 text-amber-700 border-amber-200"
-                            : "bg-slate-50 text-slate-600 border-slate-200"
-                        }`}>
-                          {app.environment}
-                        </span>
-                      </td>
-                      <td className="px-5 py-3 text-xs text-slate-500">{app.owner_name || "-"}</td>
-                      <td className="px-5 py-3">
-                        {app.policy_override ? (
-                          <span className="text-xs px-2 py-0.5 rounded-full bg-blue-50 text-blue-700 border border-blue-200">Overridden</span>
-                        ) : (
-                          <span className="text-xs text-slate-400">Inherits dept</span>
-                        )}
-                      </td>
-                      <td className="px-5 py-3 text-right">
-                        <div className="flex items-center justify-end gap-3">
-                          <Link href={`/applications/${app.id}`} className="text-xs text-blue-700 hover:underline">
-                            Manage
-                          </Link>
-                          {isJwt && (
-                            confirmDeactivate === app.id ? (
-                              <div className="flex items-center gap-2">
-                                <span className="text-xs text-red-600 whitespace-nowrap">Deactivate?</span>
-                                <button
-                                  onClick={() => handleDeactivate(app.id)}
-                                  className="text-xs font-medium text-red-600 hover:text-red-800"
-                                >
-                                  Confirm
-                                </button>
-                                <button
-                                  onClick={() => setConfirmDeactivate(null)}
-                                  className="text-xs text-slate-500 hover:text-slate-700"
-                                >
-                                  Cancel
-                                </button>
-                              </div>
-                            ) : (
+                    <Fragment key={app.id}>
+                      <tr
+                        className="border-b border-slate-50"
+                        onMouseEnter={e => (e.currentTarget as HTMLElement).style.background = "#f9fafb"}
+                        onMouseLeave={e => (e.currentTarget as HTMLElement).style.background = ""}
+                      >
+                        <td className="px-5 py-3">
+                          <p className="font-medium text-slate-900">{app.name}</p>
+                          <p className="text-xs text-slate-400 font-mono">{app.slug}</p>
+                        </td>
+                        <td className="px-5 py-3 text-xs text-slate-600">{deptName(app.dept_id)}</td>
+                        <td className="px-5 py-3">
+                          <span className={`text-xs px-2 py-0.5 rounded-full border ${
+                            app.environment === "production"
+                              ? "bg-green-50 text-green-700 border-green-200"
+                              : app.environment === "staging"
+                              ? "bg-amber-50 text-amber-700 border-amber-200"
+                              : "bg-slate-50 text-slate-600 border-slate-200"
+                          }`}>
+                            {app.environment}
+                          </span>
+                        </td>
+                        <td className="px-5 py-3 text-xs text-slate-500">{app.owner_name || "-"}</td>
+                        <td className="px-5 py-3">
+                          {app.policy_override ? (
+                            <span className="text-xs px-2 py-0.5 rounded-full bg-blue-50 text-blue-700 border border-blue-200">Overridden</span>
+                          ) : (
+                            <span className="text-xs text-slate-400">Inherits dept</span>
+                          )}
+                        </td>
+                        <td className="px-5 py-3 text-right">
+                          <div className="flex items-center justify-end gap-3">
+                            <Link
+                              href={`/applications/${app.id}`}
+                              style={{ fontSize: "12px", color: "#1d4ed8" }}
+                              onMouseEnter={e => (e.currentTarget as HTMLElement).style.textDecoration = "underline"}
+                              onMouseLeave={e => (e.currentTarget as HTMLElement).style.textDecoration = "none"}
+                            >
+                              Manage
+                            </Link>
+                            {isJwt && (
                               <button
-                                onClick={() => setConfirmDeactivate(app.id)}
-                                className="text-xs text-red-500 hover:text-red-700"
+                                onClick={() => setConfirmDeactivate(confirmDeactivate === app.id ? null : app.id)}
+                                style={{ fontSize: "12px", color: "#dc2626", background: "none", border: "none", cursor: "pointer", padding: 0 }}
+                                onMouseEnter={e => (e.currentTarget as HTMLElement).style.textDecoration = "underline"}
+                                onMouseLeave={e => (e.currentTarget as HTMLElement).style.textDecoration = "none"}
                               >
                                 Deactivate
                               </button>
-                            )
-                          )}
-                        </div>
-                      </td>
-                    </tr>
+                            )}
+                          </div>
+                        </td>
+                      </tr>
+                      {confirmDeactivate === app.id && (
+                        <tr style={{ background: "#fff5f5" }}>
+                          <td colSpan={6} className="px-5 py-3">
+                            <div className="flex items-center gap-3">
+                              <p className="text-xs text-red-700 whitespace-nowrap">
+                                This will permanently deactivate the application.
+                              </p>
+                              <button
+                                onClick={() => handleDeactivate(app.id)}
+                                style={{ fontSize: "12px", fontWeight: 500, color: "#fff", background: "#dc2626", border: "none", cursor: "pointer", padding: "4px 12px", borderRadius: "4px", whiteSpace: "nowrap" }}
+                                onMouseEnter={e => (e.currentTarget as HTMLElement).style.background = "#b91c1c"}
+                                onMouseLeave={e => (e.currentTarget as HTMLElement).style.background = "#dc2626"}
+                              >
+                                Confirm deactivate
+                              </button>
+                              <button
+                                onClick={() => setConfirmDeactivate(null)}
+                                style={{ fontSize: "12px", color: "#6b7280", background: "none", border: "none", cursor: "pointer", padding: 0 }}
+                                onMouseEnter={e => (e.currentTarget as HTMLElement).style.color = "#374151"}
+                                onMouseLeave={e => (e.currentTarget as HTMLElement).style.color = "#6b7280"}
+                              >
+                                Cancel
+                              </button>
+                            </div>
+                          </td>
+                        </tr>
+                      )}
+                    </Fragment>
                   ))
                 )}
               </tbody>
             </table>
+            </div>
           )}
         </Card>
       </div>
