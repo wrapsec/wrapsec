@@ -340,7 +340,9 @@ export function RequestDetailModal({ traceId, onClose }: RequestDetailModalProps
                       <DecisionChip label="Output decision" decision={detail.proxy.output_decision} />
                       <div className="flex flex-col gap-1">
                         <p className="text-xs text-slate-400">Execution status</p>
-                        <StatusChip status={detail.proxy.execution_status} />
+                        <div className="w-fit">
+                          <StatusChip status={detail.proxy.execution_status} />
+                        </div>
                       </div>
                     </div>
 
