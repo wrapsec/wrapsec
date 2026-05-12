@@ -43,20 +43,24 @@ async def health_ready():
     # Redis ping
     redis_ok = await redis_ping()
 
-    # ML model check - verify the model file was loaded at startup
-    ml_ok = False
+    # Per-detector status -- each tier reported separately
+    tfidf_status       = "unavailable"
+    transformer_status = "unavailable"
     try:
         from engine.detection.ml_detector import MLDetector
-        ml_ok = MLDetector.is_model_loaded()
+        from engine.detection.transformer_detector import TransformerDetector
+        tfidf_status       = "healthy" if MLDetector.is_model_loaded()       else "degraded"
+        transformer_status = "healthy" if TransformerDetector.is_model_loaded() else "degraded"
     except Exception:
-        ml_ok = False
+        pass
 
     checks = {
-        "database": "ok" if db_ok else "unavailable",
-        "redis":    "ok" if redis_ok else "unavailable",
-        "ml_model": "ok" if ml_ok else "unavailable",
+        "database":             "ok"      if db_ok    else "unavailable",
+        "redis":                "ok"      if redis_ok else "unavailable",
+        "tfidf_detector":       tfidf_status,
+        "transformer_detector": transformer_status,
     }
-    all_ok = all(v == "ok" for v in checks.values())
+    all_ok = all(v in ("ok", "healthy") for v in checks.values())
 
     return {
         "status": "ready" if all_ok else "degraded",

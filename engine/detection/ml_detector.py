@@ -33,6 +33,9 @@ class MLDetector(BaseDetector):
     ML-based threat classifier using TF-IDF + LogisticRegression.
     Migrated from ai-security-gateway prototype.
     Falls back to clean result if model not found.
+
+    Accepts an optional model_path constructor argument. DetectionPipeline passes
+    profile.tier1_model explicitly. Direct instantiation still works unchanged.
     """
 
     _class_ready: bool = False  # set to True when any instance loads the model
@@ -41,31 +44,34 @@ class MLDetector(BaseDetector):
     def is_model_loaded(cls) -> bool:
         return cls._class_ready
 
-    def __init__(self):
-        self._model    = None
-        self._ready    = False
+    def __init__(self, model_path: Path | None = None):
+        self._model      = None
+        self._ready      = False
+        self._model_path = model_path or MODEL_PATH
+        self._hash_path  = self._model_path.with_suffix(self._model_path.suffix + ".sha256")
         self._load_model()
 
     def _load_model(self) -> None:
-        if not MODEL_PATH.exists():
+        if not self._model_path.exists():
             logger.warning(
-                f"ML model not found at {MODEL_PATH}. "
-                "MLDetector will return clean results until model is trained."
+                "ML model not found at %s. "
+                "MLDetector will return clean results until model is trained.",
+                self._model_path,
             )
             return
         try:
-            raw = MODEL_PATH.read_bytes()
+            raw = self._model_path.read_bytes()
 
             # Integrity check - refuse to unpickle if hash file exists and mismatches.
             # pickle.load() executes arbitrary code; a tampered model is an RCE vector.
-            if MODEL_HASH_PATH.exists():
-                expected = MODEL_HASH_PATH.read_text().strip().lower()
+            if self._hash_path.exists():
+                expected = self._hash_path.read_text().strip().lower()
                 actual   = hashlib.sha256(raw).hexdigest().lower()
                 if actual != expected:
                     logger.error(
                         "ML model integrity check FAILED - "
                         "expected=%s actual=%s path=%s - refusing to load",
-                        expected[:16] + "...", actual[:16] + "...", MODEL_PATH,
+                        expected[:16] + "...", actual[:16] + "...", self._model_path,
                     )
                     return
             else:
@@ -73,14 +79,14 @@ class MLDetector(BaseDetector):
                     "ML model integrity file not found at %s - refusing to load. "
                     "pickle.loads without verification is an RCE vector. "
                     "Generate the hash with: sha256sum %s > %s",
-                    MODEL_HASH_PATH, MODEL_PATH, MODEL_HASH_PATH,
+                    self._hash_path, self._model_path, self._hash_path,
                 )
                 return
 
             self._model             = pickle.loads(raw)
             self._ready             = True
             MLDetector._class_ready = True
-            logger.info("ML model loaded from %s", MODEL_PATH)
+            logger.info("ML model loaded from %s", self._model_path)
         except Exception as e:
             logger.error("Failed to load ML model: %s", e)
 

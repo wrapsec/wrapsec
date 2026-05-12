@@ -107,6 +107,7 @@ class AuditLogModel(Base):
     proxy_interaction_id = Column(UUID(as_uuid=True), ForeignKey("proxy_interactions.id", ondelete="SET NULL"), nullable=True)
     severity       = Column(String(10),  nullable=True)
     principal_type = Column(String(20),  nullable=True,  default="api_key")
+    model_version  = Column(String(50),  nullable=True)
     created_at     = Column(DateTime,    nullable=False, default=datetime.utcnow)
 
     __table_args__ = (

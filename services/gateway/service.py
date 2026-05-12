@@ -14,7 +14,8 @@ from domain.entities.request import IncomingRequest
 from domain.entities.decision import GatewayDecision, LayerScores
 from domain.entities.audit_log import AuditLog
 from engine.detection.rule_detector import RuleDetector
-from engine.detection.ml_detector import MLDetector
+from engine.detection.pipeline import DetectionPipeline
+from engine.detection.profiles import get_profile
 from engine.detection.llm_detector import LLMDetector
 from engine.detection.base import DetectionResult
 from engine.guardrails.pii.detector import PIIDetector
@@ -51,9 +52,9 @@ class GatewayService:
     """
 
     def __init__(self):
-        self._rule_detector  = RuleDetector()
-        self._ml_detector    = MLDetector()
-        self._llm_detector   = LLMDetector()
+        self._rule_detector      = RuleDetector()
+        self._detection_pipeline = DetectionPipeline(get_profile("general"))
+        self._llm_detector       = LLMDetector()
         self._pii_detector   = PIIDetector()
         self._input_guard    = InputGuard()
         self._output_guard   = OutputGuard()
@@ -131,16 +132,14 @@ class GatewayService:
                 rule_result      = DetectionResult.clean("rule_detector")
                 detection_failed = True
 
-            # ── Step 3: ML detection (CPU-bound -> thread) ────
+            # ── Step 3: ML detection (two-tier: TF-IDF + transformer, parallel) ──
             try:
                 if ml_enabled:
-                    ml_result = await asyncio.to_thread(
-                        self._ml_detector.detect, effective_input
-                    )
+                    ml_result = await self._detection_pipeline.run(effective_input)
                 else:
                     ml_result = DetectionResult.clean("ml_detector")
             except Exception as e:
-                logger.error(f"ML detector failed: {e} trace_id={request.trace_id}")
+                logger.error(f"Detection pipeline failed: {e} trace_id={request.trace_id}")
                 ml_result        = DetectionResult.clean("ml_detector")
                 detection_failed = True
 

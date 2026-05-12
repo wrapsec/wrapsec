@@ -159,12 +159,21 @@ def doctor() -> None:
     else:
         for svc, status in checks.items():
             status_str = str(status) if status is not None else "unknown"
-            ok    = status_str.lower() == "ok"
-            color = "green" if ok else "red"
-            icon  = "+" if ok else "-"
-            click.secho(f"  {icon} {svc:<14} {status_str}", fg=color)
-            if not ok:
+            s = status_str.lower()
+            if s in ("ok", "healthy"):
+                color, icon = "green",  "+"
+            elif s == "degraded":
+                color, icon = "yellow", "!"
                 all_ok = False
+            else:
+                color, icon = "red",    "-"
+                all_ok = False
+            click.secho(f"  {icon} {svc:<22} {status_str}", fg=color)
+            if s == "degraded" and "transformer" in svc:
+                click.echo(
+                    "                               transformer model unavailable -- "
+                    "download model or check models/ dir"
+                )
 
     # ── Checks 5+6: fetch config once ──────────────────────────────────────
     config_data: dict = {}
