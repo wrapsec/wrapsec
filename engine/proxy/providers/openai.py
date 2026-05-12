@@ -69,6 +69,11 @@ class OpenAIProxyProvider(BaseProxyProvider):
                 headers=headers,
                 json=payload,
             )
+            if not resp.is_success:
+                logger.error(
+                    "Provider error -- status=%s body=%.500s",
+                    resp.status_code, resp.text,
+                )
             resp.raise_for_status()
 
         data       = resp.json()

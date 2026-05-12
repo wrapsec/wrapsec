@@ -131,10 +131,10 @@ def _build_config_response(config: ProxyProviderConfigModel) -> dict:
     }
 
 
-async def _get_config(key_id: str, db: AsyncSession) -> ProxyProviderConfigModel | None:
+async def _get_config(tenant_id: str, db: AsyncSession) -> ProxyProviderConfigModel | None:
     result = await db.execute(
         select(ProxyProviderConfigModel).where(
-            ProxyProviderConfigModel.key_id == key_id
+            ProxyProviderConfigModel.tenant_id == tenant_id
         )
     )
     return result.scalar_one_or_none()
@@ -149,12 +149,12 @@ async def get_proxy_settings(
     _principal: Principal    = Depends(get_current_principal),
 ):
     """
-    Returns the proxy provider config for the current API key.
+    Returns the proxy provider config for the current tenant.
     The provider API key is always masked in the response - never returned in plaintext.
     404 if no provider has been configured.
     """
-    key_id = request.state.key_id
-    config = await _get_config(key_id, db)
+    tenant_id = request.state.tenant_id
+    config = await _get_config(tenant_id, db)
 
     if not config:
         return JSONResponse(
@@ -175,11 +175,11 @@ async def put_proxy_settings(
     _principal: Principal    = Depends(require_any_admin()),
 ):
     """
-    Creates or replaces the proxy provider config for the current API key (upsert).
+    Creates or replaces the proxy provider config for the current tenant (upsert).
     The provider API key is encrypted before storage using the server's secret_key.
     Providers "openai" and "custom" require api_key; "ollama" does not.
     """
-    key_id = request.state.key_id
+    tenant_id = request.state.tenant_id
 
     # Validate: openai and custom providers require an api_key
     if body.provider in ("openai", "custom") and not (body.api_key and body.api_key.get_secret_value()):
@@ -198,7 +198,7 @@ async def put_proxy_settings(
     if body.api_key:
         encrypted_key = encrypt(body.api_key.get_secret_value(), get_settings().secret_key)
 
-    existing = await _get_config(key_id, db)
+    existing = await _get_config(tenant_id, db)
 
     if existing:
         # Update in place
@@ -211,7 +211,7 @@ async def put_proxy_settings(
     else:
         # Create new
         config = ProxyProviderConfigModel(
-            key_id               = key_id,
+            tenant_id            = tenant_id,
             provider             = body.provider,
             base_url             = body.base_url,
             provider_api_key_enc = encrypted_key,
@@ -223,7 +223,7 @@ async def put_proxy_settings(
     await db.commit()
     await db.refresh(config)
 
-    logger.info(f"Proxy config saved for key_id={key_id} provider={body.provider}")
+    logger.info(f"Proxy config saved for tenant_id={tenant_id} provider={body.provider}")
 
     return JSONResponse(status_code=200, content=_build_config_response(config))
 
@@ -237,14 +237,14 @@ async def delete_proxy_settings(
     _principal: Principal    = Depends(get_current_principal),
 ):
     """
-    Removes the proxy provider config for the current API key.
+    Removes the proxy provider config for the current tenant.
     After deletion, proxy mode requests will fail with proxy_not_configured.
     404 if no config exists.
     """
-    key_id = request.state.key_id
+    tenant_id = request.state.tenant_id
     result = await db.execute(
         delete(ProxyProviderConfigModel).where(
-            ProxyProviderConfigModel.key_id == key_id
+            ProxyProviderConfigModel.tenant_id == tenant_id
         )
     )
     await db.commit()
@@ -255,7 +255,7 @@ async def delete_proxy_settings(
             content={"error": {"code": "NOT_FOUND", "message": "No proxy provider configured."}},
         )
 
-    logger.info(f"Proxy config deleted for key_id={key_id}")
+    logger.info(f"Proxy config deleted for tenant_id={tenant_id}")
     return Response(status_code=204)
 
 
@@ -273,8 +273,8 @@ async def get_proxy_health(
     Ollama: GET /api/tags. OpenAI-compatible: GET /models with Authorization header.
     Timeout for the connectivity check is fixed at 10 seconds.
     """
-    key_id = request.state.key_id
-    config = await _get_config(key_id, db)
+    tenant_id = request.state.tenant_id
+    config = await _get_config(tenant_id, db)
 
     if not config:
         return JSONResponse(
@@ -316,7 +316,7 @@ async def get_proxy_health(
             latency_ms = int((time.monotonic() - start) * 1000)
 
             logger.info(
-                f"Health check OK for key_id={key_id} "
+                f"Health check OK for tenant_id={tenant_id} "
                 f"provider={config.provider} latency={latency_ms}ms"
             )
 
@@ -362,7 +362,7 @@ async def get_proxy_health(
             },
         )
     except Exception as exc:
-        logger.error("Health check failed for key_id=%s: %s", key_id, exc)
+        logger.error("Health check failed for tenant_id=%s: %s", tenant_id, exc)
         return JSONResponse(
             status_code=200,
             content={

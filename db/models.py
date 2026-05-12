@@ -64,7 +64,7 @@ class ApplicationModel(Base):
     environment         = Column(String(20),  nullable=False, default="production")
     metadata_           = Column("metadata",  JSON, nullable=True, default=None)
     policy_override     = Column(JSON,        nullable=True,  default=None)
-    rate_limit_override = Column(Integer,     nullable=True,  default=None)
+    rate_limit_override = Column(JSON,        nullable=True,  default=None)
     is_active           = Column(Boolean,     nullable=False, default=True)
     created_at          = Column(DateTime,    nullable=False, default=datetime.utcnow)
 
@@ -128,7 +128,7 @@ class APIKeyModel(Base):
 
     id           = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
     key_id       = Column(String(50),  nullable=False, unique=True, index=True)
-    tenant_id    = Column(UUID(as_uuid=True), ForeignKey("tenants.id"),    nullable=True)
+    tenant_id    = Column(UUID(as_uuid=True), ForeignKey("tenants.id"),    nullable=False)
     dept_id      = Column(UUID(as_uuid=True), ForeignKey("departments.id"), nullable=True)
     app_id       = Column(UUID(as_uuid=True), ForeignKey("applications.id"), nullable=True)
     name         = Column(String(100), nullable=False)
@@ -164,7 +164,7 @@ class ProxyProviderConfigModel(Base):
     __tablename__ = "proxy_provider_configs"
 
     id                   = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
-    key_id               = Column(String(50),  nullable=False, unique=True, index=True)
+    tenant_id            = Column(String(50),  nullable=False, unique=True, index=True)
     provider             = Column(String(32),  nullable=False)
     base_url             = Column(Text,        nullable=False)
     provider_api_key_enc = Column(Text,        nullable=True)

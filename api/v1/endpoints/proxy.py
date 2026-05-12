@@ -79,11 +79,11 @@ STATUS_TIMEOUT        = "TIMEOUT"
 # ── Request schema ─────────────────────────────────────────────────────────────
 
 class ProxyChatRequest(BaseModel):
-    model:       str
+    model:       str | None    = None
     messages:    list[dict]
-    temperature: float | None = None
-    max_tokens:  int | None   = None
-    top_p:       float | None = None
+    temperature: float | None  = None
+    max_tokens:  int | None    = None
+    top_p:       float | None  = None
 
     model_config = {"extra": "forbid"}
 
@@ -308,7 +308,8 @@ async def proxy_chat_completions(
     """
     wall_start = time.monotonic()
     trace_id   = str(TraceId.generate())
-    key_id     = getattr(request.state, "key_id", None)
+    key_id     = getattr(request.state, "key_id",    None)
+    tenant_id  = getattr(request.state, "tenant_id", None)
 
     # -- 0. Trial key check - proxy mode not available for trial keys --
     key_type = getattr(request.state, "key_type", "live")
@@ -325,40 +326,42 @@ async def proxy_chat_completions(
             headers={"X-WrapSec-Trace-Id": trace_id},
         )
 
-    # -- 1. Parse model string --
-    try:
-        provider_name, model_name = parse_model_string(body.model)
-    except ValueError as exc:
-        return JSONResponse(
-            status_code=400,
-            content={
-                "error": {
-                    "message": str(exc),
-                    "type":    "invalid_request_error",
-                    "code":    "invalid_model_format",
-                }
-            },
-            headers={"X-WrapSec-Trace-Id": trace_id},
-        )
+    # -- 1. Parse model string if provided; deferred resolution happens after step 3 --
+    provider_name, model_name = None, None
+    if body.model is not None:
+        try:
+            provider_name, model_name = parse_model_string(body.model)
+        except ValueError as exc:
+            return JSONResponse(
+                status_code=400,
+                content={
+                    "error": {
+                        "message": str(exc),
+                        "type":    "invalid_request_error",
+                        "code":    "invalid_model_format",
+                    }
+                },
+                headers={"X-WrapSec-Trace-Id": trace_id},
+            )
 
     # -- 2. Resolve policy (moved early - used for both detection and proxy fallback) --
     policy, _ = await resolve_policy(
         db        = db,
-        tenant_id = getattr(request.state, "tenant_id", None),
-        dept_id   = getattr(request.state, "dept_id",   None),
-        app_id    = getattr(request.state, "app_id",    None),
+        tenant_id = tenant_id,
+        dept_id   = getattr(request.state, "dept_id", None),
+        app_id    = getattr(request.state, "app_id",  None),
     )
 
-    # -- 3. Load proxy provider config - per-key first, dept-level fallback --
+    # -- 3. Load proxy provider config - dept/app override wins, tenant config is fallback --
+    dept_proxy_cfg = policy.get("proxy_provider")  # resolved by policy_resolver (dept/app override)
     config = None
-    if key_id is not None:
+    if not dept_proxy_cfg and tenant_id is not None:
         result = await db.execute(
             select(ProxyProviderConfigModel).where(
-                ProxyProviderConfigModel.key_id == key_id
+                ProxyProviderConfigModel.tenant_id == tenant_id
             )
         )
         config = result.scalar_one_or_none()
-    dept_proxy_cfg  = policy.get("proxy_provider") if not config else None
 
     if not config and not dept_proxy_cfg:
         return JSONResponse(
@@ -374,6 +377,42 @@ async def proxy_chat_completions(
                 }
             },
         )
+
+    # -- 3b. Resolve model from default_model if not supplied in request --
+    if provider_name is None:
+        default_model = (
+            config.default_model if config
+            else (dept_proxy_cfg or {}).get("default_model")
+        )
+        if not default_model:
+            return JSONResponse(
+                status_code=400,
+                content={
+                    "error": {
+                        "message": (
+                            "No model specified and no default_model configured. "
+                            "Pass 'model' in the request body or set a default_model in proxy settings."
+                        ),
+                        "type":    "invalid_request_error",
+                        "code":    "model_required",
+                    }
+                },
+                headers={"X-WrapSec-Trace-Id": trace_id},
+            )
+        try:
+            provider_name, model_name = parse_model_string(default_model)
+        except ValueError as exc:
+            return JSONResponse(
+                status_code=400,
+                content={
+                    "error": {
+                        "message": str(exc),
+                        "type":    "invalid_request_error",
+                        "code":    "invalid_model_format",
+                    }
+                },
+                headers={"X-WrapSec-Trace-Id": trace_id},
+            )
 
     # -- 4. Read WrapSec request headers --
     scan_all = request.headers.get("X-WrapSec-Scan-All-Messages", "false").lower() == "true"

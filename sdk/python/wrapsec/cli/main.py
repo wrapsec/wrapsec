@@ -73,6 +73,7 @@ from wrapsec.cli.commands.settings import settings  # noqa: E402
 from wrapsec.cli.commands.keys     import keys      # noqa: E402
 from wrapsec.cli.commands.config   import config    # noqa: E402
 from wrapsec.cli.commands.doctor   import ping, doctor  # noqa: E402
+from wrapsec.cli.commands.chat     import chat          # noqa: E402
 
 cli.add_command(scan)
 cli.add_command(batch)
@@ -82,3 +83,4 @@ cli.add_command(keys)
 cli.add_command(config)
 cli.add_command(ping)
 cli.add_command(doctor)
+cli.add_command(chat)

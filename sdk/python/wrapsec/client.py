@@ -376,6 +376,67 @@ class Client:
         data = self._request("GET", "/keys", self._resolve_timeout(timeout))
         return data.get("keys", [])
 
+    def chat(
+        self,
+        message:  str,
+        model:    str | None = None,
+        timeout:  int | None = None,
+    ) -> dict[str, Any]:
+        """
+        Send a message through the WrapSec proxy to the configured LLM provider.
+
+        Scans the input, forwards to the provider if allowed, scans the output,
+        and returns an OpenAI-compatible response with WrapSec metadata.
+
+        message: The user message to send.
+        model:   Provider/model string e.g. "custom/llama-3.1-8b-instruct:free".
+                 If omitted, uses the default_model configured in proxy settings.
+        timeout: Per-request timeout in seconds. Proxy calls are slower than scans
+                 due to LLM latency -- consider 60-120s for large models.
+
+        Returns a dict with keys: id, object, model, choices, wrapsec (if inline meta enabled).
+        Raises WrapSecError if input is blocked or provider is unreachable.
+        """
+        api_key = self._require_api_key()
+        t       = self._resolve_timeout(timeout) if timeout is not None else 90
+
+        body: dict[str, Any] = {
+            "messages": [{"role": "user", "content": message}],
+        }
+        if model:
+            body["model"] = model
+
+        url     = f"{self._base_url}{BASE_PATH}/chat/completions"
+        headers = build_headers(api_key)
+        headers["X-WrapSec-Inline-Meta"] = "true"
+
+        try:
+            resp = requests.post(url, headers=headers, json=body, timeout=t)
+        except requests.exceptions.Timeout:
+            raise WrapSecSystemError(
+                f"Request timed out after {t}s. Use --timeout to increase.",
+            )
+        except requests.exceptions.ConnectionError:
+            raise WrapSecSystemError(
+                "Cannot reach WrapSec API. Check your network connection and base_url.",
+            )
+
+        response_data: dict[str, Any] | None = None
+        try:
+            response_data = resp.json()
+        except Exception:
+            pass
+
+        if not resp.ok:
+            raise map_response_error(resp.status_code, response_data, resp.text)
+
+        result = response_data or {}
+        result["_wrapsec_headers"] = {
+            k: v for k, v in resp.headers.items()
+            if k.lower().startswith("x-wrapsec-")
+        }
+        return result
+
     def health_live(self, timeout: int = 5) -> bool:
         """
         Check if the API is reachable (/health/live). No auth required.
