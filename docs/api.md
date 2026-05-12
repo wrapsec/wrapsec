@@ -78,7 +78,7 @@ Used by dashboard users. Issued via `POST /v1/auth/login`.
 **Notes:**
 - `GET /v1/keys` requires auth but accepts API key - CLI `wrapsec keys list` uses this
 - `PUT /v1/settings/*` requires JWT + ADMIN - admin API key not accepted
-- `/v1/settings/proxy*` scoped per `key_id` - JWT and API key each see their own config
+- `/v1/settings/proxy*` scoped per `tenant_id` - one proxy config shared across all API keys for the tenant
 - All write endpoints on admin resources require JWT (no API key writes)
 
 ---
@@ -878,7 +878,7 @@ Returns `404 NOT_FOUND` if trace_id not found.
 
 ### PUT /v1/settings/proxy
 
-Configure the LLM provider for proxy mode. One configuration per API key. Replaces existing configuration entirely.
+Configure the LLM provider for proxy mode. One configuration per tenant, shared across all API keys. Replaces existing configuration entirely.
 
 **Request:**
 ```json

@@ -514,7 +514,131 @@ Top threats:
 
 Severity follows SIEM triage levels: CRITICAL (guardrail blocks or risk_score >= 0.9), HIGH (other blocks or SYSTEM_ERROR), MEDIUM (sanitized), LOW (allowed). The Severity section is omitted when all counts are zero.
 
-## 7. `wrapsec settings get`
+## 7. `wrapsec chat`
+
+Send a message through the WrapSec proxy to the configured LLM provider.
+Scans the input, forwards to the provider if safe, scans the output, and prints the reply.
+
+The proxy provider must be configured first via the dashboard Settings page or `PUT /v1/settings/proxy`.
+
+```bash
+wrapsec chat [MESSAGE] [OPTIONS]
+```
+
+### Options
+
+| Option | Default | Description |
+|---|---|---|
+| `--model TEXT`, `-m` | from proxy settings | Provider/model string e.g. `custom/llama-3.1-8b-instant`. If omitted, uses `default_model` from proxy settings. |
+| `--timeout INT` | `90` | Request timeout in seconds (min 1). LLM calls are slower than scans. |
+| `--json` | off | Output full JSON response including WrapSec metadata |
+| `--verbose`, `-v` | off | Show WrapSec security headers alongside the reply |
+
+### Exit codes
+
+| Code | Meaning |
+|---|---|
+| `0` | Response received |
+| `1` | Error (auth, network, provider unreachable) |
+| `2` | Input blocked by security policy |
+
+### Examples
+
+```bash
+# Basic chat
+wrapsec chat "What is 2+2?"
+
+# Use a specific model
+wrapsec chat --model "custom/llama-3.1-8b-instant" "Hello"
+
+# Show security metadata
+wrapsec chat --verbose "Explain quantum computing"
+
+# Full JSON response
+wrapsec chat --json "What is the capital of France?"
+
+# Stdin input
+echo "Summarise this document" | wrapsec chat
+
+# Custom timeout (long responses)
+wrapsec chat --timeout 120 "Write a detailed essay on climate change"
+```
+
+### Output (human)
+
+```
+The capital of France is Paris.
+```
+
+### Output (--verbose)
+
+```
+The capital of France is Paris.
+
+WrapSec
+  Input decision     ALLOW
+  Output decision    ALLOW
+  Execution          SUCCESS
+  Provider           custom
+  Model              openrouter/free
+  Latency            1500ms
+  Trace ID           req_01kreyvxn41hxvs51hqctv62nd
+```
+
+### Output (--json)
+
+```json
+{
+  "id": "wrapsec-req_01kreyvxn41hxvs51hqctv62nd",
+  "object": "chat.completion",
+  "model": "openrouter/free",
+  "choices": [
+    {
+      "index": 0,
+      "message": {"role": "assistant", "content": "The capital of France is Paris."},
+      "finish_reason": "stop"
+    }
+  ],
+  "wrapsec": {
+    "trace_id": "req_01kreyvxn41hxvs51hqctv62nd",
+    "decision": "ALLOW",
+    "input_primary_reason": "NO_THREAT_DETECTED",
+    "input_confidence": 1.0,
+    "input_sanitized": false,
+    "output_decision": "ALLOW",
+    "output_sanitized": false,
+    "execution_status": "SUCCESS",
+    "provider": "custom",
+    "model": "openrouter/free",
+    "total_latency_ms": 1500
+  }
+}
+```
+
+### Model string format
+
+The model string uses `provider/model-name` format. The provider prefix must be one of `openai`, `ollama`, or `custom`.
+
+| Use case | Model string |
+|---|---|
+| OpenRouter (any model) | `custom/openrouter/free` |
+| OpenRouter (specific) | `custom/google/gemini-2.5-flash` |
+| Groq | `custom/llama-3.1-8b-instant` |
+| OpenAI directly | `openai/gpt-4o` |
+| Local Ollama | `ollama/llama3.2` |
+
+The part after `custom/` is sent verbatim as the model name to the upstream API.
+
+### Notes
+
+- Trial keys cannot use proxy mode (`403 trial_proxy_disabled`)
+- No retry on proxy calls -- provider calls have side effects
+- Default timeout is 90 seconds (higher than scan default of 30s)
+- Use `wrapsec audit get <trace_id>` for full proxy latency breakdown
+
+## 8. `wrapsec settings get`
+
+
 
 Show active gateway configuration. **Read-only.**
 To change any settings, use the dashboard.
