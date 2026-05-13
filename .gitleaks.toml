@@ -1,0 +1,47 @@
+[extend]
+useDefault = true
+
+# Allowlist obvious test fixtures and documentation examples.
+# These are not real credentials — they are hardcoded fake values in unit tests
+# and documentation code samples.
+[[allowlists]]
+description = "SDK and unit test fake API keys"
+paths = [
+    "sdk/python/tests/.*",
+    "tests/unit/.*",
+]
+regexes = [
+    "wwsk_live_test",
+    "wwsk_live_testkey",
+    "wwsk_live_abcdef",
+    "wwsk_live_secret",
+    "wwsk_live_testkey123",
+]
+
+[[allowlists]]
+description = "Documentation code samples"
+paths = [
+    "docs/.*",
+    "README\\.md",
+    "examples/.*",
+]
+regexes = [
+    "your-admin-key",
+    "wrapsec_admin_key",
+    "wwsk_live_fin_\\.\\.\\.",
+    "wwsk_live_your_key",
+    "wwsk_live_fin_abc123",
+    "wwsk_live_PTyW8LaBq5opGiz7\\.\\.\\.",
+    "wwsk_live_\\.\\.\\.",
+    "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9\\.\\.\\.",
+]
+
+[[allowlists]]
+description = ".env.example placeholder lines (no values)"
+paths = [
+    "\\.env\\.example",
+]
+regexes = [
+    "GROQ_API_KEY=$",
+    "OPENAI_API_KEY=$",
+]

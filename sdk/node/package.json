@@ -1,0 +1,65 @@
+{
+  "name": "wrapsec-node",
+  "version": "1.0.0",
+  "description": "WrapSec Node.js SDK — AI Security Gateway client",
+  "main": "dist/index.js",
+  "types": "dist/index.d.ts",
+  "author": "WrapSec <hello@wrapsec.com>",
+  "homepage": "https://wrapsec.com",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/wrapsec/wrapsec.git",
+    "directory": "sdk/node"
+  },
+  "files": [
+    "dist/client.js",
+    "dist/client.d.ts",
+    "dist/client.d.ts.map",
+    "dist/exceptions.js",
+    "dist/exceptions.d.ts",
+    "dist/exceptions.d.ts.map",
+    "dist/types.js",
+    "dist/types.d.ts",
+    "dist/types.d.ts.map",
+    "dist/index.js",
+    "dist/index.d.ts",
+    "dist/index.d.ts.map",
+    "dist/middleware/express.js",
+    "dist/middleware/express.d.ts",
+    "dist/middleware/express.d.ts.map",
+    "dist/middleware/fastify.js",
+    "dist/middleware/fastify.d.ts",
+    "dist/middleware/fastify.d.ts.map",
+    "README.md",
+    "LICENSE",
+    "CHANGELOG.md"
+  ],
+  "exports": {
+    ".": {
+      "require": "./dist/index.js",
+      "types":   "./dist/index.d.ts"
+    },
+    "./middleware/express": {
+      "require": "./dist/middleware/express.js",
+      "types":   "./dist/middleware/express.d.ts"
+    },
+    "./middleware/fastify": {
+      "require": "./dist/middleware/fastify.js",
+      "types":   "./dist/middleware/fastify.d.ts"
+    }
+  },
+  "scripts": {
+    "build": "tsc",
+    "test":  "node --test dist/tests/client.test.js"
+  },
+  "keywords": ["wrapsec", "ai", "security", "llm", "prompt-injection", "ai-security"],
+  "license": "MIT",
+  "devDependencies": {
+    "@types/express": "^4.17.21",
+    "@types/node":    "^20.0.0",
+    "typescript":    "^5.4.0"
+  },
+  "engines": {
+    "node": ">=18.0.0"
+  }
+}

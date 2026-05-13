@@ -1,0 +1,169 @@
+{
+  "uid": "wrapsec-latency",
+  "title": "WrapSec — Latency & Performance",
+  "description": "Detection pipeline latency, proxy performance, SLA monitoring",
+  "tags": ["wrapsec", "latency", "performance", "sla"],
+  "timezone": "browser",
+  "refresh": "30s",
+  "time": { "from": "now-1h", "to": "now" },
+  "panels": [
+    {
+      "id": 1,
+      "title": "P50 Latency — Detection (ms)",
+      "type": "stat",
+      "gridPos": { "x": 0, "y": 0, "w": 4, "h": 4 },
+      "targets": [{
+        "expr": "histogram_quantile(0.50, sum(rate(wrapsec_request_latency_ms_bucket{execution_mode='scan_only'}[5m])) by (le))",
+        "legendFormat": "p50"
+      }],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "ms",
+          "thresholds": { "steps": [{ "color": "green", "value": null }, { "color": "yellow", "value": 25 }, { "color": "red", "value": 100 }] }
+        }
+      },
+      "options": { "reduceOptions": { "calcs": ["lastNotNull"] }, "colorMode": "background" }
+    },
+    {
+      "id": 2,
+      "title": "P95 Latency — Detection (ms)",
+      "type": "stat",
+      "gridPos": { "x": 4, "y": 0, "w": 4, "h": 4 },
+      "targets": [{
+        "expr": "histogram_quantile(0.95, sum(rate(wrapsec_request_latency_ms_bucket{execution_mode='scan_only'}[5m])) by (le))",
+        "legendFormat": "p95"
+      }],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "ms",
+          "thresholds": { "steps": [{ "color": "green", "value": null }, { "color": "yellow", "value": 100 }, { "color": "red", "value": 500 }] }
+        }
+      },
+      "options": { "reduceOptions": { "calcs": ["lastNotNull"] }, "colorMode": "background" }
+    },
+    {
+      "id": 3,
+      "title": "P99 Latency — Detection (ms)",
+      "type": "stat",
+      "gridPos": { "x": 8, "y": 0, "w": 4, "h": 4 },
+      "targets": [{
+        "expr": "histogram_quantile(0.99, sum(rate(wrapsec_request_latency_ms_bucket{execution_mode='scan_only'}[5m])) by (le))",
+        "legendFormat": "p99"
+      }],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "ms",
+          "thresholds": { "steps": [{ "color": "green", "value": null }, { "color": "yellow", "value": 250 }, { "color": "red", "value": 1000 }] }
+        }
+      },
+      "options": { "reduceOptions": { "calcs": ["lastNotNull"] }, "colorMode": "background" }
+    },
+    {
+      "id": 4,
+      "title": "P95 Latency — Proxy E2E (ms)",
+      "type": "stat",
+      "gridPos": { "x": 12, "y": 0, "w": 4, "h": 4 },
+      "targets": [{
+        "expr": "histogram_quantile(0.95, sum(rate(wrapsec_proxy_latency_ms_bucket[5m])) by (le))",
+        "legendFormat": "p95"
+      }],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "ms",
+          "thresholds": { "steps": [{ "color": "green", "value": null }, { "color": "yellow", "value": 5000 }, { "color": "red", "value": 15000 }] }
+        }
+      },
+      "options": { "reduceOptions": { "calcs": ["lastNotNull"] }, "colorMode": "background" }
+    },
+    {
+      "id": 5,
+      "title": "Avg Detection Latency — fast vs full (ms)",
+      "type": "stat",
+      "gridPos": { "x": 16, "y": 0, "w": 4, "h": 4 },
+      "targets": [
+        { "expr": "histogram_quantile(0.50, sum(rate(wrapsec_request_latency_ms_bucket{execution_mode='scan_only'}[5m])) by (le))", "legendFormat": "scan_only p50" }
+      ],
+      "fieldConfig": { "defaults": { "unit": "ms" } },
+      "options": { "reduceOptions": { "calcs": ["lastNotNull"] }, "colorMode": "value" }
+    },
+    {
+      "id": 6,
+      "title": "SLA Compliance — Requests under 100ms",
+      "type": "stat",
+      "gridPos": { "x": 20, "y": 0, "w": 4, "h": 4 },
+      "targets": [{
+        "expr": "sum(rate(wrapsec_request_latency_ms_bucket{execution_mode='scan_only',le='100'}[5m])) / sum(rate(wrapsec_request_latency_ms_count{execution_mode='scan_only'}[5m]))",
+        "legendFormat": "< 100ms"
+      }],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "percentunit",
+          "thresholds": { "steps": [{ "color": "red", "value": null }, { "color": "yellow", "value": 0.90 }, { "color": "green", "value": 0.99 }] }
+        }
+      },
+      "options": { "reduceOptions": { "calcs": ["lastNotNull"] }, "colorMode": "background" }
+    },
+    {
+      "id": 7,
+      "title": "Detection Latency Percentiles Over Time",
+      "type": "timeseries",
+      "gridPos": { "x": 0, "y": 4, "w": 12, "h": 8 },
+      "targets": [
+        { "expr": "histogram_quantile(0.50, sum(rate(wrapsec_request_latency_ms_bucket{execution_mode='scan_only'}[5m])) by (le))", "legendFormat": "p50" },
+        { "expr": "histogram_quantile(0.95, sum(rate(wrapsec_request_latency_ms_bucket{execution_mode='scan_only'}[5m])) by (le))", "legendFormat": "p95" },
+        { "expr": "histogram_quantile(0.99, sum(rate(wrapsec_request_latency_ms_bucket{execution_mode='scan_only'}[5m])) by (le))", "legendFormat": "p99" }
+      ],
+      "fieldConfig": { "defaults": { "unit": "ms", "custom": { "lineWidth": 2 } } }
+    },
+    {
+      "id": 8,
+      "title": "Proxy End-to-End Latency by Status",
+      "type": "timeseries",
+      "gridPos": { "x": 12, "y": 4, "w": 12, "h": 8 },
+      "targets": [
+        { "expr": "histogram_quantile(0.95, sum(rate(wrapsec_proxy_latency_ms_bucket{execution_status='SUCCESS'}[5m])) by (le))", "legendFormat": "SUCCESS p95" },
+        { "expr": "histogram_quantile(0.95, sum(rate(wrapsec_proxy_latency_ms_bucket{execution_status='TIMEOUT'}[5m])) by (le))", "legendFormat": "TIMEOUT p95" }
+      ],
+      "fieldConfig": { "defaults": { "unit": "ms", "custom": { "lineWidth": 2 } } }
+    },
+    {
+      "id": 9,
+      "title": "Latency Heatmap — Detection",
+      "type": "heatmap",
+      "gridPos": { "x": 0, "y": 12, "w": 24, "h": 8 },
+      "targets": [{
+        "expr": "sum(rate(wrapsec_request_latency_ms_bucket{execution_mode='scan_only'}[5m])) by (le)",
+        "legendFormat": "{{le}}",
+        "format": "heatmap"
+      }],
+      "options": { "calculate": false, "color": { "scheme": "Oranges", "mode": "scheme" } }
+    },
+    {
+      "id": 10,
+      "title": "Layer Score Distribution",
+      "type": "timeseries",
+      "gridPos": { "x": 0, "y": 20, "w": 12, "h": 8 },
+      "targets": [
+        { "expr": "histogram_quantile(0.95, sum(rate(wrapsec_layer_score_bucket{layer='rule'}[5m])) by (le))", "legendFormat": "Rule p95" },
+        { "expr": "histogram_quantile(0.95, sum(rate(wrapsec_layer_score_bucket{layer='ml'}[5m])) by (le))", "legendFormat": "ML p95" },
+        { "expr": "histogram_quantile(0.95, sum(rate(wrapsec_layer_score_bucket{layer='llm'}[5m])) by (le))", "legendFormat": "LLM p95" }
+      ],
+      "fieldConfig": { "defaults": { "unit": "short", "min": 0, "max": 1 } }
+    },
+    {
+      "id": 11,
+      "title": "Proxy Execution Status Breakdown",
+      "type": "timeseries",
+      "gridPos": { "x": 12, "y": 20, "w": 12, "h": 8 },
+      "targets": [
+        { "expr": "sum(rate(wrapsec_proxy_execution_total{execution_status='SUCCESS'}[5m])) * 60", "legendFormat": "SUCCESS" },
+        { "expr": "sum(rate(wrapsec_proxy_execution_total{execution_status='BLOCKED'}[5m])) * 60", "legendFormat": "BLOCKED" },
+        { "expr": "sum(rate(wrapsec_proxy_execution_total{execution_status='OUTPUT_BLOCKED'}[5m])) * 60", "legendFormat": "OUTPUT_BLOCKED" },
+        { "expr": "sum(rate(wrapsec_proxy_execution_total{execution_status='FAILED'}[5m])) * 60", "legendFormat": "FAILED" },
+        { "expr": "sum(rate(wrapsec_proxy_execution_total{execution_status='TIMEOUT'}[5m])) * 60", "legendFormat": "TIMEOUT" }
+      ],
+      "fieldConfig": { "defaults": { "unit": "reqpm" } }
+    }
+  ],
+  "schemaVersion": 38
+}

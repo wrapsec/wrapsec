@@ -1,0 +1,231 @@
+# SPDX-License-Identifier: MIT
+# Copyright (c) 2026 WrapSec. All rights reserved.
+# WrapSec v1.0 | AI Security Gateway - https://wrapsec.com
+
+import logging
+import uuid
+from db.repositories.tenant import TenantRepository
+from db.repositories.department import DepartmentRepository
+from db.repositories.application import ApplicationRepository
+from config.settings import get_settings
+from security.encryption import decrypt
+
+logger   = logging.getLogger("wrapsec.policy")
+settings = get_settings()
+
+
+# ── System defaults ────────────────────────────────────────────
+def system_defaults() -> dict:
+    return {
+        "detection": {
+            "rule_weight":   0.4,
+            "ml_weight":     0.3,
+            "llm_weight":    0.3,
+            "rule_enabled":  True,
+            "ml_enabled":    True,
+            "llm_enabled":   True,
+            "llm_trigger":   settings.llm_trigger_threshold,
+        },
+        "thresholds": {
+            "block":    settings.block_threshold,
+            "sanitize": settings.sanitize_threshold,
+        },
+        "guardrails": {
+            "pii": {
+                "enabled":            True,
+                "block_threshold":    settings.block_threshold,
+                "sanitize_threshold": settings.sanitize_threshold,
+            }
+        },
+        "llm": {
+            "provider":  settings.llm_provider,
+            "model":     settings.llm_model,
+            "base_url":  settings.llm_base_url,
+            "timeout":   settings.llm_timeout,
+        },
+        "rate_limit": {
+            "per_minute": 60,
+        },
+    }
+
+
+# ── Deep merge ─────────────────────────────────────────────────
+def deep_merge(parent: dict, child: dict | None) -> dict:
+    """
+    Recursively merge child into parent.
+    Only non-null fields in child override parent.
+    Missing or null fields in child preserve parent values.
+    """
+    if child is None:
+        return parent
+
+    result = parent.copy()
+
+    for key, value in child.items():
+        if value is None:
+            # Null field - inherit from parent
+            continue
+        if isinstance(value, dict) and key in result and isinstance(result[key], dict):
+            # Nested dict - recurse
+            result[key] = deep_merge(result[key], value)
+        else:
+            # Scalar - override
+            result[key] = value
+
+    return result
+
+
+# ── Policy source ──────────────────────────────────────────────
+def determine_policy_source(
+    dept_override: dict | None,
+    app_override:  dict | None,
+) -> str:
+    """
+    Returns the highest priority level that changed any field.
+    tenant global_policy is no longer used - DB settings table is authoritative.
+    """
+    if app_override:
+        return "application_override"
+    if dept_override:
+        return "department_override"
+    return "system_default"
+
+
+# ── Resolve policy ─────────────────────────────────────────────
+async def resolve_policy(
+    db,
+    tenant_id: str | None = None,
+    dept_id:   str | None = None,
+    app_id:    str | None = None,
+) -> tuple[dict, str]:
+    """
+    Resolve the effective policy for a request.
+    Returns (resolved_policy, policy_source).
+
+    Resolution order:
+      system defaults
+        -> DB settings (policy_thresholds, detection_layers, llm_settings, rate_limit)
+          -> department policy_override
+            -> application policy_override
+    """
+    policy = system_defaults()
+
+    dept_override   = None
+    app_override    = None
+
+    try:
+        # Load DB settings (global thresholds + layers override system defaults)
+        from db.repositories.settings import SettingsRepository
+        settings_repo     = SettingsRepository(db)
+        stored_thresholds = await settings_repo.get("policy_thresholds") or {}
+        stored_layers     = await settings_repo.get("detection_layers")  or {}
+        stored_llm        = await settings_repo.get("llm_settings")      or {}
+        stored_rate_limit = await settings_repo.get("rate_limit")        or {}
+
+        # Apply global DB settings as tenant-level defaults
+        if stored_thresholds:
+            policy["thresholds"]["block"]    = stored_thresholds.get("block_threshold",    policy["thresholds"]["block"])
+            policy["thresholds"]["sanitize"] = stored_thresholds.get("sanitize_threshold", policy["thresholds"]["sanitize"])
+            policy["guardrails"]["pii"]["block_threshold"]    = policy["thresholds"]["block"]
+            policy["guardrails"]["pii"]["sanitize_threshold"] = policy["thresholds"]["sanitize"]
+
+        if stored_layers:
+            policy["detection"]["rule_enabled"] = stored_layers.get("rule_enabled", True)
+            policy["detection"]["ml_enabled"]   = stored_layers.get("ml_enabled",   True)
+            policy["detection"]["llm_enabled"]  = stored_layers.get("llm_enabled",  True)
+
+        if stored_llm:
+            policy["llm"]["provider"] = stored_llm.get("provider", policy["llm"]["provider"])
+            policy["llm"]["model"]    = stored_llm.get("model",    policy["llm"]["model"])
+            policy["llm"]["base_url"] = stored_llm.get("base_url", policy["llm"]["base_url"])
+            policy["llm"]["timeout"]  = stored_llm.get("timeout",  policy["llm"]["timeout"])
+            policy["detection"]["llm_trigger"] = stored_llm.get("llm_trigger", policy["detection"]["llm_trigger"])
+
+        if stored_rate_limit:
+            policy["rate_limit"]["per_minute"] = stored_rate_limit.get("per_minute", policy["rate_limit"]["per_minute"])
+
+        # Tenant global_policy - intentionally skipped.
+        # global_policy on the tenant is kept in the DB for future use
+        # but is NOT applied in policy resolution. DB settings table
+        # (policy_thresholds, detection_layers, llm_settings, rate_limit)
+        # is the authoritative source for global settings.
+        # Per-dept and per-app overrides use dept/app policy_override instead.
+
+        # Department policy_override
+        if dept_id:
+            try:
+                dept_repo = DepartmentRepository(db)
+                dept      = await dept_repo.get_by_id(uuid.UUID(str(dept_id)))
+                if dept and dept.policy_override:
+                    dept_override = dept.policy_override
+                    policy        = deep_merge(policy, dept_override)
+            except Exception as e:
+                logger.warning(f"Failed to load department policy: {e}")
+
+        # Application policy_override - applied if set; null inherits from department
+        if app_id:
+            try:
+                app_repo = ApplicationRepository(db)
+                app      = await app_repo.get_by_id(uuid.UUID(str(app_id)))
+                if app and tenant_id and str(app.tenant_id) != str(tenant_id):
+                    logger.error(
+                        "policy app_tenant_mismatch app_id=%s app.tenant=%s "
+                        "request.tenant=%s - skipping app policy",
+                        app_id, app.tenant_id, tenant_id,
+                    )
+                    app = None
+                if app and app.policy_override:
+                    app_override = app.policy_override
+                    policy       = deep_merge(policy, app_override)
+                # rate_limit_override is a dedicated integer column - enforced separately
+                # from policy_override so it doesn't require JSONB knowledge to set.
+                if app and app.rate_limit_override is not None:
+                    policy["rate_limit"]["per_minute"] = app.rate_limit_override
+            except Exception as e:
+                logger.warning(f"Failed to load application policy: {e}")
+
+    except Exception as e:
+        logger.error(f"Policy resolution failed: {e} - using system defaults")
+        try:
+            from observability.metrics import SYSTEM_ERRORS
+            SYSTEM_ERRORS.labels(execution_mode="unknown").inc()
+        except Exception:
+            pass
+
+    # Decrypt any api_key_enc fields that were merged in from dept/app overrides.
+    # api_key_enc is stored encrypted in policy_override; callers need plaintext api_key.
+    for section in ("llm", "proxy_provider"):
+        sec = policy.get(section)
+        if isinstance(sec, dict) and "api_key_enc" in sec:
+            enc = sec.pop("api_key_enc")
+            try:
+                sec["api_key"] = decrypt(enc, settings.secret_key)
+            except ValueError:
+                logger.error(
+                    "policy api_key_enc decryption failed section=%r - "
+                    "provider credentials are invalid (SECRET_KEY mismatch or corrupted value). "
+                    "Re-enter the provider API key via the dashboard.",
+                    section,
+                )
+                raise ValueError(
+                    f"Provider API key for section '{section}' could not be decrypted. "
+                    "The stored credential is invalid. Re-enter it via Settings."
+                )
+
+    # Validate final thresholds - DB or override values could be inconsistent
+    block    = policy["thresholds"]["block"]
+    sanitize = policy["thresholds"]["sanitize"]
+    if not (0.0 < sanitize < block <= 1.0):
+        logger.error(
+            "Resolved thresholds invalid (block=%.2f sanitize=%.2f) - "
+            "reverting to system defaults",
+            block, sanitize,
+        )
+        policy["thresholds"]["block"]    = settings.block_threshold
+        policy["thresholds"]["sanitize"] = settings.sanitize_threshold
+
+    policy_source = determine_policy_source(
+        dept_override, app_override
+    )
+
+    return policy, policy_source
