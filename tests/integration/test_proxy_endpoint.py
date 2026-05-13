@@ -31,7 +31,7 @@ def _make_config(provider="openai"):
     """Return a mock ProxyProviderConfigModel."""
     from datetime import datetime
     config                    = MagicMock()
-    config.key_id             = "admin"
+    config.tenant_id          = "test_tenant"
     config.provider           = provider
     config.base_url           = "https://api.openai.com/v1" if provider == "openai" else "http://localhost:11434"
     config.provider_api_key_enc = encrypt("sk-test-key-1234567890", settings.secret_key) if provider == "openai" else None

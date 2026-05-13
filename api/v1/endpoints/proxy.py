@@ -355,7 +355,7 @@ async def proxy_chat_completions(
     # -- 3. Load proxy provider config - dept/app override wins, tenant config is fallback --
     dept_proxy_cfg = policy.get("proxy_provider")  # resolved by policy_resolver (dept/app override)
     config = None
-    if not dept_proxy_cfg and tenant_id is not None:
+    if not dept_proxy_cfg:
         result = await db.execute(
             select(ProxyProviderConfigModel).where(
                 ProxyProviderConfigModel.tenant_id == tenant_id
