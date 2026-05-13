@@ -1606,11 +1606,16 @@ Resets application policy override to null. Application inherits from department
 ```json
 {
   "status": "ready",
-  "checks": {"database": "ok", "redis": "ok", "ml_model": "ok"}
+  "checks": {
+    "database":             "ok",
+    "redis":                "ok",
+    "tfidf_detector":       "healthy",
+    "transformer_detector": "healthy"
+  }
 }
 ```
 
-`status` is `"degraded"` if any check is not `"ok"`.
+`status` is `"degraded"` if any check is not `"ok"` or `"healthy"`. Detector checks return `"healthy"` (not `"ok"`) when loaded. `transformer_detector` returns `"degraded"` when transformer dependencies are not installed -- Tier 1 (TF-IDF) handles all detection in this state.
 
 ### GET /health/live
 
@@ -1628,7 +1633,7 @@ Active configuration snapshot. Does not expose API keys or secrets.
   "thresholds":       {"block": 0.7, "sanitize": 0.4, "source": "database"},
   "detection_layers": {"rule": true, "ml": true, "llm": true, "source": "database"},
   "llm":              {"provider": "ollama", "model": "llama3.2", "llm_trigger": 0.2, "timeout": 30, "source": "database"},
-  "rate_limit":       {"per_minute": 60, "scope": "per_api_key"}
+  "rate_limit":       {"per_minute": 60, "source": "database"}
 }
 ```
 
@@ -1648,14 +1653,16 @@ Scrape at `http://host:8000/metrics`. Returns `401` if no valid Bearer token is 
 
 ## Rate Limiting
 
-Per API key / JWT user. Redis sliding window, key: `rate_limit:{client_ip}` (falls back to IP before auth resolves).
+Applied to gateway processing paths only: `/v1/scan`, `/v1/proxy/*`, `/v1/ai/*`. Dashboard reads, settings, auth, and health endpoints are not rate limited.
+
+Per API key. Falls back to per-IP if no key is present. Redis sliding window.
 
 | Key type | Limit | Enforcement |
 |---|---|---|
 | `live` | 60 req/min (configurable via `PUT /v1/settings/rate_limit`) | Middleware |
 | `trial` | 10 req/min (`TRIAL_RATE_LIMIT_PER_MINUTE` env var) | Endpoint level |
 | Admin key | Same as live | Middleware |
-| JWT user | Same as live | Middleware |
+| JWT user | Not rate limited (dashboard only) | - |
 
 ```json
 {"error": {"code": "RATE_LIMITED", "message": "Rate limit exceeded.", "trace_id": "..."}}
