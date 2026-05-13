@@ -346,6 +346,9 @@ function makeAuditLog(data: Record<string, unknown>): AuditLog {
     outputDecision:      d["outputDecision"] != null ? String(d["outputDecision"]) : null,
     provider:            d["provider"]       != null ? String(d["provider"])       : null,
     model:               d["model"]          != null ? String(d["model"])          : null,
+
+    // ML detection metadata
+    modelVersion:        d["model_version"]  != null ? String(d["model_version"])  : null,
   }
 }
 

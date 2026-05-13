@@ -138,6 +138,9 @@ class AuditLog:
     provider:             str | None = None
     model:                str | None = None
 
+    # ML detection metadata
+    model_version:        str | None = None
+
     @classmethod
     def from_dict(cls, data: dict[str, Any]) -> "AuditLog":
         return cls(
@@ -170,6 +173,7 @@ class AuditLog:
             output_decision      = data.get("output_decision"),
             provider             = data.get("provider"),
             model                = data.get("model"),
+            model_version        = data.get("model_version"),
         )
 
 

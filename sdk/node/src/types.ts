@@ -110,6 +110,9 @@ export interface AuditLog {
   outputDecision:      string | null
   provider:            string | null
   model:               string | null
+
+  // ML detection metadata
+  modelVersion:        string | null
 }
 
 // ── Audit stats ────────────────────────────────────────────────────────────
