@@ -53,7 +53,7 @@ WrapSec enforces security decisions before any request reaches the LLM. Blocked 
 ## Installation
 
 ```bash
-pip install wrapsec-python          # PyPI (when published)
+pip install wrapsec-python
 pip install -e sdk/python/          # local development
 ```
 
