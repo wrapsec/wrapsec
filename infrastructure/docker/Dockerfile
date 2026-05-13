@@ -8,12 +8,16 @@ RUN apt-get update && apt-get install -y \
     libpq-dev \
     && rm -rf /var/lib/apt/lists/*
 
-# BUILD_ENV=dev installs requirements-dev.txt (includes pytest)
-# BUILD_ENV=prod installs requirements.txt only (default)
+# BUILD_ENV=prod        installs requirements.txt only -- no transformer (~base image, default)
+# BUILD_ENV=transformer installs requirements-transformer.txt -- includes torch/transformers (~1.5GB extra)
+# BUILD_ENV=dev         installs requirements-dev.txt -- includes pytest
 ARG BUILD_ENV=prod
 COPY requirements*.txt ./
 RUN if [ "$BUILD_ENV" = "dev" ]; then \
         pip install --no-cache-dir -r requirements-dev.txt; \
+    elif [ "$BUILD_ENV" = "transformer" ]; then \
+        pip install --no-cache-dir -r requirements-transformer.txt \
+            --extra-index-url https://download.pytorch.org/whl/cpu; \
     else \
         pip install --no-cache-dir -r requirements.txt; \
     fi

@@ -1,0 +1,15 @@
+-r requirements.txt
+
+# Transformer (Tier 2) dependencies -- optional, ~1.5GB additional image size.
+# CPU-only torch. See docs/ml_detection_design.md for deployment impact.
+#
+# Docker build:
+#   RUN pip install -r requirements-transformer.txt \
+#       --extra-index-url https://download.pytorch.org/whl/cpu
+#
+# Local dev:
+#   pip install torch --index-url https://download.pytorch.org/whl/cpu
+#   pip install transformers accelerate
+torch
+transformers
+accelerate

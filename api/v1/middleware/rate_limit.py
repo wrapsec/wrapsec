@@ -12,6 +12,10 @@ from config.settings import get_settings
 
 PUBLIC_PATHS = {"/health", "/health/ready", "/health/live", "/metrics"}
 
+# Only these path prefixes are rate limited -- gateway processing endpoints.
+# Dashboard reads, settings, and auth endpoints are excluded.
+RATE_LIMITED_PREFIXES = ("/v1/scan", "/v1/proxy", "/v1/ai")
+
 
 async def _get_live_rate_limit() -> int:
     """
@@ -63,6 +67,9 @@ class RateLimitMiddleware(BaseHTTPMiddleware):
 
     async def dispatch(self, request: Request, call_next) -> Response:
         if request.url.path in PUBLIC_PATHS:
+            return await call_next(request)
+
+        if not request.url.path.startswith(RATE_LIMITED_PREFIXES):
             return await call_next(request)
 
         if not get_settings().rate_limit_enabled:

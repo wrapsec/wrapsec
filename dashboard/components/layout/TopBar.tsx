@@ -37,7 +37,7 @@ export function TopBar({ title }: { title: string }) {
         const health = await getHealth()
         const c      = health.checks ?? {}
         setChecks(c)
-        const allOk  = Object.keys(c).length > 0 && Object.values(c).every(v => v === "ok")
+        const allOk  = Object.keys(c).length > 0 && Object.values(c).every(v => v === "ok" || v === "healthy")
         setStatus(allOk ? "ok" : "degraded")
       } catch { setStatus("down") }
     }
@@ -61,7 +61,7 @@ export function TopBar({ title }: { title: string }) {
     : "AK"
 
   const statusColor = status === "ok" ? "#00E1FF" : status === "degraded" ? "#d97706" : "#dc2626"
-  const failed      = Object.entries(checks).filter(([, v]) => v !== "ok").map(([k]) => k)
+  const failed      = Object.entries(checks).filter(([, v]) => v !== "ok" && v !== "healthy").map(([k]) => k)
   const statusLabel = status === "ok"
     ? "All systems operational"
     : status === "degraded"

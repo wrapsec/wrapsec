@@ -46,9 +46,7 @@ email-validator==2.3.0
 cryptography==44.0.3          # AES-256-GCM encryption for proxy provider API keys
 
 # ── ML Detection -- Transformer (Tier 2) ─────────────────────────────────────
-# CPU-only torch. See docs/ml_detection_design.md for deployment impact (~1.5GB image increase).
-# Docker build: RUN pip install torch --index-url https://download.pytorch.org/whl/cpu
-# Local dev:    pip install torch --index-url https://download.pytorch.org/whl/cpu
-torch
-transformers
-accelerate
+# Transformer dependencies are optional. Without them, transformer_detector degrades
+# gracefully and TF-IDF (Tier 1) handles all detection.
+# To install: pip install -r requirements-transformer.txt
+# See docs/ml_detection_design.md for deployment impact (~1.5GB image increase).
