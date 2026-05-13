@@ -84,12 +84,14 @@ WrapSec API (FastAPI, port 8000)
 │  system -> tenant -> department -> application      │
 │                                                  │
 │  Gateway Service                                 │
-│  ├── InputGuard    PII detection + redaction     │
-│  ├── RuleDetector  try/catch -> detection_failed  │
-│  ├── MLDetector    try/catch -> detection_failed  │
-│  ├── LLMDetector   try/catch -> detection_failed  │
-│  ├── RiskScorer    rule+ml+llm (PII excluded)    │
-│  └── PolicyEngine  BLOCK / SANITIZE / ALLOW      │
+│  ├── InputGuard        PII detection + redaction │
+│  ├── RuleDetector      try/catch -> detection_failed
+│  ├── DetectionPipeline try/catch -> detection_failed
+│  │   ├── Tier 1        TF-IDF + logistic regression, ~5ms (always on)
+│  │   └── Tier 2        DeBERTa-v3 transformer, ~20-50ms (optional)
+│  ├── LLMDetector       try/catch -> detection_failed
+│  ├── RiskScorer        rule+ml+llm (PII excluded)    │
+│  └── PolicyEngine      BLOCK / SANITIZE / ALLOW      │
 └──────────────────────────────────────────────────┘
         │
         ├── audit_logs (decision, scores, threats)
@@ -412,6 +414,8 @@ CREATE TABLE audit_logs (
     -- Computed at write time from decision + risk_score + primary_reason
     -- Logic: domain/value_objects/severity.py
     -- Never returned in scan responses - audit and SIEM use only
+    -- ML detection metadata
+    model_version        VARCHAR(50),   -- DetectorProfile.model_version at time of scan
     -- Proxy link
     proxy_interaction_id UUID REFERENCES proxy_interactions(id),  -- NULL for scan_only
     created_at           TIMESTAMP DEFAULT NOW()
@@ -422,7 +426,7 @@ CREATE TABLE audit_logs (
 ```sql
 CREATE TABLE proxy_provider_configs (
     id                    UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
-    key_id                VARCHAR(50) UNIQUE NOT NULL,
+    tenant_id             VARCHAR(50) UNIQUE NOT NULL,  -- one config per tenant
     provider              VARCHAR(32) NOT NULL,  -- openai | ollama | custom
     base_url              TEXT        NOT NULL,
     provider_api_key_enc  TEXT,        -- AES-256-GCM encrypted, NULL for Ollama
@@ -535,9 +539,10 @@ All metric labels are validated against allowlists (`_safe()`) before use - no u
    stored_hash exists + body_hash DIFFERS -> 409 CONFLICT (IDEMPOTENCY_CONFLICT)
    stored_hash missing                    -> process + store both keys (TTL: 60s)
 
-2. Rate limit (per API key)
-   key_id used as Redis rate limit identifier
-   X-RateLimit-Limit/Remaining/Reset on every response
+2. Rate limit (gateway paths only: /v1/scan, /v1/proxy/*, /v1/ai/*)
+   Dashboard reads, settings, auth, and health endpoints are not rate limited.
+   key_id used as Redis rate limit identifier; falls back to IP if no key.
+   X-RateLimit-Limit/Remaining/Reset on every rate-limited response.
 
 3. Auth middleware
    SHA-256(api_key) -> look up api_keys by hash -> validate not revoked
@@ -661,6 +666,11 @@ Total: 53 endpoints
 
 ```
 yes Rule, ML, LLM detectors with per-detector try/catch
+yes Two-tier ML detection: Tier 1 TF-IDF (always on) + Tier 2 DeBERTa-v3 transformer (optional, graceful degradation)
+yes DetectionPipeline: parallel tier execution, highest-risk-wins score combination, asyncio.wait_for timeout on transformer
+yes Transformer optional: install via requirements-transformer.txt; missing deps degrade to Tier 1 without failing requests
+yes Rate limiting scoped to gateway paths (/v1/scan, /v1/proxy, /v1/ai) - dashboard reads excluded
+yes Proxy provider config scoped per tenant (not per API key) - one config per tenant
 yes Toxicity guardrail - independent thresholds, reads ML label 6, ~0ms additional latency
 yes PII guardrail (22+ entity types, input + output)
 yes Guardrail-first enforcement - PII -> Toxicity -> Detection pipeline
