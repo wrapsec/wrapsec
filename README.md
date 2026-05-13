@@ -40,11 +40,15 @@ The pipeline combines rule-based, machine learning, and optional LLM-based analy
 Input
   |-- InputGuard          PII detection (22+ entity types), redaction if triggered
   |-- RuleDetector        Regex and heuristic patterns, ~1ms
-  |-- MLDetector          TF-IDF + logistic regression, 7 labels, ~5ms
+  |-- DetectionPipeline   Two-tier ML detection
+  |   |-- Tier 1          TF-IDF + logistic regression, always on, ~5ms
+  |   |-- Tier 2          DeBERTa-v3 transformer (optional), ~20-50ms
   |   +-- ToxicityDetector    Extracts toxicity signal from ML output (no extra compute)
   |-- LLMDetector         Semantic analysis, full mode only, ~100-500ms additional
   +-- PolicyEngine        BLOCK / SANITIZE / ALLOW
 ```
+
+Tier 2 is optional. Without transformer dependencies installed, Tier 1 handles all detection. Both tiers run independently - a transformer failure degrades to Tier 1 only without affecting the request.
 
 **Output path (proxy mode only):**
 
@@ -79,7 +83,7 @@ Guardrails (PII, toxicity) are architecturally separate from the detection score
 | Database | PostgreSQL (SQLAlchemy async) |
 | Cache | Redis |
 | Dashboard | Next.js 16, React 19 |
-| ML model | TF-IDF + logistic regression, trained on 7 threat categories |
+| ML detection | Two-tier: TF-IDF + logistic regression (Tier 1, always on) + DeBERTa-v3 transformer (Tier 2, optional) |
 | Observability | Prometheus, Grafana |
 
 
@@ -283,6 +287,20 @@ That's it. `setup.sh` builds images, starts all services, and waits for the API 
 ./setup.sh --down    # stop all containers
 ```
 
+**Transformer (Tier 2) - optional:**
+
+The base install runs TF-IDF detection only. To enable the DeBERTa-v3 transformer (~1.5GB additional image size):
+
+```bash
+# Local dev
+pip install -r requirements-transformer.txt --extra-index-url https://download.pytorch.org/whl/cpu
+
+# Docker
+docker build --build-arg BUILD_ENV=transformer -f infrastructure/docker/Dockerfile .
+```
+
+Without transformer dependencies, `transformer_detector` reports `degraded` in `/health/ready` and `wrapsec doctor`. All requests are still processed via Tier 1 (TF-IDF).
+
 **Tests:**
 
 ```bash
@@ -301,6 +319,7 @@ docker compose -f infrastructure/docker/docker-compose.yml exec api \
 | API reference (47 endpoints) | `docs/api.md` |
 | Architecture and database schema | `docs/architecture.md` |
 | Risk scoring and confidence model | `docs/scoring_model.md` |
+| ML detection architecture | `docs/ml_detection_design.md` |
 | Developer guide | `docs/developer_guide.md` |
 | User guide (dashboard) | `docs/user_guide.md` |
 | CLI reference | `docs/cli_reference.md` |
