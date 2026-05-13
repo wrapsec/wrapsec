@@ -315,11 +315,11 @@ docker compose -f infrastructure/docker/docker-compose.yml exec api \
 
 | Document | Location |
 |---|---|
-| Core concepts and decision model | `docs/core_concepts.md` |
+| Core concepts and decision model | `docs/internal/core_concepts.md` |
 | API reference (47 endpoints) | `docs/api.md` |
-| Architecture and database schema | `docs/architecture.md` |
-| Risk scoring and confidence model | `docs/scoring_model.md` |
-| ML detection architecture | `docs/ml_detection_design.md` |
+| Architecture and database schema | `docs/internal/architecture.md` |
+| Risk scoring and confidence model | `docs/internal/scoring_model.md` |
+| ML detection architecture | `docs/internal/ml_detection_design.md` |
 | Developer guide | `docs/developer_guide.md` |
 | User guide (dashboard) | `docs/user_guide.md` |
 | CLI reference | `docs/cli_reference.md` |
