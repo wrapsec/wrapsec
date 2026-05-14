@@ -174,38 +174,17 @@ export default function LoginPage() {
             </p>
           </div>
 
-          {/* Feature pills */}
-          <div style={{ display: "flex", flexDirection: "column", gap: "10px" }}>
-            {[
-              { icon: "M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2", label: "All requests inspected and logged" },
-              { icon: "M3 12l2-2m0 0l7-7 7 7M5 10v10a1 1 0 001 1h3m10-11l2 2m-2-2v10a1 1 0 01-1 1h-3m-6 0a1 1 0 001-1v-4a1 1 0 011-1h2a1 1 0 011 1v4a1 1 0 001 1m-6 0h6", label: "On-premises - no data leaves your network" },
-              { icon: "M10 20l4-16m4 4l4 4-4 4M6 16l-4-4 4-4", label: "Every decision traceable by trace ID" },
-            ].map(f => (
-              <div key={f.label} style={{ display: "flex", alignItems: "center", gap: "10px" }}>
-                <div style={{
-                  width: 28, height: 28, borderRadius: "7px", flexShrink: 0,
-                  background: "rgba(103,15,239,0.20)",
-                  display: "flex", alignItems: "center", justifyContent: "center",
-                }}>
-                  <svg width={14} height={14} fill="none" stroke="#a78bfa" strokeWidth={1.75} viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" d={f.icon} />
-                  </svg>
-                </div>
-                <span style={{ fontSize: "12px", color: "rgba(255,255,255,0.50)" }}>{f.label}</span>
-              </div>
-            ))}
-
-            <div style={{ marginTop: "6px" }}>
-              <span style={{
-                fontSize: "10px", fontWeight: 600, color: "#a78bfa",
-                background: "rgba(103,15,239,0.18)",
-                border: "1px solid rgba(103,15,239,0.30)",
-                borderRadius: "20px", padding: "3px 10px",
-                letterSpacing: "0.03em",
-              }}>
-                v1.0.0
-              </span>
-            </div>
+          {/* Version badge */}
+          <div>
+            <span style={{
+              fontSize: "10px", fontWeight: 600, color: "#a78bfa",
+              background: "rgba(103,15,239,0.18)",
+              border: "1px solid rgba(103,15,239,0.30)",
+              borderRadius: "20px", padding: "3px 10px",
+              letterSpacing: "0.03em",
+            }}>
+              v1.0.0
+            </span>
           </div>
         </div>
 
