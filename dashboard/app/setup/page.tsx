@@ -146,25 +146,16 @@ export default function SetupPage() {
             </p>
           </div>
 
-          <div style={{ display: "flex", flexDirection: "column", gap: "10px" }}>
-            {[
-              { icon: "M9 12l2 2 4-4m5.618-4.016A11.955 11.955 0 0112 2.944a11.955 11.955 0 01-8.618 3.04A12.02 12.02 0 003 9c0 5.591 3.824 10.29 9 11.622 5.176-1.332 9-6.03 9-11.622 0-1.042-.133-2.052-.382-3.016z", label: "No default credentials - you set your own" },
-              { icon: "M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z", label: "Setup page permanently disabled after first use" },
-              { icon: "M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z", label: "Full admin access from the start" },
-            ].map(f => (
-              <div key={f.label} style={{ display: "flex", alignItems: "center", gap: "10px" }}>
-                <div style={{
-                  width: 28, height: 28, borderRadius: "7px", flexShrink: 0,
-                  background: "rgba(103,15,239,0.20)",
-                  display: "flex", alignItems: "center", justifyContent: "center",
-                }}>
-                  <svg width={14} height={14} fill="none" stroke="#a78bfa" strokeWidth={1.75} viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" d={f.icon} />
-                  </svg>
-                </div>
-                <span style={{ fontSize: "12px", color: "rgba(255,255,255,0.50)" }}>{f.label}</span>
-              </div>
-            ))}
+          <div>
+            <span style={{
+              fontSize: "10px", fontWeight: 600, color: "#a78bfa",
+              background: "rgba(103,15,239,0.18)",
+              border: "1px solid rgba(103,15,239,0.30)",
+              borderRadius: "20px", padding: "3px 10px",
+              letterSpacing: "0.03em",
+            }}>
+              v1.0.0
+            </span>
           </div>
         </div>
 
