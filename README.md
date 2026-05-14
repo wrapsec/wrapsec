@@ -50,6 +50,8 @@ Input
 
 Tier 2 is optional. Without transformer dependencies installed, Tier 1 handles all detection. Both tiers run independently - a transformer failure degrades to Tier 1 only without affecting the request.
 
+> **Note on bundled models:** The Tier 1 model (`ml_detector.pkl`) shipped in this repository is trained on a curated open-source dataset for demonstration and evaluation purposes. The Tier 2 transformer uses [`protectai/deberta-v3-base-prompt-injection-v2`](https://huggingface.co/protectai/deberta-v3-base-prompt-injection-v2) from HuggingFace. WrapSec's core focus is purpose-built ML models trained on significantly larger, more diverse, and production-representative datasets - these will be available for production deployments and are not part of this open-source release.
+
 **Output path (proxy mode only):**
 
 ```
@@ -300,6 +302,8 @@ docker build --build-arg BUILD_ENV=transformer -f infrastructure/docker/Dockerfi
 ```
 
 Without transformer dependencies, `transformer_detector` reports `degraded` in `/health/ready` and `wrapsec doctor`. All requests are still processed via Tier 1 (TF-IDF).
+
+> The HuggingFace transformer and the bundled TF-IDF model are suitable for evaluation. Production-grade WrapSec deployments use purpose-built models - see the note above.
 
 **Tests:**
 
