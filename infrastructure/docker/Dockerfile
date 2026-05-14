@@ -25,9 +25,6 @@ RUN if [ "$BUILD_ENV" = "dev" ]; then \
 # Copy application
 COPY . .
 
-# Train demo ML model (offline, uses curated fallback dataset only)
-RUN PYTHONPATH=/app python scripts/train_ml_model.py --offline
-
 # Create non-root user
 RUN adduser --disabled-password --gecos "" wrapsec
 RUN chown -R wrapsec:wrapsec /app
