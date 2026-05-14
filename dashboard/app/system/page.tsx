@@ -135,8 +135,14 @@ export default function SystemPage() {
   )
 }
 
+const DISPLAY_NAMES: Record<string, string> = {
+  tfidf_detector:       "ML Tier 1 Detector",
+  transformer_detector: "ML Tier 2 Detector",
+}
+
 function ServiceStatus({ name, status }: { name: string; status: string }) {
-  const ok = status === "ok" || status === "healthy"
+  const ok          = status === "ok" || status === "healthy"
+  const displayName = DISPLAY_NAMES[name] ?? name.replace(/_/g, " ")
   return (
     <div className="bg-slate-50 rounded-lg px-3 py-3 flex items-center gap-2.5">
       <span
@@ -144,7 +150,7 @@ function ServiceStatus({ name, status }: { name: string; status: string }) {
         style={{ backgroundColor: ok ? "#10b981" : "#f87171" }}
       />
       <div>
-        <p className="text-xs font-medium text-slate-700 capitalize">{name.replace(/_/g, " ")}</p>
+        <p className="text-xs font-medium text-slate-700 capitalize">{displayName}</p>
         <p className="text-xs" style={{ color: ok ? "#059669" : "#ef4444" }}>
           {ok ? "Operational" : "Error"}
         </p>
