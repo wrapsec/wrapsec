@@ -27,9 +27,6 @@ logs:
 seed:
 	python scripts/seed_data.py
 
-train:
-	python scripts/train_ml_model.py
-
 lint:
 	ruff check .
 
