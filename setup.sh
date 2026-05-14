@@ -53,6 +53,8 @@ if [ "$MODE" = "prod" ]; then
     # Required production values
     grep -q "your-secret-key-minimum-32-characters-here" .env \
         && die "SECRET_KEY is still the default. Generate one: openssl rand -hex 32"
+    grep -q "your-admin-api-key-minimum-32-chars-here" .env \
+        && die "ADMIN_API_KEY is still the default. Generate one: python3 -c \"import secrets; print('wsk_admin_' + secrets.token_hex(24))\""
 
     POSTGRES_PASSWORD=$(grep "^POSTGRES_PASSWORD=" .env | cut -d= -f2- | tr -d '"')
     REDIS_PASSWORD=$(grep "^REDIS_PASSWORD=" .env | cut -d= -f2- | tr -d '"')
@@ -137,11 +139,20 @@ else
 
     if [ ! -f .env ]; then
         cp .env.example .env
-        SECRET=$(cat /dev/urandom | tr -dc 'a-f0-9' | fold -w 64 | head -n 1)
-        sed -i "s/your-secret-key-minimum-32-characters-here/${SECRET}/" .env
         warn ".env created from .env.example"
     else
         info ".env found"
+    fi
+
+    if grep -q "your-secret-key-minimum-32-characters-here" .env; then
+        SECRET=$(cat /dev/urandom | tr -dc 'a-f0-9' | fold -w 64 | head -n 1)
+        sed -i "s/your-secret-key-minimum-32-characters-here/${SECRET}/" .env
+        warn "SECRET_KEY generated"
+    fi
+    if grep -q "your-admin-api-key-minimum-32-chars-here" .env; then
+        ADMIN_KEY="wsk_admin_$(cat /dev/urandom | tr -dc 'a-f0-9' | fold -w 48 | head -n 1)"
+        sed -i "s/your-admin-api-key-minimum-32-chars-here/${ADMIN_KEY}/" .env
+        warn "ADMIN_API_KEY generated"
     fi
 
     info "Building images and starting WrapSec (dev)..."
