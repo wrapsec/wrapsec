@@ -38,7 +38,7 @@ The pipeline combines rule-based, machine learning, and optional LLM-based analy
 
 ```
 Input
-  |-- InputGuard          PII detection (22+ entity types), redaction if triggered
+  |-- InputGuard          PII detection (22 entity types), redaction if triggered
   |-- RuleDetector        Regex and heuristic patterns, ~1ms
   |-- DetectionPipeline   Two-tier ML detection
   |   |-- Tier 1          TF-IDF + logistic regression, always on, ~5ms
@@ -59,9 +59,7 @@ LLM response
   +-- OutputGuard         PII detection on LLM output, redaction or BLOCK if triggered
 ```
 
-Detection risk score: `rule*0.40 + ml*0.30 + llm*0.30`
-
-Guardrails (PII, toxicity) are architecturally separate from the detection score. `ToxicityDetector` extracts its signal from the ML result but evaluates it against an independent threshold - toxicity cannot be diluted by averaging with other detector scores. Guardrails are evaluated first in the policy engine and can override any detection decision regardless of `risk_score`.
+Guardrails (PII, toxicity) are architecturally separate from the detection score and are evaluated independently. A guardrail can produce `BLOCK` regardless of the detection score from other layers.
 
 
 ## Security Decisions
@@ -260,7 +258,7 @@ This allows deployment in regulated environments where storing raw user input is
 
 ## Observability
 
-Prometheus scrapes `GET /metrics`. Three Grafana dashboards are included: Security Overview, Latency and Performance, Threat Intelligence.
+Prometheus scrapes `GET /metrics`. Three Grafana dashboards are included: Security Overview, Latency & Performance, Threat Intelligence.
 
 These metrics enable real-time monitoring of threat activity, latency, and system health. Key metrics: `wrapsec_requests_total`, `wrapsec_blocked_total`, `wrapsec_request_latency_ms`, `wrapsec_system_errors_total`, `wrapsec_proxy_latency_ms`.
 
@@ -312,18 +310,14 @@ docker compose -f infrastructure/docker/docker-compose.yml exec api \
   pytest tests/unit tests/integration -v
 ```
 
-**Production deployment:** see `docs/deployment.md`
+**Production deployment:** see `docs/developer_guide.md`
 
 
 ## Documentation
 
 | Document | Location |
 |---|---|
-| Core concepts and decision model | `docs/internal/core_concepts.md` |
-| API reference (47 endpoints) | `docs/api.md` |
-| Architecture and database schema | `docs/internal/architecture.md` |
-| Risk scoring and confidence model | `docs/internal/scoring_model.md` |
-| ML detection architecture | `docs/internal/ml_detection_design.md` |
+| API reference (65 endpoints) | `docs/api.md` |
 | Developer guide | `docs/developer_guide.md` |
 | User guide (dashboard) | `docs/user_guide.md` |
 | CLI reference | `docs/cli_reference.md` |
