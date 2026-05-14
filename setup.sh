@@ -145,12 +145,12 @@ else
     fi
 
     if grep -q "your-secret-key-minimum-32-characters-here" .env; then
-        SECRET=$(cat /dev/urandom | tr -dc 'a-f0-9' | fold -w 64 | head -n 1)
+        SECRET=$(openssl rand -hex 32)
         sed -i "s/your-secret-key-minimum-32-characters-here/${SECRET}/" .env
         warn "SECRET_KEY generated"
     fi
     if grep -q "your-admin-api-key-minimum-32-chars-here" .env; then
-        ADMIN_KEY="wsk_admin_$(cat /dev/urandom | tr -dc 'a-f0-9' | fold -w 48 | head -n 1)"
+        ADMIN_KEY="wsk_admin_$(openssl rand -hex 24)"
         sed -i "s/your-admin-api-key-minimum-32-chars-here/${ADMIN_KEY}/" .env
         warn "ADMIN_API_KEY generated"
     fi
