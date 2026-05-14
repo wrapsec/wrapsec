@@ -3,10 +3,12 @@
 // WrapSec v1.0 | AI Security Gateway - https://wrapsec.com
 "use client"
 
+import { useState } from "react"
 import Link from "next/link"
 import { usePathname } from "next/navigation"
 import { useSidebar } from "@/contexts/SidebarContext"
 import { cn } from "@/lib/utils"
+import { AboutModal } from "./AboutModal"
 
 // ── WrapSec logo mark (4 strokes from SVG) ────────────────────────────────
 
@@ -175,6 +177,7 @@ function NavSection({ label, sectionKey, items, collapsed, pathname }: {
 export function Sidebar() {
   const pathname = usePathname()
   const { collapsed, toggleCollapsed } = useSidebar()
+  const [aboutOpen, setAboutOpen] = useState(false)
   const w = collapsed ? 52 : 228
 
   return (
@@ -282,19 +285,44 @@ export function Sidebar() {
         </nav>
 
         {/* Footer */}
-        {!collapsed && (
-          <div style={{
-            padding:    "12px 14px",
-            borderTop:  "1px solid var(--sidebar-border)",
-            flexShrink: 0,
-          }}>
-            <p style={{ fontSize: "11px", color: "rgba(255,255,255,0.25)" }}>WrapSec v1.0</p>
-          </div>
-        )}
+        <div style={{
+          padding:    collapsed ? "10px 0" : "10px 14px",
+          borderTop:  "1px solid var(--sidebar-border)",
+          flexShrink: 0,
+          display:    "flex",
+          justifyContent: collapsed ? "center" : "flex-start",
+        }}>
+          <button
+            onClick={() => setAboutOpen(true)}
+            title="About WrapSec"
+            style={{
+              background:   "none",
+              border:       "none",
+              cursor:       "pointer",
+              padding:      collapsed ? "6px" : "4px 6px",
+              borderRadius: "4px",
+              display:      "flex",
+              alignItems:   "center",
+              gap:          "6px",
+            }}
+            onMouseEnter={e => (e.currentTarget as HTMLElement).style.background = "rgba(255,255,255,0.06)"}
+            onMouseLeave={e => (e.currentTarget as HTMLElement).style.background = "none"}
+          >
+            <svg width="14" height="14" fill="none" stroke="rgba(255,255,255,0.3)" strokeWidth={1.75} viewBox="0 0 24 24">
+              <circle cx="12" cy="12" r="10"/>
+              <path strokeLinecap="round" strokeLinejoin="round" d="M12 16v-4M12 8h.01"/>
+            </svg>
+            {!collapsed && (
+              <span style={{ fontSize: "11px", color: "rgba(255,255,255,0.25)" }}>WrapSec v1.0</span>
+            )}
+          </button>
+        </div>
       </aside>
 
       {/* Spacer */}
       <div style={{ flexShrink: 0, width: `${w}px`, transition: "width 280ms cubic-bezier(0.4,0,0.2,1)" }} />
+
+      {aboutOpen && <AboutModal onClose={() => setAboutOpen(false)} />}
     </>
   )
 }
