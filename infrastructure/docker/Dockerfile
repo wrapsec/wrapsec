@@ -25,6 +25,9 @@ RUN if [ "$BUILD_ENV" = "dev" ]; then \
 # Copy application
 COPY . .
 
+# Install Python SDK so sdk/python/tests are importable in-container
+RUN pip install --no-cache-dir -e sdk/python/
+
 # Create non-root user
 RUN adduser --disabled-password --gecos "" wrapsec
 RUN chown -R wrapsec:wrapsec /app
