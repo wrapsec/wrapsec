@@ -96,6 +96,24 @@ def decode_access_token(token: str) -> dict:
     Returns: validated payload dict on success.
     """
     _settings = get_settings()
+
+    # Defense-in-depth: reject alg mismatches before decode. jwt.decode already
+    # constrains algorithms via the allowlist, but pre-checking the unverified
+    # header adds a second gate against algorithm-confusion attacks (alg=none,
+    # HS/RS confusion) if a future PyJWT bug ever weakens that check.
+    try:
+        header_alg = jwt.get_unverified_header(token).get("alg")
+    except InvalidTokenError as e:
+        logger.warning("auth token_decode_failed reason=%s", str(e))
+        raise InvalidTokenError("Token validation failed")
+
+    if header_alg != _settings.jwt_algorithm:
+        logger.warning(
+            "auth token_decode_failed reason=alg_mismatch got=%s expected=%s",
+            header_alg, _settings.jwt_algorithm,
+        )
+        raise InvalidTokenError("Token validation failed")
+
     try:
         payload = jwt.decode(
             token,
