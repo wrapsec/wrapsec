@@ -197,6 +197,18 @@ class GatewayService:
                 toxicity_sanitize_threshold = toxicity_sanitize_threshold,
             )
 
+            # Fail-closed: if any detector raised, force BLOCK. The per-detector
+            # try/except above swallows exceptions into DetectionResult.clean(),
+            # so a single detector crash could otherwise smuggle a payload past
+            # the remaining layers.
+            if detection_failed:
+                policy.decision     = DecisionType.BLOCK
+                scoring.final_score = RiskScore(1.0)
+                logger.warning(
+                    f"Fail-closed BLOCK forced due to detector failure "
+                    f"trace_id={request.trace_id}"
+                )
+
             # ── Step 7: Sanitized input ───────────────────────
             sanitized_input = None
             if policy.decision == DecisionType.SANITIZE:
