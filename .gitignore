@@ -239,5 +239,11 @@ models/training.log
 # Dashboard build output
 dashboard/.next/
 
+# TypeScript incremental build cache
+*.tsbuildinfo
+
+# Local AI-agent context (not for public repo)
+CLAUDE.md
+
 # Node SDK build output
 sdk/node/dist/
