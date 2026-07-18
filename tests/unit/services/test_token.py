@@ -182,6 +182,56 @@ def test_decode_error_message_is_generic():
     assert str(exc_info.value) == "Token validation failed"
 
 
+# ── decode_access_token: algorithm pre-validation (C3) ─────────────────────────
+
+def test_decode_rejects_alg_none():
+    """alg=none token must be rejected pre-decode."""
+    import jwt
+    payload = {
+        "sub":       str(uuid.uuid4()),
+        "type":      "access",
+        "ver":       1,
+        "role":      "DEVELOPER",
+        "tenant_id": str(uuid.uuid4()),
+        "dept_id":   None,
+        "aud":       ACCESS_TOKEN_AUDIENCE,
+        "iat":       datetime.datetime.now(timezone.utc),
+        "exp":       datetime.datetime.now(timezone.utc) + timedelta(minutes=30),
+    }
+    token = jwt.encode(payload, key="", algorithm="none")
+    with pytest.raises(InvalidTokenError):
+        decode_access_token(token)
+
+
+def test_decode_rejects_mismatched_algorithm():
+    """Token signed with a different HMAC alg must be rejected."""
+    import jwt
+    from config.settings import get_settings
+    _settings = get_settings()
+    if _settings.jwt_algorithm == "HS512":
+        pytest.skip("configured alg matches wrong-alg test candidate")
+    payload = {
+        "sub":       str(uuid.uuid4()),
+        "type":      "access",
+        "ver":       1,
+        "role":      "DEVELOPER",
+        "tenant_id": str(uuid.uuid4()),
+        "dept_id":   None,
+        "aud":       ACCESS_TOKEN_AUDIENCE,
+        "iat":       datetime.datetime.now(timezone.utc),
+        "exp":       datetime.datetime.now(timezone.utc) + timedelta(minutes=30),
+    }
+    token = jwt.encode(payload, _settings.secret_key, algorithm="HS512")
+    with pytest.raises(InvalidTokenError):
+        decode_access_token(token)
+
+
+def test_decode_rejects_malformed_header():
+    """Garbage that is not a JWT must not crash - must raise generic error."""
+    with pytest.raises(InvalidTokenError):
+        decode_access_token("garbage")
+
+
 # ── create_refresh_token ───────────────────────────────────────────────────────
 
 def test_refresh_token_returns_tuple():
