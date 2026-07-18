@@ -51,6 +51,7 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from api.v1.dependencies.db import get_db
+from config.settings import get_settings
 from db.models import ProxyInteractionModel, ProxyProviderConfigModel
 from db.repositories.audit import AuditRepository
 from domain.enums import DetectionMode, ExecutionMode
@@ -218,13 +219,34 @@ async def _log_interaction(
     input_length:     int   = 0,
 ) -> None:
     try:
+        # Honor data_storage_mode:
+        #   full   -> store raw and sanitized as captured
+        #   masked -> null out raw fields; keep sanitized (already redacted upstream)
+        #   none   -> null out both raw and sanitized (strict compliance)
+        mode = (get_settings().data_storage_mode or "masked").lower()
+        if mode == "none":
+            stored_input_raw        = None
+            stored_input_sanitized  = None
+            stored_output_raw       = None
+            stored_output_sanitized = None
+        elif mode == "masked":
+            stored_input_raw        = None
+            stored_input_sanitized  = input_sanitized
+            stored_output_raw       = None
+            stored_output_sanitized = output_sanitized
+        else:  # "full" or any unrecognized value falls back to full for backwards compat
+            stored_input_raw        = input_raw
+            stored_input_sanitized  = input_sanitized
+            stored_output_raw       = output_raw
+            stored_output_sanitized = output_sanitized
+
         # 1. Insert into proxy_interactions
         interaction = ProxyInteractionModel(
             trace_id              = trace_id,
             key_id                = key_id,
             user_id               = user_id,
-            input_raw             = input_raw,
-            input_sanitized       = input_sanitized,
+            input_raw             = stored_input_raw,
+            input_sanitized       = stored_input_sanitized,
             input_decision        = input_decision,
             input_primary_reason  = input_reason,
             input_confidence      = input_confidence,
@@ -234,8 +256,8 @@ async def _log_interaction(
             model                 = model,
             provider_latency_ms   = provider_latency,
             execution_status      = execution_status,
-            output_raw            = output_raw,
-            output_sanitized      = output_sanitized,
+            output_raw            = stored_output_raw,
+            output_sanitized      = stored_output_sanitized,
             output_decision       = output_decision,
             output_primary_reason = output_reason,
             output_confidence     = output_confidence,
