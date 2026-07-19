@@ -25,6 +25,7 @@ from api.v1.middleware.logging import LoggingMiddleware
 from api.v1.middleware.auth import AuthMiddleware
 from api.v1.middleware.rate_limit import RateLimitMiddleware
 from api.v1.middleware.idempotency import IdempotencyMiddleware
+from api.v1.middleware.security_headers import SecurityHeadersMiddleware
 
 setup_logging()
 
@@ -180,6 +181,13 @@ app.add_middleware(
     allow_methods     = ["*"],
     allow_headers     = ["*"],
 )
+
+# ── Security headers ──────────────────────────────────────────
+# Registered last so it wraps CORS and every earlier middleware. This means
+# it also stamps headers on CORS preflight responses and on error responses
+# raised inside downstream middleware, closing the gap where a fast-path
+# 4xx/5xx would otherwise ship without X-Content-Type-Options / HSTS / CSP.
+app.add_middleware(SecurityHeadersMiddleware)
 
 # ── Exception handlers ────────────────────────────────────────
 app.add_exception_handler(WrapSecError, wrapsec_exception_handler)
