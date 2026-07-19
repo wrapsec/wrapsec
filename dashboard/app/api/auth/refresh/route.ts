@@ -3,8 +3,21 @@
 // WrapSec v1.0 | AI Security Gateway - https://wrapsec.com
 import { NextRequest, NextResponse } from "next/server"
 
-const API_BASE_URL  = process.env.API_URL || process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000"
-const COOKIE_SECURE = process.env.COOKIE_SECURE === "true"
+const API_BASE_URL     = process.env.API_URL || process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000"
+const COOKIE_SECURE    = process.env.COOKIE_SECURE === "true"
+// M5: BFF Path handshake - see login/route.ts for the full explanation.
+const DASHBOARD_ORIGIN = process.env.DASHBOARD_ORIGIN || ""
+const BFF_COOKIE_PATH  = "/api/auth"
+
+function forwardBackendSetCookies(backend: Response, out: NextResponse): void {
+  const anyHeaders = backend.headers as unknown as { getSetCookie?: () => string[] }
+  const cookies = typeof anyHeaders.getSetCookie === "function"
+    ? anyHeaders.getSetCookie()
+    : (backend.headers.get("set-cookie") ? [backend.headers.get("set-cookie") as string] : [])
+  for (const c of cookies) {
+    out.headers.append("Set-Cookie", c)
+  }
+}
 
 /**
  * POST /api/auth/refresh
@@ -24,11 +37,16 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ error: "No refresh token" }, { status: 401 })
   }
 
+  const outgoingHeaders: Record<string, string> = {
+    "Cookie":                `refresh_token=${refreshCookie}`,
+    "X-Refresh-Cookie-Path": BFF_COOKIE_PATH,
+  }
+  if (DASHBOARD_ORIGIN) {
+    outgoingHeaders["Origin"] = DASHBOARD_ORIGIN
+  }
   const response = await fetch(`${API_BASE_URL}/v1/auth/refresh`, {
     method:  "POST",
-    headers: {
-      "Cookie": `refresh_token=${refreshCookie}`,
-    },
+    headers: outgoingHeaders,
   })
 
   if (!response.ok) {
@@ -62,22 +80,11 @@ export async function POST(request: NextRequest) {
     path:     "/",
   })
 
-  // Re-issue the rotated refresh token with Path=/api/auth (same as login/route.ts).
-  // Backend returns Path=/v1/auth - rewrite to BFF path so browser sends it here.
-  const setCookie = response.headers.get("set-cookie")
-  if (setCookie) {
-    const tokenMatch  = setCookie.match(/refresh_token=([^;]+)/)
-    const maxAgeMatch = setCookie.match(/[Mm]ax-[Aa]ge=(\d+)/)
-    if (tokenMatch) {
-      res.cookies.set("refresh_token", tokenMatch[1], {
-        httpOnly: true,
-        secure:   COOKIE_SECURE,
-        sameSite: "strict",
-        maxAge:   maxAgeMatch ? parseInt(maxAgeMatch[1], 10) : 30 * 24 * 60 * 60,
-        path:     "/api/auth",
-      })
-    }
-  }
+  // Forward backend's Set-Cookie headers (rotated refresh_token with the
+  // negotiated Path) unchanged. See login/route.ts for the deploy-time
+  // contract that keeps DASHBOARD_ORIGIN and backend cors_allowed_origins
+  // aligned.
+  forwardBackendSetCookies(response, res)
 
   return res
 }
