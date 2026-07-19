@@ -188,6 +188,13 @@ async def ai_request(
     cached = await get_cached_result(body.input, det_mode_str, exe_mode_str, _tenant_id)
     if cached:
         CACHE_HITS.inc()
+        # Overwrite the cached body's trace_id with the current request's so the
+        # response body matches the X-Trace-Id header stamped by TraceMiddleware.
+        # Without this, the cached trace_id belongs to the original requester and
+        # trace correlation breaks for cache-hit responses.
+        _current_trace_id = getattr(request.state, "trace_id", None)
+        if _current_trace_id:
+            cached = {**cached, "trace_id": _current_trace_id}
         return JSONResponse(content=cached)
     CACHE_MISSES.inc()
 
@@ -358,7 +365,12 @@ async def ai_request(
         sanitize_threshold  = sanitize_threshold,
     )
 
-    await set_cached_result(body.input, det_mode_str, exe_mode_str, _tenant_id, response)
+    # Cache the non-debug shape only. If we cached the debug-included body, a
+    # subsequent non-admin request for the same input would hit the cache and
+    # receive per-layer detector scores meant for admins only. Building a
+    # separate cache-safe copy keeps the on-hit path uniformly non-debug.
+    cache_body = {k: v for k, v in response.items() if k != "debug"}
+    await set_cached_result(body.input, det_mode_str, exe_mode_str, _tenant_id, cache_body)
 
     return JSONResponse(content=response)
 

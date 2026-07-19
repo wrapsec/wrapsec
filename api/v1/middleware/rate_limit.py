@@ -14,7 +14,9 @@ PUBLIC_PATHS = {"/health", "/health/ready", "/health/live", "/metrics"}
 
 # Only these path prefixes are rate limited -- gateway processing endpoints.
 # Dashboard reads, settings, and auth endpoints are excluded.
-RATE_LIMITED_PREFIXES = ("/v1/scan", "/v1/proxy", "/v1/ai")
+# /v1/ai/*             covers scan-only requests (/v1/ai/request).
+# /v1/chat/completions covers the OpenAI-compatible proxy path.
+RATE_LIMITED_PREFIXES = ("/v1/ai", "/v1/chat/completions")
 
 
 async def _get_live_rate_limit() -> int:

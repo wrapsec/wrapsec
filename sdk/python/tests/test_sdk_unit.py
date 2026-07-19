@@ -456,6 +456,34 @@ class TestHealthLiveTimeout:
         assert client.health_live() is False
 
 
+# ── SDK-F9 regression: chat() raises WrapSecSystemError, not NameError ────────
+
+class TestChatTimeoutRaisesSystemError:
+    """
+    Regression for v1.0.6/F-9: chat() used WrapSecSystemError in its
+    timeout/connection handlers but the class was not imported into client.py,
+    so a real timeout raised NameError instead of the intended typed error.
+    """
+
+    @patch(
+        "wrapsec.client.requests.post",
+        side_effect=__import__("requests").exceptions.Timeout("stall"),
+    )
+    def test_timeout_raises_system_error(self, _mock_post):
+        client = make_client()
+        with pytest.raises(WrapSecSystemError, match="timed out"):
+            client.chat("hello", model="ollama/llama3.2")
+
+    @patch(
+        "wrapsec.client.requests.post",
+        side_effect=__import__("requests").exceptions.ConnectionError("refused"),
+    )
+    def test_connection_error_raises_system_error(self, _mock_post):
+        client = make_client()
+        with pytest.raises(WrapSecSystemError, match="Cannot reach"):
+            client.chat("hello", model="ollama/llama3.2")
+
+
 # ── SDK-32: AsyncClient tests ─────────────────────────────────────────────────
 
 def make_async_client() -> AsyncClient:

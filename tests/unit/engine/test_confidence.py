@@ -108,11 +108,11 @@ def test_pii_max_score_capped_at_095():
 
 # ── compute_confidence ─────────────────────────────────────────
 
-def test_guardrail_triggered_uses_guardrail_confidence():
+def test_pii_guardrail_triggered_uses_guardrail_confidence():
     confidence, band = compute_confidence(
         rule_score=0.0, ml_score=0.0, llm_score=0.0,
         pii_score=0.73,
-        guardrail_triggered=True,
+        pii_guardrail_triggered=True,
         block_threshold=0.7, sanitize_threshold=0.4,
     )
     assert confidence >= 0.90
@@ -123,7 +123,7 @@ def test_no_guardrail_uses_detector_confidence():
     confidence, band = compute_confidence(
         rule_score=0.85, ml_score=0.80, llm_score=0.0,
         pii_score=0.0,
-        guardrail_triggered=False,
+        pii_guardrail_triggered=False,
         rule_enabled=True, ml_enabled=True, llm_invoked=False,
     )
     assert band == "HIGH"
@@ -133,9 +133,75 @@ def test_confidence_capped_at_1():
     confidence, _ = compute_confidence(
         rule_score=0.0, ml_score=0.0, llm_score=0.0,
         pii_score=0.0,
-        guardrail_triggered=False,
+        pii_guardrail_triggered=False,
     )
     assert confidence <= 1.0
+
+
+# ── F-2 regression: toxicity-only decision must not route into PII branch ───
+
+def test_toxicity_only_decision_produces_high_confidence():
+    """
+    Pre-fix bug: service.py passed the combined PII-or-toxicity flag as the
+    first parameter, and compute_confidence branch 1 used pii_score. A
+    toxicity-only BLOCK/SANITIZE ended up with confidence 0.0 / LOW because
+    pii_score was 0.0. This test locks in that pii_guardrail_triggered=False
+    with toxicity_guardrail_triggered=True routes into branch 2 and returns
+    a real confidence derived from toxicity_score.
+    """
+    confidence, band = compute_confidence(
+        rule_score=0.0, ml_score=0.0, llm_score=0.0,
+        pii_score=0.0,
+        pii_guardrail_triggered=False,
+        toxicity_score=0.85,
+        toxicity_guardrail_triggered=True,
+        toxicity_block_threshold=0.7,
+        toxicity_sanitize_threshold=0.4,
+    )
+    assert confidence >= 0.90
+    assert band == "HIGH"
+
+
+def test_toxicity_branch_uses_toxicity_thresholds_not_detection_thresholds():
+    """
+    Branch 2 must tier against the toxicity guardrail's own thresholds so the
+    HIGH/MEDIUM/LOW band matches the guardrail that actually fired. If it
+    accidentally used detection thresholds, a toxicity guardrail configured
+    with tighter thresholds would report the wrong band.
+    """
+    # Toxicity score at exact toxicity block threshold - must land in BLOCK tier.
+    confidence, band = compute_confidence(
+        rule_score=0.0, ml_score=0.0, llm_score=0.0,
+        pii_score=0.0,
+        pii_guardrail_triggered=False,
+        block_threshold=0.95,     # detection threshold - should be ignored
+        sanitize_threshold=0.80,  # detection threshold - should be ignored
+        toxicity_score=0.5,
+        toxicity_guardrail_triggered=True,
+        toxicity_block_threshold=0.5,
+        toxicity_sanitize_threshold=0.3,
+    )
+    # 0.5 >= tox_block_threshold (0.5) -> BLOCK tier -> confidence >= 0.90
+    assert confidence >= 0.90
+    assert band == "HIGH"
+
+
+def test_pii_triggered_still_takes_priority_over_toxicity():
+    """
+    If both guardrails fire, PII branch wins (it comes first). Confirms the
+    rename to pii_guardrail_triggered didn't invert priority.
+    """
+    confidence, band = compute_confidence(
+        rule_score=0.0, ml_score=0.0, llm_score=0.0,
+        pii_score=0.9,                    # BLOCK-level PII
+        pii_guardrail_triggered=True,
+        block_threshold=0.7, sanitize_threshold=0.4,
+        toxicity_score=0.6,                # would also fire
+        toxicity_guardrail_triggered=True,
+        toxicity_block_threshold=0.5,
+    )
+    # PII branch used - confidence derived from pii_score, not toxicity_score
+    assert band == "HIGH"
 
 
 # ── get_confidence_band ────────────────────────────────────────

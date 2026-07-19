@@ -305,7 +305,6 @@ class GatewayService:
                 not pii_guardrail_triggered and
                 scoring.toxicity_score >= _tox_st
             )
-            guardrail_triggered = pii_guardrail_triggered or toxicity_guardrail_triggered
 
             primary_reason = compute_primary_reason(
                 guardrail_triggered          = pii_guardrail_triggered,
@@ -322,7 +321,9 @@ class GatewayService:
                 toxicity_block_threshold     = _tox_bt,
             )
 
-            # Compute confidence score
+            # Compute confidence score. Pass the PII-specific flag (not the
+            # combined guardrail_triggered) so a toxicity-only decision routes
+            # into the toxicity branch instead of the PII branch with pii_score=0.
             from engine.scoring.confidence import compute_confidence
             confidence, confidence_band = compute_confidence(
                 rule_score                   = scoring.rule_score,
@@ -332,11 +333,13 @@ class GatewayService:
                 rule_enabled                 = rule_enabled,
                 ml_enabled                   = ml_enabled,
                 llm_invoked                  = llm_invoked,
-                guardrail_triggered          = guardrail_triggered,
-                block_threshold              = block_threshold,
-                sanitize_threshold           = sanitize_threshold,
+                pii_guardrail_triggered      = pii_guardrail_triggered,
+                block_threshold              = _pii_bt,
+                sanitize_threshold           = _pii_st,
                 toxicity_score               = scoring.toxicity_score,
                 toxicity_guardrail_triggered = toxicity_guardrail_triggered,
+                toxicity_block_threshold     = _tox_bt,
+                toxicity_sanitize_threshold  = _tox_st,
             )
 
             gateway_decision = GatewayDecision(
