@@ -8,8 +8,7 @@ from engine.detection.base import BaseDetector, DetectionResult
 from domain.enums import ThreatCategory
 from config.settings import get_settings
 
-logger   = logging.getLogger("wrapsec.engine")
-settings = get_settings()
+logger = logging.getLogger("wrapsec.engine")
 
 THREAT_CATEGORY_MAP = {
     "PROMPT_INJECTION":  ThreatCategory.PROMPT_INJECTION,

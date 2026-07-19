@@ -29,7 +29,6 @@ from domain.value_objects.severity import compute_severity
 from services.gateway.service import GatewayService
 
 router   = APIRouter()
-settings = get_settings()
 _gateway = GatewayService()
 
 
@@ -69,8 +68,16 @@ def _build_response(
         response["output"] = decision.output
 
     if debug and decision.layer_scores:
-        _bt = block_threshold    if block_threshold    is not None else settings.block_threshold
-        _st = sanitize_threshold if sanitize_threshold is not None else settings.sanitize_threshold
+        # F-6: fetch settings only if the caller-supplied thresholds are
+        # missing (they normally aren't). Avoids a get_settings() call on
+        # every scan response for a defensive-default branch.
+        if block_threshold is None or sanitize_threshold is None:
+            _fallback = get_settings()
+            _bt = block_threshold    if block_threshold    is not None else _fallback.block_threshold
+            _st = sanitize_threshold if sanitize_threshold is not None else _fallback.sanitize_threshold
+        else:
+            _bt = block_threshold
+            _st = sanitize_threshold
 
         def layer_decision(score: float) -> str:
             if score >= _bt:
@@ -122,6 +129,12 @@ async def ai_request(
     if body.options.debug and not getattr(request.state, "is_admin", False):
         raise DebugForbiddenError()
 
+    # F-6: single per-call snapshot of settings for this request. Reading
+    # config once at handler entry keeps the request internally consistent
+    # (all fields read from the same version) while still honoring the
+    # per-call invariant so key rotation and test overrides take effect.
+    _settings = get_settings()
+
     # Debug rate limit - separate bucket, tighter than global limit.
     # Prevents model fingerprinting: an attacker with a stolen admin key
     # cannot probe 60 inputs/min to calibrate below-threshold payloads.
@@ -133,7 +146,7 @@ async def ai_request(
             debug_id = f"debug:key:{key_id or 'admin'}"
             is_limited, _, _ = await is_rate_limited(
                 debug_id,
-                limit=settings.debug_rate_limit_per_minute,
+                limit=_settings.debug_rate_limit_per_minute,
             )
             if is_limited:
                 from errors.exceptions import RateLimitError
@@ -147,10 +160,10 @@ async def ai_request(
     key_type = getattr(request.state, "key_type", "live")
     if key_type == "trial":
         # Input size cap - stricter than the global max_input_chars limit
-        if len(body.input) > settings.trial_max_input_chars:
+        if len(body.input) > _settings.trial_max_input_chars:
             from errors.exceptions import ValidationError
             raise ValidationError(
-                f"Trial keys are limited to {settings.trial_max_input_chars} characters. "
+                f"Trial keys are limited to {_settings.trial_max_input_chars} characters. "
                 f"Upgrade to a live key for full input limits."
             )
         # Proxy mode not available for trial keys
@@ -169,7 +182,7 @@ async def ai_request(
                 trial_id = f"trial:key:{key_id}"
                 is_limited, remaining, reset_at = await is_rate_limited(
                     trial_id,
-                    limit=settings.trial_rate_limit_per_minute,
+                    limit=_settings.trial_rate_limit_per_minute,
                 )
                 if is_limited:
                     from errors.exceptions import RateLimitError
