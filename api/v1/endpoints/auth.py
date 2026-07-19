@@ -29,12 +29,80 @@ auth_service = AuthService()
 
 # ── Cookie settings ────────────────────────────────────────────────────────────
 REFRESH_COOKIE_NAME = "refresh_token"
-REFRESH_COOKIE_PATH = "/v1/auth"
-# Browser only sends this cookie to /v1/auth/* endpoints.
-# If the API prefix changes, this path must also change.
+
+# M5: refresh_cookie Path is resolved per-request. A BFF (dashboard) fronts
+# /v1/auth/* under its own prefix (/api/auth/*); the browser only sends the
+# cookie to whichever Path the BFF is reachable at. Rather than the BFF
+# regex-re-parsing the backend Set-Cookie and re-emitting with a rewritten
+# Path (fragile: silent drift when the backend adds SameSite=lax or
+# Partitioned), the BFF supplies its Path via X-Refresh-Cookie-Path AND
+# proves it is trusted by presenting an Origin in the CORS allowlist.
+# Direct callers (SDK using API keys don't need it; browser extension
+# calling /v1/* directly) fall through to the configured default
+# (settings.refresh_cookie_path, default "/v1/auth"). OWASP-compliant
+# tight-scoping preserved.
+
+import re
+_REFRESH_COOKIE_PATH_RE = re.compile(r"^/[a-zA-Z0-9/_-]*$")
+_MAX_COOKIE_PATH_LEN    = 128
 
 
-def _set_refresh_cookie(response: Response, raw_token: str, max_age: int) -> None:
+def _valid_cookie_path(candidate: str) -> bool:
+    """Path chars only, no traversal, no empty segments, bounded length."""
+    if not candidate or len(candidate) > _MAX_COOKIE_PATH_LEN:
+        return False
+    if not _REFRESH_COOKIE_PATH_RE.match(candidate):
+        return False
+    if ".." in candidate or "//" in candidate:
+        return False
+    return True
+
+
+def _resolve_refresh_cookie_path(request: Request | None) -> str:
+    """
+    Return the Path attribute to use on the refresh_token cookie.
+
+    Uses `X-Refresh-Cookie-Path` if ALL of:
+      1. The request has an `Origin` header.
+      2. That Origin exists in `settings.cors_allowed_origins` (same
+         allowlist that already gates credentialed CORS).
+      3. The header value passes _valid_cookie_path.
+    Otherwise falls back to `settings.refresh_cookie_path`.
+
+    Notes on threat model: the refresh cookie is issued in response to a
+    successful login. Path only affects when THAT session's cookie is sent
+    by the browser. An attacker manipulating the header can only mis-scope
+    THEIR OWN cookie - no cross-user attack. The Origin gate is
+    defense-in-depth against a rogue-Origin caller nudging Path to a value
+    that would leak the cookie to an unexpected endpoint.
+    """
+    from config.settings import get_settings
+    _settings = get_settings()
+    default   = _settings.refresh_cookie_path
+
+    if request is None:
+        return default
+
+    header_path = request.headers.get("x-refresh-cookie-path")
+    if not header_path:
+        return default
+
+    origin = request.headers.get("origin")
+    if not origin or origin not in _settings.cors_allowed_origins:
+        return default
+
+    if not _valid_cookie_path(header_path):
+        return default
+
+    return header_path
+
+
+def _set_refresh_cookie(
+    response:  Response,
+    raw_token: str,
+    max_age:   int,
+    request:   Request | None = None,
+) -> None:
     from config.settings import get_settings
     _settings = get_settings()
     response.set_cookie(
@@ -44,15 +112,16 @@ def _set_refresh_cookie(response: Response, raw_token: str, max_age: int) -> Non
         secure   = _settings.cookie_secure,
         samesite = "strict",
         max_age  = max_age,
-        path     = REFRESH_COOKIE_PATH,
+        path     = _resolve_refresh_cookie_path(request),
     )
 
 
-def _clear_refresh_cookie(response: Response) -> None:
+def _clear_refresh_cookie(response: Response, request: Request | None = None) -> None:
     from config.settings import get_settings
     _settings = get_settings()
     # secure flag must match the flag used when the cookie was set; a mismatch
     # means the browser treats them as different cookies and the old one persists.
+    # Same rule for Path: clear must target the same Path the cookie was set at.
     response.set_cookie(
         key      = REFRESH_COOKIE_NAME,
         value    = "",
@@ -60,7 +129,7 @@ def _clear_refresh_cookie(response: Response) -> None:
         secure   = _settings.cookie_secure,
         samesite = "strict",
         max_age  = 0,
-        path     = REFRESH_COOKIE_PATH,
+        path     = _resolve_refresh_cookie_path(request),
     )
 
 
@@ -164,6 +233,7 @@ async def login(
         response  = response,
         raw_token = result.refresh_token,
         max_age   = _settings.jwt_refresh_token_expire_days * 24 * 3600,
+        request   = request,
     )
     return response
 
@@ -226,6 +296,7 @@ async def refresh(
         response  = response,
         raw_token = result.refresh_token,
         max_age   = _settings.jwt_refresh_token_expire_days * 24 * 3600,
+        request   = request,
     )
     return response
 
@@ -269,7 +340,7 @@ async def logout(
         status_code=200,
         content={"message": "Logged out successfully."},
     )
-    _clear_refresh_cookie(response)
+    _clear_refresh_cookie(response, request=request)
     return response
 
 
@@ -350,6 +421,7 @@ async def me(
 @router.post("/change-password")
 async def change_password(
     body:      ChangePasswordRequest,
+    request:   Request,
     principal: Principal    = Depends(require_jwt),
     db:        AsyncSession = Depends(get_db),
 ) -> JSONResponse:
@@ -391,5 +463,5 @@ async def change_password(
         status_code=200,
         content={"message": "Password changed. All sessions have been invalidated."},
     )
-    _clear_refresh_cookie(response)
+    _clear_refresh_cookie(response, request=request)
     return response
