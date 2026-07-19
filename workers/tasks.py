@@ -30,6 +30,48 @@ from datetime import datetime
 logger = logging.getLogger("wrapsec.retention_worker")
 
 
+RETENTION_LEASE_KEY = "wrapsec:retention:lease"
+RETENTION_LEASE_TTL = 3600  # 1 hour - long enough for the cleanup, short
+                            # enough that a crash on one worker doesn't block
+                            # the next scheduled run 24 hours later.
+
+
+async def _acquire_retention_lease() -> bool:
+    """
+    F-5: cross-process lock so only ONE uvicorn worker per install runs the
+    retention cleanup per day.
+
+    APScheduler is started in every worker via api/main.py lifespan. Without
+    coordination each worker triggers the job at 02:00 UTC and they all race
+    on the same DELETE/UPDATE statements. The end state is correct (queries
+    are idempotent) but the duplicate DB work is wasted load.
+
+    We use Redis SET NX PX as a lease. TTL is 1 hour - long enough for the
+    cleanup to finish on any realistic dataset, short enough that a crashed
+    worker never blocks tomorrow's run.
+
+    Fail-open on Redis error: if the lease can't be checked, we let the
+    worker run. Worst case is duplicate DB work (the pre-fix behavior).
+    NEVER fail-closed here - that would skip cleanup entirely.
+    """
+    try:
+        from cache.redis_client import get_redis
+        redis = get_redis()
+        acquired = await redis.set(
+            RETENTION_LEASE_KEY,
+            "held",
+            nx = True,
+            ex = RETENTION_LEASE_TTL,
+        )
+        return bool(acquired)
+    except Exception as e:
+        logger.warning(
+            f"Retention worker: lease check failed: {e} - "
+            "proceeding without cross-worker coordination"
+        )
+        return True
+
+
 async def run_retention_cleanup() -> None:
     """
     Main retention task - runs on schedule.
@@ -37,6 +79,15 @@ async def run_retention_cleanup() -> None:
     per configured retention periods.
     Never raises - all exceptions are caught and logged.
     """
+    # F-5: try to acquire the daily lease. If another worker already holds
+    # it, log-and-return; the holder is doing the work. Fail-open if Redis
+    # is unavailable (see _acquire_retention_lease docstring).
+    if not await _acquire_retention_lease():
+        logger.info(
+            "Retention worker: another worker holds the daily lease - skipping"
+        )
+        return
+
     logger.info("Retention worker: starting scheduled cleanup run")
     start = datetime.utcnow()
 
