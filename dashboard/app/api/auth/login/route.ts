@@ -3,8 +3,36 @@
 // WrapSec v1.0 | AI Security Gateway - https://wrapsec.com
 import { NextRequest, NextResponse } from "next/server"
 
-const API_BASE_URL  = process.env.API_URL || process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000"
-const COOKIE_SECURE = process.env.COOKIE_SECURE === "true"
+const API_BASE_URL     = process.env.API_URL || process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000"
+const COOKIE_SECURE    = process.env.COOKIE_SECURE === "true"
+// M5: BFF Path handshake. This BFF is reachable at /api/auth/*, so refresh
+// cookies must be scoped to that Path. The backend defaults to /v1/auth
+// (correct for direct callers like the SDK / browser extension). We send
+// X-Refresh-Cookie-Path along with an Origin that must be in the backend's
+// cors_allowed_origins for the header to be honored. If DASHBOARD_ORIGIN
+// is unset (e.g. dev), the backend won't recognise the Origin and will
+// fall back to its configured default - which for a dashboard deployment
+// should be set via REFRESH_COOKIE_PATH=/api/auth in the api container env.
+const DASHBOARD_ORIGIN = process.env.DASHBOARD_ORIGIN || ""
+const BFF_COOKIE_PATH  = "/api/auth"
+
+/**
+ * Copy every Set-Cookie header the backend emitted onto our BFF response,
+ * unchanged. Preserves any attribute the backend adds now or later
+ * (SameSite value, Partitioned for CHIPS, etc.) without re-parsing.
+ * Uses getSetCookie() (Node 18+ / undici) which returns an array of
+ * individual Set-Cookie header values; falls back to the legacy
+ * comma-joined form only if the runtime is old enough not to have it.
+ */
+function forwardBackendSetCookies(backend: Response, out: NextResponse): void {
+  const anyHeaders = backend.headers as unknown as { getSetCookie?: () => string[] }
+  const cookies = typeof anyHeaders.getSetCookie === "function"
+    ? anyHeaders.getSetCookie()
+    : (backend.headers.get("set-cookie") ? [backend.headers.get("set-cookie") as string] : [])
+  for (const c of cookies) {
+    out.headers.append("Set-Cookie", c)
+  }
+}
 
 /**
  * POST /api/auth/login
@@ -76,12 +104,20 @@ export async function POST(request: NextRequest) {
   if (body.email && body.password) {
     const { email, password } = body
 
+    const outgoingHeaders: Record<string, string> = {
+      "Content-Type":            "application/json",
+      "x-forwarded-for":         clientIp,
+      "X-Refresh-Cookie-Path":   BFF_COOKIE_PATH,
+    }
+    if (DASHBOARD_ORIGIN) {
+      // Backend gates the header on Origin ∈ cors_allowed_origins.
+      // Without a matching Origin the backend falls back to its
+      // configured default REFRESH_COOKIE_PATH.
+      outgoingHeaders["Origin"] = DASHBOARD_ORIGIN
+    }
     const response = await fetch(`${API_BASE_URL}/v1/auth/login`, {
       method:  "POST",
-      headers: {
-        "Content-Type":    "application/json",
-        "x-forwarded-for": clientIp,
-      },
+      headers: outgoingHeaders,
       body:    JSON.stringify({ email, password }),
     })
 
@@ -119,25 +155,14 @@ export async function POST(request: NextRequest) {
       path:     "/",
     })
 
-    // Re-issue the refresh token cookie scoped to the BFF auth path.
-    // The backend sets Path=/v1/auth - the browser won't send that cookie to
-    // /api/auth/* routes. We parse the token value and max-age from the
-    // backend set-cookie and re-store it with Path=/api/auth so the browser
-    // includes it on /api/auth/refresh and /api/auth/logout requests.
-    const setCookie = response.headers.get("set-cookie")
-    if (setCookie) {
-      const tokenMatch  = setCookie.match(/refresh_token=([^;]+)/)
-      const maxAgeMatch = setCookie.match(/[Mm]ax-[Aa]ge=(\d+)/)
-      if (tokenMatch) {
-        res.cookies.set("refresh_token", tokenMatch[1], {
-          httpOnly: true,
-          secure:   COOKIE_SECURE,
-          sameSite: "strict",
-          maxAge:   maxAgeMatch ? parseInt(maxAgeMatch[1], 10) : 30 * 24 * 60 * 60,
-          path:     "/api/auth",
-        })
-      }
-    }
+    // Forward backend's Set-Cookie headers (refresh_token with the negotiated
+    // Path) unchanged. The BFF supplied X-Refresh-Cookie-Path=/api/auth so
+    // the backend emitted Path=/api/auth if it recognised our Origin; if
+    // not, the backend used its configured default and this dashboard's
+    // refresh flow won't have a matching Path - deployment env
+    // (DASHBOARD_ORIGIN + backend REFRESH_COOKIE_PATH / cors_allowed_origins)
+    // must be aligned. This is a deploy-time contract, not a runtime parse.
+    forwardBackendSetCookies(response, res)
 
     // Clear any stale API key credential - only one auth mechanism active at a time
     res.cookies.set("wrapsec_api_key", "", { httpOnly: true, secure: COOKIE_SECURE, sameSite: "strict", maxAge: 0, path: "/" })
