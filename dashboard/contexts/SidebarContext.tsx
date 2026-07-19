@@ -3,7 +3,7 @@
 // WrapSec v1.0 | AI Security Gateway - https://wrapsec.com
 "use client"
 
-import { createContext, useContext, useState, useEffect, useRef } from "react"
+import { createContext, useContext, useState } from "react"
 
 interface SidebarContextValue {
   collapsed:       boolean
@@ -19,28 +19,30 @@ const SidebarContext = createContext<SidebarContextValue>({
   toggleSection:   () => {},
 })
 
+// SSR-safe localStorage read. The initializer runs during the very first
+// useState() call - on the server `window` is undefined so we return the
+// default; on the client hydration React uses the actual persisted value.
+// This replaces the previous setState-inside-useEffect pattern flagged by
+// react-hooks/set-state-in-effect (pentest H13).
+function readBool(key: string, fallback: boolean): boolean {
+  if (typeof window === "undefined") return fallback
+  try {
+    const raw = window.localStorage.getItem(key)
+    if (raw === null) return fallback
+    return raw === "true"
+  } catch {
+    return fallback
+  }
+}
+
 export function SidebarProvider({ children }: { children: React.ReactNode }) {
-  const [collapsed,   setCollapsed]   = useState(false)
-  const [sectionOpen, setSectionOpen] = useState<Record<string, boolean>>({
-    configuration:  true,
-    administration: true,
-  })
-  const hydrated = useRef(false)
-
-  useEffect(() => {
-    try {
-      const c  = localStorage.getItem("sidebar_collapsed")
-      const co = localStorage.getItem("sidebar_section_configuration")
-      const ao = localStorage.getItem("sidebar_section_administration")
-
-      if (c  === "true") setCollapsed(true)
-      setSectionOpen({
-        configuration:  co === null ? true : co === "true",
-        administration: ao === null ? true : ao === "true",
-      })
-    } catch {}
-    hydrated.current = true
-  }, [])
+  const [collapsed,   setCollapsed]   = useState<boolean>(() =>
+    readBool("sidebar_collapsed", false),
+  )
+  const [sectionOpen, setSectionOpen] = useState<Record<string, boolean>>(() => ({
+    configuration:  readBool("sidebar_section_configuration",  true),
+    administration: readBool("sidebar_section_administration", true),
+  }))
 
   const toggleCollapsed = (v: boolean) => {
     setCollapsed(v)
