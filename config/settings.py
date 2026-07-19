@@ -181,10 +181,28 @@ class Settings(BaseSettings):
                 "python -c \"import secrets; print('wsk_admin_' + secrets.token_hex(24))\""
             )
 
+    def validate_cookie_security(self) -> None:
+        # Fail closed in deployed environments: refusing to boot with
+        # COOKIE_SECURE=false forces the operator to fix the misconfig
+        # instead of silently issuing session cookies over plain HTTP.
+        import os
+        if os.getenv("TESTING") == "true":
+            return
+
+        env = (self.environment or "").strip().lower()
+        if env in ("staging", "production") and not self.cookie_secure:
+            raise ValueError(
+                f"COOKIE_SECURE must be true when ENVIRONMENT={self.environment!r}. "
+                "Session cookies are issued over plain HTTP otherwise. "
+                "Set COOKIE_SECURE=true (default) and terminate TLS at the "
+                "reverse proxy, or set ENVIRONMENT=development for local HTTP."
+            )
+
 
 @lru_cache
 def get_settings() -> Settings:
     settings = Settings()
     settings.validate_thresholds()
     settings.validate_secrets()
+    settings.validate_cookie_security()
     return settings
