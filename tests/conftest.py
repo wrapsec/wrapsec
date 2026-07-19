@@ -9,51 +9,20 @@ import pytest
 import pytest_asyncio
 import uuid
 from httpx import AsyncClient, ASGITransport
-from sqlalchemy import select
 from sqlalchemy.ext.asyncio import create_async_engine, async_sessionmaker, AsyncSession
-from sqlalchemy.pool import NullPool
 
 from api.main import app
 from api.v1.dependencies.db import get_db
-from db.models import Base, TenantModel
+from db.models import Base
 from config.settings import get_settings
 
 settings = get_settings()
 
 
-# ── PostgreSQL bootstrap - runs once per session ──────────────────────────────
-
-@pytest_asyncio.fixture(scope="session", autouse=True)
-async def _postgres_db_setup():
-    """
-    Creates all tables in PostgreSQL and seeds the default tenant.
-    Required for admin_jwt_headers and auth_setup fixtures which call
-    TenantRepository.get_default() and assert a slug='default' tenant exists.
-    Runs once before any test in the session.
-    """
-    engine = create_async_engine(settings.database_url, poolclass=NullPool)
-    sf     = async_sessionmaker(bind=engine, class_=AsyncSession, expire_on_commit=False)
-
-    async with engine.begin() as conn:
-        await conn.run_sync(Base.metadata.create_all)
-
-    async with sf() as db:
-        result = await db.execute(
-            select(TenantModel).where(TenantModel.slug == "default")
-        )
-        if result.scalar_one_or_none() is None:
-            db.add(TenantModel(
-                id            = uuid.uuid4(),
-                slug          = "default",
-                name          = "Default",
-                global_policy = {},
-                is_active     = True,
-            ))
-            await db.commit()
-
-    yield
-
-    await engine.dispose()
+# The autouse PostgreSQL bootstrap fixture that previously lived here has
+# been moved to tests/integration/conftest.py (see pentest H10). Unit tests
+# must not require a live database - autouse at this tier meant every unit
+# test errored with ConnectionRefusedError when Docker DB was down.
 
 # ── SQLite - for tests that don't need JWT/users ──────────────────────────────
 TEST_DATABASE_URL = "sqlite+aiosqlite:///./test.db"

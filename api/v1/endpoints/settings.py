@@ -2,10 +2,8 @@
 # Copyright (c) 2026 WrapSec. All rights reserved.
 # WrapSec v1.0 | AI Security Gateway - https://wrapsec.com
 
-import ipaddress
 import uuid
 from datetime import datetime, timezone
-from urllib.parse import urlparse
 from fastapi import APIRouter, Depends, Request
 from fastapi.responses import JSONResponse
 from pydantic import BaseModel, model_validator, field_validator, SecretStr
@@ -20,6 +18,7 @@ from config.settings import get_settings
 from domain.enums import AdminEventAction
 from errors.exceptions import ValidationError
 from security.encryption import encrypt, decrypt, mask
+from security.url_validator import validate_llm_base_url
 
 router = APIRouter()
 
@@ -173,30 +172,6 @@ async def update_layers(
 LLM_KEY         = "llm_settings"
 LLM_API_KEY_KEY = "llm_api_key_enc"
 
-_LLM_PRIVATE_NETS = [
-    ipaddress.ip_network("127.0.0.0/8"),
-    ipaddress.ip_network("10.0.0.0/8"),
-    ipaddress.ip_network("172.16.0.0/12"),
-    ipaddress.ip_network("192.168.0.0/16"),
-    ipaddress.ip_network("169.254.0.0/16"),
-    ipaddress.ip_network("0.0.0.0/8"),
-    ipaddress.ip_network("::1/128"),
-    ipaddress.ip_network("fc00::/7"),
-    ipaddress.ip_network("fe80::/10"),
-]
-_LLM_BLOCKED_HOSTS = frozenset({"localhost", "metadata.google.internal", "metadata.goog"})
-
-
-def _is_ssrf_target(url: str) -> bool:
-    host = (urlparse(url).hostname or "").lower()
-    if host in _LLM_BLOCKED_HOSTS:
-        return True
-    try:
-        addr = ipaddress.ip_address(host)
-        return any(addr in net for net in _LLM_PRIVATE_NETS)
-    except ValueError:
-        return False
-
 
 def _default_llm() -> dict:
     _s = get_settings()
@@ -222,12 +197,7 @@ class LLMSettingsSchema(BaseModel):
     def validate_base_url(cls, v: str | None) -> str | None:
         if v is None:
             return v
-        v = v.rstrip("/")
-        if not v.startswith(("http://", "https://")):
-            raise ValueError("base_url must start with http:// or https://")
-        if _is_ssrf_target(v):
-            raise ValueError("base_url must not target private or internal addresses")
-        return v
+        return validate_llm_base_url(v)
 
     @model_validator(mode="after")
     def validate_llm(self) -> "LLMSettingsSchema":

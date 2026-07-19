@@ -2,7 +2,10 @@
 # Copyright (c) 2026 WrapSec. All rights reserved.
 # WrapSec v1.0 | AI Security Gateway - https://wrapsec.com
 
+import re
+
 from engine.detection.base import BaseDetector, DetectionResult
+from engine.detection.limits import clamp_for_regex
 from engine.detection.rule_patterns.general import COMPILED_REGISTRY
 
 # In v2, RuleDetector will accept a profile parameter and load the appropriate
@@ -19,15 +22,23 @@ class RuleDetector(BaseDetector):
 
     def detect(self, text: str) -> DetectionResult:
         try:
+            # ReDoS defense: bound the input size fed into regex engine.
+            # See engine/detection/limits.py for rationale.
+            text = clamp_for_regex(text)
+
             threats    = []
             max_score  = 0.0
             details    = {}
 
             for compiled_patterns, category, base_score in _COMPILED:
-                matched = [
-                    p.pattern for p in compiled_patterns
-                    if p.search(text)
-                ]
+                matched = []
+                for p in compiled_patterns:
+                    try:
+                        if p.search(text):
+                            matched.append(p.pattern)
+                    except re.error:
+                        # A single broken pattern must not disable the whole detector.
+                        continue
                 if matched:
                     threats.append(category)
                     # Score is the max across all matching categories, not a sum.

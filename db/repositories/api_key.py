@@ -52,5 +52,5 @@ class ApiKeyRepository(BaseRepository):
         if not record:
             return None
         record.revoked = True
-        await self.commit()
+        await self.flush()
         return record

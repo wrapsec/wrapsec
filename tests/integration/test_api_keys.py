@@ -6,10 +6,10 @@ import pytest
 
 
 @pytest.mark.asyncio
-async def test_create_key(client, admin_jwt_headers):
+async def test_create_key(client, admin_jwt_headers, admin_key_scope):
     response = await client.post(
         "/v1/keys",
-        json={"name": "test-system"},
+        json={"name": "test-system", "dept_id": admin_key_scope},
         headers=admin_jwt_headers,
     )
     assert response.status_code == 201
@@ -21,10 +21,10 @@ async def test_create_key(client, admin_jwt_headers):
 
 
 @pytest.mark.asyncio
-async def test_api_key_not_in_list(client, admin_jwt_headers):
+async def test_api_key_not_in_list(client, admin_jwt_headers, admin_key_scope):
     await client.post(
         "/v1/keys",
-        json={"name": "test-system"},
+        json={"name": "test-system", "dept_id": admin_key_scope},
         headers=admin_jwt_headers,
     )
     response = await client.get("/v1/keys", headers=admin_jwt_headers)
@@ -34,9 +34,17 @@ async def test_api_key_not_in_list(client, admin_jwt_headers):
 
 
 @pytest.mark.asyncio
-async def test_list_keys(client, admin_jwt_headers):
-    await client.post("/v1/keys", json={"name": "key-1"}, headers=admin_jwt_headers)
-    await client.post("/v1/keys", json={"name": "key-2"}, headers=admin_jwt_headers)
+async def test_list_keys(client, admin_jwt_headers, admin_key_scope):
+    await client.post(
+        "/v1/keys",
+        json={"name": "key-1", "dept_id": admin_key_scope},
+        headers=admin_jwt_headers,
+    )
+    await client.post(
+        "/v1/keys",
+        json={"name": "key-2", "dept_id": admin_key_scope},
+        headers=admin_jwt_headers,
+    )
 
     response = await client.get("/v1/keys", headers=admin_jwt_headers)
     assert response.status_code == 200
@@ -45,10 +53,10 @@ async def test_list_keys(client, admin_jwt_headers):
 
 
 @pytest.mark.asyncio
-async def test_revoke_key(client, admin_jwt_headers):
+async def test_revoke_key(client, admin_jwt_headers, admin_key_scope):
     create = await client.post(
         "/v1/keys",
-        json={"name": "to-revoke"},
+        json={"name": "to-revoke", "dept_id": admin_key_scope},
         headers=admin_jwt_headers,
     )
     key_id = create.json()["key_id"]
@@ -64,10 +72,10 @@ async def test_revoke_key(client, admin_jwt_headers):
 
 
 @pytest.mark.asyncio
-async def test_revoked_key_excluded_from_list(client, admin_jwt_headers):
+async def test_revoked_key_excluded_from_list(client, admin_jwt_headers, admin_key_scope):
     create = await client.post(
         "/v1/keys",
-        json={"name": "to-revoke"},
+        json={"name": "to-revoke", "dept_id": admin_key_scope},
         headers=admin_jwt_headers,
     )
     key_id = create.json()["key_id"]
@@ -86,3 +94,15 @@ async def test_revoke_nonexistent_key_returns_404(client, admin_jwt_headers):
     )
     assert response.status_code == 404
     assert response.json()["error"]["code"] == "NOT_FOUND"
+
+
+@pytest.mark.asyncio
+async def test_create_key_without_dept_rejected(client, admin_jwt_headers):
+    """H4: non-admin key with no dept_id must be rejected at endpoint (not DB)."""
+    response = await client.post(
+        "/v1/keys",
+        json={"name": "no-scope"},
+        headers=admin_jwt_headers,
+    )
+    assert response.status_code == 422
+    assert response.json()["error"]["code"] == "VALIDATION_ERROR"

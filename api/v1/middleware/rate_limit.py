@@ -77,9 +77,15 @@ class RateLimitMiddleware(BaseHTTPMiddleware):
 
         # Rate limit per API key - more precise than per IP
         # Falls back to IP if no key (e.g. unauthenticated requests)
-        api_key   = request.headers.get("x-api-key", "")
-        key_id    = getattr(request.state, "key_id", None)
-        client_ip = request.client.host if request.client else "unknown"
+        api_key = request.headers.get("x-api-key", "")
+        key_id  = getattr(request.state, "key_id", None)
+
+        # get_client_ip trusts x-forwarded-for only when the peer IP is in
+        # TRUSTED_PROXY_IPS. Behind nginx, the peer is 127.0.0.1 and all
+        # requests would otherwise rate-limit under a single ip:127.0.0.1
+        # bucket, letting one loud tenant DoS every other tenant on the box.
+        from api.v1.middleware.auth import get_client_ip
+        client_ip = get_client_ip(request)
 
         # Use key_id if available, else hash of api_key, else IP
         if key_id:

@@ -114,6 +114,23 @@ async def create_key(
         if request.state.dept_id:
             dept_id = uuid.UUID(request.state.dept_id)
 
+    # Reject non-admin keys that resolve to no department. Without dept_id, the
+    # scope dependency (api/v1/dependencies/scope.py) falls through to tenant-
+    # scoped audit reads, letting the key see other departments' audit records
+    # within its tenant. The DB CheckConstraint enforces this too, but rejecting
+    # here returns a clear 422 instead of a 500 from constraint violation.
+    if dept_id is None:
+        from errors.exceptions import WrapSecError
+        raise WrapSecError(
+            code        = "VALIDATION_ERROR",
+            message     = (
+                "dept_id is required to create an API key. Admins without a "
+                "department must specify app_id (dept derived from app) or "
+                "dept_id (dept-scoped key) explicitly."
+            ),
+            status_code = 422,
+        )
+
     repo   = ApiKeyRepository(db)
     record = await repo.create({
         "key_id":    key_id,
@@ -269,6 +286,7 @@ async def delete_key(
     was_in_grace = record.expires_at is not None and not record.revoked
 
     await repo.revoke(key_id)
+    await db.commit()
 
     return JSONResponse(content={
         "key_id":          key_id,

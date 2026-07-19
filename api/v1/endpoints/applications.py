@@ -18,6 +18,7 @@ from domain.entities.principal import Principal
 from domain.enums import AdminEventAction
 from errors.exceptions import NotFoundError
 from security.encryption import encrypt, decrypt, mask
+from security.url_validator import validate_llm_base_url
 from services.policy_resolver import resolve_policy
 
 router = APIRouter()
@@ -356,33 +357,6 @@ async def reset_application_policy(
 
 _VALID_PROVIDERS = {"openai", "ollama", "custom"}
 
-_BLOCKED_HOSTS   = frozenset({"localhost", "metadata.google.internal", "metadata.goog"})
-import ipaddress as _ip
-_PRIVATE_NETS    = [
-    _ip.ip_network("127.0.0.0/8"),  _ip.ip_network("10.0.0.0/8"),
-    _ip.ip_network("172.16.0.0/12"), _ip.ip_network("192.168.0.0/16"),
-    _ip.ip_network("169.254.0.0/16"), _ip.ip_network("0.0.0.0/8"),
-    _ip.ip_network("::1/128"),       _ip.ip_network("fc00::/7"),
-    _ip.ip_network("fe80::/10"),
-]
-
-
-def _validate_provider_url(v: str) -> str:
-    from urllib.parse import urlparse
-    v = v.rstrip("/")
-    if not v.startswith(("http://", "https://")):
-        raise ValueError("base_url must start with http:// or https://")
-    host = (urlparse(v).hostname or "").lower()
-    if host in _BLOCKED_HOSTS:
-        raise ValueError("base_url must not target private or internal addresses")
-    try:
-        addr = _ip.ip_address(host)
-        if any(addr in net for net in _PRIVATE_NETS):
-            raise ValueError("base_url must not target private or internal addresses")
-    except ValueError:
-        pass
-    return v
-
 
 class AppLLMOverrideSchema(BaseModel):
     provider: str       | None = None
@@ -404,7 +378,7 @@ class AppLLMOverrideSchema(BaseModel):
     def validate_base_url(cls, v: str | None) -> str | None:
         if v is None:
             return v
-        return _validate_provider_url(v)
+        return validate_llm_base_url(v)
 
     @field_validator("timeout")
     @classmethod
@@ -434,7 +408,7 @@ class AppProxyOverrideSchema(BaseModel):
     def validate_base_url(cls, v: str | None) -> str | None:
         if v is None:
             return v
-        return _validate_provider_url(v)
+        return validate_llm_base_url(v)
 
     @field_validator("timeout_seconds")
     @classmethod

@@ -13,11 +13,9 @@ Endpoints:
     GET    /v1/settings/proxy/health   -- test provider connectivity
 """
 
-import ipaddress
 import logging
 import time
 from typing import Literal
-from urllib.parse import urlparse
 
 import httpx
 from fastapi import APIRouter, Depends, Request
@@ -32,36 +30,12 @@ from domain.entities.principal import Principal
 from config.settings import get_settings
 from db.models import ProxyProviderConfigModel
 from security.encryption import encrypt, decrypt, mask
+from security.url_validator import validate_llm_base_url
 
 router = APIRouter()
 logger = logging.getLogger("wrapsec.proxy.settings")
 
 SUPPORTED_PROVIDERS = {"openai", "ollama", "custom"}
-
-_PRIVATE_NETS = [
-    ipaddress.ip_network("127.0.0.0/8"),
-    ipaddress.ip_network("10.0.0.0/8"),
-    ipaddress.ip_network("172.16.0.0/12"),
-    ipaddress.ip_network("192.168.0.0/16"),
-    ipaddress.ip_network("169.254.0.0/16"),
-    ipaddress.ip_network("0.0.0.0/8"),
-    ipaddress.ip_network("::1/128"),
-    ipaddress.ip_network("fc00::/7"),
-    ipaddress.ip_network("fe80::/10"),
-]
-_BLOCKED_HOSTS = frozenset({"localhost", "metadata.google.internal", "metadata.goog"})
-
-
-def _is_ssrf_target(url: str) -> bool:
-    """Return True if the URL targets a private, loopback, or cloud-metadata address."""
-    host = (urlparse(url).hostname or "").lower()
-    if host in _BLOCKED_HOSTS:
-        return True
-    try:
-        addr = ipaddress.ip_address(host)
-        return any(addr in net for net in _PRIVATE_NETS)
-    except ValueError:
-        return False
 
 
 # ── Schemas ────────────────────────────────────────────────────────────────────
@@ -92,12 +66,7 @@ class ProxySettingsPutSchema(BaseModel):
     @field_validator("base_url")
     @classmethod
     def validate_base_url(cls, v: str) -> str:
-        v = v.rstrip("/")
-        if not v.startswith(("http://", "https://")):
-            raise ValueError("base_url must start with http:// or https://")
-        if _is_ssrf_target(v):
-            raise ValueError("base_url must not target private or internal addresses")
-        return v
+        return validate_llm_base_url(v)
 
     @field_validator("default_model")
     @classmethod

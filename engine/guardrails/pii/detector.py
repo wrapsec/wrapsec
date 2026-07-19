@@ -4,6 +4,7 @@
 
 import re
 from engine.detection.base import BaseDetector, DetectionResult
+from engine.detection.limits import clamp_for_regex
 from domain.enums import ThreatCategory
 
 
@@ -64,10 +65,18 @@ class PIIDetector(BaseDetector):
 
     def detect(self, text: str) -> DetectionResult:
         try:
+            # ReDoS defense: bound the input size fed into regex engine.
+            # See engine/detection/limits.py for rationale.
+            text = clamp_for_regex(text)
+
             found:   dict[str, list[str]] = {}
 
             for pattern, label in _COMPILED_PII:
-                matches = pattern.findall(text)
+                try:
+                    matches = pattern.findall(text)
+                except re.error:
+                    # A single broken pattern must not disable the whole detector.
+                    continue
                 if matches:
                     found[label] = matches if isinstance(matches[0], str) else [str(m) for m in matches]
 

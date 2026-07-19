@@ -15,6 +15,7 @@ import uuid
 import pytest
 import pytest_asyncio
 from httpx import AsyncClient, ASGITransport
+from sqlalchemy import select
 from sqlalchemy.ext.asyncio import (
     create_async_engine, async_sessionmaker, AsyncSession,
 )
@@ -22,10 +23,49 @@ from sqlalchemy.pool import NullPool
 
 from api.main import app
 from api.v1.dependencies.db import get_db
-from db.models import Base
+from db.models import Base, TenantModel
 from config.settings import get_settings
 
 settings = get_settings()
+
+
+# ── PostgreSQL bootstrap - runs once per integration session ─────────────────
+# H10: this fixture used to live in tests/conftest.py where autouse+session
+# scope forced every unit test to require a live Postgres instance. Scoped
+# down to tests/integration/ so the unit tier stays hermetic.
+
+@pytest_asyncio.fixture(scope="session", autouse=True)
+async def _postgres_db_setup():
+    """
+    Creates all tables in PostgreSQL and seeds the default tenant.
+    Required for admin_jwt_headers and auth_setup fixtures which call
+    TenantRepository.get_default() and assert a slug='default' tenant exists.
+    Runs once before any integration test in the session.
+    """
+    engine = create_async_engine(settings.database_url, poolclass=NullPool)
+    sf     = async_sessionmaker(bind=engine, class_=AsyncSession, expire_on_commit=False)
+
+    async with engine.begin() as conn:
+        await conn.run_sync(Base.metadata.create_all)
+
+    async with sf() as db:
+        result = await db.execute(
+            select(TenantModel).where(TenantModel.slug == "default")
+        )
+        if result.scalar_one_or_none() is None:
+            db.add(TenantModel(
+                id            = uuid.uuid4(),
+                slug          = "default",
+                name          = "Default",
+                global_policy = {},
+                is_active     = True,
+            ))
+            await db.commit()
+
+    yield
+
+    await engine.dispose()
+
 
 # ── Existing fixtures ──────────────────────────────────────────────────────────
 
@@ -77,6 +117,32 @@ async def client(test_db):
 @pytest.fixture
 def admin_headers():
     return {"x-api-key": settings.admin_api_key}
+
+
+@pytest_asyncio.fixture(scope="function")
+async def admin_key_scope(test_db, admin_jwt_headers):
+    """
+    Creates a Department row in the SQLite test_db whose tenant_id matches the
+    admin_jwt token's tenant_id. Returns the dept_id (str) for tests that POST
+    /v1/keys - required after H4 (endpoints reject non-admin keys without a dept).
+    """
+    from db.models import DepartmentModel
+    from services.auth.token import decode_access_token
+
+    token     = admin_jwt_headers["Authorization"].split()[1]
+    payload   = decode_access_token(token)
+    tenant_id = uuid.UUID(payload["tenant_id"])
+
+    dept_id = uuid.uuid4()
+    test_db.add(DepartmentModel(
+        id        = dept_id,
+        tenant_id = tenant_id,
+        slug      = f"testdept-{dept_id.hex[:6]}",
+        name      = "Test Dept",
+        is_active = True,
+    ))
+    await test_db.commit()
+    return str(dept_id)
 
 
 @pytest.fixture
