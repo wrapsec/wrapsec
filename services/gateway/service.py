@@ -115,29 +115,77 @@ class GatewayService:
         try:
 
             # ── Step 1: Input guard ───────────────────────────
-            input_result    = self._input_guard.inspect(request.input)
+            # H2: PII regex runs on the caller's event loop; a ReDoS payload
+            # here would hang all coroutines. Off-thread + wait_for bounds
+            # the blast radius. On timeout: treat the same as any detector
+            # failure and let C1 fail-closed force BLOCK.
+            detection_failed = False
+            _timeout = _settings.detector_timeout_seconds
+            try:
+                input_result = await asyncio.wait_for(
+                    asyncio.to_thread(self._input_guard.inspect, request.input),
+                    timeout=_timeout,
+                )
+            except asyncio.TimeoutError:
+                logger.error(
+                    f"Input guard timeout after {_timeout}s trace_id={request.trace_id}"
+                )
+                # No sanitized text available; fall through to fail-closed. The
+                # downstream code will still run against request.input, but the
+                # BLOCK forced at the end supersedes any decision computed here.
+                from engine.guardrails.input_guard import InputGuardResult
+                input_result     = InputGuardResult(
+                    text            = request.input,
+                    sanitized_text  = None,
+                    pii_result      = DetectionResult.clean("input_guard"),
+                    toxicity_result = DetectionResult.clean("toxicity_detector"),
+                    redacted_types  = [],
+                    was_sanitized   = False,
+                )
+                detection_failed = True
+
             effective_input = input_result.sanitized_text or request.input
 
             # ── Step 2: Rule detection (CPU-bound -> thread) ──
-            detection_failed = False
+            # H2: bound execution with asyncio.wait_for so ReDoS payloads
+            # cannot hang the request. On timeout we mark detection_failed
+            # so the C1 fail-closed check below forces BLOCK.
             try:
                 if rule_enabled:
-                    rule_result = await asyncio.to_thread(
-                        self._rule_detector.detect, effective_input
+                    rule_result = await asyncio.wait_for(
+                        asyncio.to_thread(self._rule_detector.detect, effective_input),
+                        timeout=_timeout,
                     )
                 else:
                     rule_result = DetectionResult.clean("rule_detector")
+            except asyncio.TimeoutError:
+                logger.error(
+                    f"Rule detector timeout after {_timeout}s trace_id={request.trace_id}"
+                )
+                rule_result      = DetectionResult.clean("rule_detector")
+                detection_failed = True
             except Exception as e:
                 logger.error(f"Rule detector failed: {e} trace_id={request.trace_id}")
                 rule_result      = DetectionResult.clean("rule_detector")
                 detection_failed = True
 
             # ── Step 3: ML detection (two-tier: TF-IDF + transformer, parallel) ──
+            # H2: same timeout guard as the rule detector - both surfaces run
+            # regex-like patterns and can exhibit pathological latency.
             try:
                 if ml_enabled:
-                    ml_result = await self._detection_pipeline.run(effective_input)
+                    ml_result = await asyncio.wait_for(
+                        self._detection_pipeline.run(effective_input),
+                        timeout=_timeout,
+                    )
                 else:
                     ml_result = DetectionResult.clean("ml_detector")
+            except asyncio.TimeoutError:
+                logger.error(
+                    f"ML pipeline timeout after {_timeout}s trace_id={request.trace_id}"
+                )
+                ml_result        = DetectionResult.clean("ml_detector")
+                detection_failed = True
             except Exception as e:
                 logger.error(f"Detection pipeline failed: {e} trace_id={request.trace_id}")
                 ml_result        = DetectionResult.clean("ml_detector")

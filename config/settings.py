@@ -84,6 +84,11 @@ class Settings(BaseSettings):
     # Output guardrail PII thresholds
     output_block_threshold:    float = 0.95
     output_sanitize_threshold: float = 0.01
+    # H2: hard cap on regex-heavy detector execution to bound ReDoS blast
+    # radius. Catastrophic-backtracking payloads that run past this cap are
+    # aborted and treated as a detector failure - C1 fail-closed then forces
+    # BLOCK. Default 2s is generous versus the ~5ms happy path.
+    detector_timeout_seconds:  float = 2.0
 
     # ── LLM Provider ──────────────────────────────────────────
     llm_provider:             str = Field(default="ollama")  # ollama | openai | groq
