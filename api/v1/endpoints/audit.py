@@ -5,6 +5,7 @@
 import csv
 import hashlib
 import io
+import uuid
 from datetime import datetime, timezone
 from typing import Literal
 from fastapi import APIRouter, Query, Depends, Request
@@ -32,6 +33,23 @@ def _parse_dt(value: str | None) -> datetime | None:
         from errors.exceptions import ValidationError
         raise ValidationError(
             f"Invalid date format: '{value}'. Use ISO 8601, e.g. 2026-01-15T00:00:00Z"
+        )
+
+
+def _parse_uuid_filter(value: str | None, field: str) -> str | None:
+    """
+    M6: audit list filters that previously accepted arbitrary substrings for
+    UUID columns are now UUID-strict. Rejecting invalid UUIDs at the boundary
+    closes the substring-probe user-enumeration path.
+    """
+    if not value:
+        return None
+    try:
+        return str(uuid.UUID(value))
+    except (ValueError, AttributeError):
+        from errors.exceptions import ValidationError
+        raise ValidationError(
+            f"Invalid {field}: must be a UUID"
         )
 
 
@@ -159,6 +177,9 @@ async def get_audit_logs(
     scope     = get_audit_scope(request)
     tenant_id = scope.get("tenant_id", tenant_id)
     dept_id   = scope.get("dept_id",   dept_id)
+
+    # M6: enforce UUID for the user_id filter (was substring ILIKE).
+    user_id = _parse_uuid_filter(user_id, "user_id")
 
     repo = AuditRepository(db)
     total, items = await repo.list(
@@ -521,13 +542,26 @@ async def export_audit_logs(
     confidence_band: str | None = Query(None),
     from_:           str | None = Query(None, alias="from"),
     to:              str | None = Query(None),
-    limit:           int        = Query(1000, ge=1, le=10000),
+    # L1: hard cap of 10K rows per call. A single call cannot request more.
+    # Callers wanting more must page through by incrementing `offset` in steps
+    # of `limit`. `offset` is bounded so a caller cannot force the DB to skip
+    # arbitrarily far into the result set.
+    limit:           int        = Query(1000,   ge=1, le=10000),
+    offset:          int        = Query(0,      ge=0, le=1_000_000),
     db:              AsyncSession = Depends(get_db),
     _principal:      Principal    = Depends(get_current_principal),
     _rl:             None         = Depends(endpoint_rate_limit("audit_export_rate_limit")),
 ):
     """
-    Exports audit logs as a CSV file for compliance reporting (up to 10,000 rows).
+    Exports audit logs as a CSV file for compliance reporting.
+
+    Row limits (L1):
+      * limit  <= 10_000 rows per call (hard cap)
+      * offset <= 1_000_000 rows into the result set
+
+    Callers needing the full dataset must page: repeat the call with
+    offset += limit until fewer than `limit` rows are returned.
+
     Non-admin keys are scoped to their own dept_id.
     Response is streamed as attachment: wrapsec_audit_export.csv.
     """
@@ -548,7 +582,7 @@ async def export_audit_logs(
         sort_by         = "created_at",
         sort_order      = "desc",
         limit           = limit,
-        offset          = 0,
+        offset          = offset,
     )
 
     output = io.StringIO()

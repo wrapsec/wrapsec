@@ -92,7 +92,10 @@ class AuditRepository(BaseRepository):
         if key_id:
             query = query.where(AuditLogModel.key_id == key_id)
         if user_id:
-            query = query.where(AuditLogModel.user_id.ilike(f"%{user_id}%"))
+            # M6: previously used ILIKE substring, which allowed audit-read
+            # principals to enumerate other users by probing UUID substrings.
+            # user_id at this layer must be a full UUID string; equality only.
+            query = query.where(AuditLogModel.user_id == user_id)
         if source:
             query = query.where(AuditLogModel.source.ilike(f"%{source}%"))
         if primary_reason:
