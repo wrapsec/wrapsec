@@ -50,6 +50,14 @@ services:
     environment:
       - API_URL=http://api:8000
       - COOKIE_SECURE=false
+      # DASHBOARD_ORIGIN is the Origin header the BFF sends to the backend
+      # so the backend recognises it as trusted and honors the BFF's
+      # X-Refresh-Cookie-Path handshake. Must match one of the values in
+      # the api's CORS_ALLOWED_ORIGINS (.env). Leave empty in local http dev
+      # only when the backend also has REFRESH_COOKIE_PATH=/api/auth set,
+      # otherwise the browser will store the cookie at /v1/auth and the
+      # dashboard refresh flow won't find it.
+      - DASHBOARD_ORIGIN=${DASHBOARD_ORIGIN:-}
     ports:
       - "3000:3000"
     depends_on:

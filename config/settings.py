@@ -144,6 +144,13 @@ class Settings(BaseSettings):
     # Must be True in all deployed environments (staging, production).
     cookie_secure: bool = True
 
+    # Default Path for the refresh_token cookie. Direct clients (SDK, browser
+    # extension) hit /v1/auth/* and need this default. A BFF (dashboard)
+    # fronts the backend under a different prefix; it overrides per-request
+    # via the X-Refresh-Cookie-Path header, gated on Origin allowlist. See
+    # api/v1/endpoints/auth.py:_resolve_refresh_cookie_path.
+    refresh_cookie_path: str = Field(default="/v1/auth")
+
     # -- Data storage ----------------------------------------------------------
     data_storage_mode:        str = Field(default="masked")
     # full   -- store input_raw and output_raw as-is (development)

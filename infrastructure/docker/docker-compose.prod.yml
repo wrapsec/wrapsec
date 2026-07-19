@@ -57,6 +57,10 @@ services:
     environment:
       - API_URL=http://api:8000
       - COOKIE_SECURE=true
+      # DASHBOARD_ORIGIN must match one of the api's CORS_ALLOWED_ORIGINS
+      # (see .env). Enables the M5 X-Refresh-Cookie-Path handshake so the
+      # backend emits Path=/api/auth for the dashboard's refresh cookie.
+      - DASHBOARD_ORIGIN=${DASHBOARD_ORIGIN}
     ports:
       - "3000:3000"
     depends_on:
