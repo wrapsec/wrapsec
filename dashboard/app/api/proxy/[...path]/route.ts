@@ -106,10 +106,23 @@ async function handler(request: NextRequest) {
 
   } catch (error) {
     // Catch-all - network failure, timeout, etc.
-    // Always return JSON - never let an exception bubble as HTML
-    console.error("Proxy handler error:", error)
+    // Always return JSON - never let an exception bubble as HTML.
+    //
+    // M8: only log the message and a correlation id, never the raw error
+    // object. The raw object can hold upstream URLs (leaking internal
+    // hostnames), request bodies, and full stack traces including file
+    // paths of the container image.
+    const correlationId = crypto.randomUUID()
+    const message       = error instanceof Error ? error.message : "unknown error"
+    console.error(`Proxy handler error corr_id=${correlationId} message=${message}`)
     return NextResponse.json(
-      { error: { code: "INTERNAL_ERROR", message: "Internal proxy error" } },
+      {
+        error: {
+          code:           "INTERNAL_ERROR",
+          message:        "Internal proxy error",
+          correlation_id: correlationId,
+        },
+      },
       { status: 500 }
     )
   }
