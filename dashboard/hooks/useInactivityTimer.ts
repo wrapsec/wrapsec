@@ -33,7 +33,12 @@ export function useInactivityTimer() {
   const timerRef       = useRef<ReturnType<typeof setTimeout>  | null>(null)
   const warningRef     = useRef<ReturnType<typeof setTimeout>  | null>(null)
   const intervalRef    = useRef<ReturnType<typeof setInterval> | null>(null)
-  const startedAt      = useRef<number>(Date.now())
+  // Initialize to 0 rather than Date.now() so the hook stays pure during
+  // render - startTimers() writes the real timestamp inside an effect.
+  // See H12 in pentest round 3: an impure Date.now() during render lets
+  // Strict-Mode remounts drift the inactivity threshold, which weakens
+  // the auto-logout security control.
+  const startedAt      = useRef<number>(0)
   // Mirrors showWarning state so the event handler reads the current value
   // without closing over stale state from the initial render.
   const showWarningRef = useRef(false)
