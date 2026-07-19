@@ -10,12 +10,16 @@ from db.repositories.application import ApplicationRepository
 from config.settings import get_settings
 from security.encryption import decrypt
 
-logger   = logging.getLogger("wrapsec.policy")
-settings = get_settings()
+logger = logging.getLogger("wrapsec.policy")
 
 
 # ── System defaults ────────────────────────────────────────────
 def system_defaults() -> dict:
+    # F-6: get_settings() per-call to honor the documented invariant that
+    # settings are reloaded on each call (supports key rotation and test
+    # isolation). Called once per request via resolve_policy(), so the
+    # overhead is negligible compared to the DB reads that follow.
+    settings = get_settings()
     return {
         "detection": {
             "rule_weight":   0.4,
@@ -108,6 +112,11 @@ async def resolve_policy(
           -> department policy_override
             -> application policy_override
     """
+    # F-6: get_settings() per-call so key rotation and test overrides land
+    # inside a single request scope (secret_key for decryption, threshold
+    # fallback values). system_defaults() also fetches its own snapshot.
+    settings = get_settings()
+
     policy = system_defaults()
 
     dept_override   = None
