@@ -77,38 +77,49 @@ def guardrail_confidence(
 
 
 def compute_confidence(
-    rule_score:                  float,
-    ml_score:                    float,
-    llm_score:                   float,
-    pii_score:                   float,
-    rule_enabled:                bool  = True,
-    ml_enabled:                  bool  = True,
-    llm_invoked:                 bool  = False,
-    guardrail_triggered:         bool  = False,
-    block_threshold:             float = 0.7,
-    sanitize_threshold:          float = 0.4,
-    toxicity_score:              float = 0.0,
-    toxicity_guardrail_triggered: bool = False,
+    rule_score:                   float,
+    ml_score:                     float,
+    llm_score:                    float,
+    pii_score:                    float,
+    rule_enabled:                 bool  = True,
+    ml_enabled:                   bool  = True,
+    llm_invoked:                  bool  = False,
+    pii_guardrail_triggered:      bool  = False,
+    block_threshold:              float = 0.7,
+    sanitize_threshold:           float = 0.4,
+    toxicity_score:               float = 0.0,
+    toxicity_guardrail_triggered: bool  = False,
+    toxicity_block_threshold:     float | None = None,
+    toxicity_sanitize_threshold:  float | None = None,
 ) -> tuple[float, str]:
     """
     Returns (confidence, confidence_band).
 
     Priority:
-      1. PII guardrail triggered      -> guardrail_confidence(pii_score)
-      2. Toxicity guardrail triggered -> guardrail_confidence(toxicity_score)
+      1. PII guardrail triggered      -> guardrail_confidence(pii_score, PII thresholds)
+      2. Toxicity guardrail triggered -> guardrail_confidence(toxicity_score, toxicity thresholds)
       3. Detection-based              -> detector_confidence(rule/ml/llm)
+
+    Callers MUST pass pii_guardrail_triggered (the PII-specific flag), not the
+    combined "any guardrail" flag - otherwise a toxicity-only decision routes
+    into branch 1 with pii_score=0.0 and returns confidence 0.0.
     """
-    if guardrail_triggered:
+    if pii_guardrail_triggered:
         confidence = guardrail_confidence(
             pii_score          = pii_score,
             block_threshold    = block_threshold,
             sanitize_threshold = sanitize_threshold,
         )
     elif toxicity_guardrail_triggered:
+        # Toxicity thresholds default to detection thresholds if the caller
+        # didn't override - preserves prior behaviour when tox thresholds are
+        # unset, and lets service.py pass the resolved policy thresholds.
+        _tbt = toxicity_block_threshold    if toxicity_block_threshold    is not None else block_threshold
+        _tst = toxicity_sanitize_threshold if toxicity_sanitize_threshold is not None else sanitize_threshold
         confidence = guardrail_confidence(
             pii_score          = toxicity_score,
-            block_threshold    = block_threshold,
-            sanitize_threshold = sanitize_threshold,
+            block_threshold    = _tbt,
+            sanitize_threshold = _tst,
         )
     else:
         confidence = detector_confidence(

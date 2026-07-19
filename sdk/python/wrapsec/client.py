@@ -40,7 +40,7 @@ from wrapsec.core.http import (
 )
 from wrapsec.core.retry import with_retry
 from wrapsec.core.validation import normalize_text, validate_input
-from wrapsec.exceptions import WrapSecAuthError
+from wrapsec.exceptions import WrapSecAuthError, WrapSecSystemError
 from wrapsec.models import AuditLog, AuditStats, ScanResult
 
 logger = logging.getLogger("wrapsec.client")

@@ -26,6 +26,22 @@ router = APIRouter()
 _ENCRYPTED_SECTIONS = ("llm", "proxy_provider")
 
 
+def _require_dept_scope(request: Request, dept_id: str) -> None:
+    """
+    For non-admin principals, restrict department read endpoints to the caller's
+    own dept_id. Raises NotFoundError (not ForbiddenError) so a scoped caller
+    cannot enumerate sibling departments by probing responses.
+
+    Admin principals bypass this check and can read any department in the tenant
+    (the tenant-scope check on each endpoint still applies).
+    """
+    if getattr(request.state, "is_admin", False):
+        return
+    own_dept_id = getattr(request.state, "dept_id", None)
+    if not own_dept_id or str(own_dept_id) != dept_id:
+        raise NotFoundError("department", dept_id)
+
+
 def _mask_policy_override(override: dict | None) -> dict | None:
     """Strip api_key_enc from sensitive sections, replace with api_key_masked."""
     if not override:
@@ -200,6 +216,8 @@ async def get_department_stats(
     Returns total request count, decision breakdown, block rate, average latency,
     and the top 5 threat categories by frequency.
     """
+    _require_dept_scope(request, dept_id)
+
     dept_check = await DepartmentRepository(db).get_by_id(uuid.UUID(dept_id))
     if not dept_check or str(dept_check.tenant_id) != request.state.tenant_id:
         raise NotFoundError("department", dept_id)
@@ -273,6 +291,8 @@ async def get_department_policy(
     Merges: system defaults -> tenant global -> department override.
     Useful for compliance verification.
     """
+    _require_dept_scope(request, dept_id)
+
     from services.policy_resolver import resolve_policy
 
     repo   = DepartmentRepository(db)
@@ -304,6 +324,8 @@ async def get_department(
     principal: Principal    = Depends(get_current_principal),
 ):
     """Returns a single department by ID. 404 if not found."""
+    _require_dept_scope(request, dept_id)
+
     repo   = DepartmentRepository(db)
     record = await repo.get_by_id(uuid.UUID(dept_id))
     if not record or str(record.tenant_id) != request.state.tenant_id:
