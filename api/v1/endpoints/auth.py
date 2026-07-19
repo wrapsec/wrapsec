@@ -238,8 +238,10 @@ async def logout(
     principal: Principal     = Depends(require_jwt),
 ) -> JSONResponse:
     """
-    Revokes refresh token. Access token expires naturally (≤30 min).
-    Clears httpOnly cookie. Idempotent - safe to call multiple times.
+    Revokes refresh token AND blacklists the presented access token's jti
+    for the remainder of its lifetime (M1). Access token becomes unusable
+    immediately - not just after natural expiry. Clears httpOnly cookie.
+    Idempotent - safe to call multiple times.
 
     Optional body: { "reason": "manual" | "inactivity" | "expired" }
     Invalid reason values are normalized to "manual" - never returns 400.
@@ -258,12 +260,49 @@ async def logout(
     if raw_token:
         await auth_service.logout(raw_token, db, reason=logout_reason)
 
+    # M1: blacklist the access token's jti so it cannot be reused before exp.
+    # The middleware has already decoded and validated the token to get here,
+    # but we need jti + exp - re-parse the Authorization header token.
+    await _blacklist_current_access_token(request)
+
     response = JSONResponse(
         status_code=200,
         content={"message": "Logged out successfully."},
     )
     _clear_refresh_cookie(response)
     return response
+
+
+async def _blacklist_current_access_token(request: Request) -> None:
+    """
+    Best-effort: extract Bearer token, decode it, blacklist jti for the
+    token's remaining lifetime. Any failure is swallowed - logout must
+    always succeed even if blacklisting fails.
+    """
+    from datetime import datetime, timezone
+    from services.auth.token import decode_access_token
+    from services.auth.jti_blacklist import blacklist_jti
+
+    auth_header = request.headers.get("authorization", "")
+    if not auth_header.lower().startswith("bearer "):
+        return
+
+    token = auth_header.split(" ", 1)[1].strip()
+    try:
+        payload = decode_access_token(token)
+    except Exception:
+        return  # expired or invalid - nothing to blacklist
+
+    jti = payload.get("jti")
+    exp = payload.get("exp")
+    if not jti or not exp:
+        return
+
+    ttl = int(exp - datetime.now(timezone.utc).timestamp())
+    if ttl <= 0:
+        return
+
+    await blacklist_jti(jti, ttl)
 
 
 @router.get("/me")

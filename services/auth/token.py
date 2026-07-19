@@ -26,6 +26,7 @@ def create_access_token(user: "UserModel") -> str:
 
     Claims and their purposes:
         sub        - user UUID string (JWT subject - standard claim)
+        jti        - opaque token id: enables per-token revocation via Redis blacklist
         type       - "access": rejects refresh tokens used as access tokens
         ver        - user.token_version: detects session invalidation
         role       - user.role: used by RBAC dependencies (require_role)
@@ -44,6 +45,7 @@ def create_access_token(user: "UserModel") -> str:
     expires = now + timedelta(minutes=_settings.jwt_access_token_expire_minutes)
     payload = {
         "sub":       str(user.id),
+        "jti":       secrets.token_urlsafe(16),
         "type":      "access",
         "ver":       user.token_version,
         "role":      user.role,
@@ -132,7 +134,7 @@ def decode_access_token(token: str) -> dict:
         )
         raise InvalidTokenError("Token validation failed")  # generic
 
-    required = ["sub", "tenant_id", "role", "ver"]
+    required = ["sub", "tenant_id", "role", "ver", "jti"]
     missing  = [f for f in required if payload.get(f) is None]
     if missing:
         logger.warning(

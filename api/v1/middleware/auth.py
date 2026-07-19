@@ -410,6 +410,14 @@ class AuthMiddleware(BaseHTTPMiddleware):
                 await _log_session_expired(token, "token_invalid", request.url.path)
             return _unauthorized(request, "invalid_or_expired_token")
 
+        # M1: reject tokens whose jti was blacklisted by /logout. Runs before
+        # any DB lookup so a revoked token cannot even probe user state.
+        from services.auth.jti_blacklist import is_blacklisted
+        if await is_blacklisted(payload["jti"]):
+            if not skip_logging:
+                await _log_session_expired(token, "token_revoked", request.url.path)
+            return _unauthorized(request, "invalid_or_expired_token")
+
         # Step 2 - parse sub claim
         user_id_str = payload.get("sub")
         try:

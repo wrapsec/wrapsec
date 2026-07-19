@@ -70,10 +70,12 @@ async def test_llm_detector_exception_forces_block(svc):
 
     # Patch settings to force LLM detector to trigger even on benign input.
     with patch("services.gateway.service.get_settings") as mock_settings:
-        mock_settings.return_value.llm_trigger_threshold = 0.0
-        mock_settings.return_value.block_threshold       = 0.7
-        mock_settings.return_value.sanitize_threshold    = 0.4
-        mock_settings.return_value.llm_model             = "test-model"
+        mock_settings.return_value.llm_trigger_threshold    = 0.0
+        mock_settings.return_value.block_threshold          = 0.7
+        mock_settings.return_value.sanitize_threshold       = 0.4
+        mock_settings.return_value.llm_model                = "test-model"
+        # H2: wait_for requires a numeric timeout; MagicMock default breaks it.
+        mock_settings.return_value.detector_timeout_seconds = 2.0
         with patch.object(svc._llm_detector, "detect_async", side_effect=_raise):
             result = await svc.process(request)
 
