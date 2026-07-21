@@ -45,7 +45,12 @@ services:
       context: ../..
       dockerfile: infrastructure/docker/Dockerfile.dashboard
       args:
-        NEXT_PUBLIC_API_URL: ""
+        # BFF pattern: the browser only talks to the dashboard's own /api/*
+        # routes (CSP connect-src 'self'), so this value is essentially
+        # unused client-side. It must still be set to satisfy the M4 guard
+        # in next.config.ts. In dev, http://localhost points at the nginx
+        # container which reverse-proxies to the api.
+        NEXT_PUBLIC_API_URL: ${NEXT_PUBLIC_API_URL:-http://localhost}
     container_name: wrapsec_dashboard
     environment:
       - API_URL=http://api:8000
