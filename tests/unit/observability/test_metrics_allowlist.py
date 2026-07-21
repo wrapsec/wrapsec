@@ -21,12 +21,13 @@ from observability.metrics import _VALID_PRIMARY_REASONS
 
 def test_toxicity_reasons_in_allowlist():
     """
-    F-7 regression: TOXICITY_GUARDRAIL_BLOCK and TOXICITY_GUARDRAIL_SANITIZE
-    must be in the primary_reason allowlist. Otherwise toxicity-driven blocks
-    and sanitizes are dropped from BLOCKED_TOTAL / SANITIZED_TOTAL.
+    F-7 regression + v1.0.9: TOXICITY_GUARDRAIL_BLOCK must be in the primary_reason
+    allowlist. Otherwise toxicity-driven blocks are dropped from BLOCKED_TOTAL.
+    The TOXICITY_GUARDRAIL_SANITIZE tier was removed in v1.0.9 (Bedrock-style
+    BLOCK-or-ALLOW semantics) and must NOT appear in the allowlist.
     """
-    assert "TOXICITY_GUARDRAIL_BLOCK"    in _VALID_PRIMARY_REASONS
-    assert "TOXICITY_GUARDRAIL_SANITIZE" in _VALID_PRIMARY_REASONS
+    assert "TOXICITY_GUARDRAIL_BLOCK" in _VALID_PRIMARY_REASONS
+    assert "TOXICITY_GUARDRAIL_SANITIZE" not in _VALID_PRIMARY_REASONS
 
 
 def test_pii_reasons_still_in_allowlist():

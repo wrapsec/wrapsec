@@ -258,9 +258,13 @@ class GatewayService:
                 )
 
             # ── Step 7: Sanitized input ───────────────────────
+            # Only surface a sanitized_input when PII redaction actually rewrote
+            # the text. A SANITIZE decision from the detection tier (risk score
+            # in [st, bt) with no PII) leaves the text unchanged; returning the
+            # raw text as "sanitized" would be a silent lie to callers.
             sanitized_input = None
-            if policy.decision == DecisionType.SANITIZE:
-                sanitized_input = input_result.sanitized_text or effective_input
+            if policy.decision == DecisionType.SANITIZE and input_result.sanitized_text:
+                sanitized_input = input_result.sanitized_text
 
             # ── Step 8: LLM execution (proxy mode only) ───────
             output      = None
@@ -297,13 +301,14 @@ class GatewayService:
             from engine.scoring.primary_reason import compute_primary_reason
             _pii_bt = pii_block_threshold    if pii_block_threshold    is not None else block_threshold
             _pii_st = pii_sanitize_threshold if pii_sanitize_threshold is not None else sanitize_threshold
-            _tox_bt = toxicity_block_threshold    if toxicity_block_threshold    is not None else block_threshold
-            _tox_st = toxicity_sanitize_threshold if toxicity_sanitize_threshold is not None else sanitize_threshold
+            _tox_bt = toxicity_block_threshold if toxicity_block_threshold is not None else block_threshold
 
             pii_guardrail_triggered = scoring.pii_score >= _pii_st
+            # Toxicity is BLOCK-or-ALLOW only (Bedrock semantics as of v1.0.9);
+            # SANITIZE tier removed - guardrail fires only at BLOCK threshold.
             toxicity_guardrail_triggered = (
                 not pii_guardrail_triggered and
-                scoring.toxicity_score >= _tox_st
+                scoring.toxicity_score >= _tox_bt
             )
 
             primary_reason = compute_primary_reason(
@@ -339,7 +344,6 @@ class GatewayService:
                 toxicity_score               = scoring.toxicity_score,
                 toxicity_guardrail_triggered = toxicity_guardrail_triggered,
                 toxicity_block_threshold     = _tox_bt,
-                toxicity_sanitize_threshold  = _tox_st,
             )
 
             gateway_decision = GatewayDecision(

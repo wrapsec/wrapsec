@@ -714,7 +714,7 @@ When set via `PUT /v1/tenant`, `global_policy` is validated against `GlobalPolic
   },
   "guardrails": {
     "pii":      { "enabled": true, "block_threshold": 0.8, "sanitize_threshold": 0.4 },
-    "toxicity": { "enabled": true, "block_threshold": 0.8, "sanitize_threshold": 0.4 }
+    "toxicity": { "enabled": true, "block_threshold": 0.8 }
   },
   "rate_limit": {
     "per_minute": 60
@@ -723,6 +723,8 @@ When set via `PUT /v1/tenant`, `global_policy` is validated against `GlobalPolic
 ```
 
 All fields are optional - only provided keys are stored. Invariant: `0.0 < sanitize < block <= 1.0`.
+
+Toxicity is BLOCK-or-ALLOW only (Bedrock-style semantics). The `toxicity.sanitize_threshold` field is accepted for backward compatibility with pre-v1.0.9 stored policies but is a no-op.
 
 `rate_limit_override` on an application is a dedicated integer column (separate from `policy_override`). When set, it overrides `policy["rate_limit"]["per_minute"]` and is enforced as a per-app bucket (key `app:{app_id}`) in `ai.py` after policy resolution. Setting it to `null` removes the per-app limit.
 
