@@ -259,7 +259,7 @@ Guardrails are independent of the detection pipeline and always take priority ov
 
 **PII guardrail** - detects and redacts personally identifiable information (22+ types including email addresses, phone numbers, credit card numbers, SSNs, etc.). Can BLOCK or SANITIZE depending on configured thresholds.
 
-**Toxicity guardrail** - detects hate speech, harassment, and other toxic content. Can BLOCK or flag. Does not redact - the entire input is blocked if the threshold is exceeded.
+**Toxicity guardrail** - detects hate speech, harassment, and other toxic content. BLOCK-or-ALLOW only: toxic content above the block threshold blocks the entire request; below it, the toxicity guardrail does not fire. There is no partial redaction tier - toxic text cannot be safely rewritten by pattern substitution.
 
 Guardrail thresholds can be configured independently per department in the department policy override settings.
 
