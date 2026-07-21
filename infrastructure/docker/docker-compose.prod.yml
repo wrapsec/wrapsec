@@ -52,7 +52,12 @@ services:
       context: ../..
       dockerfile: infrastructure/docker/Dockerfile.dashboard
       args:
-        NEXT_PUBLIC_API_URL: ""
+        # Required. next.config.ts (M4 guard) fails the production build if
+        # this is unset. Operators must set NEXT_PUBLIC_API_URL in .env to
+        # the public URL of the deployment (e.g. https://api.example.com).
+        # BFF pattern means this value rarely reaches the browser, but it
+        # is still inlined into the client bundle at build time.
+        NEXT_PUBLIC_API_URL: ${NEXT_PUBLIC_API_URL:?NEXT_PUBLIC_API_URL must be set in .env for prod builds}
     container_name: wrapsec_dashboard
     environment:
       - API_URL=http://api:8000
