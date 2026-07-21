@@ -24,9 +24,13 @@ class PolicyEngine:
     Maps aggregated risk score to a policy decision.
 
     Guardrail-first enforcement:
-      PII and other guardrails are evaluated FIRST.
+      PII and toxicity guardrails are evaluated FIRST.
       A guardrail decision overrides the detection-based decision.
       Guardrail scores never contribute to the detection risk score.
+
+    Guardrail tiers (Bedrock-style):
+      PII       -> BLOCK / SANITIZE / ALLOW  (SANITIZE anonymizes entities)
+      Toxicity  -> BLOCK / ALLOW             (no SANITIZE tier - see decide())
 
     Detection-based decision (applied only if no guardrail triggers):
       score >= block_threshold    -> BLOCK
@@ -48,15 +52,22 @@ class PolicyEngine:
         pii_sanitize_threshold:        float | None = None,
         toxicity_score:                float = 0.0,
         toxicity_block_threshold:      float | None = None,
-        toxicity_sanitize_threshold:   float | None = None,
+        toxicity_sanitize_threshold:   float | None = None,  # deprecated: toxicity is BLOCK-or-ALLOW only (see docstring)
     ) -> PolicyDecision:
         """
         Evaluate guardrail-first, then detection-based decision.
 
         Guardrail priority order:
           1. PII guardrail   (pii_score vs pii_block/sanitize_threshold)
-          2. Toxicity guardrail (toxicity_score vs toxicity_block/sanitize_threshold)
+          2. Toxicity guardrail (toxicity_score vs toxicity_block_threshold; BLOCK-or-ALLOW only)
           3. Detection-based (risk_score vs block/sanitize_threshold)
+
+        Toxicity is BLOCK-or-ALLOW by design (Bedrock-style semantics): unlike PII,
+        toxic content cannot be safely rewritten by pattern substitution without
+        changing meaning, and partial redaction produces "sanitized" text that is
+        still recognizably harmful. Only PII has an ANONYMIZE tier. The
+        `toxicity_sanitize_threshold` parameter is retained for signature
+        compatibility with pre-v1.0.9 callers but is intentionally unused.
 
         All guardrail thresholds are independent from detection thresholds.
         """
@@ -77,9 +88,8 @@ class PolicyEngine:
             pii_bt = pii_block_threshold    if pii_block_threshold    is not None else bt
             pii_st = pii_sanitize_threshold if pii_sanitize_threshold is not None else st
 
-            # Toxicity guardrail thresholds - default to same as detection
-            tox_bt = toxicity_block_threshold    if toxicity_block_threshold    is not None else bt
-            tox_st = toxicity_sanitize_threshold if toxicity_sanitize_threshold is not None else st
+            # Toxicity guardrail threshold - BLOCK-only tier
+            tox_bt = toxicity_block_threshold if toxicity_block_threshold is not None else bt
 
             # ── 1. PII guardrail (highest priority) ──────────
             if pii_score >= pii_bt:
@@ -90,14 +100,10 @@ class PolicyEngine:
                 logger.debug(f"PolicyEngine PII guardrail SANITIZE pii_score={pii_score} threshold={pii_st}")
                 return PolicyDecision(decision=DecisionType.SANITIZE, risk_score=risk_score, threats=threats, rules=self.rules)
 
-            # ── 2. Toxicity guardrail ─────────────────────────
+            # ── 2. Toxicity guardrail (BLOCK-or-ALLOW only) ───
             if toxicity_score >= tox_bt:
                 logger.debug(f"PolicyEngine toxicity guardrail BLOCK toxicity_score={toxicity_score} threshold={tox_bt}")
                 return PolicyDecision(decision=DecisionType.BLOCK,   risk_score=risk_score, threats=threats, rules=self.rules)
-
-            if toxicity_score >= tox_st:
-                logger.debug(f"PolicyEngine toxicity guardrail SANITIZE toxicity_score={toxicity_score} threshold={tox_st}")
-                return PolicyDecision(decision=DecisionType.SANITIZE, risk_score=risk_score, threats=threats, rules=self.rules)
 
             # ── 3. Detection-based decision ───────────────────
             if score >= bt:

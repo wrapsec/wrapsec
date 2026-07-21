@@ -23,12 +23,14 @@ function ConfidenceBadge({ band }: { band: string | null }) {
 function PrimaryReasonBadge({ reason }: { reason: string | null }) {
   if (!reason) return null
   const label: Record<string, string> = {
-    RULE_DETECTOR:        "Rule Detector",
-    ML_DETECTOR:          "ML Classifier",
-    LLM_DETECTOR:         "LLM Semantic",
-    PII_GUARDRAIL_BLOCK:    "PII Guardrail",
-    PII_GUARDRAIL_SANITIZE: "PII Guardrail",
-    NO_THREAT_DETECTED:   "No Threat",
+    RULE_DETECTOR:            "Rule Detector",
+    ML_DETECTOR:              "ML Classifier",
+    LLM_DETECTOR:             "LLM Semantic",
+    PII_GUARDRAIL_BLOCK:      "PII Guardrail",
+    PII_GUARDRAIL_SANITIZE:   "PII Guardrail",
+    TOXICITY_GUARDRAIL_BLOCK: "Toxicity Guardrail",
+    NO_THREAT_DETECTED:       "No Threat",
+    SYSTEM_ERROR:             "System Error",
   }
   return (
     <span className="text-xs px-2 py-0.5 rounded-full bg-slate-100 text-slate-600 border border-slate-200 font-medium">

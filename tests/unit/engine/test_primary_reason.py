@@ -102,3 +102,48 @@ def test_guardrail_takes_priority_over_detectors():
         sanitize_threshold = 0.4,
     )
     assert result == "PII_GUARDRAIL_BLOCK"
+
+
+# ── v1.0.9: toxicity is BLOCK-or-ALLOW only (Bedrock semantics) ─
+
+def test_toxicity_guardrail_returns_block_only():
+    """
+    Toxicity guardrail triggered must always map to TOXICITY_GUARDRAIL_BLOCK.
+    v1.0.9 removed the SANITIZE tier - even scores below what used to be the
+    sanitize threshold must not produce TOXICITY_GUARDRAIL_SANITIZE.
+    """
+    result = compute_primary_reason(
+        guardrail_triggered          = False,
+        guardrail_decision           = None,
+        rule_score                   = 0.0,
+        ml_score                     = 0.0,
+        llm_score                    = 0.0,
+        pii_score                    = 0.0,
+        block_threshold              = 0.7,
+        sanitize_threshold           = 0.4,
+        toxicity_score               = 0.55,   # below old sanitize threshold
+        toxicity_guardrail_triggered = True,
+        toxicity_block_threshold     = 0.5,
+    )
+    assert result == "TOXICITY_GUARDRAIL_BLOCK"
+
+
+def test_toxicity_never_returns_sanitize_variant():
+    """
+    Explicit ban on the removed TOXICITY_GUARDRAIL_SANITIZE literal - even for
+    a low toxicity score, the mapper must return BLOCK (the caller controls
+    whether the guardrail fired at all via toxicity_guardrail_triggered).
+    """
+    result = compute_primary_reason(
+        guardrail_triggered          = False,
+        guardrail_decision           = None,
+        rule_score                   = 0.0,
+        ml_score                     = 0.0,
+        llm_score                    = 0.0,
+        pii_score                    = 0.0,
+        toxicity_score               = 0.3,
+        toxicity_guardrail_triggered = True,
+        toxicity_block_threshold     = 0.7,
+    )
+    assert result != "TOXICITY_GUARDRAIL_SANITIZE"
+    assert result == "TOXICITY_GUARDRAIL_BLOCK"

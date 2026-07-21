@@ -396,7 +396,6 @@ function PrimaryReasonBreakdown({ byReason }: { byReason: { primary_reason: stri
     PII_GUARDRAIL_BLOCK:         "PII guardrail - block",
     PII_GUARDRAIL_SANITIZE:      "PII guardrail - sanitize",
     TOXICITY_GUARDRAIL_BLOCK:    "Toxicity guardrail - block",
-    TOXICITY_GUARDRAIL_SANITIZE: "Toxicity guardrail - sanitize",
     NO_THREAT_DETECTED:          "No threat detected",
     SYSTEM_ERROR:                "System error",
   }

@@ -573,8 +573,7 @@ Scan-only mode. Inspect input, get a security decision, then forward to your LLM
 | `LLM_DETECTOR` | LLM semantic detector highest score |
 | `PII_GUARDRAIL_BLOCK` | PII score ≥ block threshold |
 | `PII_GUARDRAIL_SANITIZE` | PII score ≥ sanitize threshold |
-| `TOXICITY_GUARDRAIL_BLOCK` | Toxicity score ≥ block threshold |
-| `TOXICITY_GUARDRAIL_SANITIZE` | Toxicity score ≥ sanitize threshold |
+| `TOXICITY_GUARDRAIL_BLOCK` | Toxicity score ≥ block threshold (BLOCK-only tier; see note below) |
 | `NO_THREAT_DETECTED` | All detectors ran, no threat found |
 | `SYSTEM_ERROR` | Detector failure or exception |
 
@@ -589,6 +588,8 @@ Scan-only mode. Inspect input, get a security decision, then forward to your LLM
 **`SYSTEM_ERROR` behaviour:** Returns `decision = ALLOW`, `confidence = 0.0`, `confidence_band = LOW`. Clients **must not** forward to LLM when `primary_reason = SYSTEM_ERROR`.
 
 **`risk_score = 0.0` does not mean safe.** Guardrails can BLOCK with `risk_score = 0.0`. Always check `decision`.
+
+**Toxicity guardrail is BLOCK-or-ALLOW only.** Unlike PII (which has an ANONYMIZE / SANITIZE tier), toxic content cannot be safely rewritten by pattern substitution without changing meaning. Toxicity above the block threshold returns `decision = BLOCK` with `primary_reason = TOXICITY_GUARDRAIL_BLOCK`; below it, the toxicity guardrail does not fire (the request may still SANITIZE or BLOCK via PII or detection tiers). This mirrors AWS Bedrock content filter semantics.
 
 ---
 
@@ -1423,13 +1424,15 @@ Updates tenant name, description, contact email, or global policy. All fields ar
   "detection":  { "rule_enabled": true, "ml_enabled": true, "llm_enabled": true },
   "guardrails": {
     "pii":      { "enabled": true, "block_threshold": 0.8, "sanitize_threshold": 0.4 },
-    "toxicity": { "enabled": true, "block_threshold": 0.8, "sanitize_threshold": 0.4 }
+    "toxicity": { "enabled": true, "block_threshold": 0.8 }
   },
   "rate_limit": { "per_minute": 60 }
 }
 ```
 
 Unknown keys are rejected (422). Invariant: `0.0 < sanitize < block <= 1.0`.
+
+Toxicity is BLOCK-or-ALLOW only (see decision model section). The `toxicity.sanitize_threshold` field is accepted for backward compatibility with pre-v1.0.9 policies but is a no-op - use `toxicity.block_threshold` to tune sensitivity.
 
 **Request:**
 ```json
@@ -1847,7 +1850,7 @@ Note: `account_inactive` is the `auth_events.failure_reason` value when `is_acti
 - `POST /v1/keys/{key_id}/rotate` - grace period key rotation
 - `GET/PUT /v1/settings/rate_limit` - DB-backed live key rate limit
 - Application-level policy overrides wired into resolution chain
-- Toxicity guardrail - `TOXICITY_GUARDRAIL_BLOCK` / `TOXICITY_GUARDRAIL_SANITIZE`
+- Toxicity guardrail - `TOXICITY_GUARDRAIL_BLOCK` / `TOXICITY_GUARDRAIL_SANITIZE` (SANITIZE tier removed in v1.0.9)
 - `api_keys.key_type` column - `live` | `trial`
 - Idempotency scoped per API key
 

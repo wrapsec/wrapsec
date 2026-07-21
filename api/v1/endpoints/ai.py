@@ -52,7 +52,10 @@ def _build_response(
         "confidence":            decision.confidence,
         "confidence_band":       decision.confidence_band,
         "threats":               [t.value for t in decision.threats],
-        "sanitization_applied":  decision.decision.value == "SANITIZE",
+        # Only true when the input text was actually rewritten (PII redacted).
+        # A SANITIZE decision from the detection tier with no PII leaves the
+        # text unchanged; sanitization_applied stays false in that case.
+        "sanitization_applied":  decision.sanitized_input is not None,
         "processing": {
             "latency_ms":     round(decision.latency_ms, 2),
             "llm_invoked":    decision.llm_invoked,
@@ -61,7 +64,7 @@ def _build_response(
         },
     }
 
-    if decision.decision.value == "SANITIZE":
+    if decision.sanitized_input is not None:
         response["sanitized_input"] = decision.sanitized_input
 
     if decision.output is not None:

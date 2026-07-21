@@ -90,19 +90,23 @@ def compute_confidence(
     toxicity_score:               float = 0.0,
     toxicity_guardrail_triggered: bool  = False,
     toxicity_block_threshold:     float | None = None,
-    toxicity_sanitize_threshold:  float | None = None,
+    toxicity_sanitize_threshold:  float | None = None,  # deprecated: unused (see docstring)
 ) -> tuple[float, str]:
     """
     Returns (confidence, confidence_band).
 
     Priority:
       1. PII guardrail triggered      -> guardrail_confidence(pii_score, PII thresholds)
-      2. Toxicity guardrail triggered -> guardrail_confidence(toxicity_score, toxicity thresholds)
+      2. Toxicity guardrail triggered -> BLOCK-arm of guardrail_confidence (BLOCK-only tier)
       3. Detection-based              -> detector_confidence(rule/ml/llm)
 
     Callers MUST pass pii_guardrail_triggered (the PII-specific flag), not the
     combined "any guardrail" flag - otherwise a toxicity-only decision routes
     into branch 1 with pii_score=0.0 and returns confidence 0.0.
+
+    Toxicity is BLOCK-or-ALLOW only (Bedrock semantics); if triggered, it's
+    always BLOCK. The `toxicity_sanitize_threshold` parameter is retained for
+    signature compatibility with pre-v1.0.9 callers but is intentionally unused.
     """
     if pii_guardrail_triggered:
         confidence = guardrail_confidence(
@@ -111,15 +115,14 @@ def compute_confidence(
             sanitize_threshold = sanitize_threshold,
         )
     elif toxicity_guardrail_triggered:
-        # Toxicity thresholds default to detection thresholds if the caller
-        # didn't override - preserves prior behaviour when tox thresholds are
-        # unset, and lets service.py pass the resolved policy thresholds.
-        _tbt = toxicity_block_threshold    if toxicity_block_threshold    is not None else block_threshold
-        _tst = toxicity_sanitize_threshold if toxicity_sanitize_threshold is not None else sanitize_threshold
+        # BLOCK-only tier: collapse the SANITIZE arm by setting
+        # sanitize_threshold == block_threshold, so only the BLOCK arm
+        # of guardrail_confidence can fire.
+        _tbt = toxicity_block_threshold if toxicity_block_threshold is not None else block_threshold
         confidence = guardrail_confidence(
             pii_score          = toxicity_score,
             block_threshold    = _tbt,
-            sanitize_threshold = _tst,
+            sanitize_threshold = _tbt,
         )
     else:
         confidence = detector_confidence(
