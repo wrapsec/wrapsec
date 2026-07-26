@@ -304,3 +304,175 @@ async def auth_setup():
         pass
     finally:
         await engine2.dispose()
+
+
+# ── Two-tenant fixture for cross-tenant isolation tests (Issue 162) ───────────
+
+@pytest_asyncio.fixture(scope="function")
+async def two_tenant_setup():
+    """
+    Seeds two independent tenants (A and B) in PostgreSQL, each with:
+    admin user, dept, application, API key, and audit log row.
+
+    HTTP-boundary cross-tenant tests use this to prove that tenant A's admin
+    JWT cannot access tenant B's resources via any endpoint. Cleans up all
+    seeded rows after each test.
+    """
+    from db.models import (
+        TenantModel, DepartmentModel, ApplicationModel, APIKeyModel,
+        UserModel, AuditLogModel, ProxyInteractionModel,
+        ProxyProviderConfigModel, RefreshTokenModel, AdminEventModel,
+    )
+    from db.repositories.user import UserRepository
+    from services.auth.password import hash_password, normalize_email
+    from services.auth.token import create_access_token
+    from sqlalchemy import delete as sa_delete
+    from unittest.mock import MagicMock
+
+    def _mock(uid, tid, did, role):
+        m = MagicMock()
+        m.id = uid; m.tenant_id = tid; m.dept_id = did
+        m.role = role; m.token_version = 1
+        return m
+
+    class _Obj:
+        def __init__(self, **kw): self.__dict__.update(kw)
+
+    fixtures = {}
+    tenant_ids = []
+    user_ids = []
+    api_key_ids = []
+
+    engine = create_async_engine(settings.database_url, poolclass=NullPool)
+    sf = async_sessionmaker(bind=engine, class_=AsyncSession, expire_on_commit=False)
+
+    try:
+        async with sf() as db:
+            for letter in ("A", "B"):
+                tid   = uuid.uuid4()
+                did   = uuid.uuid4()
+                aid   = uuid.uuid4()
+                uid   = uuid.uuid4()
+                keyid = f"wsk_live_{letter.lower()}_" + uuid.uuid4().hex[:12]
+                trace = f"trace-{letter.lower()}-" + uuid.uuid4().hex[:8]
+                email = normalize_email(
+                    f"admin-{letter.lower()}-{uuid.uuid4().hex[:6]}@t.com"
+                )
+
+                db.add(TenantModel(
+                    id=tid,
+                    slug=f"tenant-{letter.lower()}-{uuid.uuid4().hex[:6]}",
+                    name=f"Tenant {letter}",
+                    global_policy={},
+                    is_active=True,
+                ))
+                await db.commit()
+
+                db.add(DepartmentModel(
+                    id=did, tenant_id=tid,
+                    slug=f"dept-{letter.lower()}",
+                    name=f"Dept {letter}",
+                    is_active=True,
+                ))
+                await db.commit()
+
+                db.add(ApplicationModel(
+                    id=aid, tenant_id=tid, dept_id=did,
+                    slug=f"app-{letter.lower()}",
+                    name=f"App {letter}",
+                    is_active=True,
+                ))
+                await db.commit()
+
+                db.add(APIKeyModel(
+                    id=uuid.uuid4(), key_id=keyid,
+                    tenant_id=tid, dept_id=did, app_id=aid,
+                    name=f"key-{letter.lower()}",
+                    key_hash=f"hash-{letter.lower()}-" + uuid.uuid4().hex,
+                    key_type="live", is_admin=False, revoked=False,
+                ))
+                await db.commit()
+
+                repo = UserRepository(db)
+                u = await repo.create({
+                    "tenant_id": tid, "dept_id": None,
+                    "email": email, "password_hash": hash_password("TestPass1!"),
+                    "role": "ADMIN", "force_password_change": False,
+                })
+                await db.commit()
+
+                db.add(AuditLogModel(
+                    id=uuid.uuid4(), trace_id=trace,
+                    decision="ALLOW", risk_score=0.1, threats=[],
+                    input_hash="hash-" + uuid.uuid4().hex,
+                    detection_mode="standard", execution_mode="scan",
+                    llm_invoked=False, latency_ms=12.5,
+                    tenant_id=str(tid), dept_id=str(did), app_id=str(aid),
+                    key_id=keyid, user_id=str(u.id), source="api",
+                ))
+                proxy_trace = f"px-{letter.lower()}-" + uuid.uuid4().hex[:8]
+                db.add(ProxyInteractionModel(
+                    id=uuid.uuid4(),
+                    trace_id=proxy_trace,
+                    key_id=keyid,
+                    input_decision="ALLOW",
+                    input_primary_reason="clean",
+                    input_confidence=0.05,
+                    execution_status="COMPLETED",
+                    total_latency_ms=42,
+                ))
+                await db.commit()
+
+                fixtures[letter] = {
+                    "tenant":       _Obj(id=tid),
+                    "dept":         _Obj(id=did),
+                    "app":          _Obj(id=aid),
+                    "admin_user":   _Obj(id=u.id, email=email, role="ADMIN"),
+                    "admin_token":  create_access_token(
+                        _mock(u.id, tid, None, "ADMIN")
+                    ),
+                    "api_key_id":   keyid,
+                    "audit_trace":  trace,
+                    "proxy_trace":  proxy_trace,
+                }
+                tenant_ids.append(tid)
+                user_ids.append(u.id)
+                api_key_ids.append(keyid)
+    finally:
+        await engine.dispose()
+
+    yield fixtures
+
+    # ── Cleanup ────────────────────────────────────────────────────────────────
+    engine2 = create_async_engine(settings.database_url, poolclass=NullPool)
+    sf2 = async_sessionmaker(bind=engine2, class_=AsyncSession, expire_on_commit=False)
+    try:
+        async with sf2() as db:
+            if user_ids:
+                await db.execute(sa_delete(RefreshTokenModel).where(
+                    RefreshTokenModel.user_id.in_(user_ids)))
+                await db.execute(sa_delete(AdminEventModel).where(
+                    AdminEventModel.target_user_id.in_(user_ids)))
+            if api_key_ids:
+                await db.execute(sa_delete(ProxyInteractionModel).where(
+                    ProxyInteractionModel.key_id.in_(api_key_ids)))
+            for tid in tenant_ids:
+                await db.execute(sa_delete(AuditLogModel).where(
+                    AuditLogModel.tenant_id == str(tid)))
+                await db.execute(sa_delete(APIKeyModel).where(
+                    APIKeyModel.tenant_id == tid))
+                await db.execute(sa_delete(UserModel).where(
+                    UserModel.tenant_id == tid))
+                await db.execute(sa_delete(ApplicationModel).where(
+                    ApplicationModel.tenant_id == tid))
+                await db.execute(sa_delete(DepartmentModel).where(
+                    DepartmentModel.tenant_id == tid))
+                await db.execute(sa_delete(ProxyProviderConfigModel).where(
+                    ProxyProviderConfigModel.tenant_id == str(tid)))
+                await db.execute(sa_delete(TenantModel).where(
+                    TenantModel.id == tid))
+            await db.commit()
+    except Exception:
+        pass
+    finally:
+        await engine2.dispose()

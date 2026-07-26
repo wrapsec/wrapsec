@@ -321,9 +321,8 @@ async def get_attribution_report(
     and application. Useful for security review and capacity planning.
     Supports from/to date filtering (ISO format) for time-scoped reports.
     """
-    scope = get_audit_scope(request)
-    if scope:
-        dept_id = scope.get("dept_id")  # non-admin: identity overrides query param
+    scope   = get_audit_scope(request)
+    dept_id = scope.get("dept_id", dept_id)
 
     base_where = []
     if scope.get("tenant_id"):
@@ -461,9 +460,8 @@ async def get_analytics(
     Advanced cross-department analytics with time-series trend data.
     Groups requests by time period with decision breakdowns.
     """
-    scope = get_audit_scope(request)
-    if scope:
-        dept_id = scope.get("dept_id")  # non-admin: identity overrides query param
+    scope   = get_audit_scope(request)
+    dept_id = scope.get("dept_id", dept_id)
 
     # Build base query
     stmt = select(

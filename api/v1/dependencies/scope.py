@@ -11,33 +11,41 @@ if TYPE_CHECKING:
     from db.repositories.audit import AuditRepository
 
 
+# The master admin API key uses the sentinel key_id "key:admin" (see
+# api/v1/middleware/auth.py _authenticate_admin_key). Only that principal is
+# cross-tenant by design; every other admin (tenant ADMIN role users) must be
+# scoped to their own tenant_id to prevent Issue 162 style cross-tenant reads.
+_MASTER_ADMIN_KEY_ID = "key:admin"
+
+
+def _is_master_admin(request: Request) -> bool:
+    return getattr(request.state, "key_id", None) == _MASTER_ADMIN_KEY_ID
+
+
 def get_audit_scope(request: Request) -> dict:
     """
     Returns tenant/dept filter kwargs for the current principal's audit scope.
 
-    Admin     : empty dict - caller-supplied query filters apply as-is.
-    Non-admin : {"tenant_id": ..., "dept_id": ...} - identity always wins,
-                any tenant_id/dept_id from the query string are ignored.
+    Master admin key : empty dict - caller-supplied query filters apply as-is.
+    Tenant admin     : {"tenant_id": ...} - identity always wins for tenant_id,
+                       dept_id from the query string still applies.
+    Non-admin        : {"tenant_id": ..., "dept_id": ...} - both fixed.
 
-    Usage with repo.list() - admin query params pass through, non-admin are fixed:
+    Usage with repo.list() - non-admin scopes are enforced, admin dept filter
+    still passes through:
+
         scope     = get_audit_scope(request)
         tenant_id = scope.get("tenant_id", tenant_id)
         dept_id   = scope.get("dept_id",   dept_id)
         await repo.list(tenant_id=tenant_id, dept_id=dept_id, ...)
-
-    Usage with raw WHERE clauses:
-        scope = get_audit_scope(request)
-        if scope.get("tenant_id"):
-            stmt = stmt.where(Model.tenant_id == scope["tenant_id"])
-        if scope.get("dept_id"):
-            stmt = stmt.where(Model.dept_id == scope["dept_id"])
     """
-    if getattr(request.state, "is_admin", False):
+    if _is_master_admin(request):
         return {}
-    return {
-        "tenant_id": getattr(request.state, "tenant_id", None),
-        "dept_id":   getattr(request.state, "dept_id",   None),
-    }
+
+    scope: dict = {"tenant_id": getattr(request.state, "tenant_id", None)}
+    if not getattr(request.state, "is_admin", False):
+        scope["dept_id"] = getattr(request.state, "dept_id", None)
+    return scope
 
 
 async def get_scoped_audit_record(
@@ -48,17 +56,20 @@ async def get_scoped_audit_record(
     """
     Fetches a single audit record by trace_id, enforcing the principal's scope.
 
-    Admin             : unscoped - can see any record.
+    Master admin key  : unscoped - can see any record.
+    Tenant admin      : tenant-scoped (Issue 162 - prevents cross-tenant reads).
     Non-admin + dept  : dept-scoped (primary path - all non-admin keys have dept_id).
     Non-admin no dept : tenant-scoped (defensive fallback for edge cases).
     """
-    is_admin = getattr(request.state, "is_admin", False)
-    dept_id  = getattr(request.state, "dept_id", None)
+    if _is_master_admin(request):
+        return await repo.get_by_trace_id(trace_id)
+
+    is_admin  = getattr(request.state, "is_admin", False)
+    tenant_id = getattr(request.state, "tenant_id", "") or ""
+    dept_id   = getattr(request.state, "dept_id", None)
 
     if is_admin:
-        return await repo.get_by_trace_id(trace_id)
-    elif dept_id:
-        return await repo.get_by_trace_id_scoped(trace_id, dept_id)
-    else:
-        tenant_id = getattr(request.state, "tenant_id", "")
         return await repo.get_by_trace_id_tenant_scoped(trace_id, tenant_id)
+    if dept_id:
+        return await repo.get_by_trace_id_scoped(trace_id, dept_id)
+    return await repo.get_by_trace_id_tenant_scoped(trace_id, tenant_id)
