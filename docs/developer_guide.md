@@ -247,6 +247,44 @@ Enforced at middleware level - not just frontend. When `force_password_change = 
 - `POST /v1/auth/logout`
 - `GET /v1/auth/me`
 
+### AuthProvider abstraction
+
+As of v1.1.0 the credential-verification step of `AuthService.login()` runs
+behind an `AuthProvider` interface (`services/auth/providers/base.py`) so v1.5+
+can plug in OIDC, SAML, or SCIM providers without touching AuthService.
+
+```
+AuthService.login()
+  |
+  +--> provider.authenticate(credentials, db) -> AuthenticationOutcome
+  |        ^                                          |
+  |        |                                          +-- ok=True  -> user
+  |    PasswordAuthProvider (v1.1.0)                  +-- ok=False -> failure_reason
+  |    OIDCAuthProvider     (v1.5+)                              [+ resolved_user for logging]
+  |    SAMLAuthProvider     (v1.5+)
+  |
+  +--> lockout + is_active + auth_event logging + session issuance
+       (stay in AuthService - apply regardless of provider)
+```
+
+**Contract (`AuthProvider.authenticate`):**
+- Must be timing-safe against user enumeration. For password auth this means
+  running `verify_dummy()` on the unknown-user path so response time does not
+  leak account existence.
+- Never raises on bad credentials - returns
+  `AuthenticationOutcome(failure_reason=...)`. Real exceptions (DB down,
+  malformed input) propagate as-is.
+- On success returns `AuthenticationOutcome(user=<User>)`. On a wrong-password
+  failure where the identifier did match a row, sets `resolved_user` so
+  AuthService can log `tenant_id` and `user_id` in the `auth_event`.
+
+**What stays in AuthService, not the provider:**
+
+Lockout counters, `is_active` checks, session issuance, and `auth_event`
+writes apply regardless of *how* the user proved their identity, so they
+remain in `AuthService.login()`. Adding a new provider only requires
+implementing `authenticate()` - the surrounding policy is unchanged.
+
 ### Tenant enforcement - four layers
 
 `tenant_id` is the outermost security boundary. All four layers must hold:
