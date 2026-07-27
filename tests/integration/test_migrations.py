@@ -69,12 +69,12 @@ def test_baseline_migration_is_idempotent(tmp_path):
     assert "tenants" in created
 
 
-def test_head_revision_advances_to_v2_envelope(tmp_path):
+def test_head_revision_advances_to_audit_session_hash(tmp_path):
     """
-    After `alembic upgrade head`, alembic_version must point at the B3
-    re-encrypt migration. Locks in that new revisions are actually being
-    picked up (a common failure mode is dropping the file into the wrong
-    directory and silently landing on 0001).
+    After `alembic upgrade head`, alembic_version must point at the v1.2.0
+    audit session/hash migration. Locks in that new revisions are actually
+    being picked up (a common failure mode is dropping the file into the
+    wrong directory and silently landing on 0001).
     """
     db_file   = tmp_path / "migrated.db"
     async_url = f"sqlite+aiosqlite:///{db_file}"
@@ -92,4 +92,30 @@ def test_head_revision_advances_to_v2_envelope(tmp_path):
         engine.dispose()
 
     assert row is not None
-    assert row[0] == "0002_envelope_reencrypt"
+    assert row[0] == "0003_audit_session_hash"
+
+
+def test_audit_logs_has_v1_2_session_and_hash_columns(tmp_path):
+    """
+    v1.2.0 adds session_id/turn_index/run_id (caller-supplied tracking)
+    plus record_hash/prev_hash (tamper-evident chain) to audit_logs.
+    All five must be present and nullable after upgrade -- the hash writer
+    and the UPDATE-blocking trigger land in later commits, so existing
+    rows must be free to stay NULL.
+    """
+    db_file   = tmp_path / "migrated.db"
+    async_url = f"sqlite+aiosqlite:///{db_file}"
+    sync_url  = f"sqlite:///{db_file}"
+
+    cfg = _alembic_config(async_url)
+    command.upgrade(cfg, "head")
+
+    engine = create_engine(sync_url)
+    try:
+        cols = {c["name"]: c for c in inspect(engine).get_columns("audit_logs")}
+    finally:
+        engine.dispose()
+
+    for name in ("session_id", "turn_index", "run_id", "record_hash", "prev_hash"):
+        assert name in cols, f"audit_logs missing v1.2.0 column: {name}"
+        assert cols[name]["nullable"] is True, f"audit_logs.{name} must be nullable"

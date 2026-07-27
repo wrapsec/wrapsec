@@ -108,6 +108,15 @@ class AuditLogModel(Base):
     severity       = Column(String(10),  nullable=True)
     principal_type = Column(String(20),  nullable=True,  default="api_key")
     model_version  = Column(String(50),  nullable=True)
+    # v1.2.0 session tracking - caller-supplied opaque identifiers.
+    # Validated in api/v1/schemas/request.py (max 200, [A-Za-z0-9_.:-]).
+    session_id     = Column(String(200), nullable=True)
+    turn_index     = Column(Integer,     nullable=True)
+    run_id         = Column(String(200), nullable=True)
+    # v1.2.0 tamper-evident hash chain. SHA-256 hex = 64 chars.
+    # Populated by the hash-chained audit writer; UPDATE blocked by trigger.
+    record_hash    = Column(String(64),  nullable=True)
+    prev_hash      = Column(String(64),  nullable=True)
     created_at     = Column(DateTime,    nullable=False, default=datetime.utcnow)
 
     __table_args__ = (
@@ -121,6 +130,8 @@ class AuditLogModel(Base):
         Index("ix_audit_logs_exec_mode",        "execution_mode"),
         Index("ix_audit_logs_created_desc",     "created_at"),
         Index("ix_audit_principal_type",        "principal_type"),
+        Index("ix_audit_session_created",       "session_id", "created_at"),
+        Index("ix_audit_run_created",           "run_id",     "created_at"),
     )
 
 
