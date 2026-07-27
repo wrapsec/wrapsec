@@ -2,6 +2,18 @@
 
 All notable changes to WrapSec are documented here.
 
+## [1.1.5] - 2026-07-27
+
+### Fixed
+- Docker healthcheck for the api service was permanently `unhealthy`
+  because the check ran `curl -f http://localhost:8000/health` but
+  `curl` was never installed in the `python:3.10-slim` base. Added
+  `curl` to the apt install list (~10 MB) and moved `HEALTHCHECK` from
+  `docker-compose.yml` into the Dockerfile itself, so the image is
+  self-describing under bare `docker run`, swarm, or portainer, and
+  matches the FastAPI/Django convention. No application behaviour
+  change.
+
 ## [1.1.4] - 2026-07-27
 
 ### Fixed
