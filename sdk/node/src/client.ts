@@ -266,6 +266,44 @@ function camelizeKeys(obj: Record<string, unknown>): Record<string, unknown> {
 
 const VALID_DECISIONS = new Set(["ALLOW", "BLOCK", "SANITIZE"])
 
+// Session/run identifier constraints mirror the API's Pydantic validators.
+// Opaque strings only; charset [A-Za-z0-9_.:-]; max 200 chars.
+const SESSION_ID_MAX_LEN = 200
+const SESSION_ID_PATTERN = /^[A-Za-z0-9_.:\-]+$/
+const TURN_INDEX_MAX     = 10000
+
+function validateSessionId(value: string | undefined, field: string): string | undefined {
+  if (value === undefined) return undefined
+  if (typeof value !== "string") {
+    throw new WrapSecError(`${field} must be a string, got ${typeof value}`)
+  }
+  if (value.length === 0) {
+    throw new WrapSecError(`${field} must be non-empty; omit the field instead`)
+  }
+  if (value.length > SESSION_ID_MAX_LEN) {
+    throw new WrapSecError(
+      `${field} exceeds max length of ${SESSION_ID_MAX_LEN} chars (got ${value.length})`
+    )
+  }
+  if (!SESSION_ID_PATTERN.test(value)) {
+    throw new WrapSecError(
+      `${field} contains disallowed characters; allowed: [A-Za-z0-9_.:-]`
+    )
+  }
+  return value
+}
+
+function validateTurnIndex(value: number | undefined): number | undefined {
+  if (value === undefined) return undefined
+  if (typeof value !== "number" || !Number.isInteger(value)) {
+    throw new WrapSecError(`turnIndex must be an integer, got ${typeof value}`)
+  }
+  if (value < 0 || value > TURN_INDEX_MAX) {
+    throw new WrapSecError(`turnIndex must be in [0, ${TURN_INDEX_MAX}], got ${value}`)
+  }
+  return value
+}
+
 function makeScanResult(data: Record<string, unknown>): ScanResult {
   const d        = camelizeKeys(data)
   const decision = String(d["decision"] ?? "")
@@ -448,7 +486,16 @@ export class WrapSec {
    * Spec: Section 4, Section 8
    */
   async scan(text: string, options: ScanOptions = {}): Promise<ScanResult> {
-    const { mode = "fast", executionMode = "scan_only", model, user = "sdk", timeout } = options
+    const {
+      mode = "fast",
+      executionMode = "scan_only",
+      model,
+      user = "sdk",
+      timeout,
+      sessionId,
+      turnIndex,
+      runId,
+    } = options
 
     if (!text || typeof text !== "string") {
       throw new WrapSecError("text must be a non-empty string")
@@ -476,6 +523,10 @@ export class WrapSec {
       throw new WrapSecError("model is required when executionMode is 'proxy'")
     }
 
+    const validSessionId = validateSessionId(sessionId, "sessionId")
+    const validRunId     = validateSessionId(runId, "runId")
+    const validTurnIndex = validateTurnIndex(turnIndex)
+
     const t    = this.resolveTimeout(timeout)
     const body: Record<string, unknown> = {
       input:          text,
@@ -483,7 +534,10 @@ export class WrapSec {
       execution_mode: executionMode,
       metadata:       { source: `wrapsec-node/${SDK_VERSION}`, user_id: user },
     }
-    if (model) body["model"] = model
+    if (model)          body["model"]      = model
+    if (validSessionId) body["session_id"] = validSessionId
+    if (validRunId)     body["run_id"]     = validRunId
+    if (validTurnIndex !== undefined) body["turn_index"] = validTurnIndex
 
     const data = await this.request("POST", "/ai/request", t, body)
     return makeScanResult(data as Record<string, unknown>)

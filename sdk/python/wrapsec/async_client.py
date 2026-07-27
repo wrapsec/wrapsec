@@ -33,7 +33,12 @@ from wrapsec.core.http import (
     resolve_timeout,
 )
 from wrapsec.core.retry import with_retry_async
-from wrapsec.core.validation import normalize_text, validate_input
+from wrapsec.core.validation import (
+    normalize_text,
+    validate_input,
+    validate_session_id,
+    validate_turn_index,
+)
 from wrapsec.exceptions import WrapSecAuthError
 from wrapsec.models import AuditLog, AuditStats, ScanResult
 
@@ -128,6 +133,9 @@ class AsyncClient:
         model:          str | None = None,
         user:           str = "sdk",
         timeout:        int | None = None,
+        session_id:     str | None = None,
+        turn_index:     int | None = None,
+        run_id:         str | None = None,
     ) -> ScanResult:
         """
         Scan a single input for security risks. Async version.
@@ -145,6 +153,10 @@ class AsyncClient:
         if execution_mode == "proxy" and not model:
             raise ValueError("model is required when execution_mode='proxy'")
 
+        session_id = validate_session_id(session_id, "session_id")
+        run_id     = validate_session_id(run_id, "run_id")
+        turn_index = validate_turn_index(turn_index)
+
         text = normalize_text(text)
         text = validate_input(text)
         t    = self._resolve_timeout(timeout)
@@ -158,8 +170,11 @@ class AsyncClient:
                 "user_id": user,
             },
         }
-        if model:
-            body["model"] = model
+        if model:      body["model"]      = model
+        if session_id: body["session_id"] = session_id
+        if run_id:     body["run_id"]     = run_id
+        if turn_index is not None:
+            body["turn_index"] = turn_index
 
         data = await self._request(method="POST", path="/ai/request", timeout=t, json=body)
         return ScanResult.from_dict(data)

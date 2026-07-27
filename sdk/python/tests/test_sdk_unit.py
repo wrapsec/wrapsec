@@ -900,3 +900,97 @@ class TestAuditExport:
                 result = await client.audit_export()
                 assert result == CSV_BYTES
         asyncio.run(_test())
+
+
+# ── Session tracking kwargs (v1.2.0) ─────────────────────────────────────────
+
+class TestSessionKwargsSync:
+    """
+    Cover session_id / turn_index / run_id validation and body wiring on the
+    sync client. Kwargs default to None; when set, they must be forwarded in
+    snake_case; invalid values must fail before the HTTP request is sent.
+    """
+
+    def test_kwargs_default_to_none_and_not_in_body(self):
+        client = make_client()
+        client._request = MagicMock(return_value=ALLOW_RESPONSE)
+        client.scan("hello world")
+        body = client._request.call_args.kwargs["json"]
+        assert "session_id" not in body
+        assert "run_id"     not in body
+        assert "turn_index" not in body
+
+    def test_valid_session_id_forwarded_snake_case(self):
+        client = make_client()
+        client._request = MagicMock(return_value=ALLOW_RESPONSE)
+        client.scan("hello", session_id="sess_abc.123")
+        body = client._request.call_args.kwargs["json"]
+        assert body["session_id"] == "sess_abc.123"
+
+    def test_valid_run_id_forwarded_snake_case(self):
+        client = make_client()
+        client._request = MagicMock(return_value=ALLOW_RESPONSE)
+        client.scan("hello", run_id="run_xyz")
+        body = client._request.call_args.kwargs["json"]
+        assert body["run_id"] == "run_xyz"
+
+    def test_turn_index_zero_forwarded(self):
+        client = make_client()
+        client._request = MagicMock(return_value=ALLOW_RESPONSE)
+        client.scan("hello", turn_index=0)
+        body = client._request.call_args.kwargs["json"]
+        assert body["turn_index"] == 0
+
+    def test_empty_session_id_rejected_before_network(self):
+        client = make_client()
+        client._request = MagicMock()
+        with pytest.raises(ValueError, match="session_id"):
+            client.scan("hello", session_id="")
+        client._request.assert_not_called()
+
+    def test_session_id_too_long_rejected(self):
+        client = make_client()
+        client._request = MagicMock()
+        with pytest.raises(ValueError, match="session_id"):
+            client.scan("hello", session_id="a" * 201)
+        client._request.assert_not_called()
+
+    def test_session_id_bad_charset_rejected(self):
+        client = make_client()
+        client._request = MagicMock()
+        with pytest.raises(ValueError, match="session_id"):
+            client.scan("hello", session_id="has space")
+        client._request.assert_not_called()
+
+    def test_turn_index_negative_rejected(self):
+        client = make_client()
+        client._request = MagicMock()
+        with pytest.raises(ValueError, match="turn_index"):
+            client.scan("hello", turn_index=-1)
+        client._request.assert_not_called()
+
+    def test_turn_index_over_upper_bound_rejected(self):
+        client = make_client()
+        client._request = MagicMock()
+        with pytest.raises(ValueError, match="turn_index"):
+            client.scan("hello", turn_index=10001)
+        client._request.assert_not_called()
+
+
+class TestSessionKwargsAsync:
+
+    def test_valid_kwargs_forwarded(self):
+        client = make_async_client()
+        client._request = AsyncMock(return_value=ALLOW_RESPONSE)
+        asyncio.run(client.scan("hello", session_id="s1", turn_index=2, run_id="r1"))
+        body = client._request.call_args.kwargs["json"]
+        assert body["session_id"] == "s1"
+        assert body["turn_index"] == 2
+        assert body["run_id"]     == "r1"
+
+    def test_invalid_run_id_rejected_before_network(self):
+        client = make_async_client()
+        client._request = AsyncMock()
+        with pytest.raises(ValueError, match="run_id"):
+            asyncio.run(client.scan("hello", run_id="bad char"))
+        client._request.assert_not_called()

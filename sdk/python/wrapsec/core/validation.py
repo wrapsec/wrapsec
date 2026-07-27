@@ -23,6 +23,49 @@ MAX_INPUT_CHARS = 8000
 # CJK and dense text may be rejected below 8000 chars
 TOKEN_HEURISTIC_LIMIT = 4000
 
+# Session/run identifier constraints match the API's Pydantic validators.
+# Opaque strings only; charset [A-Za-z0-9_.:-]; max 200 chars (Langfuse convention).
+SESSION_ID_MAX_LEN = 200
+SESSION_ID_PATTERN = re.compile(r"^[A-Za-z0-9_.:\-]+$")
+TURN_INDEX_MAX     = 10000
+
+
+def validate_session_id(value: str | None, field: str) -> str | None:
+    """
+    Validate a session_id or run_id field. Returns the value unchanged if
+    valid, None if input is None. Raises ValueError on invalid input.
+
+    Mirrors AIRequestSchema server-side rules so the SDK fails fast without
+    a round-trip. Empty strings are rejected - callers must pass None to omit.
+    """
+    if value is None:
+        return None
+    if not isinstance(value, str):
+        raise ValueError(f"{field} must be a string, got {type(value).__name__}")
+    if not value:
+        raise ValueError(f"{field} must be non-empty; pass None to omit")
+    if len(value) > SESSION_ID_MAX_LEN:
+        raise ValueError(
+            f"{field} exceeds max length of {SESSION_ID_MAX_LEN} chars "
+            f"(got {len(value)})"
+        )
+    if not SESSION_ID_PATTERN.match(value):
+        raise ValueError(
+            f"{field} contains disallowed characters; allowed: [A-Za-z0-9_.:-]"
+        )
+    return value
+
+
+def validate_turn_index(value: int | None) -> int | None:
+    """Validate turn_index; mirrors AIRequestSchema server-side rules."""
+    if value is None:
+        return None
+    if isinstance(value, bool) or not isinstance(value, int):
+        raise ValueError(f"turn_index must be an integer, got {type(value).__name__}")
+    if value < 0 or value > TURN_INDEX_MAX:
+        raise ValueError(f"turn_index must be in [0, {TURN_INDEX_MAX}], got {value}")
+    return value
+
 
 def normalize_text(text: str) -> str:
     """

@@ -147,6 +147,20 @@ export interface ScanOptions {
   user?:           string
   /** Per-request timeout in seconds. Overrides client default. */
   timeout?:        number
+  /**
+   * Opaque conversation identifier grouping related scans.
+   * Max 200 chars, [A-Za-z0-9_.:-] only. Do NOT include PII
+   * (name, email, phone) - use a UUID or hash.
+   */
+  sessionId?:      string
+  /** Zero-based index of this turn within sessionId (0-10000). */
+  turnIndex?:      number
+  /**
+   * Opaque identifier for one agent execution (may span multiple
+   * scans, tool calls, LLM calls). Matches LangSmith / OpenAI
+   * Assistants run_id semantics. Max 200 chars.
+   */
+  runId?:          string
 }
 
 // ── audit list options ─────────────────────────────────────────────────────
