@@ -127,11 +127,11 @@ async def bootstrap_admin() -> None:
 async def lifespan(app: FastAPI):
     import os
     if os.getenv("TESTING") != "true":
-        from db.session import create_tables, dispose_engine
+        from db.session import run_migrations, dispose_engine
         from cache.redis_client import ping, close
         from workers.queue import start_scheduler, stop_scheduler
         _settings = get_settings()
-        await create_tables()
+        await run_migrations()
         redis_ok = await ping()
         await start_scheduler()
         await seed_default_tenant()      # ensure default tenant exists (fresh deploy)
