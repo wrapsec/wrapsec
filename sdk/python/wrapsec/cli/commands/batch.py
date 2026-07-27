@@ -30,7 +30,13 @@ import click
 
 from wrapsec.client import Client
 from wrapsec.config.loader import load_config
-from wrapsec.core.validation import MAX_INPUT_CHARS, normalize_text, validate_input
+from wrapsec.core.validation import (
+    MAX_INPUT_CHARS,
+    TURN_INDEX_MAX,
+    normalize_text,
+    validate_input,
+    validate_session_id,
+)
 from wrapsec.exceptions import WrapSecError, WrapSecRateLimitError
 from wrapsec.cli._output import (
     get_scan_exit_code,
@@ -88,6 +94,19 @@ LARGE_FILE_WARN = 100                 # lines
     is_flag=True,
     help="No stdout output. Errors to stderr. Exit code only.",
 )
+@click.option(
+    "--session-id",
+    default=None,
+    help="Opaque conversation identifier attached to every scan. Max 200 "
+         "chars, charset [A-Za-z0-9_.:-]. When set, turn_index auto-increments "
+         "from 0 per processed line. Do not put PII here.",
+)
+@click.option(
+    "--run-id",
+    default=None,
+    help="Opaque identifier for one agent execution, attached to every scan. "
+         "Same charset rules as --session-id. Do not put PII here.",
+)
 def batch(
     file:        str,
     mode:        str,
@@ -97,6 +116,8 @@ def batch(
     summary:     bool,
     json_output: bool,
     quiet:       bool,
+    session_id:  str | None,
+    run_id:      str | None,
 ) -> None:
     """Scan prompts from FILE (one prompt per line).
 
@@ -122,6 +143,14 @@ def batch(
     # Validate timeout at CLI level
     if timeout is not None and timeout < 1:
         print_error(f"timeout must be at least 1 second, got {timeout}")
+        sys.exit(1)
+
+    # Fail fast on malformed session/run identifiers.
+    try:
+        session_id = validate_session_id(session_id, "session_id")
+        run_id     = validate_session_id(run_id,     "run_id")
+    except ValueError as e:
+        print_error(str(e))
         sys.exit(1)
 
     # Check file size before starting
@@ -225,7 +254,24 @@ def batch(
 
             # Scan
             try:
-                result = client.scan(text, mode=mode, user="cli-batch", timeout=timeout)
+                # turn_index auto-increments from 0 per processed line when a
+                # session_id is set; NULL otherwise (server treats as absent).
+                # Ceiling matches the server validator to fail before the
+                # network call on very large files.
+                if session_id is not None and processed <= TURN_INDEX_MAX:
+                    turn = processed
+                else:
+                    turn = None
+
+                result = client.scan(
+                    text,
+                    mode       = mode,
+                    user       = "cli-batch",
+                    timeout    = timeout,
+                    session_id = session_id,
+                    turn_index = turn,
+                    run_id     = run_id,
+                )
                 processed += 1
 
                 exit_code = get_scan_exit_code(result)
