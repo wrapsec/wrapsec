@@ -296,6 +296,11 @@ class GatewayService:
                 pii_score      = scoring.pii_score,
                 toxicity_score = scoring.toxicity_score,
             )
+            # B2: propagate any additional per-layer scores (multi-class
+            # transformer categories, MCP-added detectors, per-category
+            # toxicity) without disturbing the five core keys.
+            if scoring.extra_scores:
+                layer_scores.update(scoring.extra_scores)
 
             # Compute primary reason
             from engine.scoring.primary_reason import compute_primary_reason

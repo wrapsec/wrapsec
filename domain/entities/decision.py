@@ -9,22 +9,87 @@ from domain.value_objects.risk_score import RiskScore
 from domain.value_objects.trace_id import TraceId
 
 
-@dataclass
 class LayerScores:
-    rule_score:     float = 0.0
-    ml_score:       float = 0.0
-    llm_score:      float = 0.0
-    pii_score:      float = 0.0
-    toxicity_score: float = 0.0
+    """
+    Open-ended per-layer score bag.
 
-    def as_dict(self) -> dict:
-        return {
-            "rule_score":     self.rule_score,
-            "ml_score":       self.ml_score,
-            "llm_score":      self.llm_score,
-            "pii_score":      self.pii_score,
-            "toxicity_score": self.toxicity_score,
-        }
+    Historically a dataclass with five fixed fields (rule_score, ml_score,
+    llm_score, pii_score, toxicity_score). v1.1.0 (B2) rewrites the backing
+    store as `dict[str, float]` so downstream releases can add new keys --
+    multi-class transformer categories, MCP-added detectors, per-category
+    toxicity -- without touching the shared entity.
+
+    Backward compatibility:
+      - Attribute access (`layer_scores.rule_score`) still works; missing
+        keys return 0.0, matching the old dataclass defaults.
+      - `as_dict()` still returns a plain dict, but now includes every
+        key that was written, not just the original five.
+
+    New usage:
+      - `layer_scores["transformer_jailbreak"] = 0.87`
+      - `for name, score in layer_scores.items(): ...`
+    """
+
+    __slots__ = ("_scores",)
+
+    _CORE_KEYS = ("rule_score", "ml_score", "llm_score", "pii_score", "toxicity_score")
+
+    def __init__(self, **scores: float) -> None:
+        self._scores: dict[str, float] = {k: float(v) for k, v in scores.items()}
+
+    def __getattr__(self, name: str) -> float:
+        if name.startswith("_"):
+            raise AttributeError(name)
+        return float(self._scores.get(name, 0.0))
+
+    def __getitem__(self, key: str) -> float:
+        return float(self._scores.get(key, 0.0))
+
+    def __setitem__(self, key: str, value: float) -> None:
+        self._scores[key] = float(value)
+
+    def __contains__(self, key: str) -> bool:
+        return key in self._scores
+
+    def __iter__(self):
+        return iter(self._scores)
+
+    def __len__(self) -> int:
+        return len(self._scores)
+
+    def __eq__(self, other: object) -> bool:
+        if isinstance(other, LayerScores):
+            return self._scores == other._scores
+        if isinstance(other, dict):
+            return self._scores == other
+        return NotImplemented
+
+    def __repr__(self) -> str:
+        return f"LayerScores({self._scores!r})"
+
+    def keys(self):
+        return self._scores.keys()
+
+    def values(self):
+        return self._scores.values()
+
+    def items(self):
+        return self._scores.items()
+
+    def update(self, other: "LayerScores | dict[str, float]") -> None:
+        if isinstance(other, LayerScores):
+            self._scores.update(other._scores)
+        else:
+            for k, v in other.items():
+                self._scores[k] = float(v)
+
+    def as_dict(self) -> dict[str, float]:
+        """
+        Return a defensive copy. Callers that need every-key-present output
+        (e.g. legacy consumers of the five core keys) can wrap this via
+        `{k: scores.get(k, 0.0) for k in LayerScores._CORE_KEYS}`.
+        """
+        return dict(self._scores)
 
 
 @dataclass
