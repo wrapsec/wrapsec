@@ -15,7 +15,7 @@ Usage (in api/main.py lifespan):
 
     @asynccontextmanager
     async def lifespan(app: FastAPI):
-        await create_tables()
+        await run_migrations()
         await start_scheduler()
         yield
         await stop_scheduler()

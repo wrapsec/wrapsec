@@ -439,6 +439,27 @@ Floors are enforced server-side in the Pydantic schema - not just client-side. S
 
 ## Database
 
+### Migrations (Alembic)
+
+Schema is version-controlled with Alembic. Migrations live in `db/migrations/versions/`; the baseline (`0001_baseline.py`) captures the v1.0.11 schema.
+
+Startup path: `api/main.py` lifespan calls `db.session.run_migrations()` which runs `alembic upgrade head` automatically. Nothing to run by hand in normal operation.
+
+Manual commands (from repo root):
+
+```bash
+make migrate                       # alembic upgrade head
+make migration MSG="add xyz col"  # alembic revision --autogenerate -m "..."
+```
+
+Adding a schema change:
+
+1. Edit `db/models.py`.
+2. Run `make migration MSG="descriptive change"` and review the generated file in `db/migrations/versions/`.
+3. Commit the model change and the migration together.
+
+The legacy `db.session.create_tables()` helper (raw `Base.metadata.create_all()`) is kept only for throwaway per-test SQLite databases; production and dev startup goes through Alembic.
+
 ### Session management
 
 Production: `AsyncSessionFactory()` from `db/session.py` - shared async connection pool.

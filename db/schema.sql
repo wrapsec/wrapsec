@@ -1,10 +1,12 @@
 -- WrapSec — Complete Database Schema
 -- Generated from live database introspection on 2026-05-03
--- Run this once on a fresh PostgreSQL database to create the full schema.
--- Order matters: tables are created in dependency order.
 --
--- Usage:
---   psql -U wrapsec -d wrapsec -f schema.sql
+-- NOTE: As of v1.1.0 the schema is managed by Alembic. The authoritative
+-- source is db/models.py + db/migrations/versions/. This file is kept as
+-- a human-readable reference snapshot and is not used at runtime.
+--
+-- To bootstrap a fresh database use `alembic upgrade head` (also run
+-- automatically on API startup via db.session.run_migrations).
 
 -- ── Extension ────────────────────────────────────────────────────────────────
 
