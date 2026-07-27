@@ -67,3 +67,29 @@ def test_baseline_migration_is_idempotent(tmp_path):
 
     created = _tables(sync_url)
     assert "tenants" in created
+
+
+def test_head_revision_advances_to_v2_envelope(tmp_path):
+    """
+    After `alembic upgrade head`, alembic_version must point at the B3
+    re-encrypt migration. Locks in that new revisions are actually being
+    picked up (a common failure mode is dropping the file into the wrong
+    directory and silently landing on 0001).
+    """
+    db_file   = tmp_path / "migrated.db"
+    async_url = f"sqlite+aiosqlite:///{db_file}"
+    sync_url  = f"sqlite:///{db_file}"
+
+    cfg = _alembic_config(async_url)
+    command.upgrade(cfg, "head")
+
+    engine = create_engine(sync_url)
+    try:
+        with engine.connect() as conn:
+            from sqlalchemy import text
+            row = conn.execute(text("SELECT version_num FROM alembic_version")).fetchone()
+    finally:
+        engine.dispose()
+
+    assert row is not None
+    assert row[0] == "0002_reencrypt_secrets_v2_envelope"
