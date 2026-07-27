@@ -22,7 +22,14 @@ logger = logging.getLogger('wrapsec.cli.scan')
 
 from wrapsec.client import Client
 from wrapsec.config.loader import load_config
-from wrapsec.core.validation import MAX_INPUT_CHARS, normalize_text, validate_input, warn_if_dense
+from wrapsec.core.validation import (
+    MAX_INPUT_CHARS,
+    normalize_text,
+    validate_input,
+    validate_session_id,
+    validate_turn_index,
+    warn_if_dense,
+)
 from wrapsec.exceptions import WrapSecError
 from wrapsec.cli._output import (
     format_scan_result_human,
@@ -74,6 +81,24 @@ from wrapsec.cli._spinner import Spinner, should_show_spinner
     help="No stdout output. Errors still go to stderr. "
          "Exit code is the only interface. Recommended for CI.",
 )
+@click.option(
+    "--session-id",
+    default=None,
+    help="Opaque conversation identifier groups related scans in audit. "
+         "Max 200 chars, charset [A-Za-z0-9_.:-]. Do not put PII here.",
+)
+@click.option(
+    "--turn-index",
+    default=None,
+    type=int,
+    help="Zero-based turn index within --session-id. Range [0, 10000].",
+)
+@click.option(
+    "--run-id",
+    default=None,
+    help="Opaque identifier for one agent execution. Same charset rules as "
+         "--session-id. Do not put PII here.",
+)
 def scan(
     text:        str | None,
     mode:        str,
@@ -81,6 +106,9 @@ def scan(
     json_output: bool,
     user:        str,
     quiet:       bool,
+    session_id:  str | None,
+    turn_index:  int | None,
+    run_id:      str | None,
 ) -> None:
     """Scan a single prompt for security risks.
 
@@ -111,6 +139,16 @@ def scan(
     # Spec: Section 7 - validation at CLI and SDK level
     if timeout is not None and timeout < 1:
         print_error(f"timeout must be at least 1 second, got {timeout}")
+        sys.exit(1)
+
+    # Fail fast on malformed session/run identifiers before we open a network
+    # connection. Same rules as the API's Pydantic validators.
+    try:
+        session_id = validate_session_id(session_id, "session_id")
+        run_id     = validate_session_id(run_id,     "run_id")
+        turn_index = validate_turn_index(turn_index)
+    except ValueError as e:
+        print_error(str(e))
         sys.exit(1)
 
     # Read from stdin if no argument provided
@@ -167,7 +205,15 @@ def scan(
             spinner.start()
             spinner.update("Running detection layers")
 
-        result = client.scan(text, mode=mode, user=user, timeout=timeout)
+        result = client.scan(
+            text,
+            mode       = mode,
+            user       = user,
+            timeout    = timeout,
+            session_id = session_id,
+            turn_index = turn_index,
+            run_id     = run_id,
+        )
 
     except WrapSecError as e:
         if spinner:

@@ -994,3 +994,149 @@ class TestSessionKwargsAsync:
         with pytest.raises(ValueError, match="run_id"):
             asyncio.run(client.scan("hello", run_id="bad char"))
         client._request.assert_not_called()
+
+
+# ── CLI session/run flag forwarding ──────────────────────────────────────────
+
+from click.testing import CliRunner
+from wrapsec.cli.commands import scan  as scan_cmd
+from wrapsec.cli.commands import batch as batch_cmd
+
+
+def _cfg_stub(api_key: str = "wsk_live_testkey1234567890123456789012"):
+    """Minimal stand-in for load_config() return value."""
+    cfg = MagicMock()
+    cfg.api_key  = api_key
+    cfg.base_url = "http://localhost:8000"
+    cfg.timeout  = 30
+    return cfg
+
+
+def _allow_result() -> ScanResult:
+    """Real ScanResult so is_system_error and other properties work."""
+    return ScanResult.from_dict(ALLOW_RESPONSE)
+
+
+class TestScanCliSessionFlags:
+
+    def test_flags_forwarded_to_client_scan(self):
+        runner = CliRunner()
+        with patch.object(scan_cmd, "load_config", return_value=_cfg_stub()), \
+             patch.object(scan_cmd, "Client")     as MockClient:
+            instance = MockClient.return_value
+            instance.scan.return_value = _allow_result()
+            result = runner.invoke(
+                scan_cmd.scan,
+                ["--session-id", "sess_a.1", "--turn-index", "2",
+                 "--run-id", "run_z", "--quiet", "hello"],
+            )
+            assert result.exit_code == 0, result.output
+            kwargs = instance.scan.call_args.kwargs
+            assert kwargs["session_id"] == "sess_a.1"
+            assert kwargs["turn_index"] == 2
+            assert kwargs["run_id"]     == "run_z"
+
+    def test_absent_flags_pass_none(self):
+        runner = CliRunner()
+        with patch.object(scan_cmd, "load_config", return_value=_cfg_stub()), \
+             patch.object(scan_cmd, "Client")     as MockClient:
+            instance = MockClient.return_value
+            instance.scan.return_value = _allow_result()
+            result = runner.invoke(scan_cmd.scan, ["--quiet", "hello"])
+            assert result.exit_code == 0, result.output
+            kwargs = instance.scan.call_args.kwargs
+            assert kwargs["session_id"] is None
+            assert kwargs["turn_index"] is None
+            assert kwargs["run_id"]     is None
+
+    def test_bad_session_id_charset_rejected_before_network(self):
+        runner = CliRunner()
+        with patch.object(scan_cmd, "load_config", return_value=_cfg_stub()), \
+             patch.object(scan_cmd, "Client")     as MockClient:
+            result = runner.invoke(
+                scan_cmd.scan,
+                ["--session-id", "has space", "--quiet", "hello"],
+            )
+            assert result.exit_code == 1
+            MockClient.assert_not_called()
+
+    def test_turn_index_out_of_range_rejected_before_network(self):
+        runner = CliRunner()
+        with patch.object(scan_cmd, "load_config", return_value=_cfg_stub()), \
+             patch.object(scan_cmd, "Client")     as MockClient:
+            result = runner.invoke(
+                scan_cmd.scan,
+                ["--turn-index", "-1", "--quiet", "hello"],
+            )
+            assert result.exit_code == 1
+            MockClient.assert_not_called()
+
+    def test_bad_run_id_rejected_before_network(self):
+        runner = CliRunner()
+        with patch.object(scan_cmd, "load_config", return_value=_cfg_stub()), \
+             patch.object(scan_cmd, "Client")     as MockClient:
+            result = runner.invoke(
+                scan_cmd.scan,
+                ["--run-id", "a" * 201, "--quiet", "hello"],
+            )
+            assert result.exit_code == 1
+            MockClient.assert_not_called()
+
+
+class TestBatchCliSessionFlags:
+
+    def _write_prompts(self, runner_env, lines):
+        """Helper: write a temp prompts file inside CliRunner's isolated fs."""
+        path = "prompts.txt"
+        with open(path, "w", encoding="utf-8") as fh:
+            fh.write("\n".join(lines) + "\n")
+        return path
+
+    def test_flags_forwarded_and_turn_index_autoincrements(self):
+        runner = CliRunner()
+        with runner.isolated_filesystem(), \
+             patch.object(batch_cmd, "load_config", return_value=_cfg_stub()), \
+             patch.object(batch_cmd, "Client")     as MockClient:
+            instance = MockClient.return_value
+            instance.scan.return_value = _allow_result()
+            path = self._write_prompts(runner, ["hello", "world", "third"])
+            result = runner.invoke(
+                batch_cmd.batch,
+                ["--session-id", "sess_multi", "--run-id", "run_multi",
+                 "--quiet", path],
+            )
+            assert result.exit_code == 0, result.output
+            calls = instance.scan.call_args_list
+            assert len(calls) == 3
+            for i, call in enumerate(calls):
+                assert call.kwargs["session_id"] == "sess_multi"
+                assert call.kwargs["run_id"]     == "run_multi"
+                assert call.kwargs["turn_index"] == i
+
+    def test_no_session_id_leaves_turn_index_none(self):
+        runner = CliRunner()
+        with runner.isolated_filesystem(), \
+             patch.object(batch_cmd, "load_config", return_value=_cfg_stub()), \
+             patch.object(batch_cmd, "Client")     as MockClient:
+            instance = MockClient.return_value
+            instance.scan.return_value = _allow_result()
+            path = self._write_prompts(runner, ["one", "two"])
+            result = runner.invoke(batch_cmd.batch, ["--quiet", path])
+            assert result.exit_code == 0, result.output
+            for call in instance.scan.call_args_list:
+                assert call.kwargs["session_id"] is None
+                assert call.kwargs["run_id"]     is None
+                assert call.kwargs["turn_index"] is None
+
+    def test_bad_session_id_rejected_before_open(self):
+        runner = CliRunner()
+        with runner.isolated_filesystem(), \
+             patch.object(batch_cmd, "load_config", return_value=_cfg_stub()), \
+             patch.object(batch_cmd, "Client")     as MockClient:
+            path = self._write_prompts(runner, ["one"])
+            result = runner.invoke(
+                batch_cmd.batch,
+                ["--session-id", "bad space", "--quiet", path],
+            )
+            assert result.exit_code == 1
+            MockClient.assert_not_called()
