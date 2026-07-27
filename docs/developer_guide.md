@@ -699,14 +699,21 @@ Also enforced at DB level via composite FK (`fk_users_dept_tenant`).
 ## Detection Pipeline
 
 ```
-Input -> InputGuard (PII guardrail, regex, ~<1ms)
+Input -> [Preprocessors]   (empty in v1.1.0; OCR/transcription plug in here in v1.6.0)
+      -> InputGuard (PII guardrail, regex, ~<1ms)
       -> RuleDetector (regex/heuristics, ~<1ms)
       -> MLDetector (TF-IDF + LogReg, 7 labels, ~5ms)
       -> ToxicityGuard (reads ML label 6, ~0ms additional)
       -> LLMDetector (semantic, full mode only, ~100-500ms)
-      -> RiskScorer (rule×0.40 + ml×0.30 + llm×0.30, guardrails excluded)
+      -> RiskScorer (rule x 0.40 + ml x 0.30 + llm x 0.30, guardrails excluded)
       -> PolicyEngine -> BLOCK / SANITIZE / ALLOW
 ```
+
+Preprocessor slot: `DetectionPipeline(profile, preprocessors=[...])` accepts an
+ordered list of `BasePreprocessor` instances that transform the text before any
+detector sees it. The list defaults to empty, so v1.1.0 is behaviourally
+identical to v1.0.x. A failing preprocessor logs and is skipped rather than
+denying the request. See `engine/detection/preprocessors/base.py`.
 
 Guardrail priority: PII (highest) -> Toxicity -> Detection pipeline.
 Guardrails always override detection. Independent thresholds.
