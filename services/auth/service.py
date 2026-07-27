@@ -125,9 +125,8 @@ class AuthService:
             is_locked,
             record_failure,
         )
-        from services.auth.password import (
-            hash_password, needs_rehash, normalize_email, verify_dummy, verify_password,
-        )
+        from services.auth.password import normalize_email
+        from services.auth.providers import PasswordAuthProvider
         from services.auth.token import create_access_token, create_refresh_token
 
         _settings = get_settings()
@@ -141,39 +140,48 @@ class AuthService:
             )
             raise AccountLockedException(retry_after=remaining)
 
-        user_repo = UserRepository(db)
-        user      = await user_repo.get_by_email(email)
+        # B4: credential verification is delegated to an AuthProvider so
+        # SSO/OIDC/SAML backends can plug in without changing this method.
+        # PasswordAuthProvider owns email normalisation, DB lookup, password
+        # verify, dummy-verify timing equalisation, and transparent rehash.
+        provider = PasswordAuthProvider()
+        outcome  = await provider.authenticate(
+            credentials = {"email": email, "password": password},
+            db          = db,
+        )
 
-        if not user:
-            verify_dummy()
-            await record_failure(email)
-            logger.warning("auth_event LOGIN_FAILED email=%s reason=user_not_found", email)
-            await _log_auth_event(
-                action         = "login_failed",
-                success        = False,
-                failure_reason = "user_not_found",
-                ip_address     = ip_address,
-                user_agent     = user_agent,
-            )
+        if not outcome.ok:
+            reason = outcome.failure_reason or "invalid_credentials"
+            matched = outcome.resolved_user
+            if matched is None:
+                await record_failure(email)
+                logger.warning("auth_event LOGIN_FAILED email=%s reason=%s", email, reason)
+                await _log_auth_event(
+                    action         = "login_failed",
+                    success        = False,
+                    failure_reason = reason,
+                    ip_address     = ip_address,
+                    user_agent     = user_agent,
+                )
+            else:
+                count, locked = await record_failure(email)
+                logger.warning(
+                    "auth_event LOGIN_FAILED email=%s reason=%s "
+                    "attempt=%d is_now_locked=%s",
+                    email, reason, count, locked,
+                )
+                await _log_auth_event(
+                    action         = "login_failed",
+                    success        = False,
+                    tenant_id      = matched.tenant_id,
+                    user_id        = matched.id,
+                    failure_reason = reason,
+                    ip_address     = ip_address,
+                    user_agent     = user_agent,
+                )
             raise AuthenticationError()
 
-        if not verify_password(password, user.password_hash):
-            count, locked = await record_failure(email)
-            logger.warning(
-                "auth_event LOGIN_FAILED email=%s reason=wrong_password "
-                "attempt=%d is_now_locked=%s",
-                email, count, locked,
-            )
-            await _log_auth_event(
-                action         = "login_failed",
-                success        = False,
-                tenant_id      = user.tenant_id,
-                user_id        = user.id,
-                failure_reason = "invalid_password",
-                ip_address     = ip_address,
-                user_agent     = user_agent,
-            )
-            raise AuthenticationError()
+        user = outcome.user
 
         if not user.is_active:
             logger.warning("auth_event LOGIN_FAILED email=%s reason=account_inactive", email)
@@ -190,24 +198,7 @@ class AuthService:
 
         await clear_failures(email)
 
-        # Transparent password-hash upgrade (B6 in v1.1.0):
-        # If the stored hash uses a deprecated scheme (e.g. legacy bcrypt),
-        # rehash with the current default (Argon2id) now that we hold the
-        # plaintext. Silent on failure - a rehash error must not deny a login.
-        if needs_rehash(user.password_hash):
-            try:
-                new_hash = hash_password(password)
-                await user_repo.update(user.id, {"password_hash": new_hash})
-                logger.info(
-                    "auth_event PASSWORD_HASH_UPGRADED user_id=%s scheme=argon2id",
-                    user.id,
-                )
-            except Exception as exc:
-                logger.warning(
-                    "auth_event PASSWORD_HASH_UPGRADE_FAILED user_id=%s error=%s",
-                    user.id, exc,
-                )
-
+        user_repo             = UserRepository(db)
         access_token          = create_access_token(user)
         refresh_raw, ref_hash = create_refresh_token()
         expires_at            = _utcnow() + timedelta(days=_settings.jwt_refresh_token_expire_days)
