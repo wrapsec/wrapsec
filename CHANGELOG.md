@@ -2,6 +2,22 @@
 
 All notable changes to WrapSec are documented here.
 
+## [1.1.2] - 2026-07-27
+
+### Security
+- Dashboard: bump `next` from 16.2.10 to 16.2.12. Clears 8 CVEs
+  affecting the App Router runtime, including a middleware /
+  proxy bypass, two Server-Side Request Forgery classes (Server
+  Actions on custom servers; rewrites with attacker-controlled
+  hostnames), unauthenticated disclosure of internal Server
+  Function endpoints, cache confusion on request bodies, DoS in
+  the Image Optimization API via SVGs, and unbounded Server
+  Action payloads on the Edge runtime.
+- Dashboard: pin `sharp >= 0.35.0` via package.json `overrides`
+  to clear inherited libvips CVEs (CVE-2026-33327 / -33328 /
+  -35590 / -35591). Verified against `next build` -- static +
+  dynamic pages generate cleanly.
+
 ## [1.1.1] - 2026-07-27
 
 ### Security
