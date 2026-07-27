@@ -92,4 +92,4 @@ def test_head_revision_advances_to_v2_envelope(tmp_path):
         engine.dispose()
 
     assert row is not None
-    assert row[0] == "0002_reencrypt_secrets_v2_envelope"
+    assert row[0] == "0002_envelope_reencrypt"

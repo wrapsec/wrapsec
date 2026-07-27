@@ -4,7 +4,7 @@
 
 """reencrypt stored secrets from v1 to v2 envelope format
 
-Revision ID: 0002_reencrypt_secrets_v2_envelope
+Revision ID: 0002_envelope_reencrypt
 Revises: 0001_baseline
 Create Date: 2026-07-27
 
@@ -35,7 +35,7 @@ from alembic import op
 from security.encryption import decrypt, encrypt
 
 
-revision: str = "0002_reencrypt_secrets_v2_envelope"
+revision: str = "0002_envelope_reencrypt"
 down_revision: Union[str, None] = "0001_baseline"
 branch_labels: Union[str, Sequence[str], None] = None
 depends_on: Union[str, Sequence[str], None] = None
@@ -145,6 +145,6 @@ def downgrade() -> None:
     # AES key with no envelope; we cannot recover that path from a v2 ciphertext
     # without re-encrypting, and the whole point of B3 is to move off v1.
     raise RuntimeError(
-        "0002_reencrypt_secrets_v2_envelope is a one-way migration; "
+        "0002_envelope_reencrypt is a one-way migration; "
         "restore from backup instead of downgrading."
     )
