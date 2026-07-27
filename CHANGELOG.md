@@ -2,6 +2,31 @@
 
 All notable changes to WrapSec are documented here.
 
+## [1.1.4] - 2026-07-27
+
+### Fixed
+- Alembic revision id `0002_reencrypt_secrets_v2_envelope` (34 chars)
+  exceeded the default `alembic_version.version_num VARCHAR(32)`,
+  causing `alembic upgrade head` to fail with
+  `StringDataRightTruncationError` on any database that had `0001_baseline`
+  already applied. Renamed to `0002_envelope_reencrypt` (23 chars) to
+  match the alembic convention of short revision ids (Airflow, Superset,
+  Sentry all keep them under 32). No schema change; migration behaviour
+  is identical.
+
+  Upgrade note: if you already have `0002_reencrypt_secrets_v2_envelope`
+  recorded in your `alembic_version` table, run
+  `UPDATE alembic_version SET version_num='0002_envelope_reencrypt';`
+  before deploying v1.1.4.
+
+- Docker API image dropped from 9.68 GB to 1.18 GB (~87%). Two causes:
+  (1) build context had no `.dockerignore`, so `.venv/` (1.1 GB),
+  `dashboard/.next/` (1 GB), `.git/`, sibling checkouts, and caches were
+  all shipped into the image; (2) `RUN chown -R wrapsec:wrapsec /app`
+  after `COPY . .` created a full duplicate layer of the application
+  tree. Added a root `.dockerignore` and replaced the two-step copy with
+  a single `COPY --chown=wrapsec:wrapsec . .`.
+
 ## [1.1.3] - 2026-07-27
 
 ### Fixed
