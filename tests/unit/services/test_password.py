@@ -35,9 +35,14 @@ def test_normalize_already_clean():
 
 # ── hash_password / verify_password ───────────────────────────────────────────
 
-def test_hash_returns_bcrypt_hash():
+# Legacy bcrypt hash of "SecurePass1" - used to prove verify_password() still
+# accepts pre-v1.1.0 hashes and that needs_rehash() flags them for upgrade.
+_LEGACY_BCRYPT_HASH = "$2b$12$/Xm8bvi2h5VgpK0bK8wrK.QreUKobMaqwqnBI95ZNz51KqG1lRsN2"
+
+
+def test_hash_returns_argon2id_hash():
     h = hash_password("SecurePass1")
-    assert h.startswith("$2b$")
+    assert h.startswith("$argon2id$")
 
 
 def test_verify_correct_returns_true():
@@ -51,7 +56,7 @@ def test_verify_wrong_returns_false():
 
 
 def test_hash_is_not_deterministic():
-    # bcrypt uses random salt - same input produces different hashes
+    # Argon2id uses random salt - same input produces different hashes
     h1 = hash_password("SecurePass1")
     h2 = hash_password("SecurePass1")
     assert h1 != h2
@@ -64,10 +69,32 @@ def test_hash_rejects_overlong_password():
 
 
 def test_verify_rejects_overlong_password():
-    # Must return False immediately - bcrypt must never run on >128-char input
+    # Must return False immediately - hasher must never run on >128-char input
     h = hash_password("SecurePass1")
     overlong = "A1" * 65
     assert verify_password(overlong, h) is False
+
+
+# ── legacy bcrypt compatibility ───────────────────────────────────────────────
+
+def test_verify_accepts_legacy_bcrypt_hash():
+    # Users provisioned before v1.1.0 have bcrypt hashes; login must still work.
+    assert verify_password("SecurePass1", _LEGACY_BCRYPT_HASH) is True
+
+
+def test_verify_rejects_wrong_password_against_legacy_bcrypt():
+    assert verify_password("WrongPass1", _LEGACY_BCRYPT_HASH) is False
+
+
+def test_needs_rehash_flags_legacy_bcrypt():
+    from services.auth.password import needs_rehash
+    assert needs_rehash(_LEGACY_BCRYPT_HASH) is True
+
+
+def test_needs_rehash_leaves_current_argon2_alone():
+    from services.auth.password import needs_rehash
+    h = hash_password("SecurePass1")
+    assert needs_rehash(h) is False
 
 
 # ── verify_dummy ───────────────────────────────────────────────────────────────
@@ -81,7 +108,7 @@ def test_dummy_hash_is_static_not_dynamic():
     # _DUMMY_HASH must be a hardcoded string, not computed at runtime
     # If it were dynamic, timing would vary between restarts
     assert isinstance(_DUMMY_HASH, str)
-    assert _DUMMY_HASH.startswith("$2b$")
+    assert _DUMMY_HASH.startswith("$argon2id$")
 
 
 def test_dummy_verify_always_returns_false():

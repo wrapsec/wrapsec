@@ -125,7 +125,9 @@ class AuthService:
             is_locked,
             record_failure,
         )
-        from services.auth.password import normalize_email, verify_dummy, verify_password
+        from services.auth.password import (
+            hash_password, needs_rehash, normalize_email, verify_dummy, verify_password,
+        )
         from services.auth.token import create_access_token, create_refresh_token
 
         _settings = get_settings()
@@ -187,6 +189,24 @@ class AuthService:
             raise AccountDisabledException()
 
         await clear_failures(email)
+
+        # Transparent password-hash upgrade (B6 in v1.1.0):
+        # If the stored hash uses a deprecated scheme (e.g. legacy bcrypt),
+        # rehash with the current default (Argon2id) now that we hold the
+        # plaintext. Silent on failure - a rehash error must not deny a login.
+        if needs_rehash(user.password_hash):
+            try:
+                new_hash = hash_password(password)
+                await user_repo.update(user.id, {"password_hash": new_hash})
+                logger.info(
+                    "auth_event PASSWORD_HASH_UPGRADED user_id=%s scheme=argon2id",
+                    user.id,
+                )
+            except Exception as exc:
+                logger.warning(
+                    "auth_event PASSWORD_HASH_UPGRADE_FAILED user_id=%s error=%s",
+                    user.id, exc,
+                )
 
         access_token          = create_access_token(user)
         refresh_raw, ref_hash = create_refresh_token()

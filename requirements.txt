@@ -37,7 +37,8 @@ aiosqlite==0.21.0
 
 # ── JWT + Auth ────────────────────────────────────────────────────────────────
 PyJWT==2.13.0                 # JWT encoding/decoding
-passlib[bcrypt]==1.7.4        # password hashing — bcrypt backend
+passlib[argon2,bcrypt]==1.7.4 # password hashing — argon2 default, bcrypt kept for legacy verify
+argon2_cffi==23.1.0           # Argon2id backend (B6 in v1.1.0; replaces bcrypt for new hashes)
 bcrypt==4.0.1                 # passlib compat pin — bcrypt>=4.1 breaks passlib 1.7.4
 python-multipart==0.0.32      # FastAPI form parsing — required for login endpoint
 APScheduler==3.11.2           # background retention worker
