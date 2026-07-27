@@ -2,6 +2,14 @@
 
 All notable changes to WrapSec are documented here.
 
+## [1.1.1] - 2026-07-27
+
+### Security
+- Bump `click` from 8.3.2 to 8.3.3 to clear PYSEC-2026-2132
+  (command injection in `click.edit()`). WrapSec does not call
+  `click.edit()` or `click.launch()`, so there is no known
+  exploit path; the bump keeps the dependency scan clean.
+
 ## [1.1.0] - 2026-07-27 - Foundation
 
 Foundation release. Closes six architectural blockers that gate the v1.2+

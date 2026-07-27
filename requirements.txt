@@ -4,7 +4,7 @@ anyio==4.13.0
 async-timeout==5.0.1
 asyncpg==0.31.0
 certifi==2026.2.25
-click==8.3.2
+click==8.3.3                   # v1.1.1: PYSEC-2026-2132 (click.edit command injection); we don't call click.edit but keep the pin clean
 colorama==0.4.6
 exceptiongroup==1.3.1
 fastapi==0.135.3
