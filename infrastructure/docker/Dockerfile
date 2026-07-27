@@ -8,6 +8,9 @@ RUN apt-get update && apt-get install -y \
     libpq-dev \
     && rm -rf /var/lib/apt/lists/*
 
+# Create non-root user up front so COPY --chown works without a duplicate layer
+RUN adduser --disabled-password --gecos "" wrapsec
+
 # BUILD_ENV=prod        installs requirements.txt only -- no transformer (~base image, default)
 # BUILD_ENV=transformer installs requirements-transformer.txt -- includes torch/transformers (~1.5GB extra)
 # BUILD_ENV=dev         installs requirements-dev.txt -- includes pytest
@@ -22,15 +25,12 @@ RUN if [ "$BUILD_ENV" = "dev" ]; then \
         pip install --no-cache-dir -r requirements.txt; \
     fi
 
-# Copy application
-COPY . .
+# Copy application with wrapsec ownership in a single layer
+COPY --chown=wrapsec:wrapsec . .
 
 # Install Python SDK so sdk/python/tests are importable in-container
 RUN pip install --no-cache-dir -e sdk/python/
 
-# Create non-root user
-RUN adduser --disabled-password --gecos "" wrapsec
-RUN chown -R wrapsec:wrapsec /app
 USER wrapsec
 
 EXPOSE 8000

@@ -1,0 +1,60 @@
+# Host-side Python venvs
+.venv/
+venv/
+env/
+
+# VCS + editor state
+.git/
+.gitignore
+.vscode/
+.idea/
+*.swp
+
+# Python caches / bytecode
+**/__pycache__/
+**/*.pyc
+**/*.pyo
+**/*.pyd
+.pytest_cache/
+.hypothesis/
+.mypy_cache/
+.ruff_cache/
+.coverage
+htmlcov/
+*.egg-info/
+
+# Dashboard generated output (needed source stays)
+dashboard/node_modules/
+dashboard/.next/
+dashboard/out/
+dashboard/.env.local
+
+# Node modules anywhere else
+**/node_modules/
+
+# Local env files (never ship secrets)
+.env
+.env.*
+!.env.example
+
+# Sibling checkouts / scratch dirs not used at runtime
+aisecuritygateway-oss/
+backups/
+models/
+tmp/
+*.log
+
+# Docs and non-runtime assets
+docs/
+*.md
+!README.md
+
+# Docker + CI metadata (not needed inside the image)
+.github/
+Dockerfile*
+docker-compose*.yml
+.dockerignore
+
+# OS junk
+.DS_Store
+Thumbs.db
