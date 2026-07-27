@@ -4,22 +4,33 @@
 
 from passlib.context import CryptContext
 
-pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
+# Argon2id is the default for new hashes (winner of the Password Hashing
+# Competition; resistant to GPU/ASIC attacks that bcrypt cannot mitigate).
+# bcrypt stays in the scheme list so legacy hashes stored before v1.1.0
+# still verify. deprecated="auto" flags any non-default scheme as needing
+# a rehash - callers use needs_rehash() to trigger a transparent upgrade
+# on next successful login.
+pwd_context = CryptContext(
+    schemes    = ["argon2", "bcrypt"],
+    deprecated = "auto",
+    default    = "argon2",
+)
 
-# Pre-computed bcrypt hash used for timing equalisation in login().
+# Pre-computed Argon2id hash used for timing equalisation in login().
 #
 # WHY hardcoded (R5 fix):
-#   A dynamically computed hash (pwd_context.hash(...) at module load time)
-#   produces a different hash on every process restart, introducing slight
-#   timing variation between restarts. A hardcoded hash is fully stable.
+#   A dynamically computed hash produces different output on every process
+#   restart, introducing slight timing variation. A hardcoded hash is
+#   fully stable across restarts and deployments.
 #
 # HOW to regenerate if needed:
 #   from passlib.context import CryptContext
-#   print(CryptContext(["bcrypt"]).hash("__wrapsec_timing_dummy__"))
+#   ctx = CryptContext(schemes=["argon2", "bcrypt"], default="argon2")
+#   print(ctx.hash("__wrapsec_timing_dummy__"))
 #
 # NEVER change the sentinel string "__wrapsec_timing_dummy__" - only update
 # the hash value if you do (and update the unit test too).
-_DUMMY_HASH = "$2b$12$LQv3c1yqBWVHxkd0LHAkCOYz6TiGrmlfebYcSGR/Q3pnK.Bj2SL8."
+_DUMMY_HASH = "$argon2id$v=19$m=65536,t=3,p=4$QOgdYwwBAODce2+tdS4l5A$9LWHExdyqG+5mhY4k+/XFSmwzlHDUsgyuyBdZK7eSvs"
 
 
 def normalize_email(email: str) -> str:
@@ -74,7 +85,10 @@ _COMMON_PASSWORDS: frozenset[str] = frozenset({
 
 def hash_password(password: str) -> str:
     """
-    Returns bcrypt hash of the given password.
+    Returns Argon2id hash of the given password (per-user random salt embedded
+    in the hash string). Legacy bcrypt hashes remain verifiable via
+    verify_password() but are never produced here.
+
     Always call validate_password_strength() before this.
     NEVER store the result of this function in logs.
     """
@@ -85,29 +99,45 @@ def hash_password(password: str) -> str:
 
 def verify_password(plain: str, hashed: str) -> bool:
     """
-    Constant-time bcrypt comparison via passlib.
-    Timing-safe - bcrypt work factor equalises comparison time across inputs.
+    Constant-time password comparison via passlib.
 
-    Passwords exceeding _MAX_PASSWORD_LEN are rejected immediately - bcrypt
-    only processes the first 72 bytes, so over-length inputs can never match
-    a hash produced by hash_password() which enforces the same limit.
+    Auto-detects the hash scheme (Argon2id for post-v1.1.0 hashes,
+    bcrypt for legacy hashes) so verification works transparently across
+    the migration boundary.
+
+    Passwords exceeding _MAX_PASSWORD_LEN are rejected immediately. This
+    also caps bcrypt exposure (bcrypt only processes the first 72 bytes,
+    so over-length inputs can never match a hash produced by
+    hash_password() which enforces the same limit).
     """
     if len(plain) > _MAX_PASSWORD_LEN:
         return False
     return pwd_context.verify(plain, hashed)
 
 
+def needs_rehash(hashed: str) -> bool:
+    """
+    True when `hashed` uses a deprecated scheme or outdated parameters
+    (e.g. legacy bcrypt hashes minted before the Argon2id migration).
+
+    Call this AFTER a successful verify_password() to decide whether to
+    transparently upgrade the stored hash via hash_password(plain).
+    """
+    return pwd_context.needs_update(hashed)
+
+
 def verify_dummy() -> None:
     """
-    Runs a dummy bcrypt verify against _DUMMY_HASH.
+    Runs a dummy Argon2id verify against _DUMMY_HASH.
 
     MUST be called when user is not found in the login flow - immediately
     before raising InvalidCredentialsException. This equalises response
     timing between the 'user not found' and 'wrong password' paths.
 
-    Without this: response time differs because bcrypt verify is slow (~100ms)
-    but a missing-user path skips it entirely, leaking whether an email address
-    is registered via response time measurement (timing oracle / enumeration).
+    Without this: response time differs because password verification is
+    intentionally slow (Argon2id ~50-100ms) but a missing-user path skips
+    it entirely, leaking whether an email address is registered via
+    response time measurement (timing oracle / enumeration).
 
     Sentinel input "__dummy_input__" is intentionally different from
     "__wrapsec_timing_dummy__" - it will never match _DUMMY_HASH, so

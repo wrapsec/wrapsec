@@ -48,7 +48,7 @@ services/
   auth/
     service.py          AuthService - login, refresh, logout, change_password
     token.py            JWT encode/decode (PyJWT)
-    password.py         bcrypt hashing, normalize_email, verify_dummy
+    password.py         Argon2id hashing (bcrypt legacy verify + auto-rehash), normalize_email, verify_dummy
     lockout.py          Redis-based account lockout
   gateway/
     service.py          GatewayService.process() - full detection pipeline
@@ -219,10 +219,22 @@ Redis keys: `auth:failed:{normalized_email}`, `auth:locked:{normalized_email}`.
 - Lock TTL reset on each retry - attacker extends their own lockout
 - On success: both keys deleted immediately
 
+### Password hashing - Argon2id with legacy bcrypt compatibility
+
+As of v1.1.0 new passwords are hashed with Argon2id (winner of the Password
+Hashing Competition; resistant to GPU/ASIC attacks that bcrypt cannot mitigate).
+Per-user salt is embedded in the hash string; the `passlib` CryptContext keeps
+`bcrypt` in the scheme list so hashes minted before v1.1.0 still verify.
+
+Transparent upgrade path: after a successful login, `needs_rehash()` inspects
+the stored hash and, if it uses a deprecated scheme, the service rehashes the
+plaintext with Argon2id and updates the user record. Legacy users migrate to
+Argon2id on their next successful login without any admin action.
+
 ### Timing equalisation - email enumeration prevention
 
 When a user is not found:
-1. `verify_dummy()` is called - runs a full bcrypt verify against a hardcoded hash
+1. `verify_dummy()` is called - runs a full Argon2id verify against a hardcoded hash
 2. `record_failure()` increments the counter
 3. 401 is raised with the same message as wrong password
 
