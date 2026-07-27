@@ -3,16 +3,53 @@
 # WrapSec v1.0 | AI Security Gateway - https://wrapsec.com
 
 from datetime import datetime
-from sqlalchemy import select, func, case, cast
+from sqlalchemy import select, func, case, cast, text
 from sqlalchemy.dialects.postgresql import JSONB
 from sqlalchemy.ext.asyncio import AsyncSession
 from db.models import AuditLogModel
 from db.repositories.base import BaseRepository
+from security.audit_chain import compute_record_hash
 
 
 class AuditRepository(BaseRepository):
 
     async def create(self, data: dict) -> AuditLogModel:
+        # Populate created_at up front so the hash covers exactly the value
+        # that lands on disk. Falling back to SQLAlchemy's default would let
+        # the DB or the ORM pick a different timestamp than the one we hashed.
+        data.setdefault("created_at", datetime.utcnow())
+
+        tenant_id = data.get("tenant_id")
+        if tenant_id:
+            # Serialise chain reads+writes within a tenant so two concurrent
+            # inserts cannot both compute prev_hash off the same row and fork
+            # the chain. pg_advisory_xact_lock releases on commit/rollback,
+            # which lines up exactly with the commit() below. SQLite tests are
+            # single-writer per database so the lock is skipped there.
+            if self.session.bind.dialect.name == "postgresql":
+                await self.session.execute(
+                    text("SELECT pg_advisory_xact_lock(hashtext(:tid))"),
+                    {"tid": tenant_id},
+                )
+
+            # `record_hash IS NOT NULL` skips any pre-v1.2.0 rows still in
+            # the table -- the chain starts fresh for each tenant on the
+            # first v1.2.0 write. Retroactive hashing of legacy rows is
+            # deliberately out of scope.
+            prev_hash = await self.session.scalar(
+                select(AuditLogModel.record_hash)
+                .where(
+                    AuditLogModel.tenant_id   == tenant_id,
+                    AuditLogModel.record_hash.is_not(None),
+                )
+                .order_by(AuditLogModel.created_at.desc())
+                .limit(1)
+            )
+            data["prev_hash"]   = prev_hash
+            data["record_hash"] = compute_record_hash(data, prev_hash)
+        # Rows without tenant_id stay unchained (both hash cols NULL);
+        # see security/audit_chain.py docstring for the rationale.
+
         record = AuditLogModel(**data)
         self.session.add(record)
         await self.commit()
