@@ -93,6 +93,11 @@ def _format_item(
             risk_score     = item.risk_score or 0.0,
             primary_reason = item.primary_reason,
         ),
+        "session_id":            item.session_id,
+        "turn_index":            item.turn_index,
+        "run_id":                item.run_id,
+        "record_hash":           item.record_hash,
+        "prev_hash":             item.prev_hash,
     }
 
 
