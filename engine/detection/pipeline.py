@@ -34,6 +34,7 @@ from enum import Enum
 from engine.detection.base import DetectionResult
 from engine.detection.ml_detector import MLDetector
 from engine.detection.transformer_detector import TransformerDetector
+from engine.detection.preprocessors import BasePreprocessor
 from engine.detection.profiles import DetectorProfile
 from domain.enums import ThreatCategory
 
@@ -60,10 +61,18 @@ class DetectionPipeline:
     pattern set without any changes to this class or GatewayService.
     """
 
-    def __init__(self, profile: DetectorProfile):
-        self._profile     = profile
-        self._tfidf       = MLDetector(model_path=profile.tier1_model)
-        self._transformer = TransformerDetector(model_id=profile.tier2_model)
+    def __init__(
+        self,
+        profile:       DetectorProfile,
+        preprocessors: list[BasePreprocessor] | None = None,
+    ):
+        self._profile       = profile
+        self._tfidf         = MLDetector(model_path=profile.tier1_model)
+        self._transformer   = TransformerDetector(model_id=profile.tier2_model)
+        # Preprocessors run before every detector. Empty in v1.1.0; the slot
+        # exists so v1.6.0 OCR and later hooks can be added without changing
+        # the pipeline shape or GatewayService.
+        self._preprocessors = list(preprocessors) if preprocessors else []
 
         if not self._transformer.is_ready:
             logger.warning(
@@ -74,10 +83,13 @@ class DetectionPipeline:
 
     async def run(self, text: str) -> DetectionResult:
         """
-        Run both detection tiers in parallel and return the combined result.
-        Transformer timeout and failures are handled gracefully -- TF-IDF result
-        is always returned even if transformer fails.
+        Run every preprocessor (if any), then both detection tiers in parallel,
+        and return the combined result. Preprocessor failures and transformer
+        timeouts are handled gracefully -- TF-IDF still runs even if a
+        preprocessor or the transformer fails.
         """
+        text = await self._run_preprocessors(text)
+
         tfidf_coro = asyncio.to_thread(self._tfidf.detect, text)
 
         if self._transformer.is_ready:
@@ -115,6 +127,22 @@ class DetectionPipeline:
             transformer_result = DetectionResult.clean("transformer_detector")
 
         return self._combine(tfidf_result, transformer_result)
+
+    async def _run_preprocessors(self, text: str) -> str:
+        """
+        Apply preprocessors sequentially, off the event loop. A failing
+        preprocessor logs and is skipped; the chain never denies a request.
+        """
+        if not self._preprocessors:
+            return text
+        for pp in self._preprocessors:
+            try:
+                text = await asyncio.to_thread(pp.preprocess, text)
+            except Exception as exc:
+                logger.warning(
+                    "Preprocessor %s failed, skipping: %s", pp.name, exc,
+                )
+        return text
 
     def _combine(
         self,
