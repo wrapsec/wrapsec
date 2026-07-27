@@ -601,6 +601,84 @@ describe("scan() executionMode validation", () => {
     )
   })
 
+})
+
+// ── scan() session tracking kwargs (v1.2.0) ───────────────────────────────
+
+describe("scan() session tracking kwargs", () => {
+
+  it("throws WrapSecError on empty sessionId", async () => {
+    const client = makeClient()
+    await assert.rejects(
+      () => client.scan("test", { sessionId: "" }),
+      (err: any) => err instanceof WrapSecError && /sessionId/.test(err.message),
+    )
+  })
+
+  it("throws WrapSecError on sessionId over 200 chars", async () => {
+    const client = makeClient()
+    await assert.rejects(
+      () => client.scan("test", { sessionId: "a".repeat(201) }),
+      (err: any) => err instanceof WrapSecError && /sessionId/.test(err.message),
+    )
+  })
+
+  it("throws WrapSecError on sessionId with disallowed chars", async () => {
+    const client = makeClient()
+    await assert.rejects(
+      () => client.scan("test", { sessionId: "has space" }),
+      (err: any) => err instanceof WrapSecError && /disallowed/.test(err.message),
+    )
+  })
+
+  it("throws WrapSecError on runId with disallowed chars", async () => {
+    const client = makeClient()
+    await assert.rejects(
+      () => client.scan("test", { runId: "bad@char" }),
+      (err: any) => err instanceof WrapSecError && /runId/.test(err.message),
+    )
+  })
+
+  it("throws WrapSecError on turnIndex negative", async () => {
+    const client = makeClient()
+    await assert.rejects(
+      () => client.scan("test", { turnIndex: -1 }),
+      (err: any) => err instanceof WrapSecError && /turnIndex/.test(err.message),
+    )
+  })
+
+  it("throws WrapSecError on turnIndex above upper bound", async () => {
+    const client = makeClient()
+    await assert.rejects(
+      () => client.scan("test", { turnIndex: 10001 }),
+      (err: any) => err instanceof WrapSecError && /turnIndex/.test(err.message),
+    )
+  })
+
+  it("throws WrapSecError on non-integer turnIndex", async () => {
+    const client = makeClient()
+    await assert.rejects(
+      () => client.scan("test", { turnIndex: 1.5 as number }),
+      (err: any) => err instanceof WrapSecError && /turnIndex/.test(err.message),
+    )
+  })
+
+  it("accepts valid session/run kwargs", async () => {
+    const client = makeClient()
+    const result = await client.scan("hello", {
+      sessionId: "sess_abc.123",
+      turnIndex: 0,
+      runId: "run_xyz",
+    })
+    assert.ok(result.decision)
+  })
+
+})
+
+// ── scan() scan_only execution mode ────────────────────────────────────────
+
+describe("scan() scan_only execution mode", () => {
+
   it("accepts scan_only without model", async () => {
     const client = makeClient()
     const result = await client.scan("hello", { executionMode: "scan_only" })

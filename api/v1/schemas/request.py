@@ -26,11 +26,45 @@ class RequestOptionsSchema(BaseModel):
     debug:  bool = False
 
 
+_SESSION_ID_PATTERN = r"^[A-Za-z0-9_.:\-]+$"
+_SESSION_ID_DESC    = (
+    "Caller-supplied conversation identifier that groups scans belonging to the "
+    "same multi-turn interaction. Opaque string, max 200 chars, "
+    "[A-Za-z0-9_.:-] only. Do NOT include PII (name, email, phone); use a "
+    "hash, UUID, or other opaque identifier. v1 persists the field for future "
+    "correlation; session-aware detection lands in a later release."
+)
+_RUN_ID_DESC = (
+    "Caller-supplied identifier for one agent execution (which may span multiple "
+    "gateway scans, tool calls, and LLM calls). Distinct from trace_id, which "
+    "identifies a single scan. Matches LangSmith / OpenAI Assistants run_id "
+    "semantics. Opaque string, max 200 chars, [A-Za-z0-9_.:-] only."
+)
+
+
 class AIRequestSchema(BaseModel):
     input:          str                       = Field(..., min_length=1)
     detection_mode: DetectionMode             = DetectionMode.FAST
     execution_mode: ExecutionMode             = ExecutionMode.SCAN_ONLY
     model:          str | None                = None
+    session_id:     str | None                = Field(
+        default        = None,
+        max_length     = 200,
+        pattern        = _SESSION_ID_PATTERN,
+        description    = _SESSION_ID_DESC,
+    )
+    turn_index:     int | None                = Field(
+        default     = None,
+        ge          = 0,
+        le          = 10000,
+        description = "Zero-based index of this turn within session_id.",
+    )
+    run_id:         str | None                = Field(
+        default        = None,
+        max_length     = 200,
+        pattern        = _SESSION_ID_PATTERN,
+        description    = _RUN_ID_DESC,
+    )
     metadata:       RequestMetadataSchema     = Field(default_factory=RequestMetadataSchema)
     context:        RequestContextSchema      = Field(default_factory=RequestContextSchema)
     options:        RequestOptionsSchema      = Field(default_factory=RequestOptionsSchema)

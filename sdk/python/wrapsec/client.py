@@ -39,7 +39,12 @@ from wrapsec.core.http import (
     resolve_timeout,
 )
 from wrapsec.core.retry import with_retry
-from wrapsec.core.validation import normalize_text, validate_input
+from wrapsec.core.validation import (
+    normalize_text,
+    validate_input,
+    validate_session_id,
+    validate_turn_index,
+)
 from wrapsec.exceptions import WrapSecAuthError, WrapSecSystemError
 from wrapsec.models import AuditLog, AuditStats, ScanResult
 
@@ -153,6 +158,9 @@ class Client:
         model:          str | None = None,
         user:           str = "sdk",
         timeout:        int | None = None,
+        session_id:     str | None = None,
+        turn_index:     int | None = None,
+        run_id:         str | None = None,
     ) -> ScanResult:
         """
         Scan a single input for security risks.
@@ -165,6 +173,13 @@ class Client:
                         CLI overrides this with the --user flag or "cli".
         timeout:        Per-request timeout in seconds (min 1).
                         Overrides client default for this call only.
+        session_id:     Opaque conversation identifier grouping related scans.
+                        Max 200 chars, [A-Za-z0-9_.:-] only. Do NOT include PII
+                        (name, email, phone) - use a UUID or hash.
+        turn_index:     Zero-based index of this turn within session_id (0-10000).
+        run_id:         Opaque identifier for one agent execution (may span
+                        multiple scans, tool calls, LLM calls). Matches LangSmith
+                        / OpenAI Assistants run_id semantics. Max 200 chars.
 
         Returns ScanResult. BLOCK is not an exception - check result.decision.
 
@@ -182,6 +197,10 @@ class Client:
         if execution_mode == "proxy" and not model:
             raise ValueError("model is required when execution_mode='proxy'")
 
+        session_id = validate_session_id(session_id, "session_id")
+        run_id     = validate_session_id(run_id, "run_id")
+        turn_index = validate_turn_index(turn_index)
+
         text = normalize_text(text)
         text = validate_input(text)
         t    = self._resolve_timeout(timeout)
@@ -195,8 +214,11 @@ class Client:
                 "user_id": user,
             },
         }
-        if model:
-            body["model"] = model
+        if model:      body["model"]      = model
+        if session_id: body["session_id"] = session_id
+        if run_id:     body["run_id"]     = run_id
+        if turn_index is not None:
+            body["turn_index"] = turn_index
 
         data = self._request(method="POST", path="/ai/request", timeout=t, json=body)
         return ScanResult.from_dict(data)
