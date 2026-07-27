@@ -2,6 +2,18 @@
 
 All notable changes to WrapSec are documented here.
 
+## [1.1.3] - 2026-07-27
+
+### Fixed
+- Dashboard image build (`Dockerfile.dashboard`) failed under `npm ci`
+  after the v1.1.2 bump because the lockfile -- generated on Windows --
+  did not include the linux-musl platform-specific optional dependencies
+  that `sharp@0.35.3` pulls in on Alpine (missing `@emnapi/*`, missing
+  `@img/sharp-libvips-linuxmusl-x64`, etc.). Regenerated the lockfile
+  inside a `node:20-alpine` container with `--include=optional`, so
+  every platform variant is now pinned and `npm ci` succeeds on Alpine.
+  No dependency version changes.
+
 ## [1.1.2] - 2026-07-27
 
 ### Security
