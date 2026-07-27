@@ -3,7 +3,7 @@
 # WrapSec v1.0 | AI Security Gateway - https://wrapsec.com
 
 import logging
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from engine.detection.base import DetectionResult
 from domain.enums import ThreatCategory
 from domain.value_objects.risk_score import RiskScore
@@ -21,6 +21,11 @@ class ScoringResult:
     toxicity_score: float
     threats:        list[ThreatCategory]
     boosted:        bool = False
+    # B2: layer names -> score. Populated by detectors that produce more
+    # granular signals than the five core aggregates (multi-class transformer
+    # categories, MCP-added detectors, per-category toxicity). Flows into
+    # LayerScores at the gateway boundary.
+    extra_scores:   dict[str, float] = field(default_factory=dict)
 
 
 class RiskScorer:
