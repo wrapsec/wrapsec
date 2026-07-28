@@ -69,12 +69,13 @@ def test_baseline_migration_is_idempotent(tmp_path):
     assert "tenants" in created
 
 
-def test_head_revision_advances_to_audit_session_hash(tmp_path):
+def test_head_revision_advances_to_audit_immutable_trigger(tmp_path):
     """
     After `alembic upgrade head`, alembic_version must point at the v1.2.0
-    audit session/hash migration. Locks in that new revisions are actually
-    being picked up (a common failure mode is dropping the file into the
-    wrong directory and silently landing on 0001).
+    trigger migration. Locks in that new revisions are actually being picked
+    up (a common failure mode is dropping the file into the wrong directory
+    and silently landing on 0001). The trigger DDL itself is a no-op on
+    SQLite (Postgres-only) but the revision must still advance.
     """
     db_file   = tmp_path / "migrated.db"
     async_url = f"sqlite+aiosqlite:///{db_file}"
@@ -92,7 +93,7 @@ def test_head_revision_advances_to_audit_session_hash(tmp_path):
         engine.dispose()
 
     assert row is not None
-    assert row[0] == "0003_audit_session_hash"
+    assert row[0] == "0004_audit_immutable_trigger"
 
 
 def test_audit_logs_has_v1_2_session_and_hash_columns(tmp_path):
