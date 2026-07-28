@@ -104,8 +104,8 @@ class TestHasPermissionExactMatch:
 
 
 class TestHasPermissionSegmentWildcard:
-    # Segment-wise wildcards are the same containment rule Casbin,
-    # AWS IAM, and GCP IAM apply: len(parts) must match len(p_parts).
+    # Segment-wise wildcards require len(parts) == len(p_parts); "scan:*"
+    # matches one extra segment, never zero or two.
 
     def test_prefix_star_grants_sibling_actions(self):
         p = _principal_with(["scan:*"])
@@ -222,7 +222,7 @@ def test_build_user_auditor_tenant_wide_no_dept():
 
 def test_build_user_auditor_dept_scoped():
     # AUDITOR can also be constrained to one department for large tenants
-    # that want per-BU compliance leads. Mirrors AWS SecurityAudit at OU scope.
+    # that want per-BU compliance leads (department-scoped audit).
     dept_id   = uuid.uuid4()
     user      = _make_user_model(role="AUDITOR", dept_id=dept_id)
     principal = build_principal_from_user(user)

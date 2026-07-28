@@ -16,11 +16,11 @@ from domain.enums import ThreatCategory
 # 9 disambiguates); IBAN_STRICT before the label-anchored IBAN so a bare
 # IBAN in the wild is caught even without an "IBAN:" prefix.
 #
-# Coverage aligned with Presidio built-in recognizers, AWS Comprehend PII
-# entity types, and Google Cloud DLP infoTypes. Where those systems ship
-# checksum validators (mod-97 for IBAN, Luhn for NPI) this file does not
-# yet -- the current architecture is pure regex. Adding a validator hook
-# is a follow-up; the strict regex length + format prefixes below already
+# Coverage spans 30 entity types (identity, financial, contact, medical,
+# international identifiers). Where standard checksum validators exist
+# (mod-97 for IBAN, Luhn for NPI) this file does not yet apply them --
+# the current architecture is pure regex. Adding a validator hook is a
+# follow-up; the strict regex length + format prefixes below already
 # reject most false positives.
 
 PII_PATTERNS = [

@@ -2,6 +2,98 @@
 
 All notable changes to WrapSec are documented here.
 
+## [1.2.0] - 2026-07-28 - Enterprise plumbing
+
+Enterprise-plumbing release. Adds audit tamper-evidence, session and
+multi-turn attribution on scan requests, broader PII coverage, a fourth
+compliance-oriented user role, an OTLP metrics bridge, and a startup
+guard on the Grafana bootstrap credential. Existing scan, chat, and
+admin endpoints remain wire-compatible with 1.0.x and 1.1.x clients.
+
+### Added
+
+- **Session and turn tracking on scan requests.** Optional `session_id`,
+  `turn_index`, and `run_id` fields on `POST /v1/ai/request` and
+  `POST /v1/chat/completions`, with matching kwargs on the Python and
+  Node SDKs. Field names follow LangSmith and OpenAI Assistants
+  conventions so existing agent-framework instrumentation slots in
+  directly. Values are captured on every audit row for post-hoc replay
+  of multi-turn or agent sessions. Fields are optional; 1.0.x and 1.1.x
+  clients are unaffected.
+- **Tamper-evident audit log.** Every `audit_logs` row now carries a
+  SHA-256 `entry_hash` computed over the row payload plus the previous
+  row's `entry_hash` (hash chain). A PostgreSQL trigger rejects `UPDATE`
+  and `DELETE` on the table, so log tampering requires database-superuser
+  access and leaves obvious gaps in the chain. Chain verification is a
+  single pass over the table and can run offline against a database
+  dump.
+- **Fourth user role: AUDITOR.** Read-only role scoped for SOC 2 and
+  ISO 27001 audit work. Carries `audit:read`, `dashboard:read`,
+  `settings:read`, and `keys:read` -- broader than `VIEWER` so a
+  compliance auditor can inspect policy configuration and API key
+  inventory without any write path. Departmental scoping is flexible:
+  `dept_id` may be `NULL` for tenant-wide audit scope or set for a
+  department-scoped auditor. Available in the dashboard user creation
+  and edit forms.
+- **OTLP export for existing Prometheus metrics.** Optional OpenTelemetry
+  Collector sidecar bridges the existing `/metrics` endpoint to any
+  OTLP-compatible backend without re-instrumenting the application.
+  Enable with `docker compose --profile otlp up -d`. Configure via the
+  standard OpenTelemetry Protocol Exporter environment variables
+  (`OTEL_EXPORTER_OTLP_ENDPOINT`, `OTEL_EXPORTER_OTLP_HEADERS`,
+  `OTEL_EXPORTER_OTLP_PROTOCOL`, `OTEL_EXPORTER_OTLP_INSECURE`).
+  Metric names, labels, and help text are preserved as-scraped.
+
+### Changed
+
+- **PII coverage expanded from 22 to 30 entity types.** Added IBAN,
+  SWIFT/BIC, passport numbers, driver licence numbers, MAC addresses,
+  ITIN, medical record numbers, and additional national identifiers,
+  broadening international coverage. Detectors, thresholds, and the
+  BLOCK / SANITIZE policy are unchanged; new entity types are covered
+  by the same policy as the existing set.
+- **Permission enforcement is now segment-wise.** The `has_permission`
+  check activates alongside the AUDITOR role and matches permissions
+  segment by segment (for example, `keys:create` matches `keys:*` but
+  not `*:create`). Wildcards match a single segment only; a bare `*`
+  matches any single segment, not the entire permission string.
+  `has_role` is unchanged.
+
+### Security
+
+- **Grafana bootstrap credential guard.**
+  `docker compose -f docker-compose.prod.yml up` now refuses to start
+  when `GRAFANA_PASSWORD` is unset or empty. `setup.sh --prod`
+  additionally rejects a denylist of well-known weak values (`admin`,
+  `changeme`, `password`, `grafana`, ...) and enforces a 12-character
+  minimum per NIST SP 800-63B. Closes the "operator forgot to change
+  the default password" class of finding, which is the most common
+  Grafana exposure indexed by internet-facing scanners.
+- **Audit log immutability at the database layer.** The
+  `UPDATE`/`DELETE` trigger on `audit_logs` means tampering cannot
+  succeed silently even if application-layer controls are bypassed.
+  Chain verification detects any gap.
+
+### Migration notes
+
+- **Fresh install:** no action -- startup runs `alembic upgrade head`.
+- **Upgrade from 1.1.x:** startup runs one new migration adding
+  nullable `session_id`, `turn_index`, `run_id`, `entry_hash`, and
+  `prev_entry_hash` columns to `audit_logs`, plus the immutability
+  trigger on PostgreSQL. The migration is idempotent. Existing rows
+  are not back-hashed; the chain starts at the first row written under
+  1.2.0. SQLite deployments (development only) get the columns but not
+  the trigger.
+- **Grafana admin password:** if you were relying on the default
+  `changeme_before_deploy` value for a production deploy, generate a
+  strong password (`openssl rand -base64 24`) and set
+  `GRAFANA_PASSWORD` in `.env` before starting the stack, or the
+  deploy will halt.
+- **OTLP export:** off by default. No change unless you opt in with
+  the `otlp` compose profile.
+- **AUDITOR role:** additive. Existing ADMIN / DEVELOPER / VIEWER
+  users and their permissions are unchanged.
+
 ## [1.1.5] - 2026-07-27
 
 ### Fixed

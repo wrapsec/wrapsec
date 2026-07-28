@@ -118,9 +118,9 @@ services:
     restart: unless-stopped
 
   # OpenTelemetry Collector: bridges the existing Prometheus /metrics
-  # endpoint to any OTLP backend (Grafana Cloud, Datadog, New Relic, etc.)
-  # without re-instrumenting the app. Opt-in via profile so existing
-  # `docker compose up` deployments are unchanged:
+  # endpoint to any OTLP-compatible backend without re-instrumenting the
+  # app. Opt-in via profile so existing `docker compose up` deployments
+  # are unchanged:
   #   docker compose --profile otlp up -d
   # Config: infrastructure/otel-collector/otel-collector-config.yaml
   otel-collector:

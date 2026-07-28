@@ -19,11 +19,9 @@ if TYPE_CHECKING:
 # that landed with the AUDITOR role (settings:read, keys:read) where a
 # VIEWER-vs-AUDITOR distinction matters more than a role label.
 #
-# AUDITOR mirrors industry-standard read-only compliance roles:
-#   AWS SecurityAudit, Azure Security Reader, GCP roles/iam.securityReviewer,
-#   GitHub Security manager. It is strictly a superset of VIEWER (all VIEWER
-#   scopes plus settings:read and keys:read) so any policy that admits VIEWER
-#   also admits AUDITOR by construction.
+# AUDITOR is a read-only compliance role. It is strictly a superset of
+# VIEWER (all VIEWER scopes plus settings:read and keys:read) so any policy
+# that admits VIEWER also admits AUDITOR by construction.
 #
 ROLE_PERMISSIONS: dict[str, list[str]] = {
     "ADMIN":     ["*"],
@@ -62,10 +60,9 @@ class Principal:
             "tool:db:*" grants "tool:db:read", "tool:db:write"
 
         Segment lengths must match: "scan:*" does NOT grant "scan:read:sensitive"
-        (that would require "scan:*:*" or similar). This is the same containment
-        rule Casbin, AWS IAM, and Google Cloud IAM apply to their wildcard
-        expansions -- broader matches are opt-in with an explicit extra segment,
-        not accidental via a single trailing star.
+        (that would require "scan:*:*" or similar). Broader matches are opt-in
+        with an explicit extra segment, not accidental via a single trailing
+        star.
 
         Empty permission strings and permissions containing "*" as a literal
         segment in the check argument are treated as no-match; callers should

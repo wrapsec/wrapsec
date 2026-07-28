@@ -12,13 +12,11 @@ Adds AUDITOR as a fourth accepted value for `users.role` and reworks the
 role/dept coupling so AUDITOR can be either tenant-wide (dept_id NULL) or
 department-scoped (dept_id set).
 
-Rationale for the flexible dept coupling: enterprise reference roles map
-this way. AWS SecurityAudit can be attached to an account root or an OU,
-Azure Security Reader can be assigned at subscription or resource-group
-scope, and GitHub's Security manager can be team-scoped or org-wide.
-Pinning AUDITOR to NULL would force compliance leads at large tenants to
-share a single tenant-wide login; pinning it to NOT NULL would break the
-tenant-wide auditor use-case that GRC teams actually ask for.
+Rationale for the flexible dept coupling: compliance audit scope varies
+by tenant. Pinning AUDITOR to NULL would force compliance leads at large
+tenants to share a single tenant-wide login; pinning it to NOT NULL would
+break the tenant-wide auditor use-case that GRC teams actually ask for.
+Either scope must be expressible.
 
 Two constraints are rewritten (drop + add, not alter -- Postgres does not
 support ALTER CONSTRAINT for CHECK expressions):
