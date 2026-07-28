@@ -23,8 +23,19 @@ function RequestsPageInner() {
   // If decision/threat/mode types change, update VALID_* in lib/constants.ts.
   const sanitise     = (val: string | null, allowlist: string[]) =>
     val && allowlist.includes(val) ? val : ""
-  const sanitiseDate = (val: string | null) =>
-    val && /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}$/.test(val) ? val : ""
+  // Overview and Analytics deep-link with a full ISO datetime (`useTimeRange`
+  // slices ISO to 19 chars), so accept both `YYYY-MM-DD` and
+  // `YYYY-MM-DDTHH:MM:SS` and always return the date portion. The API-call
+  // effect below re-attaches T00:00:00 / T23:59:59 for the fetch. Without
+  // this normalisation, `<input type="date">` silently rejects any value
+  // containing "T" and shows blank, so the deep-linked filter looks unset
+  // even though the request is being filtered correctly.
+  const sanitiseDate = (val: string | null) => {
+    if (!val) return ""
+    if (/^\d{4}-\d{2}-\d{2}$/.test(val))                              return val
+    if (/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}/.test(val))             return val.slice(0, 10)
+    return ""
+  }
 
   const [traceId,          setTraceId]          = useState("")
   const [traceIdDebounced, setTraceIdDebounced] = useState("")
