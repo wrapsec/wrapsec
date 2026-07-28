@@ -181,6 +181,7 @@ class AuditRepository(BaseRepository):
     async def get_stats(
         self,
         tenant_id: str | None = None,
+        dept_id:   str | None = None,
         from_dt:   datetime | None = None,
         to_dt:     datetime | None = None,
     ) -> dict:
@@ -190,9 +191,18 @@ class AuditRepository(BaseRepository):
         # and JSON-unnest functions, so tests fall through to a Python pass;
         # SQLite is never used in production, only for the in-memory unit-test
         # database.
+        #
+        # dept_id is required for non-admin callers: without it, a dept-scoped
+        # user would receive tenant-wide aggregates that leak block/latency/
+        # threat counts across the departments they cannot list. The endpoint
+        # (api/v1/endpoints/audit.py::get_audit_stats) sources it from the
+        # request scope, mirroring the dept enforcement already applied to
+        # /v1/audit/logs and /v1/audit/attribution.
         filters = []
         if tenant_id:
             filters.append(AuditLogModel.tenant_id == tenant_id)
+        if dept_id:
+            filters.append(AuditLogModel.dept_id == dept_id)
         # audit_logs.created_at is TIMESTAMP WITHOUT TIME ZONE (per CLAUDE.md:
         # "all datetimes are naive UTC by design"). asyncpg refuses to bind a
         # tz-aware datetime against a naive column, so strip tzinfo here rather

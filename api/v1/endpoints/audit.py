@@ -234,10 +234,16 @@ async def get_audit_stats(
     """
     scope     = get_audit_scope(request)
     tenant_id = scope.get("tenant_id", tenant_id)
+    # dept_id enforcement mirrors /logs and /attribution. Without this line
+    # a non-admin (dept-scoped) caller would receive tenant-wide aggregate
+    # counts covering departments they are not allowed to list -- the very
+    # same cross-scope leak we already close for the per-row list endpoint.
+    dept_id   = scope.get("dept_id")
 
     repo  = AuditRepository(db)
     stats = await repo.get_stats(
         tenant_id = tenant_id,
+        dept_id   = dept_id,
         from_dt   = _parse_dt(from_),
         to_dt     = _parse_dt(to),
     )
@@ -246,8 +252,8 @@ async def get_audit_stats(
     sev_where = []
     if tenant_id:
         sev_where.append(AuditLogModel.tenant_id == tenant_id)
-    if scope.get("dept_id"):
-        sev_where.append(AuditLogModel.dept_id == scope["dept_id"])
+    if dept_id:
+        sev_where.append(AuditLogModel.dept_id == dept_id)
     from_dt_parsed = _parse_dt(from_)
     to_dt_parsed   = _parse_dt(to)
     if from_dt_parsed:
