@@ -62,22 +62,12 @@ if [ "$MODE" = "prod" ]; then
 
     [ -z "$POSTGRES_PASSWORD" ] && die "POSTGRES_PASSWORD not set in .env"
     [ -z "$REDIS_PASSWORD" ]    && die "REDIS_PASSWORD not set in .env"
-    [ -z "$GRAFANA_PASSWORD" ]  && die "GRAFANA_PASSWORD not set in .env"
 
-    # Grafana bootstrap-credential guard.
-    # Grafana's default admin/admin is indexed by every internet scanner;
-    # NIST SP 800-63B mandates rejecting commonly-used passwords. Reject
-    # both weak-known values and passwords shorter than 12 chars before
-    # letting the container boot.
-    gp_lower=$(printf '%s' "$GRAFANA_PASSWORD" | tr '[:upper:]' '[:lower:]')
-    case "$gp_lower" in
-        admin|password|grafana|wrapsec|changeme|changeme_before_deploy|letmein|123456|qwerty|default)
-            die "GRAFANA_PASSWORD is a well-known weak value ('$GRAFANA_PASSWORD'). Regenerate: openssl rand -base64 24"
-            ;;
-    esac
-    if [ "${#GRAFANA_PASSWORD}" -lt 12 ]; then
-        die "GRAFANA_PASSWORD must be at least 12 characters. Regenerate: openssl rand -base64 24"
-    fi
+    # Grafana bootstrap-credential guard. Function lives in scripts/lib/ so
+    # the same check is exercised by tests/integration/test_grafana_password_guard.py.
+    # shellcheck source=scripts/lib/grafana_password_guard.sh
+    . scripts/lib/grafana_password_guard.sh
+    check_grafana_password "$GRAFANA_PASSWORD" || die "Grafana password guard failed."
 
     # SSL detection
     SSL_CERT=$(grep "^SSL_CERT_PATH=" .env | cut -d= -f2- | tr -d '"')

@@ -211,6 +211,9 @@ test.db
 # Dashboard lib folder must be tracked
 !dashboard/lib/
 
+# Sourceable shell helpers must be tracked
+!scripts/lib/
+
 backups/
 
 # Claude Code settings (local only)
