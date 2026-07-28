@@ -274,21 +274,6 @@ async def get_audit_stats(
             "top_threats":    [],
         })
 
-    latencies = stats["latencies"]
-    avg_lat   = sum(latencies) / len(latencies) if latencies else 0.0
-    p95_idx   = int(len(latencies) * 0.95)
-    p95_lat   = latencies[p95_idx] if latencies else 0.0
-
-    threat_counts: dict[str, int] = {}
-    for threat in stats["threats"]:
-        threat_counts[threat] = threat_counts.get(threat, 0) + 1
-
-    top_threats = sorted(
-        [{"category": k, "count": v} for k, v in threat_counts.items()],
-        key=lambda x: x["count"],
-        reverse=True,
-    )
-
     # Severity breakdown - for SIEM compatibility and dashboard triage
     sev_map        = stats.get("severities_map", {})
     severity_counts = {
@@ -305,9 +290,9 @@ async def get_audit_stats(
         "block_rate":     round(stats["block_count"]    / total, 4),
         "sanitize_rate":  round(stats["sanitize_count"] / total, 4),
         "allow_rate":     round(stats["allow_count"]    / total, 4),
-        "avg_latency_ms": round(avg_lat, 2),
-        "p95_latency_ms": round(p95_lat, 2),
-        "top_threats":    top_threats,
+        "avg_latency_ms": round(stats["avg_latency_ms"], 2),
+        "p95_latency_ms": round(stats["p95_latency_ms"], 2),
+        "top_threats":    stats["top_threats"],
         "severity_counts": severity_counts,
     })
 

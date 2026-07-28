@@ -184,7 +184,12 @@ class AuditRepository(BaseRepository):
         from_dt:   datetime | None = None,
         to_dt:     datetime | None = None,
     ) -> dict:
-        # Build shared WHERE conditions
+        # Aggregation is done in SQL on PostgreSQL so we do not fan out every
+        # latency and threats row into a Python list -- that pattern OOMs once
+        # a tenant crosses a few million audit rows. SQLite lacks percentile
+        # and JSON-unnest functions, so tests fall through to a Python pass;
+        # SQLite is never used in production, only for the in-memory unit-test
+        # database.
         filters = []
         if tenant_id:
             filters.append(AuditLogModel.tenant_id == tenant_id)
@@ -193,48 +198,92 @@ class AuditRepository(BaseRepository):
         if to_dt:
             filters.append(AuditLogModel.created_at <= to_dt)
 
-        # Single aggregation query for counts - avoids fetching all rows into memory
-        count_q = select(
+        is_pg = self.session.bind.dialect.name == "postgresql"
+
+        agg_cols = [
             func.count().label("total"),
             func.sum(case((AuditLogModel.decision == "BLOCK",    1), else_=0)).label("block_count"),
             func.sum(case((AuditLogModel.decision == "SANITIZE", 1), else_=0)).label("sanitize_count"),
             func.sum(case((AuditLogModel.decision == "ALLOW",    1), else_=0)).label("allow_count"),
-        )
-        if filters:
-            count_q = count_q.where(*filters)
-        counts_row = (await self.session.execute(count_q)).one()
+            func.avg(AuditLogModel.latency_ms).label("avg_latency"),
+        ]
+        if is_pg:
+            # percentile_cont interpolates -- same definition Grafana, Datadog,
+            # and Prometheus histogram_quantile use for SLO reporting.
+            agg_cols.append(
+                func.percentile_cont(0.95)
+                    .within_group(AuditLogModel.latency_ms.asc())
+                    .label("p95_latency")
+            )
 
-        if not counts_row.total:
+        agg_q = select(*agg_cols)
+        if filters:
+            agg_q = agg_q.where(*filters)
+        row = (await self.session.execute(agg_q)).one()
+
+        total = row.total or 0
+        if not total:
             return {
                 "total":          0,
                 "block_count":    0,
                 "sanitize_count": 0,
                 "allow_count":    0,
-                "latencies":      [],
-                "threats":        [],
+                "avg_latency_ms": 0.0,
+                "p95_latency_ms": 0.0,
+                "top_threats":    [],
             }
 
-        # Fetch only latency_ms, pre-sorted - used for avg/p95 by caller
-        lat_q = select(AuditLogModel.latency_ms).order_by(AuditLogModel.latency_ms)
-        if filters:
-            lat_q = lat_q.where(*filters)
-        lat_rows  = (await self.session.execute(lat_q)).fetchall()
-        latencies = [r[0] for r in lat_rows if r[0] is not None]
+        avg_latency = float(row.avg_latency or 0)
 
-        # Fetch only threats column - unnest JSONB arrays in Python
-        threat_q = select(AuditLogModel.threats)
-        if filters:
-            threat_q = threat_q.where(*filters)
-        threat_rows = (await self.session.execute(threat_q)).fetchall()
-        threats: list[str] = []
-        for (threat_list,) in threat_rows:
-            threats.extend(threat_list or [])
+        if is_pg:
+            p95_latency = float(row.p95_latency or 0)
+        else:
+            lat_q = select(AuditLogModel.latency_ms).order_by(AuditLogModel.latency_ms)
+            if filters:
+                lat_q = lat_q.where(*filters)
+            lats = [
+                r[0] for r in (await self.session.execute(lat_q)).fetchall()
+                if r[0] is not None
+            ]
+            p95_latency = float(lats[int(len(lats) * 0.95)]) if lats else 0.0
+
+        if is_pg:
+            # jsonb_array_elements_text unnests each threats array into one row
+            # per element; GROUP BY then collapses across all rows for category
+            # counts. The physical column is JSONB (the SQLAlchemy `JSON` type
+            # gets promoted to JSONB on PostgreSQL), so use the jsonb_* variant.
+            threat_where = list(filters) + [AuditLogModel.threats.isnot(None)]
+            threat_elem  = func.jsonb_array_elements_text(AuditLogModel.threats).label("threat")
+            inner = select(threat_elem).where(*threat_where).subquery()
+            top_q = (
+                select(inner.c.threat, func.count().label("cnt"))
+                .group_by(inner.c.threat)
+                .order_by(func.count().desc())
+            )
+            top_threats = [
+                {"category": r.threat, "count": r.cnt}
+                for r in (await self.session.execute(top_q)).fetchall()
+            ]
+        else:
+            threat_q = select(AuditLogModel.threats)
+            if filters:
+                threat_q = threat_q.where(*filters)
+            counts: dict[str, int] = {}
+            for (arr,) in (await self.session.execute(threat_q)).fetchall():
+                for t in (arr or []):
+                    counts[t] = counts.get(t, 0) + 1
+            top_threats = sorted(
+                [{"category": k, "count": v} for k, v in counts.items()],
+                key=lambda x: x["count"],
+                reverse=True,
+            )
 
         return {
-            "total":          counts_row.total,
-            "block_count":    counts_row.block_count    or 0,
-            "sanitize_count": counts_row.sanitize_count or 0,
-            "allow_count":    counts_row.allow_count    or 0,
-            "latencies":      latencies,
-            "threats":        threats,
+            "total":          total,
+            "block_count":    row.block_count    or 0,
+            "sanitize_count": row.sanitize_count or 0,
+            "allow_count":    row.allow_count    or 0,
+            "avg_latency_ms": avg_latency,
+            "p95_latency_ms": p95_latency,
+            "top_threats":    top_threats,
         }
