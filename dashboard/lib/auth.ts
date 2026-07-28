@@ -163,7 +163,7 @@ export async function login(
 export interface AuthUser {
   id:                    string
   email:                 string
-  role:                  "ADMIN" | "DEVELOPER" | "VIEWER"
+  role:                  "ADMIN" | "DEVELOPER" | "VIEWER" | "AUDITOR"
   dept_id:               string | null
   tenant_id:             string
   is_active:             boolean
