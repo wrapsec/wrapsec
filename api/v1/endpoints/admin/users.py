@@ -112,12 +112,16 @@ def _validate_role_dept_consistency(role: str, dept_id) -> str | None:
     Validates final state role + dept_id consistency.
     Returns error message string if invalid, None if valid.
 
-    Rules (both directions enforced):
-        role = ADMIN     -> dept_id MUST be None
-        role != ADMIN    -> dept_id MUST NOT be None
+    Rules (mirror ck_users_dept_required_v2 in db/models.py):
+        role = ADMIN                 -> dept_id MUST be None
+        role = AUDITOR               -> dept_id may be None (tenant-wide)
+                                        or set (department-scoped)
+        role IN (DEVELOPER, VIEWER)  -> dept_id MUST NOT be None
     """
     if role == "ADMIN" and dept_id is not None:
         return "ADMIN users must not have a dept_id."
+    if role == "AUDITOR":
+        return None
     if role != "ADMIN" and dept_id is None:
         return f"dept_id is required for role '{role}'."
     return None
@@ -151,12 +155,12 @@ async def create_user(
         )
 
     # Validate role
-    if body.role not in ("ADMIN", "DEVELOPER", "VIEWER"):
+    if body.role not in ("ADMIN", "DEVELOPER", "VIEWER", "AUDITOR"):
         return JSONResponse(
             status_code=400,
             content={"error": {
                 "code":    "INVALID_REQUEST",
-                "message": f"Invalid role '{body.role}'. Must be ADMIN, DEVELOPER, or VIEWER.",
+                "message": f"Invalid role '{body.role}'. Must be ADMIN, DEVELOPER, VIEWER, or AUDITOR.",
             }},
         )
 
@@ -339,12 +343,12 @@ async def update_user(
         final_dept_id = data["dept_id"]
 
     # Validate role (if changing)
-    if "role" in data and data["role"] not in ("ADMIN", "DEVELOPER", "VIEWER"):
+    if "role" in data and data["role"] not in ("ADMIN", "DEVELOPER", "VIEWER", "AUDITOR"):
         return JSONResponse(
             status_code=400,
             content={"error": {
                 "code":    "INVALID_REQUEST",
-                "message": f"Invalid role '{data['role']}'. Must be ADMIN, DEVELOPER, or VIEWER.",
+                "message": f"Invalid role '{data['role']}'. Must be ADMIN, DEVELOPER, VIEWER, or AUDITOR.",
             }},
         )
 

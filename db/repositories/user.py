@@ -44,8 +44,10 @@ class UserRepository(BaseRepository):
         Optional keys: dept_id (UUID), force_password_change (bool)
 
         Validations performed before insert:
-        1. role must be in (ADMIN, DEVELOPER, VIEWER) - raises ValueError otherwise
-        2. dept_id required if role != ADMIN - raises ValueError if missing
+        1. role must be in (ADMIN, DEVELOPER, VIEWER, AUDITOR) - raises ValueError otherwise
+        2. dept_id required if role IN (DEVELOPER, VIEWER); ADMIN forbids it;
+           AUDITOR permits either (tenant-wide or dept-scoped) - raises ValueError
+           if the required/forbidden rule is violated
         3. dept_id tenant integrity check: if dept_id is provided, verifies that
            the department belongs to the same tenant as the user.
            Raises ValueError if dept does not belong to tenant.
@@ -54,10 +56,15 @@ class UserRepository(BaseRepository):
         role    = data.get("role", "DEVELOPER")
         dept_id = data.get("dept_id")
 
-        if role not in ("ADMIN", "DEVELOPER", "VIEWER"):
-            raise ValueError(f"Invalid role '{role}'. Must be ADMIN, DEVELOPER, or VIEWER.")
+        if role not in ("ADMIN", "DEVELOPER", "VIEWER", "AUDITOR"):
+            raise ValueError(
+                f"Invalid role '{role}'. Must be ADMIN, DEVELOPER, VIEWER, or AUDITOR."
+            )
 
-        if role != "ADMIN" and not dept_id:
+        if role == "ADMIN" and dept_id:
+            raise ValueError("ADMIN users must not have a dept_id.")
+
+        if role in ("DEVELOPER", "VIEWER") and not dept_id:
             raise ValueError(f"dept_id is required for role '{role}'.")
 
         if dept_id:

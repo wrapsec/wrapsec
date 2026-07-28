@@ -106,10 +106,11 @@ CREATE TABLE users (
     token_version         INTEGER      NOT NULL,
     created_at            TIMESTAMP    NOT NULL,
     last_login_at         TIMESTAMP,
-    CONSTRAINT ck_users_role CHECK (role IN ('ADMIN', 'DEVELOPER', 'VIEWER')),
+    CONSTRAINT ck_users_role CHECK (role IN ('ADMIN', 'DEVELOPER', 'VIEWER', 'AUDITOR')),
     CONSTRAINT ck_users_dept_required_v2 CHECK (
-        (role = 'ADMIN'  AND dept_id IS NULL) OR
-        (role <> 'ADMIN' AND dept_id IS NOT NULL)
+        (role = 'ADMIN'   AND dept_id IS NULL) OR
+        (role = 'AUDITOR') OR
+        (role IN ('DEVELOPER', 'VIEWER') AND dept_id IS NOT NULL)
     ),
     CONSTRAINT fk_users_dept_tenant FOREIGN KEY (dept_id, tenant_id)
         REFERENCES departments(id, tenant_id),

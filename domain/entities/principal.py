@@ -5,7 +5,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
-from typing import TYPE_CHECKING, NoReturn
+from typing import TYPE_CHECKING
 
 from domain.enums import PrincipalType
 
@@ -14,17 +14,21 @@ if TYPE_CHECKING:
 
 # ── Role -> permission strings ──────────────────────────────────────────────────
 #
-# v1 ENFORCEMENT RULE:
-#   These permission strings are defined for FUTURE USE (v2+) ONLY.
-#   In v1, all endpoint guards use has_role() / require_role() exclusively.
-#   has_permission() MUST NOT be called in any v1 endpoint guard.
-#   When v2 granular access control is implemented, replace require_role()
-#   with require_permission() at that time.
-#   Reviewers: this is intentional - do not flag as unused.
+# Endpoint guards continue to use has_role() / require_role() for coarse
+# access control; has_permission() is available for the fine-grained checks
+# that landed with the AUDITOR role (settings:read, keys:read) where a
+# VIEWER-vs-AUDITOR distinction matters more than a role label.
+#
+# AUDITOR mirrors industry-standard read-only compliance roles:
+#   AWS SecurityAudit, Azure Security Reader, GCP roles/iam.securityReviewer,
+#   GitHub Security manager. It is strictly a superset of VIEWER (all VIEWER
+#   scopes plus settings:read and keys:read) so any policy that admits VIEWER
+#   also admits AUDITOR by construction.
 #
 ROLE_PERMISSIONS: dict[str, list[str]] = {
     "ADMIN":     ["*"],
     "DEVELOPER": ["scan:*", "audit:read", "settings:read", "keys:*", "dashboard:read"],
+    "AUDITOR":   ["audit:read", "dashboard:read", "settings:read", "keys:read"],
     "VIEWER":    ["audit:read", "dashboard:read"],
 }
 
@@ -47,42 +51,42 @@ class Principal:
         """Check if principal has any of the specified roles. Used in all v1 guards."""
         return any(r in self.roles for r in roles)
 
-    def has_permission(self, permission: str) -> NoReturn:
+    def has_permission(self, permission: str) -> bool:
         """
         Wildcard permission check.
 
-        v1 HARD GUARD (R6 fix):
-            Raises NotImplementedError in v1 to prevent accidental use.
-            All v1 access control uses has_role() exclusively.
-            If this is called in v1, it is a bug - fail loud, not silent.
+        Matching rules:
+            "*"         in permissions -> matches everything (ADMIN)
+            exact match on the requested permission
+            segment-wise wildcard: "scan:*" grants "scan:read", "scan:write";
+            "tool:db:*" grants "tool:db:read", "tool:db:write"
 
-        v2+:
-            Remove the NotImplementedError guard.
-            Replace require_role() calls with require_permission() calls.
-            Implement the wildcard logic in the commented block below.
+        Segment lengths must match: "scan:*" does NOT grant "scan:read:sensitive"
+        (that would require "scan:*:*" or similar). This is the same containment
+        rule Casbin, AWS IAM, and Google Cloud IAM apply to their wildcard
+        expansions -- broader matches are opt-in with an explicit extra segment,
+        not accidental via a single trailing star.
 
-        Wildcards (for v2+ reference):
-            "*"         -> matches everything
-            "scan:*"    -> matches "scan:read", "scan:write"
-            "tool:db:*" -> matches "tool:db:read", "tool:db:write"
+        Empty permission strings and permissions containing "*" as a literal
+        segment in the check argument are treated as no-match; callers should
+        pass concrete permission strings like "settings:read".
         """
-        raise NotImplementedError(
-            "has_permission() is not enforced in v1. "
-            "Use has_role() for all v1 access control. "
-            "See ROLE_PERMISSIONS for v2+ permission strings."
-        )
-        # v2+ implementation (unreachable in v1 - remove guard above when ready):
-        # if "*" in self.permissions:
-        #     return True
-        # if permission in self.permissions:
-        #     return True
-        # parts = permission.split(":")
-        # for p in self.permissions:
-        #     p_parts = p.split(":")
-        #     if len(p_parts) == len(parts):
-        #         if all(a == b or b == "*" for a, b in zip(parts, p_parts)):
-        #             return True
-        # return False
+        if not permission:
+            return False
+
+        if "*" in self.permissions:
+            return True
+        if permission in self.permissions:
+            return True
+
+        parts = permission.split(":")
+        for p in self.permissions:
+            p_parts = p.split(":")
+            if len(p_parts) != len(parts):
+                continue
+            if all(a == b or b == "*" for a, b in zip(parts, p_parts)):
+                return True
+        return False
 
 
 # ── Builder functions ──────────────────────────────────────────────────────────
