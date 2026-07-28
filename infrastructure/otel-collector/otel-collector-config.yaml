@@ -1,0 +1,82 @@
+# WrapSec OpenTelemetry Collector configuration.
+#
+# Purpose: bridge the existing Prometheus /metrics endpoint to any OTLP-
+# compatible backend (Grafana Cloud, Datadog, New Relic, Honeycomb, Splunk,
+# etc.) without re-instrumenting the application. Metric names, labels, and
+# help text are preserved as-scraped -- the OTel spec's Prometheus-to-OTLP
+# translation is well-defined and stable.
+#
+# CNCF-recommended pattern: application exposes Prometheus /metrics, the
+# Collector scrapes it via the prometheus receiver, then forwards via the
+# otlp exporter. See:
+#   https://opentelemetry.io/docs/collector/
+#   https://github.com/open-telemetry/opentelemetry-collector-contrib/tree/main/receiver/prometheusreceiver
+#
+# Env vars this file expects (set by docker-compose):
+#   METRICS_AUTH_TOKEN            Bearer token for /metrics (METRICS_TOKEN
+#                                 falls back to ADMIN_API_KEY at compose layer)
+#   OTEL_EXPORTER_OTLP_ENDPOINT   Destination URL (e.g. https://otlp.grafana.net:443)
+#   OTEL_EXPORTER_OTLP_HEADERS    Auth headers, e.g. "Authorization=Basic xxx"
+#                                 or "api-key=xxx" for New Relic. See OTel spec.
+#   OTEL_EXPORTER_OTLP_PROTOCOL   grpc (default) or http/protobuf
+#   OTEL_EXPORTER_OTLP_INSECURE   true to skip TLS verify (dev / self-signed only)
+#
+# Env var names follow the OpenTelemetry Protocol Exporter spec:
+#   https://opentelemetry.io/docs/specs/otel/protocol/exporter/
+
+receivers:
+  prometheus:
+    config:
+      scrape_configs:
+        - job_name: wrapsec_api
+          scrape_interval: 15s
+          metrics_path: /metrics
+          scheme: http
+          authorization:
+            type: Bearer
+            credentials: ${env:METRICS_AUTH_TOKEN}
+          static_configs:
+            - targets: [api:8000]
+
+processors:
+  # memory_limiter must be the first processor in every pipeline.
+  # Guards the Collector from OOM under scrape backpressure.
+  memory_limiter:
+    check_interval: 5s
+    limit_percentage: 80
+    spike_limit_percentage: 25
+
+  # Standard batching per OTel Collector recommendations.
+  batch:
+    send_batch_size: 8192
+    timeout: 10s
+
+exporters:
+  # Real destination: any OTLP-compatible backend. Configured via env vars
+  # so the same image serves every deployment target.
+  otlp:
+    endpoint: ${env:OTEL_EXPORTER_OTLP_ENDPOINT}
+    headers:
+      # Compose passes OTEL_EXPORTER_OTLP_HEADERS as a single string; the
+      # exporter's headers block accepts a map. Operators using headers
+      # should uncomment and edit this block, or override via the
+      # OTEL_EXPORTER_OTLP_HEADERS env when using an HTTP protocol variant.
+      # Authorization: ${env:OTLP_AUTH_HEADER}
+    tls:
+      insecure: ${env:OTEL_EXPORTER_OTLP_INSECURE}
+
+  # Fallback / smoke-test sink. Prints scraped metrics on the Collector's
+  # own stdout so operators can verify the scrape works before wiring a
+  # real OTLP backend. Safe to leave enabled; volume is low.
+  debug:
+    verbosity: basic
+
+service:
+  telemetry:
+    logs:
+      level: info
+  pipelines:
+    metrics:
+      receivers:  [prometheus]
+      processors: [memory_limiter, batch]
+      exporters:  [otlp, debug]
