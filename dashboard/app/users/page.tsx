@@ -22,6 +22,7 @@ function RoleBadge({ role }: { role: string }) {
   const styles: Record<string, string> = {
     ADMIN:     "bg-purple-50 text-purple-700 border-purple-200",
     DEVELOPER: "bg-blue-50 text-blue-700 border-blue-200",
+    AUDITOR:   "bg-amber-50 text-amber-700 border-amber-200",
     VIEWER:    "bg-slate-50 text-slate-600 border-slate-200",
   }
   return (
@@ -86,6 +87,11 @@ function CreateUserModal({
   const [error,    setError]    = useState<string | null>(null)
   const { isJwt } = useAuthMode()
 
+  // ADMIN forbids dept_id; AUDITOR treats it as optional (tenant-wide when
+  // empty); DEVELOPER/VIEWER require it. Matches ck_users_dept_required_v2.
+  const auditorTenantWide = role === "AUDITOR" && !deptId
+  const omitDept          = role === "ADMIN" || auditorTenantWide
+
   const handleCreate = async () => {
     setError(null)
     setSaving(true)
@@ -94,7 +100,7 @@ function CreateUserModal({
         email,
         password,
         role:    role as any,
-        dept_id: role === "ADMIN" ? undefined : deptId,
+        dept_id: omitDept ? undefined : deptId,
       })
       onCreated()
       onClose()
@@ -142,12 +148,16 @@ function CreateUserModal({
             <select value={role} onChange={e => setRole(e.target.value)} className={selectCls}>
               <option value="ADMIN">ADMIN</option>
               <option value="DEVELOPER">DEVELOPER</option>
+              <option value="AUDITOR">AUDITOR</option>
               <option value="VIEWER">VIEWER</option>
             </select>
           </Field>
           {role !== "ADMIN" && (
-            <Field label="Department *">
+            <Field label={role === "AUDITOR" ? "Department (optional)" : "Department *"}>
               <select value={deptId} onChange={e => setDeptId(e.target.value)} className={selectCls}>
+                {role === "AUDITOR" && (
+                  <option value="">Tenant-wide (all departments)</option>
+                )}
                 {depts.map(d => (
                   <option key={d.id} value={d.id}>{d.name}</option>
                 ))}
@@ -196,7 +206,12 @@ function EditUserModal({
   }, [onClose])
 
   const [role,     setRole]     = useState(user.role)
-  const [deptId,   setDeptId]   = useState(user.dept_id ?? depts[0]?.id ?? "")
+  // AUDITOR with null dept_id is tenant-wide: seed deptId="" so the
+  // "Tenant-wide" option renders as selected rather than silently
+  // switching them to the first dept on save.
+  const [deptId,   setDeptId]   = useState(
+    user.dept_id ?? (user.role === "AUDITOR" ? "" : (depts[0]?.id ?? ""))
+  )
   const [saving,   setSaving]   = useState(false)
   const [error,    setError]    = useState<string | null>(null)
   const { isJwt } = useAuthMode()
@@ -211,13 +226,18 @@ function EditUserModal({
   const [resetError,  setResetError]  = useState<string | null>(null)
   const [resetDone,   setResetDone]   = useState(false)
 
+  // ADMIN forbids dept_id; AUDITOR treats it as optional (tenant-wide when
+  // empty); DEVELOPER/VIEWER require it. Matches ck_users_dept_required_v2.
+  const auditorTenantWide = role === "AUDITOR" && !deptId
+  const nullifyDept       = role === "ADMIN" || auditorTenantWide
+
   const handleSave = async () => {
     setError(null)
     setSaving(true)
     try {
       await updateUser(user.id, {
         role:    role as any,
-        dept_id: role === "ADMIN" ? null : deptId,
+        dept_id: nullifyDept ? null : deptId,
       })
       onSaved()
       onClose()
@@ -282,12 +302,16 @@ function EditUserModal({
             <select value={role} onChange={e => setRole(e.target.value as any)} className={selectCls}>
               <option value="ADMIN">ADMIN</option>
               <option value="DEVELOPER">DEVELOPER</option>
+              <option value="AUDITOR">AUDITOR</option>
               <option value="VIEWER">VIEWER</option>
             </select>
           </Field>
           {role !== "ADMIN" && (
-            <Field label="Department">
+            <Field label={role === "AUDITOR" ? "Department (optional)" : "Department"}>
               <select value={deptId} onChange={e => setDeptId(e.target.value)} className={selectCls}>
+                {role === "AUDITOR" && (
+                  <option value="">Tenant-wide (all departments)</option>
+                )}
                 {depts.map(d => (
                   <option key={d.id} value={d.id}>{d.name}</option>
                 ))}

@@ -666,7 +666,7 @@ export async function getUser(userId: string): Promise<DashboardUser> {
 export async function createUser(data: {
   email:    string
   password: string
-  role:     "ADMIN" | "DEVELOPER" | "VIEWER"
+  role:     "ADMIN" | "DEVELOPER" | "VIEWER" | "AUDITOR"
   dept_id?: string
 }): Promise<DashboardUser> {
   return request<DashboardUser>("/v1/admin/users", {
@@ -678,7 +678,7 @@ export async function createUser(data: {
 export async function updateUser(
   userId: string,
   data: {
-    role?:      "ADMIN" | "DEVELOPER" | "VIEWER"
+    role?:      "ADMIN" | "DEVELOPER" | "VIEWER" | "AUDITOR"
     dept_id?:   string | null
     is_active?: boolean
   }
