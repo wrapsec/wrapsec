@@ -149,7 +149,11 @@ services:
     ports:
       - "127.0.0.1:3001:3000"
     environment:
-      - GF_SECURITY_ADMIN_PASSWORD=${GRAFANA_PASSWORD}
+      # Fail closed if GRAFANA_PASSWORD is unset/empty. Grafana otherwise
+      # falls back to the default admin/admin credentials, which are indexed
+      # by every shodan-style scanner. The setup.sh --prod path additionally
+      # rejects known-weak values (admin, changeme, ...) before this point.
+      - GF_SECURITY_ADMIN_PASSWORD=${GRAFANA_PASSWORD:?GRAFANA_PASSWORD must be set to a strong non-default value (>=12 chars, not admin/changeme/etc.). Run ./setup.sh --prod for a validated bootstrap.}
       - GF_USERS_ALLOW_SIGN_UP=false
       - GF_AUTH_ANONYMOUS_ENABLED=false
       - GF_SECURITY_DISABLE_GRAVATAR=true
