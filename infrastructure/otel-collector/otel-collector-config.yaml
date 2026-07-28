@@ -1,10 +1,9 @@
 # WrapSec OpenTelemetry Collector configuration.
 #
 # Purpose: bridge the existing Prometheus /metrics endpoint to any OTLP-
-# compatible backend (Grafana Cloud, Datadog, New Relic, Honeycomb, Splunk,
-# etc.) without re-instrumenting the application. Metric names, labels, and
-# help text are preserved as-scraped -- the OTel spec's Prometheus-to-OTLP
-# translation is well-defined and stable.
+# compatible backend without re-instrumenting the application. Metric
+# names, labels, and help text are preserved as-scraped -- the OTel spec's
+# Prometheus-to-OTLP translation is well-defined and stable.
 #
 # CNCF-recommended pattern: application exposes Prometheus /metrics, the
 # Collector scrapes it via the prometheus receiver, then forwards via the
@@ -15,9 +14,9 @@
 # Env vars this file expects (set by docker-compose):
 #   METRICS_AUTH_TOKEN            Bearer token for /metrics (METRICS_TOKEN
 #                                 falls back to ADMIN_API_KEY at compose layer)
-#   OTEL_EXPORTER_OTLP_ENDPOINT   Destination URL (e.g. https://otlp.grafana.net:443)
+#   OTEL_EXPORTER_OTLP_ENDPOINT   Destination URL (e.g. https://otlp.example.com:4317)
 #   OTEL_EXPORTER_OTLP_HEADERS    Auth headers, e.g. "Authorization=Basic xxx"
-#                                 or "api-key=xxx" for New Relic. See OTel spec.
+#                                 Format is backend-specific -- see OTel spec.
 #   OTEL_EXPORTER_OTLP_PROTOCOL   grpc (default) or http/protobuf
 #   OTEL_EXPORTER_OTLP_INSECURE   true to skip TLS verify (dev / self-signed only)
 #

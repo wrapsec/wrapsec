@@ -38,7 +38,7 @@ The pipeline combines rule-based, machine learning, and optional LLM-based analy
 
 ```
 Input
-  |-- InputGuard          PII detection (22 entity types), redaction if triggered
+  |-- InputGuard          PII detection (30 entity types), redaction if triggered
   |-- RuleDetector        Regex and heuristic patterns, ~1ms
   |-- DetectionPipeline   Two-tier ML detection
   |   |-- Tier 1          TF-IDF + logistic regression, always on, ~5ms

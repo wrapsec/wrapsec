@@ -257,7 +257,7 @@ Every request is assigned a severity level for audit and alerting purposes. Seve
 
 Guardrails are independent of the detection pipeline and always take priority over it.
 
-**PII guardrail** - detects and redacts personally identifiable information (22+ types including email addresses, phone numbers, credit card numbers, SSNs, etc.). Can BLOCK or SANITIZE depending on configured thresholds.
+**PII guardrail** - detects and redacts personally identifiable information (30+ types including email addresses, phone numbers, credit card numbers, SSNs, passports, IBAN, SWIFT/BIC, driver licences, medical record numbers, and more). Can BLOCK or SANITIZE depending on configured thresholds.
 
 **Toxicity guardrail** - detects hate speech, harassment, and other toxic content. BLOCK-or-ALLOW only: toxic content above the block threshold blocks the entire request; below it, the toxicity guardrail does not fire. There is no partial redaction tier - toxic text cannot be safely rewritten by pattern substitution.
 

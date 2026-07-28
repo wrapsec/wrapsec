@@ -1871,7 +1871,7 @@ Note: `account_inactive` is the `auth_events.failure_reason` value when `is_acti
 ### V1.0 (April 2026)
 
 - Rule, ML, LLM detectors
-- PII guardrail (22+ types)
+- PII guardrail (30+ types)
 - Idempotency-Key
 - ULID trace IDs
 - Rate limiting per API key

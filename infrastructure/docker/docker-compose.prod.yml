@@ -119,12 +119,11 @@ services:
       - "--web.console.templates=/usr/share/prometheus/consoles"
     restart: unless-stopped
 
-  # OpenTelemetry Collector: bridges /metrics to any OTLP backend
-  # (Grafana Cloud, Datadog, New Relic, Honeycomb, Splunk OTel Cloud,
-  # Chronosphere, etc.) without re-instrumenting the application.
-  # Opt-in via profile so a production `docker compose -f
-  # docker-compose.prod.yml up -d` is byte-for-byte unchanged until an
-  # operator elects to enable OTLP export with `--profile otlp`.
+  # OpenTelemetry Collector: bridges /metrics to any OTLP-compatible
+  # backend without re-instrumenting the application. Opt-in via profile
+  # so a production `docker compose -f docker-compose.prod.yml up -d` is
+  # byte-for-byte unchanged until an operator elects to enable OTLP
+  # export with `--profile otlp`.
   # Config: infrastructure/otel-collector/otel-collector-config.yaml
   otel-collector:
     image: otel/opentelemetry-collector-contrib:0.157.0

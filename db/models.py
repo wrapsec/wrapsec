@@ -270,8 +270,8 @@ class UserModel(Base):
         #   role = AUDITOR                     -> dept_id may be NULL (tenant-wide)
         #                                         or set (department-scoped)
         #   role IN (DEVELOPER, VIEWER)        -> dept_id MUST NOT be NULL
-        # AUDITOR mirrors AWS SecurityAudit / Azure Security Reader scope
-        # flexibility (attach at account/root or narrower).
+        # AUDITOR scoping is flexible: attach at tenant-wide (NULL dept_id)
+        # or narrower (single department).
         CheckConstraint(
             "(role = 'ADMIN' AND dept_id IS NULL) OR "
             "(role = 'AUDITOR') OR "

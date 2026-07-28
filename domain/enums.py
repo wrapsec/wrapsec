@@ -58,8 +58,7 @@ class UserRole(str, Enum):
     # Read-only role scoped for audit and compliance work. Distinct from
     # VIEWER: also carries settings:read and keys:read so a SOC2/ISO auditor
     # can inspect policy configuration and API key inventory without any
-    # write path. Modelled on AWS SecurityAudit, Azure Security Reader,
-    # GCP roles/iam.securityReviewer, and GitHub's Security manager role.
+    # write path.
     AUDITOR   = "AUDITOR"
 
 
