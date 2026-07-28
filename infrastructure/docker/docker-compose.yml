@@ -117,6 +117,33 @@ services:
       - "--web.console.templates=/usr/share/prometheus/consoles"
     restart: unless-stopped
 
+  # OpenTelemetry Collector: bridges the existing Prometheus /metrics
+  # endpoint to any OTLP backend (Grafana Cloud, Datadog, New Relic, etc.)
+  # without re-instrumenting the app. Opt-in via profile so existing
+  # `docker compose up` deployments are unchanged:
+  #   docker compose --profile otlp up -d
+  # Config: infrastructure/otel-collector/otel-collector-config.yaml
+  otel-collector:
+    image: otel/opentelemetry-collector-contrib:latest
+    container_name: wrapsec_otel_collector
+    profiles: ["otlp"]
+    command: ["--config=/etc/otelcol/config.yaml"]
+    environment:
+      # /metrics is Bearer-protected. Reuse METRICS_TOKEN if set, else the
+      # admin key. Do not weaken /metrics auth just for the collector.
+      - METRICS_AUTH_TOKEN=${METRICS_TOKEN:-${ADMIN_API_KEY}}
+      # OTLP destination -- set these to enable real export. Names follow
+      # the OpenTelemetry Protocol Exporter spec.
+      - OTEL_EXPORTER_OTLP_ENDPOINT=${OTEL_EXPORTER_OTLP_ENDPOINT:-http://localhost:4317}
+      - OTEL_EXPORTER_OTLP_HEADERS=${OTEL_EXPORTER_OTLP_HEADERS:-}
+      - OTEL_EXPORTER_OTLP_PROTOCOL=${OTEL_EXPORTER_OTLP_PROTOCOL:-grpc}
+      - OTEL_EXPORTER_OTLP_INSECURE=${OTEL_EXPORTER_OTLP_INSECURE:-true}
+    volumes:
+      - ../otel-collector/otel-collector-config.yaml:/etc/otelcol/config.yaml:ro
+    depends_on:
+      - api
+    restart: unless-stopped
+
   grafana:
     image: grafana/grafana:latest
     container_name: wrapsec_grafana

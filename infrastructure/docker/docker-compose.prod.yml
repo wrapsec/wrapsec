@@ -119,6 +119,30 @@ services:
       - "--web.console.templates=/usr/share/prometheus/consoles"
     restart: unless-stopped
 
+  # OpenTelemetry Collector: bridges /metrics to any OTLP backend
+  # (Grafana Cloud, Datadog, New Relic, Honeycomb, Splunk OTel Cloud,
+  # Chronosphere, etc.) without re-instrumenting the application.
+  # Opt-in via profile so a production `docker compose -f
+  # docker-compose.prod.yml up -d` is byte-for-byte unchanged until an
+  # operator elects to enable OTLP export with `--profile otlp`.
+  # Config: infrastructure/otel-collector/otel-collector-config.yaml
+  otel-collector:
+    image: otel/opentelemetry-collector-contrib:0.157.0
+    container_name: wrapsec_otel_collector
+    profiles: ["otlp"]
+    command: ["--config=/etc/otelcol/config.yaml"]
+    environment:
+      - METRICS_AUTH_TOKEN=${METRICS_TOKEN:-${ADMIN_API_KEY}}
+      - OTEL_EXPORTER_OTLP_ENDPOINT=${OTEL_EXPORTER_OTLP_ENDPOINT}
+      - OTEL_EXPORTER_OTLP_HEADERS=${OTEL_EXPORTER_OTLP_HEADERS:-}
+      - OTEL_EXPORTER_OTLP_PROTOCOL=${OTEL_EXPORTER_OTLP_PROTOCOL:-grpc}
+      - OTEL_EXPORTER_OTLP_INSECURE=${OTEL_EXPORTER_OTLP_INSECURE:-false}
+    volumes:
+      - ../otel-collector/otel-collector-config.yaml:/etc/otelcol/config.yaml:ro
+    depends_on:
+      - api
+    restart: unless-stopped
+
   grafana:
     image: grafana/grafana:10.4.0
     container_name: wrapsec_grafana
