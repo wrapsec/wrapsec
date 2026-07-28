@@ -2,6 +2,31 @@
 
 All notable changes to WrapSec are documented here.
 
+## [1.2.2] - 2026-07-28
+
+### Security
+- `GET /v1/audit/stats` was not applying department scope. A
+  dept-scoped caller (non-admin, incl. dept-scoped AUDITOR) received
+  tenant-wide aggregate counts -- `total`, `block_count`,
+  `sanitize_count`, `allow_count`, `avg_latency_ms`, `p95_latency_ms`,
+  and `top_threats` -- covering departments they cannot list via
+  `/v1/audit/logs`. Per-row endpoints (`/logs`, `/attribution`,
+  `/analytics`, `/export`) were already dept-scoped; only `/stats`
+  leaked. Fixed by threading `dept_id` from the request scope through
+  `AuditRepository.get_stats` and the inline severity-count query in
+  the endpoint, matching the pattern already used for `/logs`. Admin
+  callers are unaffected because their scope carries no `dept_id`.
+
+### Fixed
+- Dashboard Requests page: date filters deep-linked from the Overview
+  and Analytics badges did not pre-populate. `useTimeRange` emits
+  `YYYY-MM-DDTHH:MM:SS`, but the URL sanitiser produced that same
+  format and `<input type="date">` silently rejects any value
+  containing `T`. `sanitiseDate` now accepts both `YYYY-MM-DD` and
+  `YYYY-MM-DDTHH:MM:SS` and always hands the input the date portion;
+  the existing fetch code re-attaches `T00:00:00` / `T23:59:59` so
+  the request is unchanged.
+
 ## [1.2.1] - 2026-07-28
 
 ### Fixed
