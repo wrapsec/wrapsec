@@ -78,7 +78,19 @@ TOXICITY_PATTERNS = [
 
 
 # Compiled registry: (compiled_patterns, threat_category, base_score)
-# re.DOTALL allows multi-line injection payloads to be matched by single-line patterns.
+#
+# Every pattern is compiled with re.IGNORECASE | re.DOTALL. DOTALL is applied
+# uniformly across all five pattern groups to close a multi-line evasion path:
+# without it, a payload like `ignore\nprevious\ninstructions` splits the `\s+`
+# whitespace anchor across a line break, and `.` inside a group like
+# `(all\s+)?` cannot span the newline -- letting the attacker slip past what
+# looks like a straightforward `ignore previous instructions` match. DOTALL
+# makes `.` match `\n` as well, so the same regex catches both the single-line
+# and multi-line rendering of the same intent.
+#
+# Trade-off: no pattern in this file uses a greedy `.*` between anchors that
+# would blow up runtime under DOTALL. If future patterns add spanning `.*`,
+# re-audit for catastrophic backtracking against long multi-line inputs.
 COMPILED_REGISTRY: list[tuple[list[re.Pattern], ThreatCategory, float]] = [
     (
         [re.compile(p, re.IGNORECASE | re.DOTALL) for p in PROMPT_INJECTION_PATTERNS],
