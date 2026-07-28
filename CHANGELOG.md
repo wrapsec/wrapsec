@@ -2,6 +2,42 @@
 
 All notable changes to WrapSec are documented here.
 
+## [1.2.1] - 2026-07-28
+
+### Fixed
+- `GET /v1/audit/stats` returned 500 whenever `from` or `to` was
+  passed. `_parse_dt` produced a tz-aware datetime but
+  `audit_logs.created_at` is `TIMESTAMP WITHOUT TIME ZONE`, so asyncpg
+  rejected the bind ("can't subtract offset-naive and offset-aware
+  datetimes"). The bug shipped in v1.2.0 and earlier -- the
+  integration test does not pass a date range so it was never hit in
+  CI. Now stripped in the repo, matching the pattern the endpoint
+  already uses for its other four query sites.
+
+### Changed
+- Grafana bootstrap-credential guard extracted from `setup.sh` into a
+  sourceable helper at `scripts/lib/grafana_password_guard.sh`, so the
+  same code the deploy script runs is exercised by CI
+  (`tests/integration/test_grafana_password_guard.py` -- 22 cases
+  covering the denylist, empty/unset, and the 12-character boundary).
+  Follows the Bats / Homebrew / nvm convention of putting reusable
+  shell functions under `scripts/lib/`. Byte-equivalent behaviour to
+  the previous inline block.
+- `GET /v1/audit/stats` aggregation runs in SQL on PostgreSQL.
+  Previously the endpoint fetched every `latency_ms` and `threats`
+  array into Python and looped for avg, p95, and top-threat counts --
+  fine at 10K rows, OOMs at 10M. Now uses `AVG()`,
+  `percentile_cont(0.95)`, and `jsonb_array_elements_text()`
+  in-database. Response shape is unchanged. SQLite unit tests fall
+  through to the Python path since it lacks these functions.
+
+### Internal
+- Documented the DOTALL flag on the rule-pattern registry
+  (`engine/detection/rule_patterns/general.py`). Every regex compiles
+  with `re.IGNORECASE | re.DOTALL`; the expanded comment records the
+  multi-line evasion the flag defends against and the future
+  catastrophic-backtracking trade-off to watch for.
+
 ## [1.2.0] - 2026-07-28 - Enterprise plumbing
 
 Enterprise-plumbing release. Adds audit tamper-evidence, session and
