@@ -55,6 +55,12 @@ class UserRole(str, Enum):
     ADMIN     = "ADMIN"
     DEVELOPER = "DEVELOPER"
     VIEWER    = "VIEWER"
+    # Read-only role scoped for audit and compliance work. Distinct from
+    # VIEWER: also carries settings:read and keys:read so a SOC2/ISO auditor
+    # can inspect policy configuration and API key inventory without any
+    # write path. Modelled on AWS SecurityAudit, Azure Security Reader,
+    # GCP roles/iam.securityReviewer, and GitHub's Security manager role.
+    AUDITOR   = "AUDITOR"
 
 
 class AdminEventAction(str, Enum):

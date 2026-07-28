@@ -262,14 +262,20 @@ class UserModel(Base):
         Index("ix_users_role",        "role"),
         Index("ix_users_role_active", "role", "is_active"),
         CheckConstraint(
-            "role IN ('ADMIN', 'DEVELOPER', 'VIEWER')",
+            "role IN ('ADMIN', 'DEVELOPER', 'VIEWER', 'AUDITOR')",
             name="ck_users_role",
         ),
-        # Updated in add_user_management.sql - enforces BOTH directions:
-        #   role = ADMIN     -> dept_id MUST be NULL
-        #   role != ADMIN    -> dept_id MUST NOT be NULL
+        # Updated by migration 0005_add_auditor_role:
+        #   role = ADMIN                       -> dept_id MUST be NULL
+        #   role = AUDITOR                     -> dept_id may be NULL (tenant-wide)
+        #                                         or set (department-scoped)
+        #   role IN (DEVELOPER, VIEWER)        -> dept_id MUST NOT be NULL
+        # AUDITOR mirrors AWS SecurityAudit / Azure Security Reader scope
+        # flexibility (attach at account/root or narrower).
         CheckConstraint(
-            "(role = 'ADMIN' AND dept_id IS NULL) OR (role != 'ADMIN' AND dept_id IS NOT NULL)",
+            "(role = 'ADMIN' AND dept_id IS NULL) OR "
+            "(role = 'AUDITOR') OR "
+            "(role IN ('DEVELOPER', 'VIEWER') AND dept_id IS NOT NULL)",
             name="ck_users_dept_required_v2",
         ),
     )

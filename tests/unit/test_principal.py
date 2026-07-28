@@ -67,16 +67,102 @@ def test_has_role_multiple_no_match():
     assert p.has_role("ADMIN", "DEVELOPER") is False
 
 
-# ── has_permission - v1 guard ──────────────────────────────────────────────────
+# ── has_permission - wildcard matching ─────────────────────────────────────────
 
-def test_has_permission_raises_not_implemented_in_v1():
-    """has_permission() must NOT be callable in v1 - fail loud."""
-    p = Principal(
+def _principal_with(permissions: list[str]) -> Principal:
+    return Principal(
         id="u1", type=PrincipalType.USER, tenant_id="t1", dept_id=None,
-        roles=["ADMIN"], permissions=["*"], is_admin=True,
+        roles=["TEST"], permissions=permissions, is_admin=False,
     )
-    with pytest.raises(NotImplementedError):
-        p.has_permission("scan:read")
+
+
+class TestHasPermissionStar:
+    # "*" is the ADMIN grant. It must short-circuit every check.
+
+    def test_star_matches_any_permission(self):
+        p = _principal_with(["*"])
+        assert p.has_permission("audit:read")     is True
+        assert p.has_permission("scan:write")     is True
+        assert p.has_permission("anything:goes")  is True
+
+
+class TestHasPermissionExactMatch:
+
+    def test_exact_permission_matches(self):
+        p = _principal_with(["audit:read", "dashboard:read"])
+        assert p.has_permission("audit:read") is True
+
+    def test_missing_permission_does_not_match(self):
+        p = _principal_with(["audit:read"])
+        assert p.has_permission("audit:write") is False
+
+    def test_empty_permission_returns_false(self):
+        # Guards against accidental has_permission("") in callers -- an
+        # empty string must never resolve to True even for "*" principals.
+        p = _principal_with(["*"])
+        assert p.has_permission("") is False
+
+
+class TestHasPermissionSegmentWildcard:
+    # Segment-wise wildcards are the same containment rule Casbin,
+    # AWS IAM, and GCP IAM apply: len(parts) must match len(p_parts).
+
+    def test_prefix_star_grants_sibling_actions(self):
+        p = _principal_with(["scan:*"])
+        assert p.has_permission("scan:read")  is True
+        assert p.has_permission("scan:write") is True
+
+    def test_prefix_star_does_not_grant_different_prefix(self):
+        p = _principal_with(["scan:*"])
+        assert p.has_permission("audit:read") is False
+
+    def test_wildcard_length_must_match(self):
+        # "scan:*" grants two-segment scan:X but NOT three-segment
+        # scan:X:Y. The stricter model prevents accidental privilege
+        # escalation via longer permission names.
+        p = _principal_with(["scan:*"])
+        assert p.has_permission("scan:read:sensitive") is False
+
+    def test_three_segment_wildcard(self):
+        p = _principal_with(["tool:db:*"])
+        assert p.has_permission("tool:db:read")  is True
+        assert p.has_permission("tool:db:write") is True
+        assert p.has_permission("tool:api:read") is False
+
+
+class TestHasPermissionForKnownRoles:
+    # Locks in the ROLE_PERMISSIONS map so a future edit that trims a
+    # scope from AUDITOR (say) breaks loudly.
+
+    def test_auditor_can_read_settings_and_keys(self):
+        p = _principal_with(ROLE_PERMISSIONS["AUDITOR"])
+        assert p.has_permission("settings:read") is True
+        assert p.has_permission("keys:read")     is True
+        assert p.has_permission("audit:read")    is True
+        assert p.has_permission("dashboard:read") is True
+
+    def test_auditor_cannot_write(self):
+        p = _principal_with(ROLE_PERMISSIONS["AUDITOR"])
+        assert p.has_permission("settings:write") is False
+        assert p.has_permission("keys:write")     is False
+        assert p.has_permission("keys:delete")    is False
+
+    def test_viewer_is_stricter_than_auditor(self):
+        # This is the whole reason AUDITOR exists as a separate role.
+        p = _principal_with(ROLE_PERMISSIONS["VIEWER"])
+        assert p.has_permission("settings:read") is False
+        assert p.has_permission("keys:read")     is False
+
+    def test_developer_keys_wildcard_grants_write(self):
+        p = _principal_with(ROLE_PERMISSIONS["DEVELOPER"])
+        assert p.has_permission("keys:read")   is True
+        assert p.has_permission("keys:write")  is True
+        assert p.has_permission("keys:delete") is True
+
+    def test_admin_star_grants_everything(self):
+        p = _principal_with(ROLE_PERMISSIONS["ADMIN"])
+        assert p.has_permission("settings:write") is True
+        assert p.has_permission("tool:db:drop")   is True
 
 
 # ── build_principal_from_user ──────────────────────────────────────────────────
@@ -122,6 +208,27 @@ def test_build_user_permissions_from_role_map():
     user      = _make_user_model(role="DEVELOPER")
     principal = build_principal_from_user(user)
     assert principal.permissions == ROLE_PERMISSIONS["DEVELOPER"]
+
+
+def test_build_user_auditor_tenant_wide_no_dept():
+    # AUDITOR is dept-scope flexible: this is the tenant-wide variant.
+    user      = _make_user_model(role="AUDITOR", dept_id=None)
+    principal = build_principal_from_user(user)
+    assert principal.is_admin is False
+    assert principal.dept_id is None
+    assert principal.roles == ["AUDITOR"]
+    assert principal.permissions == ROLE_PERMISSIONS["AUDITOR"]
+
+
+def test_build_user_auditor_dept_scoped():
+    # AUDITOR can also be constrained to one department for large tenants
+    # that want per-BU compliance leads. Mirrors AWS SecurityAudit at OU scope.
+    dept_id   = uuid.uuid4()
+    user      = _make_user_model(role="AUDITOR", dept_id=dept_id)
+    principal = build_principal_from_user(user)
+    assert principal.is_admin is False
+    assert principal.dept_id == str(dept_id)
+    assert principal.roles == ["AUDITOR"]
 
 
 # ── build_principal_from_api_key ───────────────────────────────────────────────
