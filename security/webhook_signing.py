@@ -5,12 +5,6 @@
 """
 HMAC-SHA256 signing for outbound webhook payloads.
 
-Wire format follows the Svix "Standard Webhooks" scheme, which is also
-what Stripe and most modern SaaS webhook providers use in 2026. Chosen
-over GitHub's simpler `X-Hub-Signature-256: sha256=<hex>` because the
-Svix format carries a timestamp that the receiver can verify to reject
-replayed deliveries -- GitHub's header does not.
-
 Headers emitted per delivery:
 
     webhook-id:        stable per-message identifier (UUID string)
@@ -22,21 +16,22 @@ Signed string:
     {webhook-id}.{webhook-timestamp}.{body}
 
 Signature: base64(HMAC-SHA256(secret, signed_string)), prefixed with
-"v1," so a future algo change can add "v2," entries without breaking
-existing verifiers.
+"v1," so a future algorithm change can add "v2," entries without
+breaking existing verifiers. The timestamp being part of the signed
+string is what makes captured signatures rejectable after the replay
+window closes; a signature-without-timestamp scheme cannot do this.
 
 Rotation. Multiple signatures may appear in the header, one per active
 signing secret. The emitter signs with each currently-valid secret
 (active + any old_secrets that have not yet expired) and joins them
-with a single space. Receivers accept if ANY signature verifies. This
-is Svix's ExpiringSigningKeys pattern -- during a rotation the emitter
-briefly sends two signatures, giving the receiver a grace window to
-update their verifier code.
+with a single space. Receivers accept if ANY signature verifies. During
+a rotation the emitter briefly sends two signatures, giving receivers
+a grace window to update their verifier code before the old secret is
+retired.
 
 Replay protection. `verify` rejects signatures whose timestamp is
-older than `tolerance_seconds` (default 300s / 5 min, matching Svix
-and Stripe). Even a captured valid signature stops working after the
-tolerance window.
+older than `tolerance_seconds` (default 300s / 5 min). Even a captured
+valid signature stops working after the tolerance window.
 
 Distinct HMAC secret per feature per feedback_conflict_prevention.md:
 webhook signing secrets MUST NOT be reused for the audit hash chain,
@@ -48,10 +43,6 @@ This module is a pure crypto primitive. It knows nothing about the
 database, envelope encryption, HTTP, or WrapSec settings -- callers
 decrypt the envelope-encrypted secret via security.encryption before
 passing plaintext bytes here.
-
-References:
-- Svix Standard Webhooks: https://www.standardwebhooks.com/
-- Stripe webhook signatures: https://docs.stripe.com/webhooks/signatures
 """
 
 from __future__ import annotations
@@ -69,7 +60,7 @@ from typing import Sequence
 SIGNATURE_VERSION = "v1"
 
 # Replay window. Signatures whose webhook-timestamp is more than this many
-# seconds off from `now` are rejected by `verify`. Matches Svix/Stripe.
+# seconds off from `now` are rejected by `verify`.
 DEFAULT_TIMESTAMP_TOLERANCE_S = 300
 
 
