@@ -272,6 +272,9 @@ async def get_audit_stats(
             "period_from":    from_ or datetime.now(timezone.utc).isoformat(),
             "period_to":      to    or datetime.now(timezone.utc).isoformat(),
             "total_requests": 0,
+            "block_count":    0,
+            "sanitize_count": 0,
+            "allow_count":    0,
             "block_rate":     0.0,
             "sanitize_rate":  0.0,
             "allow_rate":     0.0,
@@ -293,6 +296,13 @@ async def get_audit_stats(
         "period_from":    from_ or datetime.now(timezone.utc).isoformat(),
         "period_to":      to    or datetime.now(timezone.utc).isoformat(),
         "total_requests": total,
+        # Return raw counts alongside rates. Callers that need to display
+        # "N blocked" must use these -- reconstructing via round(rate*total)
+        # loses precision after the 4-decimal rate rounding and produces
+        # off-by-one drift versus /v1/audit/logs?decision=BLOCK counts.
+        "block_count":    stats["block_count"],
+        "sanitize_count": stats["sanitize_count"],
+        "allow_count":    stats["allow_count"],
         "block_rate":     round(stats["block_count"]    / total, 4),
         "sanitize_rate":  round(stats["sanitize_count"] / total, 4),
         "allow_rate":     round(stats["allow_count"]    / total, 4),

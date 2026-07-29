@@ -116,6 +116,9 @@ export interface AuditStatsResponse {
   period_from:     string
   period_to:       string
   total_requests:  number
+  block_count:     number
+  sanitize_count:  number
+  allow_count:     number
   block_rate:      number
   sanitize_rate:   number
   allow_rate:      number
