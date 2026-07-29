@@ -42,7 +42,7 @@ import time
 from datetime import datetime
 
 import httpx
-from fastapi import APIRouter, Depends, Request
+from fastapi import APIRouter, BackgroundTasks, Depends, Request
 from api.v1.dependencies.auth import get_current_principal
 from domain.entities.principal import Principal
 from fastapi.responses import JSONResponse
@@ -56,12 +56,14 @@ from db.models import ProxyInteractionModel, ProxyProviderConfigModel
 from db.repositories.audit import AuditRepository
 from domain.enums import DetectionMode, ExecutionMode
 from domain.entities.request import IncomingRequest, RequestMetadata
+from domain.value_objects.severity import compute_severity
 from domain.value_objects.trace_id import TraceId
 from engine.guardrails.output_guard import OutputGuard
 from engine.proxy.router import parse_model_string, resolve_provider, resolve_provider_from_dict
 from observability.metrics import record_proxy_request, record_request
 from services.gateway.service import GatewayService
 from services.policy_resolver import resolve_policy
+from services.webhooks.emitter import emit_from_audit_background
 
 router = APIRouter()
 logger = logging.getLogger("wrapsec.proxy")
@@ -75,6 +77,55 @@ STATUS_BLOCKED        = "BLOCKED"
 STATUS_OUTPUT_BLOCKED = "OUTPUT_BLOCKED"
 STATUS_FAILED         = "FAILED"
 STATUS_TIMEOUT        = "TIMEOUT"
+
+
+def _build_proxy_audit_dict(
+    *,
+    trace_id:       str,
+    tenant_id,
+    gd,
+    key_id,
+    mode:           str,
+    input_decision: str,
+    input_reason:   str | None,
+    input_conf:     float,
+    input_threats:  list[str],
+) -> dict:
+    """
+    Assemble the audit-shaped dict handed to the webhook emitter for the
+    proxy input decision. Kept as a module-level helper so the handler
+    body stays lean and this construction cost is only paid when the
+    background task fires (BackgroundTasks executes AFTER the response
+    body is on the wire).
+
+    The proxy path has no unified audit dict of its own -- _log_interaction
+    builds a different shape internally -- so this helper mirrors the
+    subset of audit_log fields the proxy can populate at input-decision
+    time. Fields not applicable to the proxy path (input_hash, dept_id,
+    app_id, ...) are simply omitted; the emitter's whitelist drops them.
+    """
+    proxy_risk = gd.risk_score.value if hasattr(gd, "risk_score") else 0.0
+    return {
+        "trace_id":        trace_id,
+        "tenant_id":       tenant_id,
+        "decision":        input_decision,
+        "risk_score":      proxy_risk,
+        "primary_reason":  input_reason,
+        "confidence":      input_conf,
+        "confidence_band": (
+            "HIGH" if input_conf >= 0.7 else "MEDIUM" if input_conf >= 0.4 else "LOW"
+        ),
+        "threats":         input_threats,
+        "detection_mode":  mode,
+        "execution_mode":  "proxy",
+        "source":          "proxy",
+        "key_id":          key_id,
+        "severity":        compute_severity(
+            decision       = input_decision,
+            risk_score     = proxy_risk,
+            primary_reason = input_reason,
+        ),
+    }
 
 
 # ── Request schema ─────────────────────────────────────────────────────────────
@@ -300,10 +351,11 @@ async def _log_interaction(
 
 @router.post("/chat/completions", response_model=None)
 async def proxy_chat_completions(
-    body:      ProxyChatRequest,
-    request:   Request,
-    db:        AsyncSession = Depends(get_db),
-    _principal: Principal   = Depends(get_current_principal),
+    body:             ProxyChatRequest,
+    request:          Request,
+    background_tasks: BackgroundTasks,
+    db:               AsyncSession = Depends(get_db),
+    _principal:       Principal    = Depends(get_current_principal),
 ):
     """
     OpenAI-compatible proxy endpoint. Scans input, forwards to the configured LLM provider,
@@ -505,6 +557,25 @@ async def proxy_chat_completions(
     _grd_scores = {"pii": gd.layer_scores.pii_score} if gd.layer_scores else {}
     if gd.layer_scores and gd.layer_scores.toxicity_score > 0.0:
         _grd_scores["toxicity"] = gd.layer_scores.toxicity_score
+
+    # Schedule webhook emit for the input decision. Runs AFTER the response
+    # body is on the wire (BackgroundTasks semantics), so the proxy path is
+    # immune to webhook subsystem latency and failures. Output-decision
+    # emit lands with the output-block webhook event in a later commit.
+    background_tasks.add_task(
+        emit_from_audit_background,
+        _build_proxy_audit_dict(
+            trace_id       = trace_id,
+            tenant_id      = tenant_id,
+            gd             = gd,
+            key_id         = key_id,
+            mode           = mode,
+            input_decision = input_decision,
+            input_reason   = input_reason,
+            input_conf     = input_conf,
+            input_threats  = input_threats,
+        ),
+    )
 
     # -- 6. Handle input BLOCK --
     if input_decision == "BLOCK":

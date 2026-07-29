@@ -6,7 +6,7 @@ import logging
 import time
 import uuid
 import hashlib
-from fastapi import APIRouter, Request, Depends
+from fastapi import APIRouter, BackgroundTasks, Request, Depends
 from fastapi.responses import JSONResponse
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -27,6 +27,7 @@ from domain.entities.request import (
 from errors.exceptions import NotFoundError, DebugForbiddenError
 from domain.value_objects.severity import compute_severity
 from services.gateway.service import GatewayService
+from services.webhooks.emitter import emit_from_audit_background
 
 router   = APIRouter()
 _gateway = GatewayService()
@@ -106,10 +107,11 @@ def _build_response(
 
 @router.post("/request", response_model=None)
 async def ai_request(
-    body:      AIRequestSchema,
-    request:   Request,
-    db:        AsyncSession = Depends(get_db),
-    _principal: Principal   = Depends(get_current_principal),
+    body:            AIRequestSchema,
+    request:         Request,
+    background_tasks: BackgroundTasks,
+    db:              AsyncSession = Depends(get_db),
+    _principal:      Principal    = Depends(get_current_principal),
 ):
     """
     Main AI security scan endpoint.
@@ -320,8 +322,9 @@ async def ai_request(
         or "unknown"
     )
 
-    repo = AuditRepository(db)
-    await repo.create({
+    # Single audit dict shared between the DB write and the webhook emit,
+    # so the wire payload is a faithful subset of the row that was persisted.
+    audit_data = {
         "trace_id":              str(incoming.trace_id),
         "decision":              result.decision.decision.value,
         "risk_score":            result.decision.risk_score.value,
@@ -353,7 +356,15 @@ async def ai_request(
             risk_score     = result.decision.risk_score.value,
             primary_reason = result.decision.primary_reason,
         ),
-    })
+    }
+
+    repo = AuditRepository(db)
+    await repo.create(audit_data)
+
+    # Schedule webhook emit to run AFTER the response body is on the wire.
+    # emit_from_audit_background owns its session + swallows exceptions, so
+    # the scan response is immune to webhook subsystem latency and failures.
+    background_tasks.add_task(emit_from_audit_background, audit_data)
 
     try:
         from observability.metrics import record_request
