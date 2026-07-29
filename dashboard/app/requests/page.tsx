@@ -24,16 +24,17 @@ function RequestsPageInner() {
   const sanitise     = (val: string | null, allowlist: string[]) =>
     val && allowlist.includes(val) ? val : ""
   // Overview and Analytics deep-link with a full ISO datetime (`useTimeRange`
-  // slices ISO to 19 chars), so accept both `YYYY-MM-DD` and
-  // `YYYY-MM-DDTHH:MM:SS` and always return the date portion. The API-call
-  // effect below re-attaches T00:00:00 / T23:59:59 for the fetch. Without
-  // this normalisation, `<input type="date">` silently rejects any value
-  // containing "T" and shows blank, so the deep-linked filter looks unset
-  // even though the request is being filtered correctly.
+  // slices ISO to 19 chars). Preserve the timestamp inside state so the API
+  // call filters on the exact deep-linked window. The date input widget
+  // rejects T-values and is fed `slice(0, 10)` at render time; when the user
+  // edits it the widget emits a plain `YYYY-MM-DD` which gets a boundary
+  // time reattached in the fetch effect below. Dropping the time in state
+  // caused deep-linked 24h windows to widen to ~48h and inflated /requests
+  // counts vs the overview badge.
   const sanitiseDate = (val: string | null) => {
     if (!val) return ""
     if (/^\d{4}-\d{2}-\d{2}$/.test(val))                              return val
-    if (/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}/.test(val))             return val.slice(0, 10)
+    if (/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}/.test(val))             return val
     return ""
   }
 
@@ -123,7 +124,7 @@ function RequestsPageInner() {
             traceId={traceId}         decision={decision}
             threatCategory={threatCategory} executionMode={executionMode}
             deptId={deptId}           departments={departments}
-            from={from}               to={to}
+            from={from.slice(0, 10)}  to={to.slice(0, 10)}
             sortBy={sortBy}           sortOrder={sortOrder}
             onTraceId={setTraceId}
             onDecision={v  => { setDecision(v);       setOffset(0) }}
