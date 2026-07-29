@@ -242,5 +242,9 @@ models/training.log
 # Dashboard build output
 dashboard/.next/
 
+# Dashboard traffic seed -- local dev tool, not for public repo
+scripts/seed_dashboard_test_traffic.py
+scripts/.seed_keys.json
+
 # Node SDK build output
 sdk/node/dist/
