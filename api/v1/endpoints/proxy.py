@@ -55,6 +55,7 @@ from config.settings import get_settings
 from db.models import ProxyInteractionModel, ProxyProviderConfigModel
 from db.repositories.audit import AuditRepository
 from domain.enums import DetectionMode, ExecutionMode
+from domain.value_objects.severity import compute_severity
 from domain.entities.request import IncomingRequest, RequestMetadata
 from domain.value_objects.trace_id import TraceId
 from engine.guardrails.output_guard import OutputGuard
@@ -509,25 +510,36 @@ async def proxy_chat_completions(
     # -- Emit outbound webhooks (v1.3.0) --
     # Fire-and-forget on the input decision only; output-side emission lands
     # with output-block webhook events in a later v1.3.x commit. Never raises
-    # so the proxy path is immune to webhook subsystem failures.
+    # so the proxy path is immune to webhook subsystem failures. Payload body
+    # mirrors the audit_logs field set (canonical SIEM shape); the proxy path
+    # populates fewer fields than /v1/ai/request so the emitter's whitelist
+    # simply drops unset keys.
     try:
         from cache.redis_client import get_redis
-        from services.webhooks.emitter import emit_gateway_decision
-        await emit_gateway_decision(
-            db             = db,
-            redis          = get_redis(),
-            tenant_id      = tenant_id,
-            trace_id       = trace_id,
-            decision       = input_decision,
-            risk_score     = gd.risk_score.value if hasattr(gd, "risk_score") else 0.0,
-            primary_reason = input_reason,
-            confidence     = input_conf,
-            threats        = input_threats,
-            source         = "proxy",
-            user_id        = None,
-            detection_mode = mode,
-            execution_mode = "proxy",
-        )
+        from services.webhooks.emitter import emit_from_audit
+        proxy_risk = gd.risk_score.value if hasattr(gd, "risk_score") else 0.0
+        proxy_audit = {
+            "trace_id":        trace_id,
+            "tenant_id":       tenant_id,
+            "decision":        input_decision,
+            "risk_score":      proxy_risk,
+            "primary_reason":  input_reason,
+            "confidence":      input_conf,
+            "confidence_band": (
+                "HIGH" if input_conf >= 0.7 else "MEDIUM" if input_conf >= 0.4 else "LOW"
+            ),
+            "threats":         input_threats,
+            "detection_mode":  mode,
+            "execution_mode":  "proxy",
+            "source":          "proxy",
+            "key_id":          key_id,
+            "severity":        compute_severity(
+                decision       = input_decision,
+                risk_score     = proxy_risk,
+                primary_reason = input_reason,
+            ),
+        }
+        await emit_from_audit(db=db, redis=get_redis(), audit_data=proxy_audit)
     except Exception:
         pass
 

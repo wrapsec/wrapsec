@@ -5,11 +5,16 @@
 """
 Emit outbound webhook events from gateway decisions (v1.3.0).
 
-Public entry point: `emit_gateway_decision`. Called from the scan endpoint
-after the audit_log write, once per request whose decision is BLOCK or
-SANITIZE. ALLOW decisions are intentionally NOT emitted -- for a real
-tenant this is 95%+ of traffic and would drown the delivery pipeline in
-low-value fanout.
+Public entry point: `emit_from_audit`. Called from the scan endpoint right
+after the audit_log write, using the SAME dict that was just persisted --
+the webhook payload body IS the audit record (minus internal-only fields).
+This is deliberate: downstream SIEM/observability pipelines already query
+these fields via GET /v1/audit/logs, so a webhook consumer joins on the
+same schema without a translation layer.
+
+The emitter never re-derives severity, primary_reason, or any classification
+input. Those are canonical audit fields; forking here would risk drift
+between what a customer sees in the audit UI and what their SIEM ingested.
 
 Design constraints:
 
@@ -22,14 +27,13 @@ Design constraints:
     Actual HTTP delivery, retries, and DLQ handling happen in the
     background worker started in commit #4.
 
-  * severity + primary_reason + threats are taken from the already-computed
-    domain values -- webhook payloads consume the canonical audit-log
-    fields verbatim so downstream tooling never sees a divergent taxonomy.
-
 Event taxonomy (v1.3.0):
 
     wrapsec.request.blocked    - decision == BLOCK
     wrapsec.request.sanitized  - decision == SANITIZE
+
+ALLOW is deliberately NOT emitted -- it is 95%+ of traffic for a healthy
+tenant and would drown the delivery pipeline in low-value fanout.
 
 New event types (endpoint-failure, circuit-breaker-tripped, etc.) land in
 later v1.3.0 commits and reuse the same envelope.
@@ -56,6 +60,43 @@ EVENT_BLOCKED   = "wrapsec.request.blocked"
 EVENT_SANITIZED = "wrapsec.request.sanitized"
 
 
+# Fields projected from the audit dict into the webhook body. Matches the
+# shape returned by GET /v1/audit/logs (_format_item in api/v1/endpoints/
+# audit.py) so a customer's SIEM sees the same schema in both channels.
+#
+# Deliberately excluded, even if present in the dict:
+#   * record_hash / prev_hash  - internal hash-chain columns; never leave
+#                                the database, no external consumer use.
+#   * proxy_interaction_id     - internal FK; join in DB, not over the wire.
+#   * attribution_verified     - internal flag; not user-facing yet.
+_ALLOWED_AUDIT_FIELDS = frozenset({
+    "trace_id",
+    "tenant_id",
+    "decision",
+    "primary_reason",
+    "risk_score",
+    "confidence",
+    "confidence_band",
+    "threats",
+    "input_hash",
+    "detection_mode",
+    "execution_mode",
+    "latency_ms",
+    "key_id",
+    "dept_id",
+    "app_id",
+    "user_id",
+    "source",
+    "ip_address",
+    "policy_source",
+    "input_length",
+    "severity",
+    "session_id",
+    "turn_index",
+    "run_id",
+})
+
+
 def _event_type_for_decision(decision: str) -> str | None:
     """Return the wire event name for a decision, or None if we do not emit."""
     if decision == "BLOCK":
@@ -65,79 +106,67 @@ def _event_type_for_decision(decision: str) -> str | None:
     return None
 
 
-def _build_event_body(
-    trace_id:       str,
-    tenant_id:      str,
-    decision:       str,
-    risk_score:     float,
-    primary_reason: str | None,
-    confidence:     float | None,
-    threats:        list[str],
-    severity:       str,
-    source:         str | None,
-    user_id:        str | None,
-    detection_mode: str | None,
-    execution_mode: str | None,
-) -> dict[str, Any]:
+def _build_body(audit_data: dict[str, Any]) -> dict[str, Any]:
     """
-    Envelope emitted inside the queue payload's `body` field.
+    Project the audit-log dict into the webhook body.
 
-    Fields deliberately mirror audit_logs so downstream SIEM pipelines can
-    join on trace_id without a schema translation step. Sanitized/original
-    input text is NOT included -- payloads may leave the tenant boundary,
-    and PII redaction ran on the input path but not on threat context.
+    Whitelist copy so a new column added to the audit dict cannot silently
+    leak over the wire; it also stringifies UUIDs (JSON-safe) and adds a
+    `timestamp` field mirroring what audit_logs receive at DB-write time
+    (the emitter fires immediately after that write, so wall time is a
+    correct-enough proxy for the row's created_at).
     """
-    return {
-        "trace_id":       trace_id,
-        "tenant_id":      tenant_id,
-        "occurred_at":    datetime.utcnow().isoformat() + "Z",
-        "decision":       decision,
-        "severity":       severity,
-        "risk_score":     risk_score,
-        "primary_reason": primary_reason,
-        "confidence":     confidence,
-        "threats":        threats,
-        "source":         source,
-        "user_id":        user_id,
-        "detection_mode": detection_mode,
-        "execution_mode": execution_mode,
-    }
+    body: dict[str, Any] = {"timestamp": datetime.utcnow().isoformat() + "Z"}
+    for key in _ALLOWED_AUDIT_FIELDS:
+        if key not in audit_data:
+            continue
+        value = audit_data[key]
+        if isinstance(value, UUID):
+            value = str(value)
+        body[key] = value
+
+    # Severity may be absent from the caller's dict on older code paths;
+    # backfill using the canonical taxonomy so downstream consumers can
+    # always trust body.severity to be present.
+    if "severity" not in body:
+        body["severity"] = compute_severity(
+            decision       = str(audit_data.get("decision", "")),
+            risk_score     = float(audit_data.get("risk_score") or 0.0),
+            primary_reason = audit_data.get("primary_reason"),
+        )
+    return body
 
 
-async def emit_gateway_decision(
-    db:             AsyncSession,
-    redis:          Redis,
-    tenant_id:      UUID | str | None,
-    trace_id:       str,
-    decision:       str,
-    risk_score:     float,
-    primary_reason: str | None,
-    confidence:     float | None,
-    threats:        list[str],
-    source:         str | None       = None,
-    user_id:        str | None       = None,
-    detection_mode: str | None       = None,
-    execution_mode: str | None       = None,
+async def emit_from_audit(
+    db:         AsyncSession,
+    redis:      Redis,
+    audit_data: dict[str, Any],
 ) -> int:
     """
-    Enqueue an outbound webhook for every enabled endpoint on `tenant_id`
-    that subscribes to the derived event type.
+    Enqueue an outbound webhook for every enabled endpoint on the tenant
+    that subscribes to the event type derived from `audit_data["decision"]`.
 
-    Returns the number of endpoints enqueued (0 if the decision is ALLOW,
-    the tenant has no matching endpoints, or an error was swallowed).
+    `audit_data` is the SAME dict passed to AuditRepository.create at the
+    same call site -- the emitter projects a whitelisted subset into the
+    payload body so the wire shape stays a faithful subset of the audit
+    row that was just persisted.
+
+    Returns the number of endpoints enqueued (0 if decision is ALLOW, no
+    tenant is attributed, no endpoint subscribes, or an error is swallowed).
     NEVER raises to the caller -- the scan response path must be immune to
     webhook subsystem failures.
     """
+    decision = str(audit_data.get("decision") or "")
     event_type = _event_type_for_decision(decision)
     if event_type is None:
         return 0
 
+    tenant_id = audit_data.get("tenant_id")
     if tenant_id is None:
-        # System-level or test requests without a tenant have no destination
-        # to route to; nothing to do.
         return 0
 
-    tenant_str = str(tenant_id)
+    tenant_str  = str(tenant_id)
+    trace_id    = str(audit_data.get("trace_id") or "")
 
     try:
         repo      = WebhookEndpointRepository(db)
@@ -152,25 +181,7 @@ async def emit_gateway_decision(
     if not endpoints:
         return 0
 
-    severity = compute_severity(
-        decision       = decision,
-        risk_score     = risk_score,
-        primary_reason = primary_reason,
-    )
-    body = _build_event_body(
-        trace_id       = trace_id,
-        tenant_id      = tenant_str,
-        decision       = decision,
-        risk_score     = risk_score,
-        primary_reason = primary_reason,
-        confidence     = confidence,
-        threats        = threats,
-        severity       = severity,
-        source         = source,
-        user_id        = user_id,
-        detection_mode = detection_mode,
-        execution_mode = execution_mode,
-    )
+    body = _build_body(audit_data)
 
     enqueued = 0
     for ep in endpoints:
@@ -189,9 +200,6 @@ async def emit_gateway_decision(
             await webhook_queue.enqueue(redis, payload)
             enqueued += 1
         except Exception as exc:                          # noqa: BLE001
-            # Never fail the scan response for a webhook queue error. The
-            # miss is loud in the logs; a future v1.3.x add-on may fall back
-            # to a durable outbox table if this proves lossy in the field.
             logger.exception(
                 "webhook enqueue failed endpoint_id=%s trace_id=%s: %s",
                 ep.id, trace_id, exc,
