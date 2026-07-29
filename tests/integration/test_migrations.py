@@ -69,12 +69,12 @@ def test_baseline_migration_is_idempotent(tmp_path):
     assert "tenants" in created
 
 
-def test_head_revision_advances_to_add_auditor_role(tmp_path):
+def test_head_revision_advances_to_json_to_jsonb(tmp_path):
     """
     After `alembic upgrade head`, alembic_version must point at the newest
-    v1.2.0 migration. Locks in that new revisions are actually being picked
-    up (a common failure mode is dropping the file into the wrong directory
-    and silently landing on 0001). Bump this assertion in lock-step with the
+    migration. Locks in that new revisions are actually being picked up (a
+    common failure mode is dropping the file into the wrong directory and
+    silently landing on 0001). Bump this assertion in lock-step with the
     latest revision file.
     """
     db_file   = tmp_path / "migrated.db"
@@ -93,7 +93,7 @@ def test_head_revision_advances_to_add_auditor_role(tmp_path):
         engine.dispose()
 
     assert row is not None
-    assert row[0] == "0005_add_auditor_role"
+    assert row[0] == "0006_json_to_jsonb"
 
 
 def test_users_check_constraint_admits_auditor(tmp_path):

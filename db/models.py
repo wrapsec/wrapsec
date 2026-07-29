@@ -10,7 +10,18 @@ from sqlalchemy import (
     CheckConstraint
 )
 from sqlalchemy.orm import DeclarativeBase, relationship
-from sqlalchemy.dialects.postgresql import UUID
+from sqlalchemy.dialects.postgresql import UUID, JSONB
+
+
+# JSONB on PostgreSQL (indexed, containment ops, jsonb_* functions), plain
+# JSON on SQLite (no jsonb type). Every JSON-holding column uses this alias
+# so the SQL layer matches the way we query these columns
+# (jsonb_array_elements_text, cast(.., JSONB).contains(..), @>, ?, etc.).
+# v1.2.3: introduced after testcontainers exposed drift between the model
+# (was `JSON`) and the actual PG column (`jsonb` from a pre-baseline
+# hand-alter) that had silently kept production working. Migration
+# 0006_json_to_jsonb aligns any existing `json` columns to `jsonb`.
+JSONVariant = JSON().with_variant(JSONB(), "postgresql")
 
 
 class Base(DeclarativeBase):
@@ -24,7 +35,7 @@ class TenantModel(Base):
     slug          = Column(String(50),  nullable=False, unique=True)
     name          = Column(String(100), nullable=False)
     description   = Column(Text,        nullable=True)
-    global_policy = Column(JSON,        nullable=False, default=dict)
+    global_policy = Column(JSONVariant,        nullable=False, default=dict)
     is_active     = Column(Boolean,     nullable=False, default=True)
     contact_email = Column(String(100), nullable=True)
     created_by    = Column(String(100), nullable=True)
@@ -39,7 +50,7 @@ class DepartmentModel(Base):
     slug            = Column(String(50),  nullable=False)
     name            = Column(String(100), nullable=False)
     description     = Column(Text,        nullable=True)
-    policy_override = Column(JSON,        nullable=True,  default=None)
+    policy_override = Column(JSONVariant,        nullable=True,  default=None)
     is_active       = Column(Boolean,     nullable=False, default=True)
     contact_email   = Column(String(100), nullable=True)
     created_by      = Column(String(100), nullable=True)
@@ -62,9 +73,9 @@ class ApplicationModel(Base):
     owner_name          = Column(String(100), nullable=True)
     owner_email         = Column(String(100), nullable=True)
     environment         = Column(String(20),  nullable=False, default="production")
-    metadata_           = Column("metadata",  JSON, nullable=True, default=None)
-    policy_override     = Column(JSON,        nullable=True,  default=None)
-    rate_limit_override = Column(JSON,        nullable=True,  default=None)
+    metadata_           = Column("metadata",  JSONVariant, nullable=True, default=None)
+    policy_override     = Column(JSONVariant,        nullable=True,  default=None)
+    rate_limit_override = Column(JSONVariant,        nullable=True,  default=None)
     is_active           = Column(Boolean,     nullable=False, default=True)
     created_at          = Column(DateTime,    nullable=False, default=datetime.utcnow)
 
@@ -80,14 +91,14 @@ class AuditLogModel(Base):
     trace_id       = Column(String(50),  nullable=False, unique=True, index=True)
     decision       = Column(String(20),  nullable=False, index=True)
     risk_score     = Column(Float,       nullable=False)
-    threats        = Column(JSON,        nullable=False, default=list)
+    threats        = Column(JSONVariant,        nullable=False, default=list)
     input_hash     = Column(String(100), nullable=False)
     detection_mode = Column(String(20),  nullable=False)
     execution_mode = Column(String(20),  nullable=False)
     llm_invoked    = Column(Boolean,     nullable=False, default=False)
     latency_ms     = Column(Float,       nullable=False)
-    detection_scores   = Column(JSON,    nullable=True)
-    guardrail_scores   = Column(JSON,    nullable=True)
+    detection_scores   = Column(JSONVariant,    nullable=True)
+    guardrail_scores   = Column(JSONVariant,    nullable=True)
     key_id             = Column(String(50),  nullable=True)
     ip_address         = Column(String(50),  nullable=True)
     user_agent         = Column(String(255), nullable=True)
@@ -199,7 +210,7 @@ class ProxyInteractionModel(Base):
     input_decision        = Column(String(16),  nullable=False)
     input_primary_reason  = Column(String(64),  nullable=False)
     input_confidence      = Column(Float,       nullable=False)
-    input_threats         = Column(JSON,        nullable=True,  default=list)
+    input_threats         = Column(JSONVariant,        nullable=True,  default=list)
     input_attack_type     = Column(String(64),  nullable=True)
     provider              = Column(String(32),  nullable=True)
     model                 = Column(String(128), nullable=True)
@@ -210,9 +221,9 @@ class ProxyInteractionModel(Base):
     output_decision       = Column(String(16),  nullable=True)
     output_primary_reason = Column(String(64),  nullable=True)
     output_confidence     = Column(Float,       nullable=True)
-    output_threats        = Column(JSON,        nullable=True,  default=list)
+    output_threats        = Column(JSONVariant,        nullable=True,  default=list)
     behavior_flag         = Column(String(32),  nullable=True)
-    output_flags          = Column(JSON,        nullable=True)
+    output_flags          = Column(JSONVariant,        nullable=True)
     total_latency_ms      = Column(Integer,     nullable=False)
     created_at            = Column(DateTime,    nullable=False, default=datetime.utcnow)
 
@@ -335,7 +346,7 @@ class AdminEventModel(Base):
     actor_user_id  = Column(UUID(as_uuid=True), ForeignKey("users.id"), nullable=False)
     target_user_id = Column(UUID(as_uuid=True), ForeignKey("users.id"), nullable=True)
     action         = Column(String(50),  nullable=False)
-    metadata_      = Column("metadata", JSON, nullable=True)
+    metadata_      = Column("metadata", JSONVariant, nullable=True)
     ip_address     = Column(String(45),  nullable=True)
     user_agent     = Column(String(500), nullable=True)
     created_at     = Column(DateTime,    nullable=False, default=datetime.utcnow)
