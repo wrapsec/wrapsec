@@ -2,6 +2,35 @@
 
 All notable changes to WrapSec are documented here.
 
+## [1.2.4] - 2026-07-29
+
+### Fixed
+- **Overview badge count did not match the filtered Requests view.**
+  Clicking a decision badge on the Overview (e.g. "14 BLOCKED in 24h")
+  deep-linked to `/requests` with a full ISO `from`/`to` window, but the
+  Requests page stripped the time portion when it stored the params in
+  state. The fetch effect then re-attached `T00:00:00` / `T23:59:59`,
+  widening a 24h window to ~48h and inflating the result badge against
+  the Overview number (observed 204 -> 213 for total, 14 -> 15 for
+  BLOCKED). State now preserves the T-portion; the `<input type="date">`
+  widget receives `from.slice(0, 10)` at the render boundary; the fetch
+  code is unchanged and still re-attaches boundary times when the user
+  edits the plain date input. Follow-up to the v1.2.2 fix which
+  addressed the input-rejection symptom but introduced the widening.
+
+### Changed
+- `GET /v1/audit/stats` now returns `block_count`, `sanitize_count`, and
+  `allow_count` alongside the existing rate fields. Dashboard overview
+  cards and the donut chart consume the counts directly instead of
+  recomputing via `Math.round(rate * total)`. Reconstructing from the
+  rate drifted by one against `/v1/audit/logs?decision=...` because the
+  API rounds `*_rate` to 4 decimals before returning.
+
+### Internal
+- Gitignored `scripts/seed_dashboard_test_traffic.py` and
+  `scripts/.seed_keys.json`. Local-only harness for repopulating the
+  dashboard with sample traffic; not for the public repo.
+
 ## [1.2.3] - 2026-07-28
 
 ### Added
