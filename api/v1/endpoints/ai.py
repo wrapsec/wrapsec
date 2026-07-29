@@ -320,7 +320,8 @@ async def ai_request(
         or "unknown"
     )
 
-    audit_data = {
+    repo = AuditRepository(db)
+    await repo.create({
         "trace_id":              str(incoming.trace_id),
         "decision":              result.decision.decision.value,
         "risk_score":            result.decision.risk_score.value,
@@ -352,22 +353,7 @@ async def ai_request(
             risk_score     = result.decision.risk_score.value,
             primary_reason = result.decision.primary_reason,
         ),
-    }
-
-    repo = AuditRepository(db)
-    await repo.create(audit_data)
-
-    # ── Emit outbound webhooks (v1.3.0) ─────────────────────────────
-    # Fire-and-forget: projects the audit dict just written above into a
-    # webhook payload and enqueues one XADD per subscribed endpoint.
-    # Never raises. Real HTTP delivery + retries happen in
-    # workers/webhook_delivery.py.
-    try:
-        from cache.redis_client import get_redis
-        from services.webhooks.emitter import emit_from_audit
-        await emit_from_audit(db=db, redis=get_redis(), audit_data=audit_data)
-    except Exception:
-        pass  # Webhook emit must never break scan responses
+    })
 
     try:
         from observability.metrics import record_request
