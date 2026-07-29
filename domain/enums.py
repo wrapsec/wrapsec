@@ -77,6 +77,17 @@ class AdminEventAction(str, Enum):
     DEPT_CHANGED     = "dept_changed"
     SETTINGS_CHANGED        = "settings_changed"
     POLICY_OVERRIDE_CHANGED = "policy_override_changed"
+    # Webhook endpoint lifecycle (v1.3.0). Every mutation to a
+    # webhook_endpoints row emits one of these so a tenant admin can
+    # reconstruct who added/changed/removed a destination and when a
+    # signing secret was last rotated. WEBHOOK_SECRET_ROTATED is the
+    # single trigger for "plaintext secret was returned in an HTTP
+    # response" -- that side-effect must always be audit-visible.
+    WEBHOOK_ENDPOINT_CREATED     = "webhook_endpoint_created"
+    WEBHOOK_ENDPOINT_UPDATED     = "webhook_endpoint_updated"
+    WEBHOOK_ENDPOINT_DELETED     = "webhook_endpoint_deleted"
+    WEBHOOK_ENDPOINT_REACTIVATED = "webhook_endpoint_reactivated"
+    WEBHOOK_SECRET_ROTATED       = "webhook_secret_rotated"
 
 
 class AuthEventAction(str, Enum):

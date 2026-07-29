@@ -7,7 +7,7 @@ from api.v1.endpoints import (
     health, ai, audit, settings, keys,
     departments, applications, tenant,
     proxy_settings, proxy,
-    auth, setup,
+    auth, setup, webhooks,
 )
 from api.v1.endpoints.admin import users
 
@@ -21,6 +21,7 @@ router.include_router(keys.router,                prefix="/v1/keys",            
 router.include_router(tenant.router,              prefix="/v1/admin/tenant",       tags=["Tenant"])
 router.include_router(departments.router,         prefix="/v1/admin/departments",  tags=["Departments"])
 router.include_router(applications.router,        prefix="/v1/admin/applications", tags=["Applications"])
+router.include_router(webhooks.router,            prefix="/v1/admin/webhooks",     tags=["Webhooks"])
 router.include_router(proxy_settings.router,      prefix="/v1/settings",           tags=["Proxy"])
 router.include_router(proxy.router,               prefix="/v1",                    tags=["Proxy"])
 

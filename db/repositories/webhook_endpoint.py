@@ -21,6 +21,12 @@ Consumers:
     schedule to flip `disabled = True` on endpoints whose failure
     timer has exceeded the configured grace window.
 
+  * The admin API (api/v1/endpoints/webhooks.py) calls the CRUD
+    methods (create, get_by_id, list_by_tenant, update, delete),
+    rotate_secret for signing-secret rotation with a receiver-side
+    grace window, and reactivate for manual recovery after the
+    circuit breaker has retired an endpoint.
+
 Repository contract (per the CLAUDE.md invariant): methods flush()
 so callers see DB-assigned state without committing. Callers are
 responsible for commit().
@@ -28,7 +34,9 @@ responsible for commit().
 
 from __future__ import annotations
 
+import uuid
 from datetime import datetime, timedelta
+from typing import Any
 from uuid import UUID
 
 from sqlalchemy import select, update
@@ -173,3 +181,201 @@ class WebhookEndpointRepository:
         await self._db.execute(update_stmt)
         await self._db.flush()
         return stale_ids
+
+    # ─── Admin CRUD ────────────────────────────────────────────────
+
+    async def create(
+        self,
+        *,
+        tenant_id:   UUID,
+        url:         str,
+        secret_enc:  str,
+        description: str | None = None,
+        event_types: list[str] | None = None,
+    ) -> WebhookEndpointModel:
+        """
+        Insert a new endpoint. `secret_enc` MUST already be envelope-
+        encrypted by the caller via security.encryption.encrypt --
+        this method never sees plaintext.
+        """
+        now = datetime.utcnow()
+        ep  = WebhookEndpointModel(
+            id          = uuid.uuid4(),
+            tenant_id   = tenant_id,
+            url         = url,
+            description = description,
+            secret_enc  = secret_enc,
+            old_secrets = [],
+            event_types = event_types,
+            disabled    = False,
+            created_at  = now,
+        )
+        self._db.add(ep)
+        await self._db.flush()
+        return ep
+
+    async def get_by_id(self, endpoint_id: UUID) -> WebhookEndpointModel | None:
+        """Fetch a single endpoint by id. Callers MUST also check
+        that the returned row's tenant_id matches the caller's tenant
+        before returning it -- this repo does not know the calling
+        tenant."""
+        return await self._db.get(WebhookEndpointModel, endpoint_id)
+
+    async def list_by_tenant(
+        self, tenant_id: UUID,
+    ) -> list[WebhookEndpointModel]:
+        """All endpoints on the tenant, disabled or not. Admin UI
+        needs to see disabled endpoints to reactivate them."""
+        stmt = (
+            select(WebhookEndpointModel)
+            .where(WebhookEndpointModel.tenant_id == tenant_id)
+            .order_by(WebhookEndpointModel.created_at.desc())
+        )
+        return list((await self._db.execute(stmt)).scalars().all())
+
+    async def update(
+        self,
+        *,
+        endpoint_id: UUID,
+        data:        dict[str, Any],
+    ) -> WebhookEndpointModel | None:
+        """
+        Update mutable fields (url, description, event_types).
+
+        `secret_enc`, `old_secrets`, `disabled`, `first_failure_at`,
+        `tenant_id`, `created_at` are intentionally NOT settable
+        through this method -- each has a dedicated call path
+        (rotate_secret, reactivate, record_failure, record_success,
+        create) with the right invariants. Passing them here is a
+        caller bug.
+        """
+        allowed = {"url", "description", "event_types"}
+        clean   = {k: v for k, v in data.items() if k in allowed}
+        if not clean:
+            return await self.get_by_id(endpoint_id)
+
+        clean["updated_at"] = datetime.utcnow()
+        stmt = (
+            update(WebhookEndpointModel)
+            .where(WebhookEndpointModel.id == endpoint_id)
+            .values(**clean)
+        )
+        await self._db.execute(stmt)
+        await self._db.flush()
+        return await self.get_by_id(endpoint_id)
+
+    async def delete(self, endpoint_id: UUID) -> bool:
+        """
+        Hard delete. Returns True if a row was removed, False if the
+        id did not exist (idempotent-friendly for the API layer).
+
+        Webhook endpoints are per-tenant configuration, not audit
+        history -- deleting is safe and expected. The audit trail of
+        what was configured lives in admin_events, not in this table.
+        """
+        ep = await self._db.get(WebhookEndpointModel, endpoint_id)
+        if ep is None:
+            return False
+        await self._db.delete(ep)
+        await self._db.flush()
+        return True
+
+    async def rotate_secret(
+        self,
+        *,
+        endpoint_id:    UUID,
+        new_secret_enc: str,
+        grace_hours:    int,
+        now:            datetime | None = None,
+    ) -> WebhookEndpointModel | None:
+        """
+        Rotate the signing secret.
+
+        Moves the current `secret_enc` into `old_secrets` with an
+        `expires_at` of now + grace_hours, then sets `secret_enc` to
+        `new_secret_enc`. The webhook-signing library reads both the
+        active secret and any non-expired old_secrets and signs each
+        delivery with all of them, so a receiver that has not yet
+        updated its verifier code keeps validating during the grace
+        window.
+
+        Any old_secrets whose expires_at is already in the past are
+        pruned in the same call so the JSON array does not grow
+        unbounded across many rotations.
+
+        `new_secret_enc` MUST be pre-encrypted by the caller -- the
+        repo never sees plaintext secret material.
+        """
+        if grace_hours <= 0:
+            raise ValueError(f"grace_hours must be > 0, got {grace_hours}")
+
+        current = now or datetime.utcnow()
+        ep      = await self._db.get(WebhookEndpointModel, endpoint_id)
+        if ep is None:
+            return None
+
+        surviving = [
+            entry for entry in (ep.old_secrets or [])
+            if _entry_expires_at(entry) > current
+        ]
+        surviving.append({
+            "ciphertext": ep.secret_enc,
+            "expires_at": (current + timedelta(hours=grace_hours)).isoformat(),
+        })
+
+        stmt = (
+            update(WebhookEndpointModel)
+            .where(WebhookEndpointModel.id == endpoint_id)
+            .values(
+                secret_enc  = new_secret_enc,
+                old_secrets = surviving,
+                updated_at  = current,
+            )
+        )
+        await self._db.execute(stmt)
+        await self._db.flush()
+        return await self.get_by_id(endpoint_id)
+
+    async def reactivate(
+        self,
+        *,
+        endpoint_id: UUID,
+        now:         datetime | None = None,
+    ) -> WebhookEndpointModel | None:
+        """
+        Manual recovery after the circuit breaker retired an endpoint.
+
+        Clears BOTH `disabled` and `first_failure_at` -- otherwise the
+        endpoint would flip disabled again on the next sweep tick with
+        no new failures having occurred, which is confusing for
+        operators.
+
+        Idempotent: safe to call on an already-active endpoint (no
+        state changes, still returns the row).
+        """
+        current = now or datetime.utcnow()
+        stmt = (
+            update(WebhookEndpointModel)
+            .where(WebhookEndpointModel.id == endpoint_id)
+            .values(
+                disabled         = False,
+                first_failure_at = None,
+                updated_at       = current,
+            )
+        )
+        await self._db.execute(stmt)
+        await self._db.flush()
+        return await self.get_by_id(endpoint_id)
+
+
+def _entry_expires_at(entry: dict) -> datetime:
+    """Parse the ISO datetime stored in an old_secrets entry. Missing
+    or malformed values are treated as already expired so a corrupt
+    row cannot indefinitely keep an old secret alive."""
+    raw = entry.get("expires_at")
+    if not isinstance(raw, str):
+        return datetime.min
+    try:
+        return datetime.fromisoformat(raw)
+    except ValueError:
+        return datetime.min

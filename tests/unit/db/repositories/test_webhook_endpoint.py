@@ -305,3 +305,297 @@ async def test_disable_stale_rejects_non_positive_threshold(test_db):
         await repo.disable_stale(threshold_hours=0)
     with pytest.raises(ValueError):
         await repo.disable_stale(threshold_hours=-5)
+
+
+# ─── Admin CRUD: create / get / list ────────────────────────────────
+
+@pytest.mark.asyncio
+async def test_create_persists_endpoint_with_defaults(test_db):
+    t = await _make_tenant(test_db)
+    repo = WebhookEndpointRepository(test_db)
+
+    ep = await repo.create(
+        tenant_id  = t.id,
+        url        = "https://example.com/hook",
+        secret_enc = "v2:encrypted-blob",
+    )
+
+    assert ep.id is not None
+    assert ep.tenant_id == t.id
+    assert ep.url == "https://example.com/hook"
+    assert ep.secret_enc == "v2:encrypted-blob"
+    assert ep.description is None
+    assert ep.event_types is None       # wildcard by default
+    assert ep.disabled is False
+    assert ep.old_secrets == []
+    assert ep.first_failure_at is None
+
+
+@pytest.mark.asyncio
+async def test_create_accepts_optional_description_and_event_types(test_db):
+    t = await _make_tenant(test_db)
+    repo = WebhookEndpointRepository(test_db)
+
+    ep = await repo.create(
+        tenant_id   = t.id,
+        url         = "https://example.com/hook",
+        secret_enc  = "v2:enc",
+        description = "SOC pipeline",
+        event_types = ["wrapsec.request.blocked"],
+    )
+
+    assert ep.description == "SOC pipeline"
+    assert ep.event_types == ["wrapsec.request.blocked"]
+
+
+@pytest.mark.asyncio
+async def test_get_by_id_returns_row(test_db):
+    t = await _make_tenant(test_db)
+    ep = await _make_endpoint(test_db, t.id)
+    repo = WebhookEndpointRepository(test_db)
+
+    result = await repo.get_by_id(ep.id)
+    assert result is not None
+    assert result.id == ep.id
+
+
+@pytest.mark.asyncio
+async def test_get_by_id_returns_none_for_missing(test_db):
+    repo = WebhookEndpointRepository(test_db)
+    assert await repo.get_by_id(uuid.uuid4()) is None
+
+
+@pytest.mark.asyncio
+async def test_list_by_tenant_includes_disabled_and_scopes_to_tenant(test_db):
+    """Admin UI needs to see disabled endpoints so operators can
+    reactivate them; and MUST NOT see other tenants' endpoints."""
+    t_a = await _make_tenant(test_db, "tenant-a")
+    t_b = await _make_tenant(test_db, "tenant-b")
+
+    live_a     = await _make_endpoint(test_db, t_a.id, disabled=False)
+    disabled_a = await _make_endpoint(test_db, t_a.id, disabled=True)
+    await _make_endpoint(test_db, t_b.id, disabled=False)
+
+    repo = WebhookEndpointRepository(test_db)
+    ids  = {ep.id for ep in await repo.list_by_tenant(t_a.id)}
+
+    assert ids == {live_a.id, disabled_a.id}
+
+
+# ─── Admin CRUD: update ─────────────────────────────────────────────
+
+@pytest.mark.asyncio
+async def test_update_changes_url_description_event_types(test_db):
+    t  = await _make_tenant(test_db)
+    ep = await _make_endpoint(test_db, t.id, event_types=None)
+    repo = WebhookEndpointRepository(test_db)
+
+    updated = await repo.update(
+        endpoint_id = ep.id,
+        data        = {
+            "url":         "https://new.example.com/hook",
+            "description": "new desc",
+            "event_types": ["wrapsec.request.blocked"],
+        },
+    )
+    assert updated is not None
+    assert updated.url == "https://new.example.com/hook"
+    assert updated.description == "new desc"
+    assert updated.event_types == ["wrapsec.request.blocked"]
+
+
+@pytest.mark.asyncio
+async def test_update_silently_drops_protected_fields(test_db):
+    """Protected fields (secret_enc, disabled, first_failure_at,
+    tenant_id, old_secrets) each have a dedicated call path with the
+    right invariants. update() must NOT be a back-door around them --
+    a caller sending disabled=True here MUST NOT bypass the manual
+    reactivate flow, and a caller sending a raw secret_enc MUST NOT
+    bypass the rotate-with-grace path."""
+    t  = await _make_tenant(test_db)
+    ep = await _make_endpoint(test_db, t.id)
+    repo = WebhookEndpointRepository(test_db)
+
+    original_secret = ep.secret_enc
+    original_disabled = ep.disabled
+
+    updated = await repo.update(
+        endpoint_id = ep.id,
+        data        = {
+            "url":              "https://ok.example.com",
+            "secret_enc":       "v2:injected-secret",
+            "disabled":         True,
+            "first_failure_at": datetime.utcnow(),
+            "tenant_id":        uuid.uuid4(),
+            "old_secrets":      [{"ciphertext": "leak", "expires_at": "3000-01-01T00:00:00"}],
+        },
+    )
+    assert updated.url == "https://ok.example.com"
+    assert updated.secret_enc == original_secret
+    assert updated.disabled == original_disabled
+    assert updated.first_failure_at is None
+    assert updated.tenant_id == t.id
+    assert updated.old_secrets == [] or updated.old_secrets is None
+
+
+@pytest.mark.asyncio
+async def test_update_with_empty_data_is_a_noop(test_db):
+    t  = await _make_tenant(test_db)
+    ep = await _make_endpoint(test_db, t.id)
+    repo = WebhookEndpointRepository(test_db)
+
+    result = await repo.update(endpoint_id=ep.id, data={})
+    assert result is not None
+    assert result.id == ep.id
+
+
+# ─── Admin CRUD: delete ─────────────────────────────────────────────
+
+@pytest.mark.asyncio
+async def test_delete_removes_row_and_returns_true(test_db):
+    t  = await _make_tenant(test_db)
+    ep = await _make_endpoint(test_db, t.id)
+    repo = WebhookEndpointRepository(test_db)
+
+    assert await repo.delete(ep.id) is True
+    assert await repo.get_by_id(ep.id) is None
+
+
+@pytest.mark.asyncio
+async def test_delete_missing_returns_false(test_db):
+    """Idempotent-friendly for the API layer: delete of a non-existent
+    id is not an error, the caller decides whether to return 404."""
+    repo = WebhookEndpointRepository(test_db)
+    assert await repo.delete(uuid.uuid4()) is False
+
+
+# ─── Admin CRUD: rotate_secret ──────────────────────────────────────
+
+@pytest.mark.asyncio
+async def test_rotate_secret_stores_old_secret_with_expiry(test_db):
+    """Rotation MUST preserve the old secret in old_secrets so a
+    receiver mid-deploy keeps validating signatures during the grace
+    window. Losing the old secret at rotation would break every
+    receiver that has not yet redeployed."""
+    t  = await _make_tenant(test_db)
+    ep = await _make_endpoint(test_db, t.id, url="https://x.example.com")
+    repo = WebhookEndpointRepository(test_db)
+
+    now = datetime(2026, 7, 29, 12, 0, 0)
+    result = await repo.rotate_secret(
+        endpoint_id    = ep.id,
+        new_secret_enc = "v2:new-secret",
+        grace_hours    = 24,
+        now            = now,
+    )
+    assert result is not None
+    assert result.secret_enc == "v2:new-secret"
+    assert len(result.old_secrets) == 1
+    entry = result.old_secrets[0]
+    assert entry["ciphertext"] == "encrypted-blob"     # from _make_endpoint
+    assert entry["expires_at"] == (now + timedelta(hours=24)).isoformat()
+
+
+@pytest.mark.asyncio
+async def test_rotate_secret_prunes_already_expired_old_secrets(test_db):
+    """old_secrets MUST NOT grow unbounded across many rotations.
+    Any entry whose expires_at has already passed is dropped in the
+    same call so an endpoint rotated weekly for years still has an
+    O(active-grace-windows) array, not O(total-rotations)."""
+    t  = await _make_tenant(test_db)
+    now = datetime(2026, 7, 29, 12, 0, 0)
+    expired = {"ciphertext": "old-v1", "expires_at": (now - timedelta(hours=1)).isoformat()}
+    live    = {"ciphertext": "old-v2", "expires_at": (now + timedelta(hours=10)).isoformat()}
+
+    ep = WebhookEndpointModel(
+        id          = uuid.uuid4(),
+        tenant_id   = t.id,
+        url         = "https://x.example.com",
+        secret_enc  = "current",
+        old_secrets = [expired, live],
+        disabled    = False,
+        created_at  = datetime.utcnow(),
+    )
+    test_db.add(ep)
+    await test_db.flush()
+
+    repo   = WebhookEndpointRepository(test_db)
+    result = await repo.rotate_secret(
+        endpoint_id    = ep.id,
+        new_secret_enc = "brand-new",
+        grace_hours    = 24,
+        now            = now,
+    )
+
+    assert result.secret_enc == "brand-new"
+    ciphertexts = [e["ciphertext"] for e in result.old_secrets]
+    assert "old-v1" not in ciphertexts    # pruned
+    assert "old-v2" in ciphertexts        # still in grace
+    assert "current" in ciphertexts       # freshly rotated
+
+
+@pytest.mark.asyncio
+async def test_rotate_secret_missing_returns_none(test_db):
+    repo = WebhookEndpointRepository(test_db)
+    result = await repo.rotate_secret(
+        endpoint_id    = uuid.uuid4(),
+        new_secret_enc = "v2:x",
+        grace_hours    = 24,
+    )
+    assert result is None
+
+
+@pytest.mark.asyncio
+async def test_rotate_secret_rejects_non_positive_grace(test_db):
+    """A zero or negative grace window would invalidate the old secret
+    the instant it moved into old_secrets, breaking receivers before
+    they could redeploy. Surface loudly."""
+    t  = await _make_tenant(test_db)
+    ep = await _make_endpoint(test_db, t.id)
+    repo = WebhookEndpointRepository(test_db)
+
+    with pytest.raises(ValueError):
+        await repo.rotate_secret(endpoint_id=ep.id, new_secret_enc="v2:x", grace_hours=0)
+    with pytest.raises(ValueError):
+        await repo.rotate_secret(endpoint_id=ep.id, new_secret_enc="v2:x", grace_hours=-5)
+
+
+# ─── Admin CRUD: reactivate ─────────────────────────────────────────
+
+@pytest.mark.asyncio
+async def test_reactivate_clears_disabled_and_first_failure_at(test_db):
+    """Manual recovery MUST clear BOTH flags -- otherwise the sweep
+    would immediately re-disable the endpoint on the next tick with
+    no new failures, which is opaque and infuriating."""
+    t   = await _make_tenant(test_db)
+    now = datetime(2026, 7, 29, 12, 0, 0)
+    ep  = await _make_endpoint(
+        test_db, t.id,
+        disabled=True,
+        first_failure_at=now - timedelta(days=10),
+    )
+    repo = WebhookEndpointRepository(test_db)
+
+    result = await repo.reactivate(endpoint_id=ep.id, now=now)
+
+    assert result is not None
+    assert result.disabled is False
+    assert result.first_failure_at is None
+
+
+@pytest.mark.asyncio
+async def test_reactivate_is_idempotent_on_active_endpoint(test_db):
+    """Safe to call on an already-active endpoint. No-op, still 200."""
+    t  = await _make_tenant(test_db)
+    ep = await _make_endpoint(test_db, t.id, disabled=False)
+    repo = WebhookEndpointRepository(test_db)
+
+    result = await repo.reactivate(endpoint_id=ep.id)
+    assert result is not None
+    assert result.disabled is False
+
+
+@pytest.mark.asyncio
+async def test_reactivate_missing_returns_none(test_db):
+    repo = WebhookEndpointRepository(test_db)
+    assert await repo.reactivate(endpoint_id=uuid.uuid4()) is None
