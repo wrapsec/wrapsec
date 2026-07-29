@@ -118,6 +118,16 @@ class Settings(BaseSettings):
     retention_worker_hour:    int  = 2   # 2 AM UTC
     retention_worker_minute:  int  = 0
 
+    # ── Webhook circuit breaker ───────────────────────────────────────────────
+    # Auto-disable a webhook endpoint after it has been continuously failing
+    # for `hours` hours (default 120h / 5 days -- matches the industry
+    # convention adopted by widely-used OSS webhook delivery platforms).
+    # A background sweep runs every `sweep_minutes` minutes to flip disabled.
+    # Set _ENABLED=false to keep the sweep off (useful for tests / dev).
+    webhook_circuit_breaker_enabled:       bool = True
+    webhook_circuit_breaker_hours:         int  = 120
+    webhook_circuit_breaker_sweep_minutes: int  = 15
+
     # ── Trial key limits ──────────────────────────────────────────────────────
     # Applied only when api_keys.key_type = 'trial'
     # Production (live) keys are completely unaffected by these settings

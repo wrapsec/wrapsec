@@ -46,49 +46,88 @@ async def start_scheduler() -> None:
     Start the APScheduler background scheduler.
     Called once during FastAPI lifespan startup.
     Safe to call multiple times - will not start a second scheduler.
+
+    Registers all in-process scheduled jobs. Each job is gated by its
+    own _ENABLED flag so operators can disable individual jobs without
+    losing the others.
     """
     global _scheduler
 
     _settings = get_settings()
 
-    if not _settings.retention_worker_enabled:
-        logger.info("Retention worker: disabled via RETENTION_WORKER_ENABLED=false")
+    retention_on       = _settings.retention_worker_enabled
+    circuit_breaker_on = _settings.webhook_circuit_breaker_enabled
+
+    if not retention_on and not circuit_breaker_on:
+        logger.info(
+            "Scheduler: all in-process jobs disabled via env - not starting APScheduler"
+        )
         return
 
     try:
         from apscheduler.schedulers.asyncio import AsyncIOScheduler
         from apscheduler.triggers.cron import CronTrigger
-        from workers.tasks import run_retention_cleanup
+        from apscheduler.triggers.interval import IntervalTrigger
 
         _scheduler = AsyncIOScheduler(timezone="UTC")
 
-        _scheduler.add_job(
-            func              = run_retention_cleanup,
-            trigger           = CronTrigger(
-                hour   = _settings.retention_worker_hour,
-                minute = _settings.retention_worker_minute,
-            ),
-            id                = "retention_cleanup",
-            name              = "WrapSec Retention Cleanup",
-            misfire_grace_time = 3600,  # Allow up to 1 hour late start (e.g. server restart)
-            replace_existing  = True,
-            max_instances     = 1,      # Never run two cleanup jobs simultaneously
-        )
+        if retention_on:
+            from workers.tasks import run_retention_cleanup
+
+            _scheduler.add_job(
+                func              = run_retention_cleanup,
+                trigger           = CronTrigger(
+                    hour   = _settings.retention_worker_hour,
+                    minute = _settings.retention_worker_minute,
+                ),
+                id                = "retention_cleanup",
+                name              = "WrapSec Retention Cleanup",
+                misfire_grace_time = 3600,  # Allow up to 1 hour late start (e.g. server restart)
+                replace_existing  = True,
+                max_instances     = 1,      # Never run two cleanup jobs simultaneously
+            )
+            logger.info(
+                f"Retention worker: scheduled daily at "
+                f"{_settings.retention_worker_hour:02d}:{_settings.retention_worker_minute:02d} UTC"
+            )
+        else:
+            logger.info("Retention worker: disabled via RETENTION_WORKER_ENABLED=false")
+
+        if circuit_breaker_on:
+            from workers.webhook_circuit_breaker import run_circuit_breaker_sweep
+
+            sweep_minutes = _settings.webhook_circuit_breaker_sweep_minutes
+            _scheduler.add_job(
+                func              = run_circuit_breaker_sweep,
+                trigger           = IntervalTrigger(minutes=sweep_minutes),
+                id                = "webhook_circuit_breaker",
+                name              = "WrapSec Webhook Circuit Breaker Sweep",
+                # Grace of one sweep interval: if a worker restart delays the
+                # tick, we still catch up on the next boundary rather than
+                # skipping the window entirely.
+                misfire_grace_time = sweep_minutes * 60,
+                replace_existing  = True,
+                max_instances     = 1,
+            )
+            logger.info(
+                f"Webhook circuit breaker: scheduled every {sweep_minutes}m, "
+                f"grace = {_settings.webhook_circuit_breaker_hours}h"
+            )
+        else:
+            logger.info(
+                "Webhook circuit breaker: disabled via WEBHOOK_CIRCUIT_BREAKER_ENABLED=false"
+            )
 
         _scheduler.start()
-
-        logger.info(
-            f"Retention worker: scheduler started - "
-            f"runs daily at {_settings.retention_worker_hour:02d}:{_settings.retention_worker_minute:02d} UTC"
-        )
+        logger.info("Scheduler: started")
 
     except ImportError:
         logger.warning(
-            "Retention worker: APScheduler not installed - worker disabled. "
+            "Scheduler: APScheduler not installed - all jobs disabled. "
             "Install with: pip install apscheduler"
         )
     except Exception as e:
-        logger.error(f"Retention worker: failed to start scheduler: {e}")
+        logger.error(f"Scheduler: failed to start: {e}")
 
 
 async def stop_scheduler() -> None:
