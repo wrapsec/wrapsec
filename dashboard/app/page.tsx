@@ -32,9 +32,12 @@ const LABEL: React.CSSProperties = {
 
 function RequestCards({ stats, from, to }: { stats: AuditStatsResponse; from: string; to: string }) {
   const total     = stats.total_requests
-  const blocked   = Math.round(stats.block_rate    * total)
-  const sanitized = Math.round(stats.sanitize_rate * total)
-  const allowed   = Math.round(stats.allow_rate    * total)
+  // Read the authoritative counts. Reconstructing via round(rate * total)
+  // loses precision after the API rounds rate to 4 decimals and drifts
+  // by one against /v1/audit/logs?decision=... on deep-link.
+  const blocked   = stats.block_count
+  const sanitized = stats.sanitize_count
+  const allowed   = stats.allow_count
 
   const CARDS = [
     { label: "Total Requests", value: total,     sub: "All time",                                             color: "#111827", accent: "#670FEF", href: `/requests?from=${from}&to=${to}` },
@@ -71,9 +74,9 @@ function RequestCards({ stats, from, to }: { stats: AuditStatsResponse; from: st
 
 function DonutChart({ stats }: { stats: AuditStatsResponse }) {
   const total     = stats.total_requests
-  const blocked   = Math.round(stats.block_rate    * total)
-  const sanitized = Math.round(stats.sanitize_rate * total)
-  const allowed   = Math.round(stats.allow_rate    * total)
+  const blocked   = stats.block_count
+  const sanitized = stats.sanitize_count
+  const allowed   = stats.allow_count
 
   const SEGMENTS = [
     { value: blocked,   color: "#dc2626", label: "Blocked",   pct: stats.block_rate    },
