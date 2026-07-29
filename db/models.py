@@ -7,7 +7,7 @@ from datetime import datetime
 from sqlalchemy import (
     Column, String, Float, Boolean,
     DateTime, Text, JSON, Integer, Index, ForeignKey,
-    CheckConstraint
+    CheckConstraint, UniqueConstraint
 )
 from sqlalchemy.orm import DeclarativeBase, relationship
 from sqlalchemy.dialects.postgresql import UUID, JSONB
@@ -394,4 +394,49 @@ class AuthEventModel(Base):
         Index("idx_auth_events_user",        "user_id"),
         Index("idx_auth_events_success",     "success"),
         Index("idx_auth_events_ip",          "ip_address"),
+    )
+
+
+class WebhookEndpointModel(Base):
+    """
+    Outbound webhook destination (v1.3.0). One row per (tenant, url).
+
+    Signing secret is stored per-endpoint, not per-tenant, so a single
+    tenant can route BLOCK events to multiple destinations with
+    independent verification material and rotate each one in isolation.
+
+    Secret rotation uses an expiring-keys array. `old_secrets` is a
+    JSON array of {ciphertext, expires_at} entries that remain valid
+    for signature verification until their expiry, giving receivers a
+    grace window to update verifier code before the old secret stops
+    being accepted. All secret material is envelope-encrypted via
+    security.encryption (v2 wire format, per-record DEK, HYOK-ready).
+    Distinct HMAC secret per feature per the conflict-prevention rule:
+    this material MUST NOT be reused for the audit hash chain, JWT
+    signing, or inbound SDK request signing.
+
+    Circuit-breaker fields: `first_failure_at` is set on the first
+    delivery failure and cleared on the next success; a background
+    sweep flips `disabled` once the failure timer exceeds the
+    configured grace window. See v1.3.0 delivery-pipeline commits.
+    """
+    __tablename__ = "webhook_endpoints"
+
+    id               = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    tenant_id        = Column(UUID(as_uuid=True), ForeignKey("tenants.id"), nullable=False)
+    url              = Column(Text,        nullable=False)
+    description      = Column(Text,        nullable=True)
+    secret_enc       = Column(Text,        nullable=False)
+    old_secrets      = Column(JSONVariant, nullable=True,  default=list)
+    event_types      = Column(JSONVariant, nullable=True,  default=None)
+    headers          = Column(JSONVariant, nullable=True,  default=None)
+    disabled         = Column(Boolean,     nullable=False, default=False)
+    first_failure_at = Column(DateTime,    nullable=True)
+    rate_limit       = Column(Integer,     nullable=True)
+    created_at       = Column(DateTime,    nullable=False, default=datetime.utcnow)
+    updated_at       = Column(DateTime,    nullable=True)
+
+    __table_args__ = (
+        UniqueConstraint("tenant_id", "url", name="uq_webhook_endpoints_tenant_url"),
+        Index("ix_webhook_endpoints_tenant_disabled", "tenant_id", "disabled"),
     )
