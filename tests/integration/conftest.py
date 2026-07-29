@@ -15,7 +15,7 @@ import uuid
 import pytest
 import pytest_asyncio
 from httpx import AsyncClient, ASGITransport
-from sqlalchemy import select
+from sqlalchemy import select, text
 from sqlalchemy.ext.asyncio import (
     create_async_engine, async_sessionmaker, AsyncSession,
 )
@@ -27,6 +27,161 @@ from db.models import Base, TenantModel
 from config.settings import get_settings
 
 settings = get_settings()
+
+
+# ── PostgreSQL URL resolver for the pg_client fixture ─────────────────────────
+# Resolution order (first that works wins):
+#   1. WRAPSEC_TEST_PG_URL env var - explicit operator override.
+#   2. settings.database_url - the same DB used by the app and by the existing
+#      _postgres_db_setup autouse fixture. If `make up-dev` is running this is
+#      what gets used. Zero container overhead in that path.
+#   3. testcontainers PostgreSQL - spins up postgres:16-alpine (same image as
+#      docker-compose.yml so it's already cached) for the session. Falls back
+#      to skipping pg-marked tests if the testcontainers package or Docker is
+#      unavailable, matching the pattern Airflow and dbt use.
+#
+# Only the NEW pg_client fixture consumes this. The pre-existing PG-backed
+# fixtures (admin_jwt_headers, auth_setup, two_tenant_setup) continue to use
+# db.session.AsyncSessionFactory, which is bound at import time from
+# settings.database_url. Moving those fixtures to the resolver would require
+# reloading db.session mid-session and is out of scope for v1.2.3.
+
+_pg_container      = None  # module-level so we can stop it in a finalizer
+_pg_url_cache: str | None = None
+
+
+async def _resolve_pg_url() -> str | None:
+    global _pg_container, _pg_url_cache
+    if _pg_url_cache is not None:
+        return _pg_url_cache
+
+    env_url = os.environ.get("WRAPSEC_TEST_PG_URL")
+    if env_url:
+        _pg_url_cache = env_url
+        return env_url
+
+    # Try the app's configured DB. If it's reachable, use it.
+    try:
+        probe = create_async_engine(settings.database_url, poolclass=NullPool)
+        async with probe.connect() as conn:
+            await conn.execute(text("SELECT 1"))
+        await probe.dispose()
+        _pg_url_cache = settings.database_url
+        return settings.database_url
+    except Exception:
+        pass
+
+    # Fall through to testcontainers.
+    try:
+        from testcontainers.postgres import PostgresContainer
+    except ImportError:
+        return None
+
+    try:
+        # Match the docker-compose.yml image so we do not pull a second copy.
+        _pg_container = PostgresContainer("postgres:16-alpine")
+        _pg_container.start()
+    except Exception:
+        # Docker not running, socket unreachable, image pull failed, etc.
+        _pg_container = None
+        return None
+
+    sync_url = _pg_container.get_connection_url()  # postgresql+psycopg2://...
+    async_url = sync_url.replace("postgresql+psycopg2://", "postgresql+asyncpg://")
+    _pg_url_cache = async_url
+    return async_url
+
+
+@pytest_asyncio.fixture(scope="session")
+async def pg_url():
+    url = await _resolve_pg_url()
+    if url is None:
+        pytest.skip(
+            "PostgreSQL not available: set WRAPSEC_TEST_PG_URL, run "
+            "`make up-dev`, or install testcontainers + start Docker."
+        )
+    yield url
+
+    # Session teardown: stop the container if we spawned one.
+    global _pg_container
+    if _pg_container is not None:
+        try:
+            _pg_container.stop()
+        finally:
+            _pg_container = None
+
+
+@pytest_asyncio.fixture(scope="session")
+async def _pg_engine(pg_url):
+    """
+    Session-scoped engine against the resolved PG. Schema is created once with
+    Base.metadata.create_all (checkfirst=True, so it is a no-op if the DB is
+    already migrated). No drop_all at the end - the container is torn down
+    with the process, and shared PGs (up-dev / WRAPSEC_TEST_PG_URL) are the
+    operator's responsibility.
+    """
+    engine = create_async_engine(pg_url, poolclass=NullPool)
+    async with engine.begin() as conn:
+        await conn.run_sync(Base.metadata.create_all)
+    yield engine
+    await engine.dispose()
+
+
+@pytest_asyncio.fixture(scope="function")
+async def pg_db(_pg_engine):
+    """
+    Function-scoped session against the resolved PG.
+
+    Isolation model:
+
+      * When the resolver spun up our own testcontainer (`_pg_container is
+        not None`), the DB is a private sandbox -- TRUNCATE the tables the
+        pg_client tests write to so state does not carry between tests.
+
+      * When the resolver is pointing at a *shared* PG
+        (WRAPSEC_TEST_PG_URL or settings.database_url from `make up-dev`),
+        NEVER truncate. That destroys the operator's live dev data. Tests
+        instead scope themselves by random tenant_id and rely on filtering.
+
+    v1.2.3: The unconditional TRUNCATE previously here wiped a shared dev
+    database in real use. Guard added so a shared PG is always append-only
+    for pg_client tests.
+    """
+    sf = async_sessionmaker(bind=_pg_engine, class_=AsyncSession, expire_on_commit=False)
+    async with sf() as session:
+        if _pg_container is not None:
+            # CASCADE is required because audit_logs is referenced by the
+            # hash chain trigger's constraint chain in v1.2.0+.
+            await session.execute(text(
+                "TRUNCATE TABLE audit_logs, proxy_interactions "
+                "RESTART IDENTITY CASCADE"
+            ))
+            await session.commit()
+        yield session
+
+
+@pytest_asyncio.fixture(scope="function")
+async def pg_client(pg_db):
+    """
+    HTTP client whose get_db override yields the pg_db PostgreSQL session.
+    Use this instead of the SQLite-backed `client` fixture for anything that
+    exercises PG-only code paths: jsonb queries, percentile_cont, hash-chain
+    trigger, asyncpg tz-aware bind rejection.
+    """
+    app.dependency_overrides.clear()
+
+    async def override_get_db():
+        yield pg_db
+
+    app.dependency_overrides[get_db] = override_get_db
+
+    async with AsyncClient(
+        transport = ASGITransport(app=app),
+        base_url  = "http://test",
+    ) as c:
+        yield c
+
+    app.dependency_overrides.clear()
 
 
 # ── PostgreSQL bootstrap - runs once per integration session ─────────────────
@@ -41,26 +196,43 @@ async def _postgres_db_setup():
     Required for admin_jwt_headers and auth_setup fixtures which call
     TenantRepository.get_default() and assert a slug='default' tenant exists.
     Runs once before any integration test in the session.
+
+    Fail-graceful: if settings.database_url is unreachable, prints a warning
+    and yields anyway. This is what unblocks the pg_client fixture's
+    testcontainers fallback -- previously an unreachable app DB would
+    session-error every integration test, including SQLite-only ones that
+    do not touch this fixture. Tests that actually depend on the app's PG
+    (auth_setup, admin_jwt_headers, two_tenant_setup) still fail on their
+    own connection attempt, which is the correct signal.
     """
     engine = create_async_engine(settings.database_url, poolclass=NullPool)
     sf     = async_sessionmaker(bind=engine, class_=AsyncSession, expire_on_commit=False)
 
-    async with engine.begin() as conn:
-        await conn.run_sync(Base.metadata.create_all)
+    try:
+        async with engine.begin() as conn:
+            await conn.run_sync(Base.metadata.create_all)
 
-    async with sf() as db:
-        result = await db.execute(
-            select(TenantModel).where(TenantModel.slug == "default")
+        async with sf() as db:
+            result = await db.execute(
+                select(TenantModel).where(TenantModel.slug == "default")
+            )
+            if result.scalar_one_or_none() is None:
+                db.add(TenantModel(
+                    id            = uuid.uuid4(),
+                    slug          = "default",
+                    name          = "Default",
+                    global_policy = {},
+                    is_active     = True,
+                ))
+                await db.commit()
+    except Exception as exc:
+        # Do not use logging here -- pytest captures it and hides the warning
+        # from operators who need to see it during collection.
+        print(
+            f"\n[integration/conftest] settings.database_url unreachable: "
+            f"{type(exc).__name__}. Tests that depend on the app's PG will "
+            f"fail; pg_client tests can still run via testcontainers."
         )
-        if result.scalar_one_or_none() is None:
-            db.add(TenantModel(
-                id            = uuid.uuid4(),
-                slug          = "default",
-                name          = "Default",
-                global_policy = {},
-                is_active     = True,
-            ))
-            await db.commit()
 
     yield
 
