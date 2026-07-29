@@ -2,6 +2,54 @@
 
 All notable changes to WrapSec are documented here.
 
+## [1.2.3] - 2026-07-28
+
+### Added
+- **Testcontainers-backed integration tests.** New `pg_client` fixture in
+  `tests/integration/conftest.py` runs API tests against a real
+  PostgreSQL instance instead of SQLite. URL resolution order:
+  `WRAPSEC_TEST_PG_URL` env var, then `settings.database_url` if
+  reachable (zero-overhead reuse of `make up-dev`), then a
+  session-scoped `postgres:16-alpine` container via
+  `testcontainers-python`. Tests marked `@pytest.mark.pg` skip cleanly
+  when none of the three paths resolve. Same pattern used by Airflow,
+  dbt-core, Superset, and Prefect. Four regression tests seeded in
+  `tests/integration/test_api_audit_pg.py` covering the v1.2.1
+  `jsonb_array_elements_text`, `percentile_cont`, and asyncpg
+  tz-aware-bind bugs plus the v1.2.2 dept-scope leak. The pre-existing
+  `_postgres_db_setup` autouse fixture now degrades gracefully when the
+  app's PG is unreachable, so SQLite-only integration tests keep
+  running instead of session-erroring.
+
+### Fixed
+- **JSON vs JSONB drift in the schema.** Every `Column(JSON, ...)` in
+  `db/models.py` was actually being queried via jsonb operators
+  (`jsonb_array_elements_text`, `cast(.., JSONB).contains(..)`). The
+  live database had those columns as `jsonb` from a pre-baseline
+  hand-alter that never made it into a tracked migration, so
+  production kept working; a fresh install from `0001_baseline` would
+  have created `json` columns and 500'd on the first `/v1/audit/stats`
+  request with `function jsonb_array_elements_text(json) does not
+  exist`. Migration `0006_json_to_jsonb` conditionally alters the
+  affected columns to `jsonb` on PostgreSQL (skips columns already at
+  `jsonb`, no-op on SQLite); models now use a `JSONVariant` alias that
+  maps to `JSONB` on PostgreSQL and falls back to `JSON` on SQLite.
+  Twelve columns across seven tables affected: `tenants.global_policy`,
+  `departments.policy_override`, `applications.metadata`,
+  `applications.policy_override`, `applications.rate_limit_override`,
+  `audit_logs.threats`, `audit_logs.detection_scores`,
+  `audit_logs.guardrail_scores`, `admin_events.metadata`,
+  `proxy_interactions.input_threats`,
+  `proxy_interactions.output_threats`,
+  `proxy_interactions.output_flags`. Caught by the new
+  testcontainers-backed regression tests running against a fresh
+  postgres:16-alpine.
+
+### Internal
+- `pytest.ini` registers a `pg` marker so `-m pg` selects the
+  PostgreSQL-backed subset and `-m 'not pg'` skips them.
+- `requirements-dev.txt` pins `testcontainers[postgres]==4.13.1`.
+
 ## [1.2.2] - 2026-07-28
 
 ### Security
