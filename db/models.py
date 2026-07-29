@@ -440,3 +440,64 @@ class WebhookEndpointModel(Base):
         UniqueConstraint("tenant_id", "url", name="uq_webhook_endpoints_tenant_url"),
         Index("ix_webhook_endpoints_tenant_disabled", "tenant_id", "disabled"),
     )
+
+
+class WebhookDeliveryAttemptModel(Base):
+    """
+    Per-attempt log for outbound webhook deliveries (v1.3.0).
+
+    Append-only. A single logical webhook (identified by `msg_id` and
+    the `webhook-id` header) produces one row per delivery attempt,
+    including the first attempt and every retry. Retention is
+    partition-based: the postgres migration creates monthly RANGE
+    partitions on `created_at`, and a maintenance job (added in a
+    later v1.3.0 commit) drops partitions older than the configured
+    retention window.
+
+    Composite primary key `(id, created_at)` is required by postgres
+    partitioning: the PK must include every partitioning column. The
+    column ordering (id first) matches the intuitive read of "the row
+    with this id" while keeping the DDL valid.
+
+    Denormalized `url` snapshots the endpoint URL at delivery time.
+    Endpoint URLs may change after an attempt is logged, and this row
+    must remain a truthful record of what was actually attempted.
+    Same reasoning as denormalizing `tenant_id` -- routing decisions
+    outside of hot-path queries stay correct even if the endpoint or
+    its parent moves.
+
+    `response_body_truncated` is a bounded slice of the receiver's
+    response body. The emitter is responsible for truncating to a
+    small ceiling before writing (see later v1.3.0 delivery-worker
+    commit); an unbounded response column would let a single misbehaved
+    receiver returning multi-megabyte HTML error pages fill disk.
+
+    `next_attempt_at` gates the retry scheduler: workers scan for rows
+    with `status = 'pending' AND next_attempt_at <= now()`. NULL means
+    "no further attempt scheduled" (either terminal or currently in
+    flight). Indexed as leading column so the scheduler scan is a
+    range scan, not a table scan.
+    """
+    __tablename__ = "webhook_delivery_attempts"
+
+    id                      = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    created_at              = Column(DateTime,           primary_key=True, nullable=False, default=datetime.utcnow)
+    endpoint_id             = Column(UUID(as_uuid=True), ForeignKey("webhook_endpoints.id"), nullable=False)
+    tenant_id               = Column(UUID(as_uuid=True), ForeignKey("tenants.id"),           nullable=False)
+    msg_id                  = Column(String(64), nullable=False)
+    url                     = Column(Text,       nullable=False)
+    event_type              = Column(String(100), nullable=False)
+    attempt_number          = Column(Integer,    nullable=False)
+    status                  = Column(String(20), nullable=False)
+    http_status_code        = Column(Integer,    nullable=True)
+    response_body_truncated = Column(Text,       nullable=True)
+    response_duration_ms    = Column(Integer,    nullable=True)
+    error_message           = Column(Text,       nullable=True)
+    next_attempt_at         = Column(DateTime,   nullable=True)
+    ended_at                = Column(DateTime,   nullable=True)
+
+    __table_args__ = (
+        Index("ix_webhook_delivery_attempts_msg_id",           "msg_id"),
+        Index("ix_webhook_delivery_attempts_endpoint_status",  "endpoint_id", "status"),
+        Index("ix_webhook_delivery_attempts_next_attempt",     "next_attempt_at"),
+    )
