@@ -506,6 +506,31 @@ async def proxy_chat_completions(
     if gd.layer_scores and gd.layer_scores.toxicity_score > 0.0:
         _grd_scores["toxicity"] = gd.layer_scores.toxicity_score
 
+    # -- Emit outbound webhooks (v1.3.0) --
+    # Fire-and-forget on the input decision only; output-side emission lands
+    # with output-block webhook events in a later v1.3.x commit. Never raises
+    # so the proxy path is immune to webhook subsystem failures.
+    try:
+        from cache.redis_client import get_redis
+        from services.webhooks.emitter import emit_gateway_decision
+        await emit_gateway_decision(
+            db             = db,
+            redis          = get_redis(),
+            tenant_id      = tenant_id,
+            trace_id       = trace_id,
+            decision       = input_decision,
+            risk_score     = gd.risk_score.value if hasattr(gd, "risk_score") else 0.0,
+            primary_reason = input_reason,
+            confidence     = input_conf,
+            threats        = input_threats,
+            source         = "proxy",
+            user_id        = None,
+            detection_mode = mode,
+            execution_mode = "proxy",
+        )
+    except Exception:
+        pass
+
     # -- 6. Handle input BLOCK --
     if input_decision == "BLOCK":
         total_ms = int((time.monotonic() - wall_start) * 1000)

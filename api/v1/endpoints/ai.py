@@ -355,6 +355,31 @@ async def ai_request(
         ),
     })
 
+    # ── Emit outbound webhooks (v1.3.0) ─────────────────────────────
+    # Fire-and-forget: enqueues one XADD per subscribed endpoint for
+    # BLOCK/SANITIZE decisions and returns. Never raises. Real HTTP
+    # delivery + retries happen in workers/webhook_delivery.py.
+    try:
+        from cache.redis_client import get_redis
+        from services.webhooks.emitter import emit_gateway_decision
+        await emit_gateway_decision(
+            db             = db,
+            redis          = get_redis(),
+            tenant_id      = getattr(request.state, "tenant_id", None),
+            trace_id       = str(incoming.trace_id),
+            decision       = result.decision.decision.value,
+            risk_score     = result.decision.risk_score.value,
+            primary_reason = result.decision.primary_reason,
+            confidence     = result.decision.confidence,
+            threats        = [t.value for t in result.decision.threats],
+            source         = source,
+            user_id        = body.metadata.user_id if body.metadata else None,
+            detection_mode = det_mode_str,
+            execution_mode = exe_mode_str,
+        )
+    except Exception:
+        pass  # Webhook emit must never break scan responses
+
     try:
         from observability.metrics import record_request
         record_request(
