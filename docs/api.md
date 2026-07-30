@@ -74,6 +74,8 @@ Used by dashboard users. Issued via `POST /v1/auth/login`.
 | `POST/PUT/DELETE /v1/admin/departments/*` | no | yes ADMIN only |
 | `POST/PUT/DELETE /v1/admin/applications/*` | no | yes ADMIN only |
 | `ALL /v1/admin/users/*` | no | yes ADMIN only |
+| `GET /v1/admin/webhooks`, `GET /v1/admin/webhooks/{id}` | no | yes ADMIN only |
+| `POST/PUT/DELETE /v1/admin/webhooks/*`, `POST /v1/admin/webhooks/{id}/rotate-secret` | no | yes ADMIN only |
 
 **Notes:**
 - `GET /v1/keys` requires auth but accepts API key - CLI `wrapsec keys list` uses this
@@ -1593,6 +1595,84 @@ Resets application policy override to null. Application inherits from department
 ```json
 {"app_id": "...", "app_name": "...", "policy_override": null, "reset": true, "message": "Application policy override removed. Inheriting from department."}
 ```
+
+---
+
+## Webhooks (Outbound)
+
+WrapSec pushes an event to configured destinations on every BLOCK and
+SANITIZE decision (ALLOW is not emitted). Delivery is asynchronous: the scan
+response never blocks on webhook I/O. Events retry on failure
+(5s -> 5m -> 30m -> 2h -> 5h -> 10h -> 10h) and dead-letter when exhausted; an
+endpoint that fails continuously for 120h is auto-disabled by the circuit
+breaker. All routes require the ADMIN role.
+
+Two endpoint kinds:
+
+- **Generic webhook** (`connector_type` null): WrapSec POSTs the raw
+  audit-shaped JSON body signed with HMAC-SHA256. The signing secret is
+  generated server-side and returned once at create. Verify deliveries with
+  the `webhook-id`, `webhook-timestamp`, and `webhook-signature` headers.
+- **SIEM connector** (`connector_type` set): WrapSec formats the event for a
+  specific SIEM and authenticates with the customer-supplied ingest token
+  (never echoed back). Supported: `splunk_hec`, `datadog_logs`,
+  `sentinel_logs_ingestion`, `elastic_ecs`.
+
+| connector_type | auth (`secret`) | required `config` keys |
+|----------------|-----------------|------------------------|
+| `splunk_hec` | HEC token | (none; `index`/`sourcetype` optional) |
+| `datadog_logs` | API key | (none; `service`/`ddsource`/`tags` optional) |
+| `sentinel_logs_ingestion` | app-registration client secret | `dcr_immutable_id`, `stream_name`, `tenant_id`, `client_id` |
+| `elastic_ecs` | base64 API key | `index` |
+
+The destination `url` is SSRF-validated (private/loopback/metadata targets are
+rejected), same as LLM provider URLs.
+
+### POST /v1/admin/webhooks
+
+Create a generic webhook (secret generated and returned once):
+
+```json
+{"url": "https://example.com/hook", "event_types": ["wrapsec.request.blocked"]}
+```
+
+```json
+{"id": "...", "url": "...", "connector_type": null, "config": null,
+ "status": "active", "secret": "<plaintext, shown once>", "secret_masked": "abc1...wxyz"}
+```
+
+Create a connector endpoint (`secret` is the ingest token; not echoed back):
+
+```json
+{"url": "https://es.example.com:9243", "connector_type": "elastic_ecs",
+ "secret": "<elastic api key>", "config": {"index": "logs-wrapsec.security-default"}}
+```
+
+Validation (422) rejects: unknown `connector_type`, a connector without
+`secret`, missing required `config` keys, a generic endpoint with a supplied
+`secret`, and `config` on a generic endpoint.
+
+### GET /v1/admin/webhooks, GET /v1/admin/webhooks/{id}
+
+List/read endpoints. Secrets are always masked. Each row carries a computed
+`status`: `active`, `failing` (in a failure window), or `auto_disabled`
+(circuit breaker retired it).
+
+### PUT /v1/admin/webhooks/{id}
+
+Update `url`, `description`, `event_types`, `config`. `connector_type` is
+immutable after create; `secret` and lifecycle flags are not settable here.
+
+### POST /v1/admin/webhooks/{id}/rotate-secret
+
+Rotate the generic signing secret with a grace window (`grace_hours`, default
+24) during which the old secret still verifies. Returns a fresh plaintext
+secret once. Returns 400 for connector endpoints (rotation is HMAC-signing
+specific; delete and recreate to change a connector token).
+
+### DELETE /v1/admin/webhooks/{id}
+
+Hard-delete the endpoint.
 
 ---
 
