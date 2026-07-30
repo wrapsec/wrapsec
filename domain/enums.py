@@ -88,6 +88,9 @@ class AdminEventAction(str, Enum):
     WEBHOOK_ENDPOINT_DELETED     = "webhook_endpoint_deleted"
     WEBHOOK_ENDPOINT_REACTIVATED = "webhook_endpoint_reactivated"
     WEBHOOK_SECRET_ROTATED       = "webhook_secret_rotated"
+    # Admin-triggered synthetic test delivery. Audited because it makes the
+    # server issue an outbound request to the configured destination.
+    WEBHOOK_ENDPOINT_TESTED      = "webhook_endpoint_tested"
 
 
 class AuthEventAction(str, Enum):

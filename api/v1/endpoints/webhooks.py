@@ -50,6 +50,7 @@ from __future__ import annotations
 import logging
 import secrets as pysecrets
 import uuid
+from datetime import datetime
 
 from fastapi import APIRouter, Depends, Request
 from fastapi.responses import JSONResponse
@@ -67,9 +68,11 @@ from domain.entities.principal import Principal
 from domain.enums import AdminEventAction
 from errors.exceptions import NotFoundError, ValidationError
 from security.encryption import encrypt, mask
+from cache.redis_client import get_redis
 from security.url_validator import validate_llm_base_url
 from services.webhooks.connectors import registry
 from services.webhooks.connectors.form_schema import connector_forms
+from services.webhooks.delivery_handler import WebhookDeliveryHandler
 
 logger = logging.getLogger("wrapsec.webhooks_admin")
 
@@ -483,3 +486,74 @@ async def reactivate_webhook(
         {"endpoint_id": str(endpoint_id)},
     )
     return JSONResponse(content=_format_masked(ep))
+
+
+def _build_test_event() -> tuple[str, str, dict]:
+    """A synthetic BLOCK event, clearly marked so a receiver/SIEM can filter
+    it out. Carries no real tenant data -- placeholder values only."""
+    msg_id = f"test-{uuid.uuid4()}"
+    body = {
+        "trace_id":       msg_id,
+        "timestamp":      datetime.utcnow().isoformat() + "Z",
+        "decision":       "BLOCK",
+        "primary_reason": "RULE_DETECTOR",
+        "risk_score":     0.99,
+        "confidence":     1.0,
+        "severity":       "HIGH",
+        "source":         "webhook_test",
+        "test":           True,
+    }
+    return msg_id, "wrapsec.request.blocked", body
+
+
+@router.post("/{endpoint_id}/test")
+async def test_webhook(
+    endpoint_id: uuid.UUID,
+    request:     Request,
+    db:          AsyncSession = Depends(get_db),
+    principal:   Principal    = Depends(require_admin()),
+):
+    """
+    Send a synthetic test event to the endpoint and return the receiver's
+    response. Synchronous and side-effect-free: it does NOT enqueue, write a
+    delivery-attempt row, or move the circuit-breaker timer, so a test never
+    pollutes delivery health.
+
+    Security: ADMIN-only and tenant-scoped (cross-tenant returns 404, no
+    enumeration). The destination is the endpoint's already-SSRF-validated
+    stored URL -- the same target the delivery worker uses, no new egress
+    surface. The response exposes only the receiver's status/body/timing; the
+    endpoint secret and the outbound auth headers are never returned.
+    """
+    tenant_id = uuid.UUID(request.state.tenant_id)
+    repo      = WebhookEndpointRepository(db)
+    ep        = await _get_owned_endpoint_or_404(repo, endpoint_id, tenant_id)
+
+    settings = get_settings()
+    msg_id, event_type, body = _build_test_event()
+
+    handler = WebhookDeliveryHandler(
+        session_factory    = None,               # send_once touches no DB
+        redis              = get_redis(),        # connector token cache only
+        timeout_s          = settings.webhook_delivery_timeout_seconds,
+        max_response_bytes = settings.webhook_delivery_max_response_bytes,
+    )
+    try:
+        result = await handler.send_once(ep, event_type, body, msg_id)
+    finally:
+        await handler.aclose()
+
+    await _log_admin_event(
+        db, request, principal, tenant_id,
+        AdminEventAction.WEBHOOK_ENDPOINT_TESTED,
+        {"endpoint_id": str(endpoint_id), "ok": result.ok, "status_code": result.status_code},
+    )
+
+    # Only the receiver-facing outcome -- never the secret or request headers.
+    return JSONResponse(content={
+        "ok":               result.ok,
+        "status_code":      result.status_code,
+        "response_snippet": result.response_snippet,
+        "duration_ms":      result.duration_ms,
+        "error":            result.error,
+    })

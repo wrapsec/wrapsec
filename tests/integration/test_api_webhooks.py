@@ -244,6 +244,61 @@ async def test_connector_types_schema_endpoint(client, admin_jwt_headers):
     assert sentinel["secret"]["required"] is True
 
 
+# --- test-send ---
+
+@pytest.mark.asyncio
+async def test_test_send_returns_receiver_outcome_and_leaks_no_secret(
+    client, admin_jwt_headers, monkeypatch,
+):
+    """Test-send returns only the receiver-facing outcome (status/body/timing);
+    the endpoint secret and outbound auth headers are never in the response.
+    The synthetic event is clearly marked and carries no real data."""
+    from services.webhooks import delivery_handler as dh
+
+    captured = {}
+
+    async def _fake_send_once(self, endpoint, event_type, body, msg_id):
+        captured.update(event_type=event_type, body=body, msg_id=msg_id)
+        return dh.SendResult(ok=True, status_code=200, response_snippet="ok",
+                             duration_ms=12, error=None)
+
+    monkeypatch.setattr(dh.WebhookDeliveryHandler, "send_once", _fake_send_once)
+
+    created = await client.post(
+        "/v1/admin/webhooks",
+        json={"url": "https://example.com/hook"}, headers=admin_jwt_headers,
+    )
+    ep_id = created.json()["id"]
+
+    r = await client.post(f"/v1/admin/webhooks/{ep_id}/test", headers=admin_jwt_headers)
+    assert r.status_code == 200, r.text
+    body = r.json()
+    assert body == {"ok": True, "status_code": 200, "response_snippet": "ok",
+                    "duration_ms": 12, "error": None}
+    # No secret material or request internals leak into the response.
+    for leaked in ("secret", "secret_masked", "headers", "token", "authorization"):
+        assert leaked not in body
+    # The event that was sent is a marked, synthetic test event.
+    assert captured["event_type"] == "wrapsec.request.blocked"
+    assert captured["body"]["test"] is True
+    assert captured["msg_id"].startswith("test-")
+
+
+@pytest.mark.asyncio
+async def test_test_send_cross_tenant_returns_404(client, admin_jwt_headers, test_db):
+    """Cross-tenant test-send returns 404 (not 403) so an endpoint id cannot be
+    enumerated across tenants, and never triggers an outbound request."""
+    ep = await _seed_endpoint(test_db, uuid.uuid4())   # a different tenant
+    r = await client.post(f"/v1/admin/webhooks/{ep.id}/test", headers=admin_jwt_headers)
+    assert r.status_code == 404
+
+
+@pytest.mark.asyncio
+async def test_test_send_missing_returns_404(client, admin_jwt_headers):
+    r = await client.post(f"/v1/admin/webhooks/{uuid.uuid4()}/test", headers=admin_jwt_headers)
+    assert r.status_code == 404
+
+
 # ─── list / get ─────────────────────────────────────────────────────
 
 @pytest.mark.asyncio
