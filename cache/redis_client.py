@@ -57,3 +57,34 @@ async def close() -> None:
     if _pool:
         await _pool.aclose()
         _pool = None
+
+
+# Dedicated client for the outbound webhook delivery worker. The shared pool
+# above uses socket_timeout=2s (fail-fast for the request hot path), but the
+# worker does a ~5s blocking XREADGROUP; on the shared client that read would
+# abort at 2s every idle cycle (spin + log noise) and tie up a hot-path
+# connection. This client's socket timeout sits comfortably above the block.
+_worker_client: Redis | None = None
+
+# Must exceed the worker's poll_block_ms (5s) so the blocking read completes
+# normally instead of tripping the socket timeout.
+_WORKER_SOCKET_TIMEOUT = 30
+
+
+def get_webhook_worker_redis() -> Redis:
+    global _worker_client
+    if _worker_client is None:
+        _worker_client = Redis.from_url(
+            get_settings().redis_url,
+            decode_responses       = True,
+            socket_timeout         = _WORKER_SOCKET_TIMEOUT,
+            socket_connect_timeout = 5,
+        )
+    return _worker_client
+
+
+async def close_webhook_worker_redis() -> None:
+    global _worker_client
+    if _worker_client:
+        await _worker_client.aclose()
+        _worker_client = None

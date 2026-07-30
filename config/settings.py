@@ -134,6 +134,11 @@ class Settings(BaseSettings):
     # unbounded column would let one misbehaving receiver fill disk).
     webhook_delivery_timeout_seconds:    int = 10
     webhook_delivery_max_response_bytes: int = 2048
+    # The delivery worker loop is started in the API lifespan. Set _ENABLED=
+    # false to run the API without draining the queue (e.g. a dedicated worker
+    # process, or tests). Concurrency caps in-flight receiver requests.
+    webhook_delivery_worker_enabled:     bool = True
+    webhook_delivery_concurrency:        int  = 8
 
     # ── Trial key limits ──────────────────────────────────────────────────────
     # Applied only when api_keys.key_type = 'trial'

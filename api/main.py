@@ -126,6 +126,7 @@ async def bootstrap_admin() -> None:
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     import os
+    import asyncio
     if os.getenv("TESTING") != "true":
         from db.session import run_migrations, dispose_engine
         from cache.redis_client import ping, close
@@ -136,10 +137,48 @@ async def lifespan(app: FastAPI):
         await start_scheduler()
         await seed_default_tenant()      # ensure default tenant exists (fresh deploy)
         await bootstrap_admin()          # create first admin if users table is empty
+
+        # Outbound webhook delivery worker (v1.3.0). Long-running loop, not a
+        # cron job, so it runs as a lifespan task with its own stop_event and a
+        # DEDICATED redis client (the shared pool's 2s socket timeout would
+        # abort the worker's 5s blocking read).
+        _wh_stop = _wh_task = _wh_handler = None
+        if _settings.webhook_delivery_worker_enabled:
+            from cache.redis_client import get_redis, get_webhook_worker_redis
+            from db.session import AsyncSessionFactory
+            from services.webhooks.delivery_handler import WebhookDeliveryHandler
+            from workers import webhook_delivery
+            _wh_stop    = asyncio.Event()
+            _wh_handler = WebhookDeliveryHandler(
+                session_factory    = AsyncSessionFactory,
+                redis              = get_redis(),   # token cache: non-blocking, shared client ok
+                timeout_s          = _settings.webhook_delivery_timeout_seconds,
+                max_response_bytes = _settings.webhook_delivery_max_response_bytes,
+            )
+            _wh_task = asyncio.create_task(webhook_delivery.run(
+                redis       = get_webhook_worker_redis(),
+                handler     = _wh_handler,
+                stop_event  = _wh_stop,
+                concurrency = _settings.webhook_delivery_concurrency,
+            ))
+
         print(f"Starting {_settings.app_name} v{_settings.app_version}")
         print(f"Environment: {_settings.environment}")
         print(f"Redis: {'connected' if redis_ok else 'unavailable'}")
         yield
+
+        # Graceful shutdown: stop the worker loop, let it drain in-flight
+        # deliveries, then release its resources before the rest.
+        if _wh_task is not None:
+            from cache.redis_client import close_webhook_worker_redis
+            _wh_stop.set()
+            try:
+                await asyncio.wait_for(_wh_task, timeout=30)
+            except asyncio.TimeoutError:
+                _wh_task.cancel()
+            await _wh_handler.aclose()
+            await close_webhook_worker_redis()
+
         await stop_scheduler()
         await close()
         await dispose_engine()
