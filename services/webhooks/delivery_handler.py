@@ -50,7 +50,7 @@ from db.repositories.webhook_delivery_attempt import (
     WebhookDeliveryAttemptRepository,
 )
 from db.repositories.webhook_endpoint import WebhookEndpointRepository
-from security import webhook_signing
+from security import webhook_signing, webhook_ssrf
 from security.encryption import decrypt
 from services.webhooks import retry_schedule
 from services.webhooks.connectors import azure_token, registry
@@ -122,6 +122,15 @@ class WebhookDeliveryHandler:
         """Build and POST one delivery for `endpoint`, returning a
         SendResult. No attempt row, circuit-breaker, or queue effects --
         the queue handler and the v1.3.1 test-send endpoint both use this."""
+        # Connect-time SSRF guard: block delivery to a destination that
+        # resolves to a private/internal address (unless allowlisted), before
+        # decrypting secrets or acquiring a connector token. Permanent -- a
+        # blocked target does not become deliverable on retry.
+        try:
+            await webhook_ssrf.check_egress(endpoint.url)
+        except webhook_ssrf.WebhookEgressBlocked as exc:
+            return SendResult(ok=False, error=f"egress blocked: {exc.reason}", permanent=True)
+
         try:
             method, url, headers, content = await self._build(endpoint, event_type, body, msg_id)
         except UnknownConnectorError as exc:

@@ -1625,8 +1625,12 @@ Two endpoint kinds:
 | `sentinel_logs_ingestion` | app-registration client secret | `dcr_immutable_id`, `stream_name`, `tenant_id`, `client_id` |
 | `elastic_ecs` | base64 API key | `index` |
 
-The destination `url` is SSRF-validated (private/loopback/metadata targets are
-rejected), same as LLM provider URLs.
+Webhook egress is locked down secure-by-default (distinct from the LLM proxy
+target, which is often an internal service and stays permissive). The
+destination host is resolved at connect time and the delivery is blocked if it
+maps to a private/loopback/link-local/metadata address, and `https` is required.
+To send to an on-prem SIEM on a private address, allowlist its host or CIDR via
+`WEBHOOK_EGRESS_ALLOWLIST` (see `.env.example`).
 
 ### POST /v1/admin/webhooks
 

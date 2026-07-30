@@ -140,6 +140,20 @@ class Settings(BaseSettings):
     webhook_delivery_worker_enabled:     bool = True
     webhook_delivery_concurrency:        int  = 8
 
+    # -- Webhook egress SSRF guard --
+    # Webhook destinations are external SIEMs, so egress is locked down
+    # secure-by-default. This is DISTINCT from the LLM proxy target (LLM_
+    # PROVIDER url), which is often an internal service and stays permissive --
+    # a self-hosted gateway in front of an in-cluster LLM keeps working.
+    # The destination host is resolved at connect time and blocked if any
+    # resolved IP is private/loopback/link-local/metadata. To send to an
+    # on-prem SIEM on a private address, list its host or CIDR in the
+    # allowlist (GitLab/GitHub "allow local network" model); or set
+    # _BLOCK_PRIVATE_EGRESS=false on a fully trusted network.
+    webhook_block_private_egress:        bool = True
+    webhook_egress_allowlist:            str  = ""   # comma-separated hosts or CIDRs
+    webhook_require_https:               bool = True
+
     # ── Trial key limits ──────────────────────────────────────────────────────
     # Applied only when api_keys.key_type = 'trial'
     # Production (live) keys are completely unaffected by these settings

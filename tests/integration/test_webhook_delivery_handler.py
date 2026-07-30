@@ -27,6 +27,16 @@ from services.webhooks.retry_schedule import MAX_ATTEMPTS
 from workers.webhook_delivery import DeliveryResult
 
 
+@pytest.fixture(autouse=True)
+def _bypass_egress_guard(monkeypatch):
+    """These tests exercise the delivery state machine with a stubbed client
+    and non-resolvable test hostnames; bypass the SSRF egress guard (covered
+    on its own in tests/unit/security/test_webhook_ssrf.py)."""
+    async def _noop(url):
+        return None
+    monkeypatch.setattr(dh.webhook_ssrf, "check_egress", _noop)
+
+
 class _FakeResp:
     def __init__(self, status_code, text=""):
         self.status_code = status_code

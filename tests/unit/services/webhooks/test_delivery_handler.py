@@ -42,9 +42,16 @@ class _FakeHTTPClient:
         return self.response
 
 
+async def _noop_egress(url):
+    return None
+
+
 def _handler(monkeypatch, response=None, raise_exc=None):
     # decrypt(enc, key) -> strip an "enc:" prefix so fake secret_enc round-trips.
     monkeypatch.setattr(dh, "decrypt", lambda enc, key: enc.replace("enc:", ""))
+    # These tests target build/send/classify, not the SSRF guard; bypass it so
+    # non-resolvable test hostnames do not trip egress blocking.
+    monkeypatch.setattr(dh.webhook_ssrf, "check_egress", _noop_egress)
     h = WebhookDeliveryHandler(session_factory=None, redis=object(),
                                timeout_s=10, max_response_bytes=2048)
     h._client = _FakeHTTPClient(response=response, raise_exc=raise_exc)
@@ -198,3 +205,21 @@ async def test_response_snippet_is_bounded(monkeypatch):
     h._max_response_bytes = 100
     res = await h.send_once(_endpoint(), "wrapsec.request.blocked", _BODY, "msg-1")
     assert len(res.response_snippet) == 100
+
+
+# --- SSRF egress guard ------------------------------------------------
+
+@pytest.mark.asyncio
+async def test_egress_blocked_is_permanent_and_never_sends(monkeypatch):
+    from security.webhook_ssrf import WebhookEgressBlocked
+    h = _handler(monkeypatch, response=_FakeResp(200))
+
+    async def _block(url):
+        raise WebhookEgressBlocked("private_address")
+    monkeypatch.setattr(dh.webhook_ssrf, "check_egress", _block)
+
+    res = await h.send_once(_endpoint(), "wrapsec.request.blocked", _BODY, "msg-1")
+    assert res.ok is False
+    assert res.permanent is True
+    assert "egress blocked" in res.error
+    assert h._client.last is None            # request never issued

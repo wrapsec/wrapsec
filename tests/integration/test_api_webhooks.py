@@ -130,6 +130,18 @@ async def test_create_rejects_ssrf_target_url(client, admin_jwt_headers):
         assert r.status_code == 422, f"expected 422 for {bad}, got {r.status_code}: {r.text}"
 
 
+@pytest.mark.asyncio
+async def test_create_rejects_http_destination(client, admin_jwt_headers):
+    """Webhook egress requires https by default (secure-by-default); a public
+    http destination is rejected at create. The https check runs before DNS."""
+    r = await client.post(
+        "/v1/admin/webhooks",
+        json={"url": "http://example.com/hook"},
+        headers=admin_jwt_headers,
+    )
+    assert r.status_code == 400, r.text
+
+
 # --- connector endpoints ---
 
 @pytest.mark.asyncio

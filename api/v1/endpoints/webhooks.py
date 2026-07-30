@@ -69,6 +69,7 @@ from domain.enums import AdminEventAction
 from errors.exceptions import NotFoundError, ValidationError
 from security.encryption import encrypt, mask
 from cache.redis_client import get_redis
+from security import webhook_ssrf
 from security.url_validator import validate_llm_base_url
 from services.webhooks.connectors import registry
 from services.webhooks.connectors.form_schema import connector_forms
@@ -246,6 +247,20 @@ async def _log_admin_event(
         logger.warning("webhook admin_event log failed: %s", exc)
 
 
+async def _reject_bad_egress(url: str) -> None:
+    """Fail-fast create/update guard. Hard-blocks a destination that resolves
+    to a private/internal address, requires https, and blocks metadata hosts.
+    A transient DNS failure is tolerated at write time -- the connect-time
+    guard in delivery_handler.send_once is authoritative and re-checks on
+    every delivery, covering DNS repointing after create."""
+    try:
+        await webhook_ssrf.check_egress(url)
+    except webhook_ssrf.WebhookEgressBlocked as exc:
+        if exc.reason == "dns_resolution_failed":
+            return
+        raise ValidationError(f"webhook destination rejected: {exc.reason}")
+
+
 async def _get_owned_endpoint_or_404(
     repo:        WebhookEndpointRepository,
     endpoint_id: uuid.UUID,
@@ -277,6 +292,7 @@ async def create_webhook(
     read, because subsequent GET/LIST responses only show the mask.
     """
     tenant_id = uuid.UUID(request.state.tenant_id)
+    await _reject_bad_egress(body.url)
 
     # Generic webhook: generate a signing secret and return it once. Connector
     # endpoint: encrypt the customer-supplied ingest token and never echo it
@@ -374,6 +390,9 @@ async def update_webhook(
     tenant_id = uuid.UUID(request.state.tenant_id)
     repo      = WebhookEndpointRepository(db)
     await _get_owned_endpoint_or_404(repo, endpoint_id, tenant_id)
+
+    if body.url is not None:
+        await _reject_bad_egress(body.url)
 
     data = {k: v for k, v in body.model_dump().items() if v is not None}
     ep   = await repo.update(endpoint_id=endpoint_id, data=data)
