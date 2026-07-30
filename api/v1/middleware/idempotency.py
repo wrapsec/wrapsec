@@ -17,7 +17,7 @@ logger = logging.getLogger("wrapsec.idempotency")
 # /v1/ai/request       - scan-only path; safe to replay (no external cost)
 # /v1/chat/completions - OpenAI-compatible proxy; replay MUST hit the cache so a
 #                        network hiccup + client retry does not double-charge the
-#                        paid provider. See F-10 in docs/internal/fable_report.md.
+#                        paid provider.
 IDEMPOTENCY_PATHS = {"/v1/ai/request", "/v1/chat/completions"}
 
 

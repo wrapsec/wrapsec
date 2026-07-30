@@ -38,8 +38,7 @@ All notable changes to WrapSec are documented here.
   `make test-integration` provisions an ephemeral `postgres:16-alpine`,
   points the app and the tests at it, and tears it down. The tier skips
   gracefully when no disposable database is configured. Real-PG parity
-  surfaced foreign-key defects that SQLite had masked. See
-  `docs/internal/test.md`.
+  surfaced foreign-key defects that SQLite had masked.
 
 ### Database
 - `webhook_endpoints` gains `connector_type` and `config` columns

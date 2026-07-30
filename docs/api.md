@@ -1845,9 +1845,6 @@ SYSTEM_ERROR = detectors failed (exception, timeout, internal error)
 - `METRICS_TOKEN` - dedicated Bearer token for `/metrics` endpoint scraping. Falls back to `ADMIN_API_KEY` if unset. `/metrics` is no longer unauthenticated.
 - `TRUSTED_PROXY_IPS` - comma-separated list of trusted reverse proxy IPs/CIDRs. `x-forwarded-for` is only trusted for audit log attribution when the direct connection IP matches this list. Leave empty (default) to always use the direct connection IP - safe when not behind a proxy. Example: `TRUSTED_PROXY_IPS=10.0.0.1,172.16.0.0/12`
 
-**New internal docs:**
-- `docs/internal/session_management.md` - session lifecycle reference
-
 ---
 
 ### V1.4 (April 2026) - User Management
@@ -1872,8 +1869,6 @@ SYSTEM_ERROR = detectors failed (exception, timeout, internal error)
 **auth_events action values:** `login_success`, `login_failed`, `logout`, `token_refresh_success`, `token_refresh_failed`, `session_expired`
 
 **auth_events failure_reason values:** `invalid_password`, `user_not_found`, `account_inactive`, `account_disabled`, `token_expired`, `token_invalid`, `inactivity`, `manual`, `expired`, `refresh_failed`, `session_invalidated`
-
-See `docs/internal/session_management.md` for full logging ownership rules.
 
 Note: `account_inactive` is the `auth_events.failure_reason` value when `is_active = false`. The API error code returned to the client is always `ACCOUNT_DISABLED` - `ACCOUNT_INACTIVE` never appears in API responses.
 
