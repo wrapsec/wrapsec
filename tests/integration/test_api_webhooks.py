@@ -228,6 +228,22 @@ async def test_generic_projection_has_status_and_null_connector(client, admin_jw
     assert body["status"] == "active"
 
 
+@pytest.mark.asyncio
+async def test_connector_types_schema_endpoint(client, admin_jwt_headers):
+    """The dynamic-form schema endpoint returns generic + every connector, and
+    the literal /connector-types path is not shadowed by GET /{endpoint_id}."""
+    r = await client.get("/v1/admin/webhooks/connector-types", headers=admin_jwt_headers)
+    assert r.status_code == 200, r.text
+    entries = r.json()["connector_types"]
+    types = {c["type"] for c in entries}
+    assert None in types
+    assert {"splunk_hec", "datadog_logs", "sentinel_logs_ingestion", "elastic_ecs"} <= types
+    sentinel = next(c for c in entries if c["type"] == "sentinel_logs_ingestion")
+    required = {f["key"] for f in sentinel["config_fields"] if f["required"]}
+    assert "dcr_immutable_id" in required and "client_id" in required
+    assert sentinel["secret"]["required"] is True
+
+
 # ─── list / get ─────────────────────────────────────────────────────
 
 @pytest.mark.asyncio

@@ -69,6 +69,7 @@ from errors.exceptions import NotFoundError, ValidationError
 from security.encryption import encrypt, mask
 from security.url_validator import validate_llm_base_url
 from services.webhooks.connectors import registry
+from services.webhooks.connectors.form_schema import connector_forms
 
 logger = logging.getLogger("wrapsec.webhooks_admin")
 
@@ -329,6 +330,16 @@ async def list_webhooks(
     return JSONResponse(content={
         "endpoints": [_format_masked(ep) for ep in endpoints],
     })
+
+
+@router.get("/connector-types")
+async def list_connector_types(
+    principal: Principal = Depends(require_admin()),
+):
+    """Form schema per webhook destination type, for the dashboard's dynamic
+    create form. Static metadata only -- no tenant data, no secrets. Declared
+    before GET /{endpoint_id} so the literal path is not parsed as an id."""
+    return JSONResponse(content={"connector_types": connector_forms()})
 
 
 @router.get("/{endpoint_id}")
