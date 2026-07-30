@@ -1,10 +1,25 @@
-.PHONY: run test build up down seed lint format migrate migration
+.PHONY: run test test-integration build up down seed lint format migrate migration
 
 run:
 	uvicorn api.main:app --reload --host 0.0.0.0 --port 8000
 
 test:
 	pytest tests/unit tests/integration -v
+
+# Integration tests against a DISPOSABLE Postgres. Spins an ephemeral
+# postgres:16-alpine on port 55432 (clear of the compose stack on 5432),
+# points both the app (DATABASE_URL) and the tests (WRAPSEC_TEST_PG_URL)
+# at it so auth and data share one throwaway DB, then removes it -- even
+# if the tests fail. The dev compose DB is never touched. Requires Docker;
+# without it the integration tier skips gracefully under plain `make test`.
+test-integration:
+	@bash -c 'set -e; \
+	CID=$$(docker run --rm -d -e POSTGRES_USER=wrapsec -e POSTGRES_PASSWORD=wrapsec -e POSTGRES_DB=wrapsec_test -p 55432:5432 postgres:16-alpine); \
+	trap "docker rm -f $$CID >/dev/null 2>&1 || true" EXIT; \
+	echo "waiting for disposable postgres..."; \
+	for i in $$(seq 1 30); do docker exec $$CID pg_isready -U wrapsec -d wrapsec_test >/dev/null 2>&1 && break; sleep 1; done; \
+	URL=postgresql+asyncpg://wrapsec:wrapsec@localhost:55432/wrapsec_test; \
+	DATABASE_URL=$$URL WRAPSEC_TEST_PG_URL=$$URL TESTING=true pytest tests/integration -v'
 
 # Apply pending Alembic migrations. Also runs automatically on API startup.
 migrate:

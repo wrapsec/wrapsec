@@ -29,6 +29,42 @@ from config.settings import get_settings
 settings = get_settings()
 
 
+# ── Disposable-Postgres gate for the integration tier (Option B) ──────────────
+# The integration tier runs against a DISPOSABLE Postgres, never SQLite, so
+# tests exercise real jsonb/asyncpg/trigger behavior. The throwaway DB is
+# provisioned BEFORE pytest by `make test-integration` (or CI), which points
+# BOTH DATABASE_URL (the app binds this at import) and WRAPSEC_TEST_PG_URL (this
+# file's opt-in, which also authorizes per-test TRUNCATE) at the same database.
+# When it is absent the tier skips gracefully -- it never touches the dev DB.
+_TEST_PG_URL = os.environ.get("WRAPSEC_TEST_PG_URL")
+
+
+def _integration_skip_reason() -> str | None:
+    if not _TEST_PG_URL:
+        return (
+            "no disposable Postgres configured. Run `make test-integration`, or "
+            "set WRAPSEC_TEST_PG_URL and DATABASE_URL to the same throwaway "
+            "database."
+        )
+    if settings.database_url != _TEST_PG_URL:
+        return (
+            "WRAPSEC_TEST_PG_URL and DATABASE_URL differ; point both at the same "
+            "disposable database (make test-integration does this) so the app and "
+            "tests share one DB."
+        )
+    return None
+
+
+@pytest.fixture(autouse=True)
+def _require_disposable_pg():
+    """Skip every integration test unless a disposable Postgres is configured.
+    Keeps the tier real-PG-only without ever running against SQLite or the dev
+    database."""
+    reason = _integration_skip_reason()
+    if reason:
+        pytest.skip(reason)
+
+
 # ── PostgreSQL URL resolver for the pg_client fixture ─────────────────────────
 # Resolution order (first that works wins):
 #   1. WRAPSEC_TEST_PG_URL env var - explicit operator override.
@@ -149,9 +185,11 @@ async def pg_db(_pg_engine):
     """
     sf = async_sessionmaker(bind=_pg_engine, class_=AsyncSession, expire_on_commit=False)
     async with sf() as session:
-        if _pg_container is not None:
-            # CASCADE is required because audit_logs is referenced by the
-            # hash chain trigger's constraint chain in v1.2.0+.
+        if _pg_container is not None or _TEST_PG_URL:
+            # Safe to TRUNCATE: the DB is disposable (we spawned it, or the
+            # operator declared it via WRAPSEC_TEST_PG_URL). CASCADE is required
+            # because audit_logs is referenced by the hash chain trigger's
+            # constraint chain in v1.2.0+.
             await session.execute(text(
                 "TRUNCATE TABLE audit_logs, proxy_interactions "
                 "RESTART IDENTITY CASCADE"
@@ -239,32 +277,26 @@ async def _postgres_db_setup():
     await engine.dispose()
 
 
-# ── Existing fixtures ──────────────────────────────────────────────────────────
-
-TEST_DATABASE_URL = "sqlite+aiosqlite:///./test.db"
-
+# ── Integration test session: disposable Postgres, per-test truncation ────────
+# test_db (and the `client` fixture that wraps it) now runs on the disposable
+# Postgres, not SQLite -- it shares the session-scoped _pg_engine (schema built
+# once via create_all) and clears the high-churn tables between tests. Seed and
+# config tables (tenants, users, departments, applications, settings) are
+# preserved so the session-seeded default tenant and the admin_jwt fixtures stay
+# valid; the _require_disposable_pg gate skips the whole tier when no throwaway
+# DB is configured, so this never runs against SQLite or the dev database.
 
 @pytest_asyncio.fixture(scope="function")
-async def test_db():
-    engine = create_async_engine(
-        TEST_DATABASE_URL,
-        connect_args={"check_same_thread": False},
-    )
-    async with engine.begin() as conn:
-        await conn.run_sync(Base.metadata.create_all)
-
-    session_factory = async_sessionmaker(
-        bind=engine,
-        class_=AsyncSession,
-        expire_on_commit=False,
-    )
-
-    async with session_factory() as session:
+async def test_db(_pg_engine):
+    sf = async_sessionmaker(bind=_pg_engine, class_=AsyncSession, expire_on_commit=False)
+    async with sf() as session:
+        await session.execute(text(
+            "TRUNCATE TABLE api_keys, webhook_delivery_attempts, "
+            "webhook_endpoints, audit_logs, proxy_interactions "
+            "RESTART IDENTITY CASCADE"
+        ))
+        await session.commit()
         yield session
-
-    async with engine.begin() as conn:
-        await conn.run_sync(Base.metadata.drop_all)
-    await engine.dispose()
 
 
 @pytest_asyncio.fixture(scope="function")

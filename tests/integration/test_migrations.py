@@ -74,8 +74,8 @@ def test_head_revision_advances_to_json_to_jsonb(tmp_path):
     After `alembic upgrade head`, alembic_version must point at the newest
     migration. Locks in that new revisions are actually being picked up (a
     common failure mode is dropping the file into the wrong directory and
-    silently landing on 0001). Bump this assertion in lock-step with the
-    latest revision file.
+    silently landing on 0001). The expected head is read from the migration
+    scripts so this never goes stale as new revisions land.
     """
     db_file   = tmp_path / "migrated.db"
     async_url = f"sqlite+aiosqlite:///{db_file}"
@@ -83,6 +83,9 @@ def test_head_revision_advances_to_json_to_jsonb(tmp_path):
 
     cfg = _alembic_config(async_url)
     command.upgrade(cfg, "head")
+
+    from alembic.script import ScriptDirectory
+    expected_head = ScriptDirectory.from_config(cfg).get_current_head()
 
     engine = create_engine(sync_url)
     try:
@@ -93,7 +96,9 @@ def test_head_revision_advances_to_json_to_jsonb(tmp_path):
         engine.dispose()
 
     assert row is not None
-    assert row[0] == "0006_json_to_jsonb"
+    assert row[0] == expected_head
+    # A concrete lower bound so a broken ScriptDirectory can't make this vacuous.
+    assert row[0] != "0001_baseline"
 
 
 def test_users_check_constraint_admits_auditor(tmp_path):

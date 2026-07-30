@@ -27,7 +27,7 @@ from datetime import datetime
 
 import pytest
 
-from db.models import WebhookEndpointModel
+from db.models import TenantModel, WebhookEndpointModel
 
 
 # ─── helpers ────────────────────────────────────────────────────────
@@ -50,6 +50,17 @@ async def _seed_endpoint(
     disabled:   bool = False,
     first_failure_at=None,
 ) -> WebhookEndpointModel:
+    # Real PG enforces webhook_endpoints.tenant_id -> tenants.id (SQLite did
+    # not), so ensure the tenant row exists before seeding an endpoint under it.
+    if await test_db.get(TenantModel, tenant_id) is None:
+        test_db.add(TenantModel(
+            id            = tenant_id,
+            slug          = f"seed-{tenant_id.hex[:8]}",
+            name          = "Seed Tenant",
+            global_policy = {},
+            is_active     = True,
+        ))
+        await test_db.flush()
     ep = WebhookEndpointModel(
         id               = uuid.uuid4(),
         tenant_id        = tenant_id,

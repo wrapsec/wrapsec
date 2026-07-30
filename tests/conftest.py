@@ -107,7 +107,7 @@ async def admin_jwt_headers():
     """
     from services.auth.password import hash_password, normalize_email
     from services.auth.token import create_access_token
-    from db.models import UserModel, RefreshTokenModel
+    from db.models import UserModel, RefreshTokenModel, AdminEventModel
     from db.repositories.tenant import TenantRepository
     from sqlalchemy import delete as sa_delete
 
@@ -142,8 +142,14 @@ async def admin_jwt_headers():
 
     yield {"Authorization": f"Bearer {token}"}
 
-    # Cleanup
+    # Cleanup. admin_events.actor_user_id/target_user_id -> users has no
+    # ON DELETE CASCADE, so clear those rows before the user (real PG enforces
+    # this FK; SQLite did not). auth_events cascades on its own.
     async with sf() as db:
+        await db.execute(sa_delete(AdminEventModel).where(
+            (AdminEventModel.actor_user_id == test_user_id)
+            | (AdminEventModel.target_user_id == test_user_id)
+        ))
         await db.execute(sa_delete(RefreshTokenModel).where(RefreshTokenModel.user_id == test_user_id))
         await db.execute(sa_delete(UserModel).where(UserModel.id == test_user_id))
         await db.commit()
