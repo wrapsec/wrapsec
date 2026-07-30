@@ -349,6 +349,38 @@ async def test_create_accepts_optional_description_and_event_types(test_db):
 
 
 @pytest.mark.asyncio
+async def test_create_defaults_to_generic_webhook(test_db):
+    """A create without connector_type is a generic HMAC webhook:
+    connector_type and config are both NULL."""
+    t = await _make_tenant(test_db)
+    repo = WebhookEndpointRepository(test_db)
+
+    ep = await repo.create(
+        tenant_id  = t.id,
+        url        = "https://example.com/hook",
+        secret_enc = "v2:enc",
+    )
+    assert ep.connector_type is None
+    assert ep.config is None
+
+
+@pytest.mark.asyncio
+async def test_create_persists_connector_type_and_config(test_db):
+    t = await _make_tenant(test_db)
+    repo = WebhookEndpointRepository(test_db)
+
+    ep = await repo.create(
+        tenant_id      = t.id,
+        url            = "https://hec.example:8088",
+        secret_enc     = "v2:hec-token",
+        connector_type = "splunk_hec",
+        config         = {"index": "security", "sourcetype": "wrapsec:security"},
+    )
+    assert ep.connector_type == "splunk_hec"
+    assert ep.config == {"index": "security", "sourcetype": "wrapsec:security"}
+
+
+@pytest.mark.asyncio
 async def test_get_by_id_returns_row(test_db):
     t = await _make_tenant(test_db)
     ep = await _make_endpoint(test_db, t.id)
@@ -436,6 +468,33 @@ async def test_update_silently_drops_protected_fields(test_db):
     assert updated.first_failure_at is None
     assert updated.tenant_id == t.id
     assert updated.old_secrets == [] or updated.old_secrets is None
+
+
+@pytest.mark.asyncio
+async def test_update_changes_config_but_not_connector_type(test_db):
+    """config is an editable connector option; connector_type is
+    immutable after create because it governs how secret_enc is
+    interpreted. A caller trying to switch connector_type via update
+    MUST be silently ignored."""
+    t  = await _make_tenant(test_db)
+    repo = WebhookEndpointRepository(test_db)
+    ep = await repo.create(
+        tenant_id      = t.id,
+        url            = "https://hec.example:8088",
+        secret_enc     = "v2:hec-token",
+        connector_type = "splunk_hec",
+        config         = {"index": "old"},
+    )
+
+    updated = await repo.update(
+        endpoint_id = ep.id,
+        data        = {
+            "config":         {"index": "new", "sourcetype": "st"},
+            "connector_type": "datadog_logs",
+        },
+    )
+    assert updated.config == {"index": "new", "sourcetype": "st"}
+    assert updated.connector_type == "splunk_hec"
 
 
 @pytest.mark.asyncio

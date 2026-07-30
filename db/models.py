@@ -426,10 +426,19 @@ class WebhookEndpointModel(Base):
     tenant_id        = Column(UUID(as_uuid=True), ForeignKey("tenants.id"), nullable=False)
     url              = Column(Text,        nullable=False)
     description      = Column(Text,        nullable=True)
+    # NULL = generic HMAC-signed webhook (secret_enc is a signing secret).
+    # A connector slug (e.g. "splunk_hec", "datadog_logs",
+    # "sentinel_logs_ingestion", "elastic_ecs") selects a SIEM connector,
+    # in which case secret_enc holds that connector's ingest token/key and
+    # `config` holds its per-endpoint options. See services/webhooks/connectors.
+    connector_type   = Column(Text,        nullable=True,  default=None)
     secret_enc       = Column(Text,        nullable=False)
     old_secrets      = Column(JSONVariant, nullable=True,  default=list)
     event_types      = Column(JSONVariant, nullable=True,  default=None)
     headers          = Column(JSONVariant, nullable=True,  default=None)
+    # Per-connector configuration (e.g. Sentinel dcr_immutable_id/stream_name,
+    # Elastic index, Splunk sourcetype). NULL for generic webhooks.
+    config           = Column(JSONVariant, nullable=True,  default=None)
     disabled         = Column(Boolean,     nullable=False, default=False)
     first_failure_at = Column(DateTime,    nullable=True)
     rate_limit       = Column(Integer,     nullable=True)

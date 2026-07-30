@@ -187,28 +187,39 @@ class WebhookEndpointRepository:
     async def create(
         self,
         *,
-        tenant_id:   UUID,
-        url:         str,
-        secret_enc:  str,
-        description: str | None = None,
-        event_types: list[str] | None = None,
+        tenant_id:      UUID,
+        url:            str,
+        secret_enc:     str,
+        description:    str | None = None,
+        event_types:    list[str] | None = None,
+        connector_type: str | None = None,
+        config:         dict[str, Any] | None = None,
     ) -> WebhookEndpointModel:
         """
         Insert a new endpoint. `secret_enc` MUST already be envelope-
         encrypted by the caller via security.encryption.encrypt --
         this method never sees plaintext.
+
+        `connector_type` NULL means a generic HMAC-signed webhook;
+        a connector slug routes the endpoint through a SIEM connector
+        and `config` carries that connector's per-endpoint options.
+        connector_type is set once at create time and is not mutable
+        through `update` -- changing it would reinterpret the stored
+        secret material.
         """
         now = datetime.utcnow()
         ep  = WebhookEndpointModel(
-            id          = uuid.uuid4(),
-            tenant_id   = tenant_id,
-            url         = url,
-            description = description,
-            secret_enc  = secret_enc,
-            old_secrets = [],
-            event_types = event_types,
-            disabled    = False,
-            created_at  = now,
+            id             = uuid.uuid4(),
+            tenant_id      = tenant_id,
+            url            = url,
+            description    = description,
+            connector_type = connector_type,
+            secret_enc     = secret_enc,
+            old_secrets    = [],
+            event_types    = event_types,
+            config         = config,
+            disabled       = False,
+            created_at     = now,
         )
         self._db.add(ep)
         await self._db.flush()
@@ -240,16 +251,17 @@ class WebhookEndpointRepository:
         data:        dict[str, Any],
     ) -> WebhookEndpointModel | None:
         """
-        Update mutable fields (url, description, event_types).
+        Update mutable fields (url, description, event_types, config).
 
         `secret_enc`, `old_secrets`, `disabled`, `first_failure_at`,
-        `tenant_id`, `created_at` are intentionally NOT settable
-        through this method -- each has a dedicated call path
-        (rotate_secret, reactivate, record_failure, record_success,
-        create) with the right invariants. Passing them here is a
-        caller bug.
+        `tenant_id`, `created_at`, `connector_type` are intentionally
+        NOT settable through this method -- each has a dedicated call
+        path (rotate_secret, reactivate, record_failure, record_success,
+        create) with the right invariants, and connector_type is
+        immutable after create because it governs how secret_enc is
+        interpreted. Passing them here is a caller bug.
         """
-        allowed = {"url", "description", "event_types"}
+        allowed = {"url", "description", "event_types", "config"}
         clean   = {k: v for k, v in data.items() if k in allowed}
         if not clean:
             return await self.get_by_id(endpoint_id)
