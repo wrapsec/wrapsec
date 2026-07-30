@@ -67,6 +67,12 @@ class ConnectorSpec:
     connector_type: str
     build_request:  BuildRequest
     auth_kind:      AuthKind
+    # Config keys the endpoint MUST carry for this connector to deliver.
+    # Validated by the admin API at create time so a misconfigured endpoint
+    # is rejected up front rather than failing every delivery into the DLQ.
+    # Spans build_request AND auth needs (e.g. Sentinel needs the DCR keys
+    # for the URL plus the app-registration keys for the bearer token).
+    required_config: frozenset[str] = frozenset()
 
 
 class UnknownConnectorError(Exception):
@@ -81,10 +87,21 @@ class UnknownConnectorError(Exception):
 # One spec per connector module. Sourcing connector_type from each module's
 # own CONNECTOR_TYPE constant keeps the slug defined in exactly one place.
 _SPECS: tuple[ConnectorSpec, ...] = (
+    # Splunk/Datadog carry the destination in the url and authenticate with a
+    # single token, so no config is strictly required.
     ConnectorSpec(splunk.CONNECTOR_TYPE,   splunk.build_request,   AuthKind.STATIC_TOKEN),
     ConnectorSpec(datadog.CONNECTOR_TYPE,  datadog.build_request,  AuthKind.STATIC_TOKEN),
-    ConnectorSpec(sentinel.CONNECTOR_TYPE, sentinel.build_request, AuthKind.ENTRA_BEARER),
-    ConnectorSpec(elastic.CONNECTOR_TYPE,  elastic.build_request,  AuthKind.STATIC_TOKEN),
+    # Sentinel needs the DCR immutable id + stream (for the URL) and the app
+    # registration tenant/client (for the Entra bearer).
+    ConnectorSpec(
+        sentinel.CONNECTOR_TYPE, sentinel.build_request, AuthKind.ENTRA_BEARER,
+        required_config=frozenset({"dcr_immutable_id", "stream_name", "tenant_id", "client_id"}),
+    ),
+    # Elastic needs the target index / data stream.
+    ConnectorSpec(
+        elastic.CONNECTOR_TYPE, elastic.build_request, AuthKind.STATIC_TOKEN,
+        required_config=frozenset({"index"}),
+    ),
 )
 
 _REGISTRY: dict[str, ConnectorSpec] = {spec.connector_type: spec for spec in _SPECS}
@@ -113,3 +130,14 @@ def is_known(connector_type: str | None) -> bool:
     """True if connector_type is NULL (generic) or a registered slug.
     Used by the admin API to reject unknown slugs at create time."""
     return connector_type is None or connector_type in _REGISTRY
+
+
+def missing_config(connector_type: str, config: dict | None) -> list[str]:
+    """Return the required config keys absent (or empty) for `connector_type`,
+    sorted for stable error messages. Empty list means the config is complete.
+    Raises UnknownConnectorError if the slug is not registered."""
+    spec = get_spec(connector_type)
+    if spec is None:                      # generic webhook: no connector config
+        return []
+    cfg = config or {}
+    return sorted(k for k in spec.required_config if not cfg.get(k))

@@ -53,7 +53,7 @@ import uuid
 
 from fastapi import APIRouter, Depends, Request
 from fastapi.responses import JSONResponse
-from pydantic import BaseModel, Field, field_validator
+from pydantic import BaseModel, Field, field_validator, model_validator
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from api.v1.dependencies.auth import require_admin
@@ -65,9 +65,10 @@ from db.repositories.admin_event import AdminEventRepository
 from db.repositories.webhook_endpoint import WebhookEndpointRepository
 from domain.entities.principal import Principal
 from domain.enums import AdminEventAction
-from errors.exceptions import NotFoundError
+from errors.exceptions import NotFoundError, ValidationError
 from security.encryption import encrypt, mask
 from security.url_validator import validate_llm_base_url
+from services.webhooks.connectors import registry
 
 logger = logging.getLogger("wrapsec.webhooks_admin")
 
@@ -89,9 +90,15 @@ _DEFAULT_ROTATION_GRACE_HOURS = 24
 # ─── Schemas ────────────────────────────────────────────────────────
 
 class WebhookCreateSchema(BaseModel):
-    url:         str
-    description: str        | None = None
-    event_types: list[str]  | None = None
+    url:            str
+    description:    str        | None = None
+    event_types:    list[str]  | None = None
+    # NULL connector_type => generic HMAC webhook (signing secret generated
+    # server-side). A connector slug routes to a SIEM connector: `secret` is
+    # the customer's ingest token/key and `config` its per-endpoint options.
+    connector_type: str        | None = None
+    config:         dict       | None = None
+    secret:         str        | None = None
 
     @field_validator("url")
     @classmethod
@@ -99,14 +106,42 @@ class WebhookCreateSchema(BaseModel):
         # Reuses the shared SSRF validator (same one gating LLM
         # provider URLs). Blocks localhost/metadata/private-range
         # targets so a compromised admin cannot repurpose the
-        # delivery worker as an egress SSRF primitive.
+        # delivery worker as an egress SSRF primitive. SIEM ingest hosts
+        # are public HTTPS, so this holds for connector endpoints too.
         return validate_llm_base_url(v)
+
+    @model_validator(mode="after")
+    def _validate_connector(self) -> "WebhookCreateSchema":
+        if self.connector_type is None:
+            # Generic webhook: the signing secret is generated server-side.
+            if self.secret is not None:
+                raise ValueError("secret is generated server-side for generic webhooks")
+            if self.config is not None:
+                raise ValueError("config applies only to connector endpoints")
+            return self
+        if not registry.is_known(self.connector_type):
+            raise ValueError(f"unknown connector_type: {self.connector_type!r}")
+        if not self.secret:
+            raise ValueError(
+                f"secret (ingest token) is required for connector_type {self.connector_type!r}"
+            )
+        missing = registry.missing_config(self.connector_type, self.config)
+        if missing:
+            raise ValueError(
+                f"connector_type {self.connector_type!r} requires config keys: "
+                f"{', '.join(missing)}"
+            )
+        return self
 
 
 class WebhookUpdateSchema(BaseModel):
     url:         str        | None = None
     description: str        | None = None
     event_types: list[str]  | None = None
+    # Per-connector options are editable; connector_type is immutable after
+    # create (it governs how secret_enc is interpreted) and is dropped by the
+    # repository if passed.
+    config:      dict       | None = None
 
     @field_validator("url")
     @classmethod
@@ -122,18 +157,33 @@ class WebhookRotateSchema(BaseModel):
 
 # ─── Formatting helpers ─────────────────────────────────────────────
 
+def _health_status(ep: WebhookEndpointModel) -> str:
+    """Computed lifecycle status for the dashboard health chip (v1.3.1):
+    auto_disabled (circuit breaker retired it), failing (in a failure
+    window), or active."""
+    if ep.disabled:
+        return "auto_disabled"
+    if ep.first_failure_at is not None:
+        return "failing"
+    return "active"
+
+
 def _format_masked(ep: WebhookEndpointModel) -> dict:
     """Read-side projection. NEVER contains plaintext secret or the
     ciphertext of the current or old secrets -- only a mask derived
     from the ciphertext string so operators can spot rotations
-    without exposing key material."""
+    without exposing key material. `config` holds non-secret connector
+    options (the client secret lives in secret_enc, never here)."""
     return {
         "id":                str(ep.id),
         "tenant_id":         str(ep.tenant_id),
         "url":               ep.url,
         "description":       ep.description,
         "event_types":       ep.event_types,
+        "connector_type":    ep.connector_type,
+        "config":            ep.config,
         "disabled":          ep.disabled,
+        "status":            _health_status(ep),
         "first_failure_at":  ep.first_failure_at.isoformat() if ep.first_failure_at else None,
         "secret_masked":     mask(ep.secret_enc or ""),
         "created_at":        ep.created_at.isoformat() if ep.created_at else None,
@@ -224,16 +274,25 @@ async def create_webhook(
     """
     tenant_id = uuid.UUID(request.state.tenant_id)
 
-    plaintext_secret = pysecrets.token_urlsafe(_SECRET_BYTES)
-    secret_enc       = encrypt(plaintext_secret, get_settings().secret_key)
+    # Generic webhook: generate a signing secret and return it once. Connector
+    # endpoint: encrypt the customer-supplied ingest token and never echo it
+    # back (the customer already holds it).
+    if body.connector_type is None:
+        plaintext_secret = pysecrets.token_urlsafe(_SECRET_BYTES)
+        secret_enc       = encrypt(plaintext_secret, get_settings().secret_key)
+    else:
+        plaintext_secret = None
+        secret_enc       = encrypt(body.secret, get_settings().secret_key)
 
     repo = WebhookEndpointRepository(db)
     ep   = await repo.create(
-        tenant_id   = tenant_id,
-        url         = body.url,
-        secret_enc  = secret_enc,
-        description = body.description,
-        event_types = body.event_types,
+        tenant_id      = tenant_id,
+        url            = body.url,
+        secret_enc     = secret_enc,
+        description    = body.description,
+        event_types    = body.event_types,
+        connector_type = body.connector_type,
+        config         = body.config,
     )
     await db.commit()
 
@@ -241,16 +300,19 @@ async def create_webhook(
         db, request, principal, tenant_id,
         AdminEventAction.WEBHOOK_ENDPOINT_CREATED,
         {
-            "endpoint_id": str(ep.id),
-            "url":         ep.url,
-            "event_types": ep.event_types,
+            "endpoint_id":    str(ep.id),
+            "url":            ep.url,
+            "event_types":    ep.event_types,
+            "connector_type": ep.connector_type,
         },
     )
 
-    return JSONResponse(
-        status_code=201,
-        content=_format_with_plaintext(ep, plaintext_secret),
+    content = (
+        _format_with_plaintext(ep, plaintext_secret)
+        if plaintext_secret is not None
+        else _format_masked(ep)
     )
+    return JSONResponse(status_code=201, content=content)
 
 
 @router.get("")
@@ -354,7 +416,17 @@ async def rotate_webhook_secret(
     """
     tenant_id = uuid.UUID(request.state.tenant_id)
     repo      = WebhookEndpointRepository(db)
-    await _get_owned_endpoint_or_404(repo, endpoint_id, tenant_id)
+    existing  = await _get_owned_endpoint_or_404(repo, endpoint_id, tenant_id)
+
+    # Grace-window rotation is HMAC-signing specific: it keeps the old secret
+    # valid for receiver-side signature verification. A connector's secret is
+    # an ingest token the SIEM validates directly, so rotation-with-grace does
+    # not apply -- delete and recreate the connector endpoint to change it.
+    if existing.connector_type is not None:
+        raise ValidationError(
+            "secret rotation applies only to generic signed webhooks, not "
+            f"connector endpoints ({existing.connector_type})"
+        )
 
     plaintext_secret = pysecrets.token_urlsafe(_SECRET_BYTES)
     secret_enc       = encrypt(plaintext_secret, get_settings().secret_key)

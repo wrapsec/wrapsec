@@ -23,6 +23,7 @@ from services.webhooks.connectors.registry import (
     UnknownConnectorError,
     get_spec,
     is_known,
+    missing_config,
 )
 
 
@@ -89,3 +90,33 @@ def test_is_known_accepts_null_and_registered_slugs():
 
 def test_is_known_rejects_unregistered_slug():
     assert is_known("bogus") is False
+
+
+# --- required_config / missing_config ---------------------------------
+
+def test_required_config_per_connector():
+    assert get_spec("splunk_hec").required_config == frozenset()
+    assert get_spec("datadog_logs").required_config == frozenset()
+    assert get_spec("elastic_ecs").required_config == frozenset({"index"})
+    assert get_spec("sentinel_logs_ingestion").required_config == frozenset(
+        {"dcr_immutable_id", "stream_name", "tenant_id", "client_id"}
+    )
+
+
+def test_missing_config_none_when_generic_or_complete():
+    assert missing_config(None, None) == []
+    assert missing_config("splunk_hec", None) == []          # no required keys
+    assert missing_config("elastic_ecs", {"index": "i"}) == []
+
+
+def test_missing_config_reports_missing_and_empty_keys():
+    assert missing_config("elastic_ecs", None) == ["index"]
+    assert missing_config("elastic_ecs", {"index": ""}) == ["index"]   # empty counts as missing
+    assert missing_config("sentinel_logs_ingestion", {"tenant_id": "t"}) == [
+        "client_id", "dcr_immutable_id", "stream_name",
+    ]
+
+
+def test_missing_config_unknown_connector_raises():
+    with pytest.raises(UnknownConnectorError):
+        missing_config("bogus", {})

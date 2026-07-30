@@ -130,6 +130,104 @@ async def test_create_rejects_ssrf_target_url(client, admin_jwt_headers):
         assert r.status_code == 422, f"expected 422 for {bad}, got {r.status_code}: {r.text}"
 
 
+# --- connector endpoints ---
+
+@pytest.mark.asyncio
+async def test_create_connector_endpoint_does_not_echo_secret(client, admin_jwt_headers):
+    """A connector endpoint takes a customer-supplied ingest token; it is
+    never echoed back (the customer already holds it), only masked. The
+    projection surfaces connector_type, config, and the health status."""
+    r = await client.post(
+        "/v1/admin/webhooks",
+        json={
+            "url":            "https://hec.example.com:8088",
+            "connector_type": "splunk_hec",
+            "secret":         "hec-token-value",
+            "config":         {"index": "security", "sourcetype": "wrapsec:security"},
+        },
+        headers=admin_jwt_headers,
+    )
+    assert r.status_code == 201, r.text
+    body = r.json()
+    assert body["connector_type"] == "splunk_hec"
+    assert body["config"] == {"index": "security", "sourcetype": "wrapsec:security"}
+    assert body["status"] == "active"
+    assert "secret" not in body                 # customer token never echoed
+    assert body["secret_masked"]
+
+
+@pytest.mark.asyncio
+async def test_create_connector_requires_secret(client, admin_jwt_headers):
+    r = await client.post(
+        "/v1/admin/webhooks",
+        json={"url": "https://hec.example.com:8088", "connector_type": "splunk_hec"},
+        headers=admin_jwt_headers,
+    )
+    assert r.status_code == 422, r.text
+
+
+@pytest.mark.asyncio
+async def test_create_connector_unknown_type_rejected(client, admin_jwt_headers):
+    r = await client.post(
+        "/v1/admin/webhooks",
+        json={"url": "https://x.example.com", "connector_type": "bogus", "secret": "s"},
+        headers=admin_jwt_headers,
+    )
+    assert r.status_code == 422, r.text
+
+
+@pytest.mark.asyncio
+async def test_create_elastic_missing_required_config_rejected(client, admin_jwt_headers):
+    r = await client.post(
+        "/v1/admin/webhooks",
+        json={"url": "https://es.example.com:9243", "connector_type": "elastic_ecs",
+              "secret": "apikey"},   # config lacks required "index"
+        headers=admin_jwt_headers,
+    )
+    assert r.status_code == 422, r.text
+
+
+@pytest.mark.asyncio
+async def test_create_generic_rejects_supplied_secret(client, admin_jwt_headers):
+    r = await client.post(
+        "/v1/admin/webhooks",
+        json={"url": "https://example.com/hook", "secret": "should-not-be-allowed"},
+        headers=admin_jwt_headers,
+    )
+    assert r.status_code == 422, r.text
+
+
+@pytest.mark.asyncio
+async def test_rotate_blocked_for_connector_endpoint(client, admin_jwt_headers):
+    created = await client.post(
+        "/v1/admin/webhooks",
+        json={"url": "https://hec.example.com:8088", "connector_type": "splunk_hec",
+              "secret": "hec-token", "config": {"index": "i"}},
+        headers=admin_jwt_headers,
+    )
+    ep_id = created.json()["id"]
+    r = await client.post(
+        f"/v1/admin/webhooks/{ep_id}/rotate-secret",
+        json={"grace_hours": 24},
+        headers=admin_jwt_headers,
+    )
+    assert r.status_code == 400, r.text
+
+
+@pytest.mark.asyncio
+async def test_generic_projection_has_status_and_null_connector(client, admin_jwt_headers):
+    created = await client.post(
+        "/v1/admin/webhooks",
+        json={"url": "https://example.com/hook"},
+        headers=admin_jwt_headers,
+    )
+    assert created.status_code == 201, created.text
+    body = created.json()
+    assert body["connector_type"] is None
+    assert body["config"] is None
+    assert body["status"] == "active"
+
+
 # ─── list / get ─────────────────────────────────────────────────────
 
 @pytest.mark.asyncio
