@@ -117,7 +117,11 @@ async def _dispatch_one(
             # small default so we never lose the entry.
             delay = outcome.retry_in_s if outcome.retry_in_s is not None else 60
             run_at = _now_ts() + max(1, delay)
-            await webhook_queue.enqueue_delayed(redis, payload, run_at)
+            # Bump attempt_number so the next delivery consumes the next retry
+            # slot -- without this the schedule never advances and the message
+            # retries forever instead of exhausting into the DLQ.
+            requeued = {**payload, "attempt_number": int(payload.get("attempt_number", 1)) + 1}
+            await webhook_queue.enqueue_delayed(redis, requeued, run_at)
             await webhook_queue.ack(redis, stream_id)
             return
 

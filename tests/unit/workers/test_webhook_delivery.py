@@ -97,6 +97,31 @@ async def test_dispatch_retry_requeues_and_acks():
 
 
 @pytest.mark.asyncio
+async def test_dispatch_retry_bumps_attempt_number():
+    """The requeued payload must advance attempt_number so the retry schedule
+    progresses and eventually exhausts into the DLQ instead of retrying at the
+    first (5s) slot forever."""
+    redis = AsyncMock()
+    handler = AsyncMock(
+        return_value=DeliveryOutcome(result=DeliveryResult.RETRY, retry_in_s=300)
+    )
+    payload = _payload(attempt_number=2)
+
+    with patch.object(webhook_delivery.webhook_queue, "ack", new=AsyncMock()), \
+         patch.object(webhook_delivery.webhook_queue, "enqueue_delayed", new=AsyncMock()) as delayed, \
+         patch.object(webhook_delivery.webhook_queue, "move_to_dlq", new=AsyncMock()), \
+         patch.object(webhook_delivery, "_now_ts", return_value=1_000):
+
+        sem = asyncio.Semaphore(1)
+        await webhook_delivery._dispatch_one(redis, handler, "1-0", payload, sem)
+
+        requeued = delayed.call_args.args[1]
+        assert requeued["attempt_number"] == 3
+        # The original payload is not mutated in place.
+        assert payload["attempt_number"] == 2
+
+
+@pytest.mark.asyncio
 async def test_dispatch_dlq_moves_and_does_not_requeue():
     redis = AsyncMock()
     handler = AsyncMock(

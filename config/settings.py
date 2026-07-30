@@ -128,6 +128,13 @@ class Settings(BaseSettings):
     webhook_circuit_breaker_hours:         int  = 120
     webhook_circuit_breaker_sweep_minutes: int  = 15
 
+    # -- Webhook delivery --
+    # Per-attempt HTTP timeout against a receiver, and the byte ceiling on the
+    # receiver response body persisted to webhook_delivery_attempts (an
+    # unbounded column would let one misbehaving receiver fill disk).
+    webhook_delivery_timeout_seconds:    int = 10
+    webhook_delivery_max_response_bytes: int = 2048
+
     # ── Trial key limits ──────────────────────────────────────────────────────
     # Applied only when api_keys.key_type = 'trial'
     # Production (live) keys are completely unaffected by these settings
