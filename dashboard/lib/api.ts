@@ -21,6 +21,10 @@ import {
   ProxyHealthResult,
   DashboardUser,
   DashboardUsersResponse,
+  WebhookEndpoint,
+  WebhookEndpointCreated,
+  ConnectorTypeSchema,
+  WebhookTestResult,
 } from "./types"
 
 // Internal type for retry tracking
@@ -713,4 +717,38 @@ export async function getHealthConfig() {
     llm:              { provider: string; model: string; llm_trigger: number; timeout: number; source: string }
     rate_limit:       { per_minute: number; scope: string }
   }>("/health/config")
+}
+
+// -- Webhooks / SIEM integrations (JWT + ADMIN only) --
+export async function getWebhooks(): Promise<{ endpoints: WebhookEndpoint[] }> {
+  return request<{ endpoints: WebhookEndpoint[] }>("/v1/admin/webhooks")
+}
+
+export async function getConnectorTypes(): Promise<{ connector_types: ConnectorTypeSchema[] }> {
+  return request<{ connector_types: ConnectorTypeSchema[] }>(
+    "/v1/admin/webhooks/connector-types"
+  )
+}
+
+export async function createWebhook(body: {
+  url:             string
+  description?:     string
+  connector_type?: string | null
+  secret?:         string
+  config?:         Record<string, string>
+}): Promise<WebhookEndpointCreated> {
+  return request<WebhookEndpointCreated>("/v1/admin/webhooks", {
+    method: "POST",
+    body:   JSON.stringify(body),
+  })
+}
+
+export async function deleteWebhook(id: string): Promise<void> {
+  return request<void>(`/v1/admin/webhooks/${id}`, { method: "DELETE" })
+}
+
+export async function testWebhook(id: string): Promise<WebhookTestResult> {
+  return request<WebhookTestResult>(`/v1/admin/webhooks/${id}/test`, {
+    method: "POST",
+  })
 }

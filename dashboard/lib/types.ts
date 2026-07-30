@@ -372,3 +372,46 @@ export interface DashboardUsersResponse {
   total: number
   users: DashboardUser[]
 }
+
+// -- Webhooks / SIEM integrations --
+export interface WebhookEndpoint {
+  id:               string
+  url:              string
+  description:      string | null
+  event_types:      string[] | null
+  connector_type:   string | null
+  config:           Record<string, string> | null
+  disabled:         boolean
+  status:           "active" | "failing" | "auto_disabled"
+  first_failure_at: string | null
+  secret_masked:    string
+  created_at:       string | null
+  updated_at:       string | null
+}
+
+export interface WebhookEndpointCreated extends WebhookEndpoint {
+  secret?: string   // plaintext signing secret, generic webhooks only, shown once
+}
+
+export interface ConnectorField {
+  key:      string
+  label:    string
+  help:     string
+  required: boolean
+}
+
+export interface ConnectorTypeSchema {
+  type:          string | null
+  label:         string
+  secret:        { label: string; generated: boolean; required: boolean }
+  url:           { label: string; help: string }
+  config_fields: ConnectorField[]
+}
+
+export interface WebhookTestResult {
+  ok:               boolean
+  status_code:      number | null
+  response_snippet: string | null
+  duration_ms:      number | null
+  error:            string | null
+}
