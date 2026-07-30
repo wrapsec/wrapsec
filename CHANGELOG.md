@@ -2,6 +2,49 @@
 
 All notable changes to WrapSec are documented here.
 
+## [1.3.0] - 2026-07-30
+
+### Added
+- **Outbound webhooks on BLOCK/SANITIZE decisions.** Every block or
+  sanitize decision fans out to the tenant's configured destinations via
+  a background task, so the scan hot path never blocks on delivery. The
+  event body mirrors `GET /v1/audit/logs`, reusing the canonical
+  `severity` and `primary_reason` taxonomy; ALLOW is not emitted.
+- **Signed generic webhooks.** HMAC-SHA256 signing with per-endpoint
+  secrets and `webhook-id` / `webhook-timestamp` / `webhook-signature`
+  headers. Secret rotation keeps the old secret valid for a grace window
+  so receivers can update verifier config without dropped deliveries.
+- **Reliable delivery pipeline.** Redis Streams queue (main / delayed /
+  dead-letter) and a delivery worker started in the API lifespan on a
+  dedicated Redis connection. Fixed retry schedule
+  (5s, 5m, 30m, 2h, 5h, 10h, 10h) then dead-letter; a circuit breaker
+  auto-disables an endpoint after 120h of continuous failure. Every
+  attempt is logged to the partitioned `webhook_delivery_attempts` table.
+- **SIEM connectors.** `splunk_hec`, `datadog_logs`,
+  `sentinel_logs_ingestion` (Azure Monitor Logs Ingestion API with an
+  Entra client-credentials bearer, cached in Redis), and `elastic_ecs`
+  (Bulk API NDJSON, ECS-normalized). Each connector's request shape is
+  built to the vendor's documented contract.
+- **Webhook admin API.** `GET/POST/PUT/DELETE /v1/admin/webhooks` and
+  `POST /v1/admin/webhooks/{id}/rotate-secret` (ADMIN only). Connector
+  endpoints take a customer-supplied ingest token (never echoed back) and
+  are validated per connector (unknown type, missing secret, and missing
+  required `config` keys are rejected at create). Destination URLs are
+  SSRF-validated. Read projections expose a computed `status`
+  (`active` / `failing` / `auto_disabled`).
+
+### Changed
+- **Integration tests run on a disposable PostgreSQL, not SQLite.**
+  `make test-integration` provisions an ephemeral `postgres:16-alpine`,
+  points the app and the tests at it, and tears it down. The tier skips
+  gracefully when no disposable database is configured. Real-PG parity
+  surfaced foreign-key defects that SQLite had masked. See
+  `docs/internal/test.md`.
+
+### Database
+- `webhook_endpoints` gains `connector_type` and `config` columns
+  (migration `0009`, nullable and non-locking).
+
 ## [1.2.4] - 2026-07-29
 
 ### Fixed
