@@ -29,15 +29,20 @@ class ConnectorRequest:
     """
     A resolved outbound request for a SIEM ingest endpoint.
 
-    `json_payload` is the JSON body the worker serializes: a dict for
-    single-event APIs (Splunk HEC) or a list for array-of-events APIs
-    (Datadog logs intake). Headers are complete (auth included) -- the
-    worker does not add signing headers for connector deliveries,
-    because SIEMs authenticate via the connector's own token/key headers
-    rather than the generic webhook-signature HMAC.
+    `json_payload` is the body the worker sends. A dict or list is
+    JSON-serialized by the worker (Splunk HEC single object, Datadog and
+    Sentinel arrays). A str is a body the connector has already
+    serialized and is sent verbatim (UTF-8) -- used for non-JSON wire
+    formats such as the Elastic Bulk API's NDJSON. The connector-set
+    Content-Type header tells the receiver how to parse it.
+
+    Headers are complete (auth included) -- the worker does not add
+    signing headers for connector deliveries, because SIEMs authenticate
+    via the connector's own token/key headers rather than the generic
+    webhook-signature HMAC.
     """
     url:          str
-    json_payload: dict | list
+    json_payload: dict | list | str
     method:       str            = "POST"
     headers:      dict[str, str] = field(default_factory=dict)
 
