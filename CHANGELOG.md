@@ -2,6 +2,35 @@
 
 All notable changes to WrapSec are documented here.
 
+## [1.3.1] - 2026-07-31
+
+### Added
+- **Dashboard Integrations settings page.** Configure SIEM/webhook destinations
+  from the dashboard: a destination catalog, schema-driven per-connector forms,
+  a health chip per endpoint (active / failing / auto-disabled), and a one-click
+  "Send test" that shows the receiver's response.
+- **Connector-type schema endpoint.** `GET /v1/admin/webhooks/connector-types`
+  returns the per-connector field spec (labels, required config keys) so the
+  dashboard form is driven by the API rather than hardcoded in the frontend.
+- **Synthetic test-send endpoint.** `POST /v1/admin/webhooks/{id}/test` sends a
+  clearly-marked test event and returns the receiver's status, body, and timing.
+  Side-effect-free (no queue, no delivery-attempt row, no circuit-breaker
+  impact), ADMIN-only and tenant-scoped, and it never returns the secret.
+
+### Security
+- **Webhook egress SSRF hardening.** Webhook/SIEM destinations are resolved at
+  connect time and blocked if they map to a private/loopback/link-local/metadata
+  address, and https is required -- secure by default. This is distinct from the
+  LLM proxy target, which is often an internal service and stays permissive. An
+  on-prem SIEM on a private address is allowed by listing its host or CIDR in
+  `WEBHOOK_EGRESS_ALLOWLIST`. The check runs on every delivery, closing the gap
+  where a destination that was public at create time is later repointed
+  internally.
+
+### Fixed
+- Removed references to internal-only docs from public files (CHANGELOG, API
+  reference, and a source comment).
+
 ## [1.3.0] - 2026-07-30
 
 ### Added
