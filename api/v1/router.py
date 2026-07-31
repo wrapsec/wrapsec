@@ -7,13 +7,14 @@ from api.v1.endpoints import (
     health, ai, audit, settings, keys,
     departments, applications, tenant,
     proxy_settings, proxy,
-    auth, setup, webhooks,
+    auth, setup, webhooks, capabilities,
 )
 from api.v1.endpoints.admin import users
 
 router = APIRouter()
 
 router.include_router(health.router,              tags=["Health"])
+router.include_router(capabilities.router,        tags=["Capabilities"])
 router.include_router(ai.router,                  prefix="/v1/ai",                 tags=["Gateway"])
 router.include_router(audit.router,               prefix="/v1/audit",              tags=["Audit"])
 router.include_router(settings.router,            prefix="/v1/settings",           tags=["Settings"])

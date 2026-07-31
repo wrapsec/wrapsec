@@ -236,6 +236,12 @@ app.add_exception_handler(Exception, unhandled_exception_handler)
 # ── Routers ───────────────────────────────────────────────────
 app.include_router(v1_router)
 
+# Open-core seam: discover and load plugins registered under the
+# `wrapsec.plugins` entry-point group (paid features plug into the OSS
+# extension points here). No-op in the OSS edition -- nothing is installed.
+from services.capabilities import load_plugins  # noqa: E402
+load_plugins(app)
+
 # ── Metrics endpoint ──────────────────────────────────────────
 # Requires Bearer token: METRICS_TOKEN if set, otherwise ADMIN_API_KEY.
 @app.get("/metrics", include_in_schema=False)
