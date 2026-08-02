@@ -2,6 +2,21 @@
 
 All notable changes to WrapSec are documented here.
 
+## [1.5.0] - 2026-08-02
+
+### Added
+- **Red-team / guardrail-evaluation harness.** A new `tests/eval` tier scores
+  the detection pipeline against a labeled adversarial corpus -- prompt
+  injection, jailbreak, encoding/obfuscation evasion, indirect injection, and
+  data exfiltration, plus benign and "benign-but-suspicious" over-defense sets
+  and a held-out out-of-distribution set. It reports catch-rate, false-positive
+  rate (including over-defense), per-category breakdown, OOD generalisation, and
+  the explicit bypass and false-positive lists. The run is fully offline (no LLM
+  provider, database, or Redis). `make eval` prints the report and runs a
+  regression gate (catch-rate floor and false-positive ceiling), so a change
+  that weakens detection or worsens over-defense fails CI. Doubles as a
+  reproducible, publishable measure of detection efficacy.
+
 ## [1.4.1] - 2026-08-02
 
 ### Fixed
