@@ -2,6 +2,35 @@
 
 All notable changes to WrapSec are documented here.
 
+## [1.4.0] - 2026-08-02
+
+### Changed
+- **Timestamps are timezone-aware UTC end to end.** Every event timestamp is
+  stored as PostgreSQL `TIMESTAMPTZ`, and every timestamp returned by the API or
+  emitted in an export or webhook payload is ISO-8601 UTC with a trailing `Z`
+  (for example `2026-08-02T09:15:42.123Z`) at millisecond precision. Some
+  responses previously carried no timezone marker, which a client could misread
+  as local time; the format is now consistent, so clients that parse timestamps
+  should expect the `Z` form. Timezone conversion is a presentation concern.
+  Time handling is now defined in a single internal source.
+- **Timestamp columns migrated on upgrade.** Migration `0010` converts existing
+  timestamp columns to `TIMESTAMPTZ` in place, preserving every value as UTC;
+  the partitioned `webhook_delivery_attempts` table is migrated with a
+  data-preserving rebuild (no rows lost). It runs automatically on API startup
+  and is a no-op on a fresh install. Database sessions are pinned to UTC.
+- **Consistent audit date-range filtering.** A date-only upper bound
+  (`to=2026-04-16`) now covers the whole day on every audit endpoint instead of
+  only its first instant on some. Full ISO 8601 bounds behave as before.
+- **Centralized Redis key names.** Runtime cache and lock keys are built from a
+  single internal registry, removing duplicated key strings; key values are
+  unchanged.
+
+### Added
+- **Plugin discovery and capabilities endpoint.** Optional plugins are
+  discovered through an entry-point mechanism at startup, and
+  `GET /v1/capabilities` reports the running edition and the set of enabled
+  capabilities. The base build loads no plugins.
+
 ## [1.3.1] - 2026-07-31
 
 ### Added
