@@ -3,7 +3,7 @@
 // WrapSec v1.0 | AI Security Gateway - https://wrapsec.com
 import { useState, Fragment } from "react"
 import { ApiKey } from "@/lib/types"
-import { formatTimestamp, timeAgo } from "@/lib/datetime"
+import { formatTimestamp, timeAgo, ensureUtc } from "@/lib/datetime"
 
 interface ApiKeyTableProps {
   keys:      ApiKey[]
@@ -93,9 +93,10 @@ export function ApiKeyTable({ keys, onRevoke, onRotate, revoking, canWrite = tru
         </thead>
         <tbody>
           {keys.map((key) => {
-            // Grace period is only active if expires_at is set AND in the future
-            // expires_at from API has no timezone - treat as UTC
-            const inGrace = !!key.expires_at && new Date(key.expires_at + "Z") > new Date()
+            // Grace period is only active if expires_at is set AND in the future.
+            // ensureUtc parses the API's aware-UTC value (already carries a Z);
+            // it must NOT get a second Z appended (that yields an invalid date).
+            const inGrace = !!key.expires_at && ensureUtc(key.expires_at) > new Date()
 
             return (
               <Fragment key={key.key_id}>

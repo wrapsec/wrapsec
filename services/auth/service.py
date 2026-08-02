@@ -258,7 +258,7 @@ class AuthService:
             )
             raise InvalidTokenException()
 
-        # expires_at is stored as naive UTC - compare against utc_now()
+        # expires_at is TIMESTAMPTZ (aware UTC); compare against aware utc_now()
         if token_rec.expires_at and token_rec.expires_at < utc_now():
             await rt_repo.revoke(token_hash)
             await db.commit()
