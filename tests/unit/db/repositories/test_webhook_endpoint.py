@@ -28,7 +28,7 @@ Two surface areas covered:
 from __future__ import annotations
 
 import uuid
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 
 import pytest
 
@@ -552,7 +552,9 @@ async def test_rotate_secret_stores_old_secret_with_expiry(test_db):
     assert len(result.old_secrets) == 1
     entry = result.old_secrets[0]
     assert entry["ciphertext"] == "encrypted-blob"     # from _make_endpoint
-    assert entry["expires_at"] == (now + timedelta(hours=24)).isoformat()
+    # expires_at is stored as aware UTC (TIMESTAMPTZ): rotate_secret normalizes
+    # the injected naive `now` to aware before serialising.
+    assert entry["expires_at"] == (now.replace(tzinfo=timezone.utc) + timedelta(hours=24)).isoformat()
 
 
 @pytest.mark.asyncio
@@ -658,3 +660,34 @@ async def test_reactivate_is_idempotent_on_active_endpoint(test_db):
 async def test_reactivate_missing_returns_none(test_db):
     repo = WebhookEndpointRepository(test_db)
     assert await repo.reactivate(endpoint_id=uuid.uuid4()) is None
+
+
+# --- _entry_expires_at aware-sentinel branch -------------------------------
+# The rotation grace check compares _entry_expires_at(entry) against an aware
+# `current` (utc_now). If the sentinel/parse path returned a NAIVE datetime it
+# would raise "can't compare offset-naive and offset-aware" -- a landmine armed
+# by the timestamptz migration. These pin that every return path is aware UTC.
+
+@pytest.mark.parametrize("entry", [
+    {},                                    # expires_at missing
+    {"expires_at": None},                  # explicit null
+    {"expires_at": 12345},                 # wrong type
+    {"expires_at": "not-a-timestamp"},     # malformed string
+])
+def test_entry_expires_at_bad_input_is_aware_and_expired(entry):
+    from db.repositories.webhook_endpoint import _entry_expires_at
+    from services.time import utc_now
+
+    result = _entry_expires_at(entry)
+    assert result.tzinfo is not None                 # aware, never naive
+    # Must compare against an aware "now" without raising, and read as expired.
+    assert result < utc_now()
+
+
+def test_entry_expires_at_parses_aware_and_naive_strings_as_utc():
+    from db.repositories.webhook_endpoint import _entry_expires_at
+
+    aware = _entry_expires_at({"expires_at": "2099-01-01T00:00:00+00:00"})
+    naive = _entry_expires_at({"expires_at": "2099-01-01T00:00:00"})     # read as UTC
+    assert aware.tzinfo is not None and naive.tzinfo is not None
+    assert aware == naive

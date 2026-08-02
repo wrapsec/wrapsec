@@ -3,6 +3,7 @@
 # WrapSec v1.0 | AI Security Gateway - https://wrapsec.com
 
 from datetime import datetime, timedelta
+from services.time import utc_now
 from uuid import UUID
 
 from sqlalchemy import select, update, delete
@@ -57,7 +58,7 @@ class RefreshTokenRepository(BaseRepository):
             .where(
                 RefreshTokenModel.token_hash == token_hash,
                 RefreshTokenModel.revoked_at.is_(None),
-                RefreshTokenModel.expires_at > datetime.utcnow(),
+                RefreshTokenModel.expires_at > utc_now(),
             )
             .with_for_update()
         )
@@ -72,7 +73,7 @@ class RefreshTokenRepository(BaseRepository):
         await self.session.execute(
             update(RefreshTokenModel)
             .where(RefreshTokenModel.token_hash == token_hash)
-            .values(revoked_at=datetime.utcnow())
+            .values(revoked_at=utc_now())
         )
 
     async def revoke_all_for_user(self, user_id: UUID) -> int:
@@ -88,7 +89,7 @@ class RefreshTokenRepository(BaseRepository):
                 RefreshTokenModel.user_id    == user_id,
                 RefreshTokenModel.revoked_at.is_(None),
             )
-            .values(revoked_at=datetime.utcnow())
+            .values(revoked_at=utc_now())
         )
         return result.rowcount
 
@@ -114,7 +115,7 @@ class RefreshTokenRepository(BaseRepository):
         Returns total deleted rows from both clauses combined.
         Caller owns the transaction - no commit here.
         """
-        now              = datetime.utcnow()
+        now              = utc_now()
         cutoff_secondary = now - timedelta(days=90)
 
         # Clause 1 - expired AND revoked

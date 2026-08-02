@@ -97,9 +97,20 @@ class TestCanonicalRowDeterminism:
 class TestCanonicalTypes:
 
     def test_datetime_serialised_as_iso_with_microseconds(self):
+        # Timestamps are stored as TIMESTAMPTZ; the canonical form is aware-UTC
+        # ISO 8601 with microseconds. A naive value is read as UTC.
         out    = canonical_row({"created_at": datetime(2026, 7, 27, 15, 30, 45, 123456)})
         parsed = json.loads(out)
-        assert parsed["created_at"] == "2026-07-27T15:30:45.123456"
+        assert parsed["created_at"] == "2026-07-27T15:30:45.123456+00:00"
+
+    def test_datetime_in_other_zone_normalised_to_utc(self):
+        # Determinism: the same instant expressed in any zone hashes identically
+        # because canonicalisation normalises to UTC first.
+        from datetime import timedelta, timezone
+        plus_five = timezone(timedelta(hours=5))
+        out    = canonical_row({"created_at": datetime(2026, 7, 27, 20, 30, 45, 123456, tzinfo=plus_five)})
+        parsed = json.loads(out)
+        assert parsed["created_at"] == "2026-07-27T15:30:45.123456+00:00"
 
     def test_uuid_serialised_as_string(self):
         u      = uuid.UUID("12345678-1234-5678-1234-567812345678")

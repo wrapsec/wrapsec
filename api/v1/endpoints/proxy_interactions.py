@@ -10,6 +10,7 @@ GET /v1/proxy/interactions/:trace_id -- get single interaction detail
 """
 
 import logging
+from services.time import to_iso_z
 import uuid
 from fastapi import APIRouter, Depends, Request
 from fastapi.responses import JSONResponse
@@ -30,7 +31,7 @@ def _serialize(item: ProxyInteractionModel, detail: bool = False) -> dict:
     base = {
         "id":                    str(item.id),
         "trace_id":              item.trace_id,
-        "created_at":            item.created_at.isoformat() if item.created_at else None,
+        "created_at":            to_iso_z(item.created_at) if item.created_at else None,
         "key_id":                item.key_id,
         "user_id":               item.user_id,
         "input_decision":        item.input_decision,

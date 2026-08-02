@@ -40,7 +40,10 @@ async def seeded_audit_rows(pg_db):
     """
     tenant_id = str(uuid.uuid4())
     dept_id   = str(uuid.uuid4())
-    now       = datetime.utcnow()
+    # Aware UTC: created_at is TIMESTAMPTZ, so seed the same aware instants the
+    # production writer (utc_now) produces, or the aware date-range filter in
+    # /v1/audit/stats will not match naive-bound rows.
+    now       = datetime.now(timezone.utc)
 
     rows = [
         AuditLogModel(

@@ -33,9 +33,10 @@ responsible for commit().
 """
 
 from __future__ import annotations
+from services.time import ensure_utc, parse_utc_iso, utc_now
 
 import uuid
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from typing import Any
 from uuid import UUID
 
@@ -99,7 +100,7 @@ class WebhookEndpointRepository:
         `now` is a caller-supplied clock (default utcnow) so tests can
         pin a deterministic value without freezing wall time.
         """
-        current = now or datetime.utcnow()
+        current = ensure_utc(now or utc_now())
         stmt = (
             update(WebhookEndpointModel)
             .where(WebhookEndpointModel.id == endpoint_id)
@@ -125,7 +126,7 @@ class WebhookEndpointRepository:
         Cheap to call on every success (the UPDATE is a no-op when the
         field is already NULL).
         """
-        current = now or datetime.utcnow()
+        current = ensure_utc(now or utc_now())
         stmt = (
             update(WebhookEndpointModel)
             .where(WebhookEndpointModel.id == endpoint_id)
@@ -159,7 +160,7 @@ class WebhookEndpointRepository:
                 f"threshold_hours must be > 0, got {threshold_hours}"
             )
 
-        current = now or datetime.utcnow()
+        current = ensure_utc(now or utc_now())
         cutoff  = current - timedelta(hours=threshold_hours)
 
         select_stmt = (
@@ -207,7 +208,7 @@ class WebhookEndpointRepository:
         through `update` -- changing it would reinterpret the stored
         secret material.
         """
-        now = datetime.utcnow()
+        now = utc_now()
         ep  = WebhookEndpointModel(
             id             = uuid.uuid4(),
             tenant_id      = tenant_id,
@@ -266,7 +267,7 @@ class WebhookEndpointRepository:
         if not clean:
             return await self.get_by_id(endpoint_id)
 
-        clean["updated_at"] = datetime.utcnow()
+        clean["updated_at"] = utc_now()
         stmt = (
             update(WebhookEndpointModel)
             .where(WebhookEndpointModel.id == endpoint_id)
@@ -321,7 +322,7 @@ class WebhookEndpointRepository:
         if grace_hours <= 0:
             raise ValueError(f"grace_hours must be > 0, got {grace_hours}")
 
-        current = now or datetime.utcnow()
+        current = ensure_utc(now or utc_now())
         ep      = await self._db.get(WebhookEndpointModel, endpoint_id)
         if ep is None:
             return None
@@ -365,7 +366,7 @@ class WebhookEndpointRepository:
         Idempotent: safe to call on an already-active endpoint (no
         state changes, still returns the row).
         """
-        current = now or datetime.utcnow()
+        current = ensure_utc(now or utc_now())
         stmt = (
             update(WebhookEndpointModel)
             .where(WebhookEndpointModel.id == endpoint_id)
@@ -384,10 +385,15 @@ def _entry_expires_at(entry: dict) -> datetime:
     """Parse the ISO datetime stored in an old_secrets entry. Missing
     or malformed values are treated as already expired so a corrupt
     row cannot indefinitely keep an old secret alive."""
+    # Aware-UTC sentinel: expires_at columns are TIMESTAMPTZ and `current` in
+    # the rotation path is aware, so a naive datetime.min would raise on the
+    # comparison. parse_utc_iso normalizes any stored value (aware, offset, or
+    # a legacy naive string) to aware UTC.
     raw = entry.get("expires_at")
+    _expired = datetime.min.replace(tzinfo=timezone.utc)
     if not isinstance(raw, str):
-        return datetime.min
+        return _expired
     try:
-        return datetime.fromisoformat(raw)
+        return parse_utc_iso(raw)
     except ValueError:
-        return datetime.min
+        return _expired

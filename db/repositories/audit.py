@@ -3,6 +3,7 @@
 # WrapSec v1.0 | AI Security Gateway - https://wrapsec.com
 
 from datetime import datetime
+from services.time import ensure_utc, utc_now
 from sqlalchemy import select, func, case, cast, text
 from sqlalchemy.dialects.postgresql import JSONB
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -17,7 +18,7 @@ class AuditRepository(BaseRepository):
         # Populate created_at up front so the hash covers exactly the value
         # that lands on disk. Falling back to SQLAlchemy's default would let
         # the DB or the ORM pick a different timestamp than the one we hashed.
-        data.setdefault("created_at", datetime.utcnow())
+        data.setdefault("created_at", utc_now())
 
         tenant_id = data.get("tenant_id")
         if tenant_id:
@@ -203,14 +204,13 @@ class AuditRepository(BaseRepository):
             filters.append(AuditLogModel.tenant_id == tenant_id)
         if dept_id:
             filters.append(AuditLogModel.dept_id == dept_id)
-        # audit_logs.created_at is TIMESTAMP WITHOUT TIME ZONE (per CLAUDE.md:
-        # "all datetimes are naive UTC by design"). asyncpg refuses to bind a
-        # tz-aware datetime against a naive column, so strip tzinfo here rather
-        # than forcing every caller to remember.
+        # audit_logs.created_at is TIMESTAMPTZ; ensure_utc normalizes the bounds
+        # to aware UTC so the comparison binds aware-to-aware regardless of what
+        # the caller passed.
         if from_dt:
-            filters.append(AuditLogModel.created_at >= from_dt.replace(tzinfo=None))
+            filters.append(AuditLogModel.created_at >= ensure_utc(from_dt))
         if to_dt:
-            filters.append(AuditLogModel.created_at <= to_dt.replace(tzinfo=None))
+            filters.append(AuditLogModel.created_at <= ensure_utc(to_dt))
 
         is_pg = self.session.bind.dialect.name == "postgresql"
 

@@ -3,12 +3,12 @@
 # WrapSec v1.0 | AI Security Gateway - https://wrapsec.com
 
 import uuid
-from datetime import datetime
 from sqlalchemy import (
     Column, String, Float, Boolean,
     DateTime, Text, JSON, Integer, Index, ForeignKey,
     CheckConstraint, UniqueConstraint
 )
+from services.time import utc_now
 from sqlalchemy.orm import DeclarativeBase, relationship
 from sqlalchemy.dialects.postgresql import UUID, JSONB
 
@@ -39,7 +39,7 @@ class TenantModel(Base):
     is_active     = Column(Boolean,     nullable=False, default=True)
     contact_email = Column(String(100), nullable=True)
     created_by    = Column(String(100), nullable=True)
-    created_at    = Column(DateTime,    nullable=False, default=datetime.utcnow)
+    created_at    = Column(DateTime(timezone=True),    nullable=False, default=utc_now)
 
 
 class DepartmentModel(Base):
@@ -54,7 +54,7 @@ class DepartmentModel(Base):
     is_active       = Column(Boolean,     nullable=False, default=True)
     contact_email   = Column(String(100), nullable=True)
     created_by      = Column(String(100), nullable=True)
-    created_at      = Column(DateTime,    nullable=False, default=datetime.utcnow)
+    created_at      = Column(DateTime(timezone=True),    nullable=False, default=utc_now)
 
     __table_args__ = (
         Index("ix_dept_tenant", "tenant_id"),
@@ -77,7 +77,7 @@ class ApplicationModel(Base):
     policy_override     = Column(JSONVariant,        nullable=True,  default=None)
     rate_limit_override = Column(JSONVariant,        nullable=True,  default=None)
     is_active           = Column(Boolean,     nullable=False, default=True)
-    created_at          = Column(DateTime,    nullable=False, default=datetime.utcnow)
+    created_at          = Column(DateTime(timezone=True),    nullable=False, default=utc_now)
 
     __table_args__ = (
         Index("ix_app_dept", "dept_id"),
@@ -128,7 +128,7 @@ class AuditLogModel(Base):
     # Populated by the hash-chained audit writer; UPDATE blocked by trigger.
     record_hash    = Column(String(64),  nullable=True)
     prev_hash      = Column(String(64),  nullable=True)
-    created_at     = Column(DateTime,    nullable=False, default=datetime.utcnow)
+    created_at     = Column(DateTime(timezone=True),    nullable=False, default=utc_now)
 
     __table_args__ = (
         Index("ix_audit_logs_decision_created", "decision",   "created_at"),
@@ -159,9 +159,9 @@ class APIKeyModel(Base):
     key_type     = Column(String(20),  nullable=False, default="live")
     is_admin     = Column(Boolean,     nullable=False, default=False)
     revoked      = Column(Boolean,     nullable=False, default=False)
-    expires_at   = Column(DateTime,    nullable=True)
-    last_used_at = Column(DateTime,    nullable=True)
-    created_at   = Column(DateTime,    nullable=False, default=datetime.utcnow)
+    expires_at   = Column(DateTime(timezone=True),    nullable=True)
+    last_used_at = Column(DateTime(timezone=True),    nullable=True)
+    created_at   = Column(DateTime(timezone=True),    nullable=False, default=utc_now)
 
     __table_args__ = (
         # Only enforced in PostgreSQL (production). SQLite (used in tests) silently
@@ -180,7 +180,7 @@ class SettingsModel(Base):
 
     key        = Column(String(100), primary_key=True)
     value      = Column(Text,        nullable=False)
-    updated_at = Column(DateTime,    nullable=False, default=datetime.utcnow, onupdate=datetime.utcnow)
+    updated_at = Column(DateTime(timezone=True),    nullable=False, default=utc_now, onupdate=utc_now)
 
 
 class ProxyProviderConfigModel(Base):
@@ -193,9 +193,9 @@ class ProxyProviderConfigModel(Base):
     provider_api_key_enc = Column(Text,        nullable=True)
     default_model        = Column(String(128), nullable=False)
     timeout_seconds      = Column(Integer,     nullable=False, default=60)
-    created_at           = Column(DateTime,    nullable=False, default=datetime.utcnow)
-    updated_at           = Column(DateTime,    nullable=False, default=datetime.utcnow,
-                                  onupdate=datetime.utcnow)
+    created_at           = Column(DateTime(timezone=True),    nullable=False, default=utc_now)
+    updated_at           = Column(DateTime(timezone=True),    nullable=False, default=utc_now,
+                                  onupdate=utc_now)
 
 
 class ProxyInteractionModel(Base):
@@ -225,7 +225,7 @@ class ProxyInteractionModel(Base):
     behavior_flag         = Column(String(32),  nullable=True)
     output_flags          = Column(JSONVariant,        nullable=True)
     total_latency_ms      = Column(Integer,     nullable=False)
-    created_at            = Column(DateTime,    nullable=False, default=datetime.utcnow)
+    created_at            = Column(DateTime(timezone=True),    nullable=False, default=utc_now)
 
     __table_args__ = (
         Index("ix_proxy_int_key_id",      "key_id"),
@@ -264,8 +264,8 @@ class UserModel(Base):
     is_active             = Column(Boolean,     nullable=False, default=True)
     force_password_change = Column(Boolean,     nullable=False, default=False)
     token_version         = Column(Integer,     nullable=False, default=1)
-    created_at            = Column(DateTime,    nullable=False, default=datetime.utcnow)
-    last_login_at         = Column(DateTime,    nullable=True)
+    created_at            = Column(DateTime(timezone=True),    nullable=False, default=utc_now)
+    last_login_at         = Column(DateTime(timezone=True),    nullable=True)
 
     __table_args__ = (
         Index("ix_users_tenant",      "tenant_id"),
@@ -308,9 +308,9 @@ class RefreshTokenModel(Base):
                            nullable=False)
     token_hash    = Column(String(64),  nullable=False, unique=True)
     token_version = Column(Integer,     nullable=False, default=1)
-    expires_at    = Column(DateTime,    nullable=False)
-    revoked_at    = Column(DateTime,    nullable=True)
-    created_at    = Column(DateTime,    nullable=False, default=datetime.utcnow)
+    expires_at    = Column(DateTime(timezone=True),    nullable=False)
+    revoked_at    = Column(DateTime(timezone=True),    nullable=True)
+    created_at    = Column(DateTime(timezone=True),    nullable=False, default=utc_now)
 
     __table_args__ = (
         Index("ix_refresh_tokens_user",    "user_id"),
@@ -349,7 +349,7 @@ class AdminEventModel(Base):
     metadata_      = Column("metadata", JSONVariant, nullable=True)
     ip_address     = Column(String(45),  nullable=True)
     user_agent     = Column(String(500), nullable=True)
-    created_at     = Column(DateTime,    nullable=False, default=datetime.utcnow)
+    created_at     = Column(DateTime(timezone=True),    nullable=False, default=utc_now)
 
     __table_args__ = (
         Index("idx_admin_events_tenant_time", "tenant_id", "created_at"),
@@ -387,7 +387,7 @@ class AuthEventModel(Base):
     failure_reason = Column(String(50),  nullable=True)
     ip_address     = Column(String(45),  nullable=True)
     user_agent     = Column(String(500), nullable=True)
-    created_at     = Column(DateTime,    nullable=False, default=datetime.utcnow)
+    created_at     = Column(DateTime(timezone=True),    nullable=False, default=utc_now)
 
     __table_args__ = (
         Index("idx_auth_events_tenant_time", "tenant_id", "created_at"),
@@ -440,10 +440,10 @@ class WebhookEndpointModel(Base):
     # Elastic index, Splunk sourcetype). NULL for generic webhooks.
     config           = Column(JSONVariant, nullable=True,  default=None)
     disabled         = Column(Boolean,     nullable=False, default=False)
-    first_failure_at = Column(DateTime,    nullable=True)
+    first_failure_at = Column(DateTime(timezone=True),    nullable=True)
     rate_limit       = Column(Integer,     nullable=True)
-    created_at       = Column(DateTime,    nullable=False, default=datetime.utcnow)
-    updated_at       = Column(DateTime,    nullable=True)
+    created_at       = Column(DateTime(timezone=True),    nullable=False, default=utc_now)
+    updated_at       = Column(DateTime(timezone=True),    nullable=True)
 
     __table_args__ = (
         UniqueConstraint("tenant_id", "url", name="uq_webhook_endpoints_tenant_url"),
@@ -490,7 +490,7 @@ class WebhookDeliveryAttemptModel(Base):
     __tablename__ = "webhook_delivery_attempts"
 
     id                      = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
-    created_at              = Column(DateTime,           primary_key=True, nullable=False, default=datetime.utcnow)
+    created_at              = Column(DateTime(timezone=True),           primary_key=True, nullable=False, default=utc_now)
     endpoint_id             = Column(UUID(as_uuid=True), ForeignKey("webhook_endpoints.id"), nullable=False)
     tenant_id               = Column(UUID(as_uuid=True), ForeignKey("tenants.id"),           nullable=False)
     msg_id                  = Column(String(64), nullable=False)
@@ -502,8 +502,8 @@ class WebhookDeliveryAttemptModel(Base):
     response_body_truncated = Column(Text,       nullable=True)
     response_duration_ms    = Column(Integer,    nullable=True)
     error_message           = Column(Text,       nullable=True)
-    next_attempt_at         = Column(DateTime,   nullable=True)
-    ended_at                = Column(DateTime,   nullable=True)
+    next_attempt_at         = Column(DateTime(timezone=True),   nullable=True)
+    ended_at                = Column(DateTime(timezone=True),   nullable=True)
 
     __table_args__ = (
         Index("ix_webhook_delivery_attempts_msg_id",           "msg_id"),

@@ -3,6 +3,7 @@
 # WrapSec v1.0 | AI Security Gateway - https://wrapsec.com
 
 import hashlib
+from services.time import utc_now
 import hmac
 import ipaddress
 import logging
@@ -530,11 +531,11 @@ class AuthMiddleware(BaseHTTPMiddleware):
                     return None
 
                 if record.expires_at is not None:
-                    if datetime.utcnow() > record.expires_at:
+                    if utc_now() > record.expires_at:
                         return None
 
                 try:
-                    record.last_used_at = datetime.utcnow()
+                    record.last_used_at = utc_now()
                     await session.commit()
                 except Exception as e:
                     logger.warning("Failed to update last_used_at for %s: %s",

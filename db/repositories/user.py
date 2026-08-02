@@ -3,6 +3,7 @@
 # WrapSec v1.0 | AI Security Gateway - https://wrapsec.com
 
 from datetime import datetime
+from services.time import utc_now
 from uuid import UUID
 
 from sqlalchemy import select, func, update
@@ -183,7 +184,7 @@ class UserRepository(BaseRepository):
         await self.session.execute(
             update(UserModel)
             .where(UserModel.id == user_id)
-            .values(last_login_at=datetime.utcnow())
+            .values(last_login_at=utc_now())
         )
 
     # ── Private helpers ────────────────────────────────────────────────────────

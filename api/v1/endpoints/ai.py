@@ -3,6 +3,7 @@
 # WrapSec v1.0 | AI Security Gateway - https://wrapsec.com
 
 import logging
+from services.time import to_iso_z
 import time
 import uuid
 import hashlib
@@ -445,7 +446,7 @@ async def get_request(
     # Build base response
     response = {
         "trace_id":       record.trace_id,
-        "timestamp":      record.created_at.isoformat(),
+        "timestamp":      to_iso_z(record.created_at),
         "execution_mode": record.execution_mode,
         "is_proxy":       record.execution_mode == "proxy",
         "severity":       record.severity or compute_severity(

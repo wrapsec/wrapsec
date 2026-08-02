@@ -3,6 +3,7 @@
 # WrapSec v1.0 | AI Security Gateway - https://wrapsec.com
 
 import logging
+from services.time import to_iso_z, utc_now
 
 from fastapi import APIRouter, Depends, Request, Response
 from fastapi.responses import JSONResponse
@@ -350,7 +351,6 @@ async def _blacklist_current_access_token(request: Request) -> None:
     token's remaining lifetime. Any failure is swallowed - logout must
     always succeed even if blacklisting fails.
     """
-    from datetime import datetime, timezone
     from services.auth.token import decode_access_token
     from services.auth.jti_blacklist import blacklist_jti
 
@@ -369,7 +369,7 @@ async def _blacklist_current_access_token(request: Request) -> None:
     if not jti or not exp:
         return
 
-    ttl = int(exp - datetime.now(timezone.utc).timestamp())
+    ttl = int(exp - utc_now().timestamp())
     if ttl <= 0:
         return
 
@@ -413,7 +413,7 @@ async def me(
             "tenant_id":             str(user.tenant_id) if user.tenant_id else None,
             "is_active":             user.is_active,
             "force_password_change": user.force_password_change,
-            "last_login_at":         user.last_login_at.isoformat() if user.last_login_at else None,
+            "last_login_at":         to_iso_z(user.last_login_at) if user.last_login_at else None,
         },
     )
 

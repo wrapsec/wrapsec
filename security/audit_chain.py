@@ -49,6 +49,8 @@ import uuid
 from datetime import datetime
 from typing import Any
 
+from services.time import ensure_utc
+
 
 # Explicit sorted list. Every audit_logs column EXCEPT id (DB-assigned,
 # not part of the content) and record_hash/prev_hash (the chain output
@@ -101,9 +103,10 @@ def _json_safe(value: Any) -> Any:
     if isinstance(value, uuid.UUID):
         return str(value)
     if isinstance(value, datetime):
-        # Naive-UTC ISO 8601 with microseconds. Matches the DB's
-        # TIMESTAMP WITHOUT TIME ZONE storage convention (see CLAUDE.md).
-        return value.isoformat(timespec="microseconds")
+        # Canonical aware-UTC ISO 8601 with microseconds. Timestamps are stored
+        # as TIMESTAMPTZ; normalizing to UTC first keeps the hash input
+        # deterministic regardless of the tzinfo attached to the value.
+        return ensure_utc(value).isoformat(timespec="microseconds")
     if isinstance(value, (list, tuple)):
         return [_json_safe(v) for v in value]
     if isinstance(value, dict):

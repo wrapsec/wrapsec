@@ -21,6 +21,7 @@ Status vocabulary (String(20)):
 """
 
 from __future__ import annotations
+from services.time import utc_now
 
 import uuid
 from datetime import datetime
@@ -61,7 +62,7 @@ class WebhookDeliveryAttemptRepository:
         composite PK (postgres RANGE partitioning key) and `ended_at`
         marks when this attempt finished; both default to `now`.
         """
-        current = now or datetime.utcnow()
+        current = now or utc_now()
         row = WebhookDeliveryAttemptModel(
             id                      = uuid.uuid4(),
             created_at              = current,

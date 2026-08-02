@@ -12,12 +12,25 @@ _settings = get_settings()
 _REPO_ROOT   = Path(__file__).resolve().parent.parent
 _ALEMBIC_INI = _REPO_ROOT / "alembic.ini"
 
+# Pin every asyncpg connection to UTC. Timestamps are stored as TIMESTAMPTZ and
+# the app works in aware UTC end to end; forcing the session timezone to UTC
+# makes timestamptz decode deterministic and guarantees any stray naive value
+# binds as UTC rather than the server's local zone. Guarded to postgresql so
+# the SQLite test-fallback path (which does not accept server_settings) is left
+# untouched.
+_connect_args = (
+    {"server_settings": {"timezone": "UTC"}}
+    if _settings.database_url.startswith("postgresql")
+    else {}
+)
+
 engine = create_async_engine(
     _settings.database_url,
     pool_size     = _settings.db_pool_size,
     max_overflow  = _settings.db_max_overflow,
     pool_pre_ping = True,
     echo          = _settings.debug,
+    connect_args  = _connect_args,
 )
 
 AsyncSessionFactory = async_sessionmaker(

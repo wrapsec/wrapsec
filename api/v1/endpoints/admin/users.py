@@ -3,6 +3,7 @@
 # WrapSec v1.0 | AI Security Gateway - https://wrapsec.com
 
 import uuid
+from services.time import to_iso_z
 import logging
 
 from fastapi import APIRouter, Depends, Query, Request
@@ -36,8 +37,8 @@ def _format(user) -> dict:
         "tenant_id":             str(user.tenant_id) if user.tenant_id else None,
         "is_active":             user.is_active,
         "force_password_change": user.force_password_change,
-        "created_at":            user.created_at.isoformat(),
-        "last_login_at":         user.last_login_at.isoformat() if user.last_login_at else None,
+        "created_at":            to_iso_z(user.created_at),
+        "last_login_at":         to_iso_z(user.last_login_at) if user.last_login_at else None,
     }
 
 

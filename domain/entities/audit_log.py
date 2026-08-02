@@ -3,7 +3,7 @@
 # WrapSec v1.0 | AI Security Gateway - https://wrapsec.com
 
 from dataclasses import dataclass, field
-from datetime import datetime
+from datetime import datetime, timezone
 from domain.enums import DecisionType, ThreatCategory, DetectionMode, ExecutionMode
 from domain.value_objects.trace_id import TraceId
 
@@ -22,4 +22,4 @@ class AuditLog:
     tenant_id:       str | None  = None
     source:          str | None  = None
     user_id:         str | None  = None
-    created_at:      datetime    = field(default_factory=datetime.utcnow)
+    created_at:      datetime    = field(default_factory=lambda: datetime.now(timezone.utc))

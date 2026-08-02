@@ -46,6 +46,7 @@ Deliberately out of scope for v1.3.0:
 """
 
 from __future__ import annotations
+from services.time import to_iso_z, utc_now
 
 import logging
 import secrets as pysecrets
@@ -189,10 +190,10 @@ def _format_masked(ep: WebhookEndpointModel) -> dict:
         "config":            ep.config,
         "disabled":          ep.disabled,
         "status":            _health_status(ep),
-        "first_failure_at":  ep.first_failure_at.isoformat() if ep.first_failure_at else None,
+        "first_failure_at":  to_iso_z(ep.first_failure_at) if ep.first_failure_at else None,
         "secret_masked":     mask(ep.secret_enc or ""),
-        "created_at":        ep.created_at.isoformat() if ep.created_at else None,
-        "updated_at":        ep.updated_at.isoformat() if ep.updated_at else None,
+        "created_at":        to_iso_z(ep.created_at) if ep.created_at else None,
+        "updated_at":        to_iso_z(ep.updated_at) if ep.updated_at else None,
     }
 
 
@@ -513,7 +514,7 @@ def _build_test_event() -> tuple[str, str, dict]:
     msg_id = f"test-{uuid.uuid4()}"
     body = {
         "trace_id":       msg_id,
-        "timestamp":      datetime.utcnow().isoformat() + "Z",
+        "timestamp":      to_iso_z(utc_now()),
         "decision":       "BLOCK",
         "primary_reason": "RULE_DETECTOR",
         "risk_score":     0.99,

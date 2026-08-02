@@ -37,6 +37,7 @@ Response headers added to every response:
 """
 
 import copy
+from services.time import utc_now
 import logging
 import time
 from datetime import datetime
@@ -316,7 +317,7 @@ async def _log_interaction(
             behavior_flag         = None,
             output_flags          = None,
             total_latency_ms      = total_latency_ms,
-            created_at            = datetime.utcnow(),
+            created_at            = utc_now(),
         )
         db.add(interaction)
         await db.flush()   # flush to get interaction.id before audit_logs insert

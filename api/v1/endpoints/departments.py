@@ -3,6 +3,7 @@
 # WrapSec v1.0 | AI Security Gateway - https://wrapsec.com
 
 import uuid
+from services.time import to_iso_z
 from fastapi import APIRouter, Depends, Request
 from fastapi.responses import JSONResponse
 from pydantic import BaseModel, SecretStr, field_validator
@@ -73,7 +74,7 @@ def _format(dept) -> dict:
         "policy_override": _mask_policy_override(dept.policy_override),
         "contact_email":   dept.contact_email,
         "is_active":       dept.is_active,
-        "created_at":      dept.created_at.isoformat(),
+        "created_at":      to_iso_z(dept.created_at),
     }
 
 

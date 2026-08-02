@@ -3,7 +3,7 @@
 # WrapSec v1.0 | AI Security Gateway - https://wrapsec.com
 
 from dataclasses import dataclass, field
-from datetime import datetime
+from datetime import datetime, timezone
 from domain.enums import DecisionType, ThreatCategory, DetectionMode, ExecutionMode, get_risk_level, RiskLevel
 from domain.value_objects.risk_score import RiskScore
 from domain.value_objects.trace_id import TraceId
@@ -108,7 +108,7 @@ class GatewayDecision:
     primary_reason:  str | None            = None
     confidence:      float | None          = None
     confidence_band: str | None            = None
-    decided_at:      datetime              = field(default_factory=datetime.utcnow)
+    decided_at:      datetime              = field(default_factory=lambda: datetime.now(timezone.utc))
 
     @property
     def risk_level(self) -> RiskLevel:

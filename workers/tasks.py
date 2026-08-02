@@ -25,6 +25,7 @@ Design decisions:
 """
 
 import logging
+from services.time import utc_now
 from datetime import datetime
 
 logger = logging.getLogger("wrapsec.retention_worker")
@@ -89,7 +90,7 @@ async def run_retention_cleanup() -> None:
         return
 
     logger.info("Retention worker: starting scheduled cleanup run")
-    start = datetime.utcnow()
+    start = utc_now()
 
     try:
         audit_deleted = await _cleanup_audit_logs()
@@ -109,7 +110,7 @@ async def run_retention_cleanup() -> None:
         logger.error(f"Retention worker: refresh_tokens cleanup failed: {e}")
         tokens_deleted = -1
 
-    elapsed_ms = int((datetime.utcnow() - start).total_seconds() * 1000)
+    elapsed_ms = int((utc_now() - start).total_seconds() * 1000)
 
     all_ok = audit_deleted >= 0 and proxy_purged >= 0 and tokens_deleted >= 0
 

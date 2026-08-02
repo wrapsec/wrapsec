@@ -3,9 +3,10 @@
 # WrapSec v1.0 | AI Security Gateway - https://wrapsec.com
 
 import uuid
+from services.time import to_iso_z, utc_now
 import secrets
 import hashlib
-from datetime import datetime, timezone
+from datetime import timedelta
 from fastapi import APIRouter, Depends, Request
 from fastapi.responses import JSONResponse
 from pydantic import BaseModel, Field
@@ -18,7 +19,6 @@ from db.repositories.department import DepartmentRepository
 from db.repositories.tenant import TenantRepository
 from domain.entities.principal import Principal
 from errors.exceptions import NotFoundError
-from datetime import timedelta
 
 router = APIRouter()
 
@@ -153,7 +153,7 @@ async def create_key(
         "app_id":     str(app_id)    if app_id    else None,
         "dept_id":    str(dept_id)   if dept_id   else None,
         "tenant_id":  str(tenant_id) if tenant_id else None,
-        "created_at": record.created_at.isoformat(),
+        "created_at": to_iso_z(record.created_at),
         "expires_at": body.expires_at,
     }, status_code=201)
 
@@ -173,7 +173,7 @@ async def list_keys(
     repo = ApiKeyRepository(db)
     keys = await repo.list_active(tenant_id=tenant_id)
     # Filter out keys whose grace period has expired
-    now  = datetime.utcnow()
+    now  = utc_now()
     keys = [k for k in keys if k.expires_at is None or k.expires_at > now]
 
     # Enrich with department and application names
@@ -205,9 +205,9 @@ async def list_keys(
                 "dept_name":    dept_names.get(str(k.dept_id)) if k.dept_id else None,
                 "app_name":     app_names.get(str(k.app_id))   if k.app_id  else None,
                 "key_type":     getattr(k, "key_type", "live") or "live",
-                "created_at":   k.created_at.isoformat(),
-                "expires_at":   k.expires_at.isoformat() if k.expires_at else None,
-                "last_used_at": k.last_used_at.isoformat() if k.last_used_at else None,
+                "created_at":   to_iso_z(k.created_at),
+                "expires_at":   to_iso_z(k.expires_at) if k.expires_at else None,
+                "last_used_at": to_iso_z(k.last_used_at) if k.last_used_at else None,
             }
             for k in keys
         ]
@@ -235,9 +235,9 @@ async def get_key(
         "key_type":     getattr(record, "key_type", "live") or "live",
         "is_admin":     record.is_admin,
         "revoked":      record.revoked,
-        "created_at":   record.created_at.isoformat(),
-        "expires_at":   record.expires_at.isoformat() if record.expires_at else None,
-        "last_used_at": record.last_used_at.isoformat() if record.last_used_at else None,
+        "created_at":   to_iso_z(record.created_at),
+        "expires_at":   to_iso_z(record.expires_at) if record.expires_at else None,
+        "last_used_at": to_iso_z(record.last_used_at) if record.last_used_at else None,
     })
 
 class UpdateKeySchema(BaseModel):
@@ -263,7 +263,7 @@ async def update_key(
     return JSONResponse(content={
         "key_id":     record.key_id,
         "name":       record.name,
-        "updated_at": datetime.now(timezone.utc).isoformat(),
+        "updated_at": to_iso_z(utc_now()),
     })
 
 @router.delete("/{key_id}")
@@ -291,7 +291,7 @@ async def delete_key(
     return JSONResponse(content={
         "key_id":          key_id,
         "revoked":         True,
-        "revoked_at":      datetime.now(timezone.utc).isoformat(),
+        "revoked_at":      to_iso_z(utc_now()),
         "was_in_grace":    was_in_grace,
         "warning":         (
             "Key was in grace period and has been immediately revoked. "
@@ -329,13 +329,13 @@ async def rotate_key(
         )
 
     if record.expires_at is not None:
-        now = datetime.utcnow()
+        now = utc_now()
         if record.expires_at > now:
             # Still in grace period
             return JSONResponse(
                 content={"error": {"code": "KEY_IN_GRACE_PERIOD", "message": (
                     f"This key has already been rotated and is in its grace period "
-                    f"(expires at {record.expires_at.isoformat()}). "
+                    f"(expires at {to_iso_z(record.expires_at)}). "
                     f"Use the new key for further rotations."
                 )}},
                 status_code=400,
@@ -358,9 +358,8 @@ async def rotate_key(
     new_key_id  = generate_key_id()
     new_hash    = _hash_key(new_api_key)
 
-    # Calculate grace period expiry for old key
-    # Strip timezone - DB column is TIMESTAMP WITHOUT TIME ZONE
-    grace_expires = (datetime.now(timezone.utc) + timedelta(minutes=body.grace_period_minutes)).replace(tzinfo=None)
+    # Calculate grace period expiry for old key (aware UTC; column is TIMESTAMPTZ)
+    grace_expires = utc_now() + timedelta(minutes=body.grace_period_minutes)
 
     # Create new key with same metadata - key_type is preserved on rotation
     new_record = await repo.create({
@@ -383,11 +382,11 @@ async def rotate_key(
         "new_key_id":       new_key_id,
         "new_api_key":      new_api_key,
         "old_key_id":       key_id,
-        "old_expires_at":   grace_expires.isoformat(),
+        "old_expires_at":   to_iso_z(grace_expires),
         "grace_period_minutes": body.grace_period_minutes,
         "name":             record.name,
         "app_id":           str(record.app_id)    if record.app_id    else None,
         "dept_id":          str(record.dept_id)   if record.dept_id   else None,
-        "created_at":       new_record.created_at.isoformat(),
+        "created_at":       to_iso_z(new_record.created_at),
         "message":          f"New key created. Old key expires in {body.grace_period_minutes} minutes.",
     }, status_code=201)

@@ -3,7 +3,7 @@
 # WrapSec v1.0 | AI Security Gateway - https://wrapsec.com
 
 import uuid
-from datetime import datetime, timezone
+from services.time import to_iso_z, utc_now
 from fastapi import APIRouter, Depends, Request
 from fastapi.responses import JSONResponse
 from pydantic import BaseModel, model_validator, field_validator, SecretStr
@@ -125,7 +125,7 @@ async def update_thresholds(
 
     return JSONResponse(content={
         **current,
-        "updated_at": datetime.now(timezone.utc).isoformat(),
+        "updated_at": to_iso_z(utc_now()),
     })
 
 
@@ -166,7 +166,7 @@ async def update_layers(
 
     return JSONResponse(content={
         **current,
-        "updated_at": datetime.now(timezone.utc).isoformat(),
+        "updated_at": to_iso_z(utc_now()),
     })
 
 LLM_KEY         = "llm_settings"
@@ -286,7 +286,7 @@ async def update_llm_settings(
     return JSONResponse(content={
         **current,
         "api_key_masked": api_key_masked,
-        "updated_at":     datetime.now(timezone.utc).isoformat(),
+        "updated_at":     to_iso_z(utc_now()),
     })
 
 RETENTION_KEY = "audit_retention"
@@ -338,7 +338,7 @@ async def update_retention_settings(
     await db.commit()
     return JSONResponse(content={
         "retention_days": body.retention_days,
-        "updated_at":     datetime.now(timezone.utc).isoformat(),
+        "updated_at":     to_iso_z(utc_now()),
     })
 
 
@@ -425,7 +425,7 @@ async def update_rate_limit_settings(
     return JSONResponse(content={
         **current,
         "source":     "database",
-        "updated_at": datetime.now(timezone.utc).isoformat(),
+        "updated_at": to_iso_z(utc_now()),
     })
 
 
@@ -553,5 +553,5 @@ async def update_admin_limits(
     return JSONResponse(content={
         **current,
         "source":     "database",
-        "updated_at": datetime.now(timezone.utc).isoformat(),
+        "updated_at": to_iso_z(utc_now()),
     })

@@ -3,6 +3,7 @@
 # WrapSec v1.0 | AI Security Gateway - https://wrapsec.com
 
 from fastapi import APIRouter, Depends
+from services.time import to_iso_z
 from fastapi.responses import JSONResponse
 from pydantic import BaseModel, Field, model_validator
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -22,7 +23,7 @@ def _format(tenant, is_admin: bool = False) -> dict:
         "description":   tenant.description,
         "contact_email": tenant.contact_email,
         "is_active":     tenant.is_active,
-        "created_at":    tenant.created_at.isoformat(),
+        "created_at":    to_iso_z(tenant.created_at),
     }
     if is_admin:
         result["global_policy"] = tenant.global_policy

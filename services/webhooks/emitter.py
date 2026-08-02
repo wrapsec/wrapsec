@@ -35,6 +35,7 @@ tenant and would drown the delivery pipeline in low-value fanout.
 """
 
 from __future__ import annotations
+from services.time import to_iso_z, utc_now
 
 import logging
 from datetime import datetime
@@ -113,7 +114,7 @@ def _build_body(audit_data: dict[str, Any]) -> dict[str, Any]:
     (the emitter fires immediately after that write, so wall time is a
     correct-enough proxy for the row's created_at).
     """
-    body: dict[str, Any] = {"timestamp": datetime.utcnow().isoformat() + "Z"}
+    body: dict[str, Any] = {"timestamp": to_iso_z(utc_now())}
     for key in _ALLOWED_AUDIT_FIELDS:
         if key not in audit_data:
             continue

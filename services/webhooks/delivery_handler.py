@@ -31,6 +31,7 @@ circuit-breaker side effects.
 """
 
 from __future__ import annotations
+from services.time import utc_now
 
 import json
 import logging
@@ -188,7 +189,7 @@ class WebhookDeliveryHandler:
         """Generic HMAC-signed webhook: sign the raw JSON body with the
         active secret plus any non-expired rotation secrets, then POST it."""
         secret_key = get_settings().secret_key
-        now        = datetime.utcnow()
+        now        = utc_now()
 
         secrets = [decrypt(endpoint.secret_enc, secret_key).encode("utf-8")]
         for entry in endpoint.old_secrets or []:
@@ -276,7 +277,7 @@ class WebhookDeliveryHandler:
             await db.commit()
             return _outcome_dlq(reason)
 
-        next_at = datetime.utcnow() + timedelta(seconds=delay)
+        next_at = utc_now() + timedelta(seconds=delay)
         await att_repo.record(
             endpoint_id=endpoint_id, tenant_id=tenant_id, msg_id=msg_id,
             url=endpoint.url, event_type=event_type, attempt_number=attempt_number,

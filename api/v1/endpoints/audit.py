@@ -6,7 +6,8 @@ import csv
 import hashlib
 import io
 import uuid
-from datetime import datetime, timezone
+from datetime import datetime
+from services.time import parse_utc_iso, to_iso_z, utc_now
 from typing import Literal
 from fastapi import APIRouter, Query, Depends, Request
 from api.v1.dependencies.auth import get_current_principal, endpoint_rate_limit
@@ -25,10 +26,12 @@ router = APIRouter()
 
 
 def _parse_dt(value: str | None) -> datetime | None:
+    # Returns aware UTC (parse_utc_iso normalizes 'Z'/offset/naive to UTC), so
+    # filter comparisons run aware-to-aware against the timestamptz columns.
     if not value:
         return None
     try:
-        return datetime.fromisoformat(value.replace("Z", "+00:00"))
+        return parse_utc_iso(value)
     except ValueError:
         from errors.exceptions import ValidationError
         raise ValidationError(
@@ -62,7 +65,7 @@ def _format_item(
     proxy = proxy_map.get(str(item.proxy_interaction_id)) if item.proxy_interaction_id else None
     return {
         "trace_id":              item.trace_id,
-        "timestamp":             item.created_at.isoformat(),
+        "timestamp":             to_iso_z(item.created_at),
         "tenant_id":             item.tenant_id,
         "decision":              item.decision,
         "output_decision":       proxy.output_decision if proxy else None,
@@ -257,9 +260,9 @@ async def get_audit_stats(
     from_dt_parsed = _parse_dt(from_)
     to_dt_parsed   = _parse_dt(to)
     if from_dt_parsed:
-        sev_where.append(AuditLogModel.created_at >= from_dt_parsed.replace(tzinfo=None))
+        sev_where.append(AuditLogModel.created_at >= from_dt_parsed)
     if to_dt_parsed:
-        sev_where.append(AuditLogModel.created_at <= to_dt_parsed.replace(tzinfo=None))
+        sev_where.append(AuditLogModel.created_at <= to_dt_parsed)
 
     sev_query  = select(AuditLogModel.severity, func.count().label("count")).where(*sev_where).group_by(AuditLogModel.severity)
     sev_result = await db.execute(sev_query)
@@ -269,8 +272,8 @@ async def get_audit_stats(
     total = stats["total"]
     if total == 0:
         return JSONResponse(content={
-            "period_from":    from_ or datetime.now(timezone.utc).isoformat(),
-            "period_to":      to    or datetime.now(timezone.utc).isoformat(),
+            "period_from":    from_ or to_iso_z(utc_now()),
+            "period_to":      to    or to_iso_z(utc_now()),
             "total_requests": 0,
             "block_count":    0,
             "sanitize_count": 0,
@@ -293,8 +296,8 @@ async def get_audit_stats(
     }
 
     return JSONResponse(content={
-        "period_from":    from_ or datetime.now(timezone.utc).isoformat(),
-        "period_to":      to    or datetime.now(timezone.utc).isoformat(),
+        "period_from":    from_ or to_iso_z(utc_now()),
+        "period_to":      to    or to_iso_z(utc_now()),
         "total_requests": total,
         # Return raw counts alongside rates. Callers that need to display
         # "N blocked" must use these -- reconstructing via round(rate*total)
@@ -336,10 +339,10 @@ async def get_attribution_report(
     if dept_id:
         base_where.append(AuditLogModel.dept_id == dept_id)
     if from_:
-        base_where.append(AuditLogModel.created_at >= _parse_dt(from_).replace(tzinfo=None))
+        base_where.append(AuditLogModel.created_at >= _parse_dt(from_))
     if to:
         to_str = to if "T" in to else to + "T23:59:59"
-        base_where.append(AuditLogModel.created_at <= _parse_dt(to_str).replace(tzinfo=None))
+        base_where.append(AuditLogModel.created_at <= _parse_dt(to_str))
 
     # By API key
     key_query = select(
@@ -484,9 +487,9 @@ async def get_analytics(
     if dept_id:
         stmt = stmt.where(AuditLogModel.dept_id == dept_id)
     if from_date:
-        stmt = stmt.where(AuditLogModel.created_at >= _parse_dt(from_date).replace(tzinfo=None))
+        stmt = stmt.where(AuditLogModel.created_at >= _parse_dt(from_date))
     if to_date:
-        stmt = stmt.where(AuditLogModel.created_at <= _parse_dt(to_date + "T23:59:59").replace(tzinfo=None))
+        stmt = stmt.where(AuditLogModel.created_at <= _parse_dt(to_date + "T23:59:59"))
 
     stmt   = stmt.group_by("period", AuditLogModel.decision).order_by("period")
     result = await db.execute(stmt)
@@ -495,7 +498,7 @@ async def get_analytics(
     # Aggregate into time-series
     periods: dict = {}
     for row in rows:
-        period_str = row.period.isoformat() if row.period else "unknown"
+        period_str = to_iso_z(row.period) if row.period else "unknown"
         if period_str not in periods:
             periods[period_str] = {
                 "period":         period_str,
@@ -610,7 +613,7 @@ async def export_audit_logs(
         user_prefix = item.user_id[:8] if item.user_id else None
         writer.writerow([
             item.trace_id,
-            item.created_at.isoformat(),
+            to_iso_z(item.created_at),
             item.decision,
             item.risk_score,
             item.confidence,

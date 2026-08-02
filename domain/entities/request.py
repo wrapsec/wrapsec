@@ -3,7 +3,7 @@
 # WrapSec v1.0 | AI Security Gateway - https://wrapsec.com
 
 from dataclasses import dataclass, field
-from datetime import datetime
+from datetime import datetime, timezone
 from domain.enums import DetectionMode, ExecutionMode
 from domain.value_objects.trace_id import TraceId
 
@@ -37,7 +37,7 @@ class IncomingRequest:
     metadata:       RequestMetadata        = field(default_factory=RequestMetadata)
     context:        RequestContext         = field(default_factory=RequestContext)
     options:        RequestOptions         = field(default_factory=RequestOptions)
-    received_at:    datetime               = field(default_factory=datetime.utcnow)
+    received_at:    datetime               = field(default_factory=lambda: datetime.now(timezone.utc))
 
     def is_proxy_mode(self) -> bool:
         return self.execution_mode == ExecutionMode.PROXY

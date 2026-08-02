@@ -14,6 +14,7 @@ Endpoints:
 """
 
 import logging
+from services.time import to_iso_z
 import time
 from typing import Literal
 
@@ -95,8 +96,8 @@ def _build_config_response(config: ProxyProviderConfigModel) -> dict:
         "api_key_masked":        masked,
         "default_model":         config.default_model,
         "timeout_seconds":       config.timeout_seconds,
-        "created_at":            config.created_at.isoformat() if config.created_at else None,
-        "updated_at":            config.updated_at.isoformat() if config.updated_at else None,
+        "created_at":            to_iso_z(config.created_at) if config.created_at else None,
+        "updated_at":            to_iso_z(config.updated_at) if config.updated_at else None,
     }
 
 

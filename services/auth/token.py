@@ -5,9 +5,11 @@
 import hashlib
 import logging
 import secrets
-from datetime import datetime, timedelta, timezone
+from datetime import timedelta
 
 import jwt
+
+from services.time import utc_now
 from jwt.exceptions import InvalidTokenError
 
 from config.settings import get_settings
@@ -41,7 +43,7 @@ def create_access_token(user: "UserModel") -> str:
         permissions - not enforced in v1 (roles only)
     """
     _settings = get_settings()
-    now     = datetime.now(timezone.utc)
+    now     = utc_now()
     expires = now + timedelta(minutes=_settings.jwt_access_token_expire_minutes)
     payload = {
         "sub":       str(user.id),

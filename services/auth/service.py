@@ -3,8 +3,9 @@
 # WrapSec v1.0 | AI Security Gateway - https://wrapsec.com
 
 import logging
+from services.time import ensure_utc, utc_now
 from dataclasses import dataclass
-from datetime import datetime, timedelta, timezone
+from datetime import datetime, timedelta
 from uuid import UUID
 
 from sqlalchemy.ext.asyncio import AsyncSession, create_async_engine, async_sessionmaker
@@ -23,14 +24,13 @@ _auth_event_sf     = async_sessionmaker(bind=_auth_event_engine, class_=AsyncSes
 
 
 def _utcnow() -> datetime:
-    return datetime.now(timezone.utc)
+    return utc_now()
 
 
 def _to_db(dt: datetime) -> datetime:
-    # DB columns are TIMESTAMP WITHOUT TIME ZONE (naive UTC by convention).
-    # Strip tzinfo so SQLAlchemy doesn't reject timezone-aware datetime objects.
-    # If the schema is ever migrated to TIMESTAMPTZ, remove this function.
-    return dt.replace(tzinfo=None)
+    # DB columns are TIMESTAMPTZ. Normalize to aware UTC so any naive value
+    # still binds correctly as an instant rather than a session-TZ guess.
+    return ensure_utc(dt)
 
 
 async def _log_auth_event(
@@ -257,8 +257,8 @@ class AuthService:
             )
             raise InvalidTokenException()
 
-        # expires_at is stored as naive UTC - compare against datetime.utcnow()
-        if token_rec.expires_at and token_rec.expires_at < datetime.utcnow():
+        # expires_at is stored as naive UTC - compare against utc_now()
+        if token_rec.expires_at and token_rec.expires_at < utc_now():
             await rt_repo.revoke(token_hash)
             await db.commit()
             logger.warning("auth_event TOKEN_REFRESH_FAILED reason=token_expired user_id=%s", token_rec.user_id)
