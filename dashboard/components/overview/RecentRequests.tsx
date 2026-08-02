@@ -3,7 +3,8 @@
 // WrapSec v1.0 | AI Security Gateway - https://wrapsec.com
 import { DecisionBadge, ThreatBadge } from "@/components/ui/Badge"
 import { AuditLogItem } from "@/lib/types"
-import { timeAgo, formatLatency, formatScore } from "@/lib/utils"
+import { timeAgo } from "@/lib/datetime"
+import { formatLatency, formatScore } from "@/lib/utils"
 
 const SEVERITY_STYLE: Record<string, React.CSSProperties> = {
   CRITICAL: { color: "#dc2626", background: "#fef2f2", border: "1px solid #fecaca" },

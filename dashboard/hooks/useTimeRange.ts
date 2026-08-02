@@ -15,13 +15,12 @@
  */
 
 import { useState, useMemo, useEffect } from "react"
+import { presetRange, customRange, validateCustomRange } from "@/lib/datetime"
 
 export type TimeRange = "24h" | "7d" | "30d" | "90d" | "custom"
 
-const DATE_RE = /^\d{4}-\d{2}-\d{2}$/
-
-function isValidDate(s: string): boolean {
-  return DATE_RE.test(s) && !isNaN(new Date(s).getTime())
+const RANGE_DAYS: Record<Exclude<TimeRange, "custom">, number> = {
+  "24h": 1, "7d": 7, "30d": 30, "90d": 90,
 }
 
 interface UseTimeRangeOptions {
@@ -44,35 +43,6 @@ interface UseTimeRangeResult {
 }
 
 const DEFAULT_OPTIONS: TimeRange[] = ["24h", "7d", "30d"]
-
-function computeFromTo(range: Exclude<TimeRange, "custom">): { from: string; to: string } {
-  const now  = new Date()
-  const from = new Date(now)
-
-  switch (range) {
-    case "24h": from.setHours(now.getHours()  - 24);  break
-    case "7d":  from.setDate(now.getDate()    - 7);   break
-    case "30d": from.setDate(now.getDate()    - 30);  break
-    case "90d": from.setDate(now.getDate()    - 90);  break
-  }
-
-  return {
-    from: from.toISOString().slice(0, 19),
-    to:   now.toISOString().slice(0, 19),
-  }
-}
-
-function validateCustomRange(
-  from: string, to: string,
-): string | null {
-  if (!from || !to)              return "Both dates are required"
-  if (!isValidDate(from))        return "Invalid start date"
-  if (!isValidDate(to))          return "Invalid end date"
-  if (from >= to)                return "Start date must be before end date"
-  const today = new Date().toISOString().slice(0, 10)
-  if (to > today)                return "End date cannot be in the future"
-  return null
-}
 
 export function useTimeRange(opts: UseTimeRangeOptions = {}): UseTimeRangeResult {
   const {
@@ -109,16 +79,11 @@ export function useTimeRange(opts: UseTimeRangeOptions = {}): UseTimeRangeResult
   const { from, to } = useMemo(() => {
     if (debouncedRange === "custom") {
       const err = validateCustomRange(debouncedCustomFrom, debouncedCustomTo)
-      if (!err) {
-        return {
-          from: debouncedCustomFrom + "T00:00:00",
-          to:   debouncedCustomTo   + "T23:59:59",
-        }
-      }
+      if (!err) return customRange(debouncedCustomFrom, debouncedCustomTo)
       // Fall back to 7d while custom is being filled in
-      return computeFromTo("7d")
+      return presetRange(7)
     }
-    return computeFromTo(debouncedRange as Exclude<TimeRange, "custom">)
+    return presetRange(RANGE_DAYS[debouncedRange as Exclude<TimeRange, "custom">])
   }, [debouncedRange, debouncedCustomFrom, debouncedCustomTo])
 
   return {

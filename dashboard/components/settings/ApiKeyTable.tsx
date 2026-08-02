@@ -3,7 +3,7 @@
 // WrapSec v1.0 | AI Security Gateway - https://wrapsec.com
 import { useState, Fragment } from "react"
 import { ApiKey } from "@/lib/types"
-import { formatTimestamp, timeAgo } from "@/lib/utils"
+import { formatTimestamp, timeAgo } from "@/lib/datetime"
 
 interface ApiKeyTableProps {
   keys:      ApiKey[]

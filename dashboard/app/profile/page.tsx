@@ -7,6 +7,7 @@ import { useState, useEffect, FormEvent } from "react"
 import { Shell } from "@/components/layout/Shell"
 import { Card, CardHeader } from "@/components/ui/Card"
 import { Button } from "@/components/ui/Button"
+import { formatTimestamp } from "@/lib/datetime"
 
 const REQUIREMENTS = [
   { label: "At least 8 characters", test: (p: string) => p.length >= 8 },
@@ -171,7 +172,7 @@ export default function ProfilePage() {
   }, [])
 
   const formatDate = (iso: string | null) =>
-    iso ? new Date(iso).toLocaleString() : "Never"
+    iso ? formatTimestamp(iso) : "Never"
 
   return (
     <Shell title="Profile">

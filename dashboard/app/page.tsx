@@ -15,6 +15,7 @@ import { getAuditStats, getAuditLogs, getAttribution, getDepartments, getApplica
 import { POLL_INTERVAL } from "@/lib/constants"
 import { AuditStatsResponse } from "@/lib/types"
 import { useTimeRange } from "@/hooks/useTimeRange"
+import { timeAgo } from "@/lib/datetime"
 
 // ── Shared styles ─────────────────────────────────────────────────────────────
 
@@ -318,15 +319,6 @@ function ApiKeyActivityCard({ keys }: { keys: any }) {
   const active7d  = allKeys.filter((k: any) => k.last_used_at &&
     (now - new Date(k.last_used_at).getTime()) < 7 * 24 * 60 * 60 * 1000)
   const neverUsed = allKeys.filter((k: any) => !k.last_used_at)
-
-  const timeAgo = (dateStr: string) => {
-    const diff = now - new Date(dateStr).getTime()
-    const h    = Math.floor(diff / 3600000)
-    const d    = Math.floor(diff / 86400000)
-    if (h < 1)  return "< 1h ago"
-    if (h < 24) return `${h}h ago`
-    return `${d}d ago`
-  }
 
   return (
     <div style={{ ...CARD, padding: "20px" }}>

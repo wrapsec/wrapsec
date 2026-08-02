@@ -3,7 +3,8 @@
 // WrapSec v1.0 | AI Security Gateway - https://wrapsec.com
 import { DecisionBadge, ThreatBadge } from "@/components/ui/Badge"
 import { AuditLogItem } from "@/lib/types"
-import { timeAgo, formatLatency } from "@/lib/utils"
+import { timeAgo } from "@/lib/datetime"
+import { formatLatency } from "@/lib/utils"
 
 function ModeBadge({ label, active }: { label: string; active: boolean }) {
   return (

@@ -8,7 +8,8 @@ import { RequestDetail } from "@/lib/types"
 import { getRequest } from "@/lib/api"
 import { DecisionBadge, ThreatBadge } from "@/components/ui/Badge"
 import { Spinner } from "@/components/ui/Spinner"
-import { formatScore, formatLatency, formatTimestamp } from "@/lib/utils"
+import { formatTimestamp } from "@/lib/datetime"
+import { formatScore, formatLatency } from "@/lib/utils"
 
 interface RequestDetailModalProps {
   traceId: string
