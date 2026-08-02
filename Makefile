@@ -32,6 +32,7 @@ migration:
 
 eval:
 	python tests/eval/run_evaluation.py
+	pytest tests/eval/test_redteam.py -v
 
 build:
 	docker compose -f infrastructure/docker/docker-compose.yml build
