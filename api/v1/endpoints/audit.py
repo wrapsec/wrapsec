@@ -6,8 +6,7 @@ import csv
 import hashlib
 import io
 import uuid
-from datetime import datetime
-from services.time import parse_utc_iso, to_iso_z, utc_now
+from services.time import date_range_bounds, to_iso_z, utc_now
 from typing import Literal
 from fastapi import APIRouter, Query, Depends, Request
 from api.v1.dependencies.auth import get_current_principal, endpoint_rate_limit
@@ -25,17 +24,17 @@ from db.models import AuditLogModel, DepartmentModel, ApplicationModel, ProxyInt
 router = APIRouter()
 
 
-def _parse_dt(value: str | None) -> datetime | None:
-    # Returns aware UTC (parse_utc_iso normalizes 'Z'/offset/naive to UTC), so
-    # filter comparisons run aware-to-aware against the timestamptz columns.
-    if not value:
-        return None
+def _date_range(from_value: str | None, to_value: str | None):
+    """Parse from/to query params into aware-UTC created_at bounds via the
+    shared services.time helper, surfacing a parse error as a ValidationError.
+    A date-only `to` covers the whole day (see date_range_bounds). Single
+    boundary rule for every audit query."""
     try:
-        return parse_utc_iso(value)
+        return date_range_bounds(from_value, to_value)
     except ValueError:
         from errors.exceptions import ValidationError
         raise ValidationError(
-            f"Invalid date format: '{value}'. Use ISO 8601, e.g. 2026-01-15T00:00:00Z"
+            "Invalid date format. Use ISO 8601, e.g. 2026-01-15T00:00:00Z"
         )
 
 
@@ -189,6 +188,8 @@ async def get_audit_logs(
     # M6: enforce UUID for the user_id filter (was substring ILIKE).
     user_id = _parse_uuid_filter(user_id, "user_id")
 
+    from_dt, to_dt = _date_range(from_, to)
+
     repo = AuditRepository(db)
     total, items = await repo.list(
         tenant_id       = tenant_id,
@@ -203,8 +204,8 @@ async def get_audit_logs(
         threat_category = threat_category,
         primary_reason  = primary_reason,
         confidence_band = confidence_band,
-        from_dt         = _parse_dt(from_),
-        to_dt           = _parse_dt(to),
+        from_dt         = from_dt,
+        to_dt           = to_dt,
         sort_by         = sort_by,
         sort_order      = sort_order,
         limit           = limit,
@@ -243,12 +244,14 @@ async def get_audit_stats(
     # same cross-scope leak we already close for the per-row list endpoint.
     dept_id   = scope.get("dept_id")
 
+    from_dt, to_dt = _date_range(from_, to)
+
     repo  = AuditRepository(db)
     stats = await repo.get_stats(
         tenant_id = tenant_id,
         dept_id   = dept_id,
-        from_dt   = _parse_dt(from_),
-        to_dt     = _parse_dt(to),
+        from_dt   = from_dt,
+        to_dt     = to_dt,
     )
 
     # Fetch severity counts - direct query for SIEM-compatible dashboard metrics
@@ -257,12 +260,10 @@ async def get_audit_stats(
         sev_where.append(AuditLogModel.tenant_id == tenant_id)
     if dept_id:
         sev_where.append(AuditLogModel.dept_id == dept_id)
-    from_dt_parsed = _parse_dt(from_)
-    to_dt_parsed   = _parse_dt(to)
-    if from_dt_parsed:
-        sev_where.append(AuditLogModel.created_at >= from_dt_parsed)
-    if to_dt_parsed:
-        sev_where.append(AuditLogModel.created_at <= to_dt_parsed)
+    if from_dt:
+        sev_where.append(AuditLogModel.created_at >= from_dt)
+    if to_dt:
+        sev_where.append(AuditLogModel.created_at <= to_dt)
 
     sev_query  = select(AuditLogModel.severity, func.count().label("count")).where(*sev_where).group_by(AuditLogModel.severity)
     sev_result = await db.execute(sev_query)
@@ -338,11 +339,11 @@ async def get_attribution_report(
         base_where.append(AuditLogModel.tenant_id == scope["tenant_id"])
     if dept_id:
         base_where.append(AuditLogModel.dept_id == dept_id)
-    if from_:
-        base_where.append(AuditLogModel.created_at >= _parse_dt(from_))
-    if to:
-        to_str = to if "T" in to else to + "T23:59:59"
-        base_where.append(AuditLogModel.created_at <= _parse_dt(to_str))
+    from_dt, to_dt = _date_range(from_, to)
+    if from_dt:
+        base_where.append(AuditLogModel.created_at >= from_dt)
+    if to_dt:
+        base_where.append(AuditLogModel.created_at <= to_dt)
 
     # By API key
     key_query = select(
@@ -486,10 +487,11 @@ async def get_analytics(
         stmt = stmt.where(AuditLogModel.tenant_id == scope["tenant_id"])
     if dept_id:
         stmt = stmt.where(AuditLogModel.dept_id == dept_id)
-    if from_date:
-        stmt = stmt.where(AuditLogModel.created_at >= _parse_dt(from_date))
-    if to_date:
-        stmt = stmt.where(AuditLogModel.created_at <= _parse_dt(to_date + "T23:59:59"))
+    from_dt, to_dt = _date_range(from_date, to_date)
+    if from_dt:
+        stmt = stmt.where(AuditLogModel.created_at >= from_dt)
+    if to_dt:
+        stmt = stmt.where(AuditLogModel.created_at <= to_dt)
 
     stmt   = stmt.group_by("period", AuditLogModel.decision).order_by("period")
     result = await db.execute(stmt)
@@ -576,6 +578,7 @@ async def export_audit_logs(
     tenant_id = scope.get("tenant_id")
     dept_id   = scope.get("dept_id", dept_id)
 
+    from_dt, to_dt = _date_range(from_, to)
     repo = AuditRepository(db)
     _, items = await repo.list(
         tenant_id       = tenant_id,
@@ -584,8 +587,8 @@ async def export_audit_logs(
         decision        = decision,
         primary_reason  = primary_reason,
         confidence_band = confidence_band,
-        from_dt         = _parse_dt(from_),
-        to_dt           = _parse_dt(to),
+        from_dt         = from_dt,
+        to_dt           = to_dt,
         sort_by         = "created_at",
         sort_order      = "desc",
         limit           = limit,

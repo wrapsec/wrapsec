@@ -61,6 +61,37 @@ def to_iso_z(value: datetime) -> str:
     return aware.isoformat(timespec="milliseconds").replace("+00:00", "Z")
 
 
+def date_range_bounds(
+    from_value: str | None,
+    to_value: str | None,
+) -> tuple[datetime | None, datetime | None]:
+    """
+    Parse inclusive from/to filter strings into aware-UTC bounds for a
+    created_at range query. Single source of the date-boundary rule for every
+    audit query.
+
+    A date-only `to` (e.g. "2026-04-16", no time component) is extended to the
+    end of that day so the range covers the whole day, not just its first
+    instant -- the backend twin of the v1.2.4 dashboard date-boundary fix. A
+    `to` that already carries a time is used as parsed (so a full ISO value is
+    never double-suffixed). `from` is used as parsed: a date-only value is the
+    start of that day, the intuitive inclusive lower bound.
+
+    Returns (None, None) for absent values. Raises ValueError on an unparseable
+    string (callers surface it as a validation error), matching parse_utc_iso.
+    """
+    from_dt = parse_utc_iso(from_value) if from_value else None
+
+    to_dt: datetime | None = None
+    if to_value:
+        text = to_value.strip()
+        if "T" not in text and ":" not in text:  # date-only -> inclusive end of day
+            text = f"{text}T23:59:59.999999"
+        to_dt = parse_utc_iso(text)
+
+    return from_dt, to_dt
+
+
 def parse_utc_iso(value: str) -> datetime:
     """
     Parse an ISO-8601 timestamp to an aware UTC datetime.

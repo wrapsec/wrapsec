@@ -16,7 +16,9 @@ from datetime import datetime, timedelta, timezone
 
 import pytest
 
-from services.time import utc_now, ensure_utc, to_iso_z, parse_utc_iso
+from services.time import (
+    utc_now, ensure_utc, to_iso_z, parse_utc_iso, date_range_bounds,
+)
 
 
 # --- utc_now ----------------------------------------------------------
@@ -98,3 +100,37 @@ def test_parse_utc_iso_round_trips_to_iso_z():
 def test_parse_utc_iso_raises_on_garbage():
     with pytest.raises(ValueError):
         parse_utc_iso("not-a-timestamp")
+
+
+# --- date_range_bounds ------------------------------------------------
+
+def test_date_range_bounds_none_none():
+    assert date_range_bounds(None, None) == (None, None)
+
+
+def test_date_range_bounds_from_date_only_is_start_of_day():
+    from_dt, to_dt = date_range_bounds("2026-04-16", None)
+    assert to_dt is None
+    assert from_dt == datetime(2026, 4, 16, 0, 0, 0, tzinfo=timezone.utc)
+
+
+def test_date_range_bounds_to_date_only_extends_to_end_of_day():
+    _, to_dt = date_range_bounds(None, "2026-04-16")
+    assert to_dt == datetime(2026, 4, 16, 23, 59, 59, 999999, tzinfo=timezone.utc)
+
+
+def test_date_range_bounds_to_with_time_is_not_double_suffixed():
+    # A full ISO `to` must be used as-is (the old `to + "T23:59:59"` path would
+    # have produced an invalid double-T string).
+    _, to_dt = date_range_bounds(None, "2026-04-16T08:30:00Z")
+    assert to_dt == datetime(2026, 4, 16, 8, 30, 0, tzinfo=timezone.utc)
+
+
+def test_date_range_bounds_to_with_offset_normalized_to_utc():
+    _, to_dt = date_range_bounds(None, "2026-04-16T13:30:00+05:00")
+    assert to_dt == datetime(2026, 4, 16, 8, 30, 0, tzinfo=timezone.utc)
+
+
+def test_date_range_bounds_raises_on_garbage():
+    with pytest.raises(ValueError):
+        date_range_bounds("nonsense", None)
