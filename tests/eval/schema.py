@@ -36,6 +36,7 @@ class Case:
     category: str          # ThreatCategory value, or "BENIGN"
     label:    str          # "malicious" | "benign"
     split:    str          # "attacks" | "benign" | "ood" (from the directory)
+    group:    str          # corpus file stem, e.g. "encoding_evasion", "benign_hard"
     source:   str = "wrapsec-authored"
     license:  str = "MIT"
 
@@ -73,6 +74,7 @@ def load_corpus(corpus_dir: Path | None = None) -> list[Case]:
                 category = obj["category"],
                 label    = obj["label"],
                 split    = split,
+                group    = path.stem,
                 source   = obj.get("source", "wrapsec-authored"),
                 license  = obj.get("license", "MIT"),
             ))
