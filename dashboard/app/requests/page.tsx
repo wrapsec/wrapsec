@@ -4,6 +4,7 @@
 "use client"
 
 import { useState, useEffect, Suspense } from "react"
+import { swrKeys } from "@/lib/swrKeys"
 import { useSearchParams } from "next/navigation"
 import useSWR from "swr"
 import { Shell } from "@/components/layout/Shell"
@@ -60,7 +61,7 @@ function RequestsPageInner() {
 
   const isValidDateRange = !from || !to || from <= to
 
-  const { data: deptsData } = useSWR("departments", getDepartments)
+  const { data: deptsData } = useSWR(swrKeys.departments, getDepartments)
   const departments = (deptsData?.departments ?? []).map(d => ({ id: d.id, name: d.name }))
 
   const { data, isLoading, error: fetchError } = useSWR(

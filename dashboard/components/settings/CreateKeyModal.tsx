@@ -4,6 +4,7 @@
 "use client"
 
 import { useState, useEffect } from "react"
+import { swrKeys } from "@/lib/swrKeys"
 import useSWR from "swr"
 import { Button } from "@/components/ui/Button"
 import { Input } from "@/components/ui/Input"
@@ -31,7 +32,7 @@ export function CreateKeyModal({ onCreated, onClose }: CreateKeyModalProps) {
   const [error,   setError]   = useState<string | null>(null)
 
   // Load departments for selector
-  const { data: deptsData } = useSWR("departments", getDepartments)
+  const { data: deptsData } = useSWR(swrKeys.departments, getDepartments)
   const departments = deptsData?.departments ?? []
 
   // Load applications when dept is selected

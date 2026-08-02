@@ -4,6 +4,7 @@
 "use client"
 
 import { useState, Fragment } from "react"
+import { swrKeys } from "@/lib/swrKeys"
 import { useAuthMode } from "@/hooks/useAuthMode"
 import useSWR from "swr"
 import { Shell } from "@/components/layout/Shell"
@@ -28,8 +29,8 @@ export default function ApplicationsPage() {
   const [confirmDeactivate, setConfirmDeactivate] = useState<string | null>(null)
   const { isJwt } = useAuthMode()
 
-  const { data,      isLoading, mutate, error: fetchError } = useSWR("applications",  getApplications)
-  const { data: deptData }               = useSWR("departments",   getDepartments)
+  const { data,      isLoading, mutate, error: fetchError } = useSWR(swrKeys.applications,  getApplications)
+  const { data: deptData }               = useSWR(swrKeys.departments,   getDepartments)
 
   const handleCreate = async () => {
     if (!name || !slug || !deptId) {

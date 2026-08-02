@@ -4,6 +4,7 @@
 "use client"
 
 import { useState, useEffect } from "react"
+import { swrKeys } from "@/lib/swrKeys"
 import useSWR from "swr"
 import { Shell } from "@/components/layout/Shell"
 import { Card } from "@/components/ui/Card"
@@ -400,7 +401,7 @@ export default function UsersPage() {
   const { isJwt } = useAuthMode()
 
   const { data: usersData, isLoading, mutate, error: fetchError } = useSWR("users", () => getUsers())
-  const { data: deptsData } = useSWR("departments", getDepartments)
+  const { data: deptsData } = useSWR(swrKeys.departments, getDepartments)
 
   const depts = (deptsData?.departments ?? []).map(d => ({ id: d.id, name: d.name }))
 
