@@ -4,7 +4,7 @@
 import { GatewayResponse } from "@/lib/types"
 import { DecisionBadge, ThreatBadge } from "@/components/ui/Badge"
 import { LayerBreakdown } from "./LayerBreakdown"
-import { formatScore, formatLatency } from "@/lib/utils"
+import { formatScore, formatLatency } from "@/lib/format"
 
 function ConfidenceBadge({ band }: { band: string | null }) {
   if (!band) return null

@@ -2,6 +2,7 @@
 // Copyright (c) 2026 WrapSec. All rights reserved.
 // WrapSec v1.0 | AI Security Gateway - https://wrapsec.com
 import Link from "next/link"
+import { formatNumber } from "@/lib/format"
 import { ThreatCount } from "@/lib/types"
 import { formatThreat } from "@/lib/utils"
 
@@ -55,7 +56,7 @@ export function TopThreats({ threats, from, to }: { threats: ThreatCount[]; from
                       </span>
                     </div>
                     <span style={{ fontSize: "12px", fontFamily: "monospace", color: "#6b7280", flexShrink: 0, marginLeft: "12px" }}>
-                      {t.count.toLocaleString()}
+                      {formatNumber(t.count)}
                     </span>
                   </div>
                   <div style={{ height: "5px", background: "#f3f4f6", borderRadius: "3px", overflow: "hidden" }}>

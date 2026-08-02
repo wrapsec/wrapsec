@@ -4,6 +4,7 @@
 "use client"
 
 import useSWR from "swr"
+import { formatNumber } from "@/lib/format"
 import { useState } from "react"
 import Link from "next/link"
 import { Shell } from "@/components/layout/Shell"
@@ -61,7 +62,7 @@ function RequestCards({ stats, from, to }: { stats: AuditStatsResponse; from: st
             <p style={LABEL}>{card.label}</p>
             <p style={{ fontSize: "30px", fontWeight: 700, color: card.color,
               lineHeight: 1, margin: "0 0 5px 0", fontVariantNumeric: "tabular-nums" }}>
-              {card.value.toLocaleString()}
+              {formatNumber(card.value)}
             </p>
             <p style={{ fontSize: "11px", color: "#9ca3af", margin: 0 }}>{card.sub}</p>
           </div>
@@ -112,7 +113,7 @@ function DonutChart({ stats }: { stats: AuditStatsResponse }) {
         <div style={{ position: "absolute", top: "50%", left: "50%",
           transform: "translate(-50%, -50%)", textAlign: "center" }}>
           <p style={{ fontSize: "20px", fontWeight: 700, color: "#111827", margin: 0, lineHeight: 1 }}>
-            {total.toLocaleString()}
+            {formatNumber(total)}
           </p>
           <p style={{ fontSize: "9px", color: "#9ca3af", margin: "3px 0 0 0", fontWeight: 600,
             textTransform: "uppercase", letterSpacing: "0.06em" }}>requests</p>
@@ -206,7 +207,7 @@ function LatencyCard({ stats, byReason }: { stats: AuditStatsResponse; byReason:
               <span style={{ fontSize: "11px", color: "#6b7280" }}>{d.label}</span>
             </div>
             <span style={{ fontSize: "11px", fontFamily: "monospace", color: "#374151", fontWeight: 600 }}>
-              {d.count.toLocaleString()}
+              {formatNumber(d.count)}
             </span>
           </div>
         ))}
@@ -293,7 +294,7 @@ function DetectionLayersCard({ byReason }: { byReason: { primary_reason: string;
                   <span style={{ fontSize: "11px", color: "#6b7280" }}>{layer.label}</span>
                 </div>
                 <span style={{ fontSize: "11px", fontFamily: "monospace", color: "#374151", fontWeight: 600 }}>
-                  {count.toLocaleString()}
+                  {formatNumber(count)}
                 </span>
               </div>
               <div style={{ height: "3px", background: "#f3f4f6", borderRadius: "2px", overflow: "hidden" }}>
@@ -406,7 +407,7 @@ function SeveritySummary({ counts }: { counts: { CRITICAL: number; HIGH: number;
             </p>
             <p style={{ fontSize: "22px", fontWeight: 700, color: l.color,
               margin: "0 0 2px 0", lineHeight: 1 }}>
-              {counts[l.level].toLocaleString()}
+              {formatNumber(counts[l.level])}
             </p>
             <p style={{ fontSize: "11px", color: l.color, opacity: 0.7, margin: 0 }}>{l.desc}</p>
           </div>

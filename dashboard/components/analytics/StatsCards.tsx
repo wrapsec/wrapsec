@@ -3,11 +3,11 @@
 // WrapSec v1.0 | AI Security Gateway - https://wrapsec.com
 import { Card } from "@/components/ui/Card"
 import { AuditStatsResponse } from "@/lib/types"
-import { formatRate, formatLatency } from "@/lib/utils"
+import { formatRate, formatLatency, formatNumber } from "@/lib/format"
 
 export function StatsCards({ stats }: { stats: AuditStatsResponse }) {
   const cards = [
-    { label: "Total Requests",  value: stats.total_requests.toLocaleString() },
+    { label: "Total Requests",  value: formatNumber(stats.total_requests) },
     { label: "Block Rate",      value: formatRate(stats.block_rate) },
     { label: "Sanitize Rate",   value: formatRate(stats.sanitize_rate) },
     { label: "Allow Rate",      value: formatRate(stats.allow_rate) },

@@ -5,7 +5,7 @@
 
 import { Card, CardHeader } from "@/components/ui/Card"
 import { AuditStatsResponse } from "@/lib/types"
-import { formatLatency } from "@/lib/utils"
+import { formatLatency } from "@/lib/format"
 
 export function LatencyStats({ stats }: { stats: AuditStatsResponse }) {
   const items = [

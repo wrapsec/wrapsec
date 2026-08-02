@@ -2,6 +2,7 @@
 // Copyright (c) 2026 WrapSec. All rights reserved.
 // WrapSec v1.0 | AI Security Gateway - https://wrapsec.com
 import { Button } from "@/components/ui/Button"
+import { formatNumber } from "@/lib/format"
 
 interface PaginationProps {
   total:    number
@@ -27,11 +28,11 @@ export function Pagination({ total, offset, limit, onChange }: PaginationProps) 
       <p style={{ fontSize: "12px", color: "#9ca3af", margin: 0 }}>
         Showing{" "}
         <span style={{ fontWeight: 600, color: "#374151" }}>
-          {(offset + 1).toLocaleString()}-{Math.min(offset + limit, total).toLocaleString()}
+          {formatNumber(offset + 1)}-{formatNumber(Math.min(offset + limit, total))}
         </span>
         {" "}of{" "}
         <span style={{ fontWeight: 600, color: "#374151" }}>
-          {total.toLocaleString()}
+          {formatNumber(total)}
         </span>
       </p>
 

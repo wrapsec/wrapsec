@@ -1,6 +1,8 @@
 // SPDX-License-Identifier: MIT
 // Copyright (c) 2026 WrapSec. All rights reserved.
 // WrapSec v1.0 | AI Security Gateway - https://wrapsec.com
+import { formatNumber } from "@/lib/format"
+
 interface SeverityCardProps {
   level:       "CRITICAL" | "HIGH" | "MEDIUM" | "LOW"
   count:       number
@@ -32,7 +34,7 @@ export function SeverityCard({ level, count, description }: SeverityCardProps) {
         {level}
       </p>
       <p style={{ fontSize: "30px", fontWeight: 700, color: cfg.color, lineHeight: 1, margin: "0 0 5px 0" }}>
-        {count.toLocaleString()}
+        {formatNumber(count)}
       </p>
       <p style={{ fontSize: "11px", color: "#9ca3af", margin: 0 }}>{description}</p>
     </div>

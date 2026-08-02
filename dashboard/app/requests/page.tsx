@@ -4,6 +4,7 @@
 "use client"
 
 import { useState, useEffect, Suspense } from "react"
+import { formatNumber } from "@/lib/format"
 import { swrKeys } from "@/lib/swrKeys"
 import { useSearchParams } from "next/navigation"
 import useSWR from "swr"
@@ -161,7 +162,7 @@ function RequestsPageInner() {
                   <path strokeLinecap="round" strokeLinejoin="round" d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2"/>
                 </svg>
                 <span style={{ fontSize: "12px", fontWeight: 600, color: "#374151", fontVariantNumeric: "tabular-nums" }}>
-                  {data.total.toLocaleString()}
+                  {formatNumber(data.total)}
                 </span>
                 <span style={{ fontSize: "11px", color: "#9ca3af" }}>requests</span>
               </div>

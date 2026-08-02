@@ -17,6 +17,7 @@ import {
 } from "@/lib/api"
 import Link from "next/link"
 import { Breadcrumb } from "@/components/ui/Breadcrumb"
+import { formatNumber } from "@/lib/format"
 
 const PROVIDERS = [
   { value: "openai", label: "OpenAI / OpenAI-compatible" },
@@ -215,7 +216,7 @@ export default function DepartmentDetailPage() {
         {stats && (
           <div className="grid grid-cols-4 gap-3">
             {[
-              { label: "Total requests", value: stats.total.toLocaleString() },
+              { label: "Total requests", value: formatNumber(stats.total) },
               {
                 label: "Block rate",
                 value: `${Math.round(stats.block_rate * 100)}%`,
@@ -244,7 +245,7 @@ export default function DepartmentDetailPage() {
                 return (
                   <div key={decision} className="flex-1 bg-slate-50 rounded-lg px-3 py-2.5">
                     <p className="text-xs text-slate-400 mb-1">{decision}</p>
-                    <p className="text-sm font-semibold text-slate-900">{count.toLocaleString()}</p>
+                    <p className="text-sm font-semibold text-slate-900">{formatNumber(count)}</p>
                     <div className="mt-1.5 h-1.5 bg-slate-200 rounded-full overflow-hidden">
                       <div className="h-full rounded-full" style={{ width: `${pct}%`, backgroundColor: color }} />
                     </div>

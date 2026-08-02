@@ -12,19 +12,6 @@ export function formatThreat(threat: ThreatCategory): string {
   return THREAT_LABELS[threat] || threat
 }
 
-export function formatScore(score: number): string {
-  return (score * 100).toFixed(0) + "%"
-}
-
-export function formatLatency(ms: number): string {
-  if (ms < 1000) return ms.toFixed(0) + "ms"
-  return (ms / 1000).toFixed(1) + "s"
-}
-
-export function formatRate(rate: number): string {
-  return (rate * 100).toFixed(1) + "%"
-}
-
 export function truncate(str: string, n: number): string {
   return str.length > n ? str.slice(0, n) + "..." : str
 }

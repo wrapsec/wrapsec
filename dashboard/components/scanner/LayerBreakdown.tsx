@@ -2,7 +2,7 @@
 // Copyright (c) 2026 WrapSec. All rights reserved.
 // WrapSec v1.0 | AI Security Gateway - https://wrapsec.com
 import { LayerScores, Decision } from "@/lib/types"
-import { formatScore } from "@/lib/utils"
+import { formatScore } from "@/lib/format"
 import { DecisionBadge } from "@/components/ui/Badge"
 
 interface LayerBreakdownProps {

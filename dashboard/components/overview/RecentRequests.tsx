@@ -4,7 +4,7 @@
 import { DecisionBadge, ThreatBadge } from "@/components/ui/Badge"
 import { AuditLogItem } from "@/lib/types"
 import { timeAgo } from "@/lib/datetime"
-import { formatLatency, formatScore } from "@/lib/utils"
+import { formatLatency, formatScore } from "@/lib/format"
 
 const SEVERITY_STYLE: Record<string, React.CSSProperties> = {
   CRITICAL: { color: "#dc2626", background: "#fef2f2", border: "1px solid #fecaca" },

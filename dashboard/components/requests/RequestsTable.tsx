@@ -4,7 +4,7 @@
 import { DecisionBadge, ThreatBadge } from "@/components/ui/Badge"
 import { AuditLogItem } from "@/lib/types"
 import { timeAgo } from "@/lib/datetime"
-import { formatLatency } from "@/lib/utils"
+import { formatLatency } from "@/lib/format"
 
 function ModeBadge({ label, active }: { label: string; active: boolean }) {
   return (

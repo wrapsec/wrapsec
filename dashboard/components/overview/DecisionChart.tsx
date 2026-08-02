@@ -6,7 +6,7 @@
 import { PieChart, Pie, Cell, Tooltip, ResponsiveContainer } from "recharts"
 import { Card, CardHeader } from "@/components/ui/Card"
 import { CHART_COLORS } from "@/lib/constants"
-import { formatRate } from "@/lib/utils"
+import { formatRate } from "@/lib/format"
 
 interface DecisionChartProps {
   blockRate:    number
