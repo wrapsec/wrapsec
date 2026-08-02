@@ -3,6 +3,7 @@
 # WrapSec v1.0 | AI Security Gateway - https://wrapsec.com
 
 import hashlib
+from cache import keyspace
 from services.time import utc_now
 import hmac
 import ipaddress
@@ -204,7 +205,7 @@ async def _get_user_cached(user_uuid: UUID, user_id_str: str):
     import json
     from types import SimpleNamespace
 
-    cache_key = f"auth:user:{user_id_str}"
+    cache_key = keyspace.auth_user(user_id_str)
 
     # Cache read
     if not _TESTING:

@@ -3,6 +3,7 @@
 # WrapSec v1.0 | AI Security Gateway - https://wrapsec.com
 
 import json
+from cache import keyspace
 import hashlib
 import logging
 from fastapi import Request
@@ -67,8 +68,8 @@ class IdempotencyMiddleware(BaseHTTPMiddleware):
             return await call_next(request)
         scope     = f"{key_id}:{idempotency_key}"
         idem_hash    = hashlib.sha256(scope.encode()).hexdigest()
-        hash_key     = f"idempotency:{idem_hash}:hash"
-        response_key = f"idempotency:{idem_hash}:resp"
+        hash_key     = keyspace.idempotency_hash(idem_hash)
+        response_key = keyspace.idempotency_response(idem_hash)
 
         try:
             redis = get_redis()

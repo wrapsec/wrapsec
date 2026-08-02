@@ -3,6 +3,7 @@
 # WrapSec v1.0 | AI Security Gateway - https://wrapsec.com
 
 import logging
+from cache import keyspace
 import time
 import uuid as _uuid
 
@@ -53,7 +54,7 @@ async def is_rate_limited(client_ip: str, limit: int | None = None) -> tuple[boo
     """
     try:
         redis    = get_redis()
-        key      = f"rate_limit:{client_ip}"
+        key      = keyspace.rate_limit(client_ip)
         now      = time.time()
         eff_lim  = limit if limit is not None else get_settings().rate_limit_per_minute
         reset_at = int(now + WINDOW_SECS)
@@ -81,7 +82,7 @@ async def get_rate_limit_headers(client_ip: str) -> dict[str, str]:
     """
     try:
         redis   = get_redis()
-        key     = f"rate_limit:{client_ip}"
+        key     = keyspace.rate_limit(client_ip)
         now     = time.time()
         limit   = get_settings().rate_limit_per_minute
 

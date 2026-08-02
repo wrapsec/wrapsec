@@ -3,6 +3,7 @@
 # WrapSec v1.0 | AI Security Gateway - https://wrapsec.com
 
 import logging
+from cache import keyspace
 
 from cache.redis_client import get_redis
 from config.settings import get_settings
@@ -32,11 +33,11 @@ logger = logging.getLogger("wrapsec.auth")
 
 
 def _failed_key(email: str) -> str:
-    return f"auth:failed:{email}"
+    return keyspace.auth_failed(email)
 
 
 def _locked_key(email: str) -> str:
-    return f"auth:locked:{email}"
+    return keyspace.auth_locked(email)
 
 
 async def is_locked(email: str) -> bool:

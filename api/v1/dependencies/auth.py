@@ -3,6 +3,7 @@
 # WrapSec v1.0 | AI Security Gateway - https://wrapsec.com
 
 from fastapi import Request
+from cache import keyspace
 from starlette.responses import JSONResponse
 
 from domain.entities.principal import (
@@ -198,7 +199,7 @@ def endpoint_rate_limit(limit_setting: str):
             limit = getattr(get_settings(), limit_setting)
 
         identity  = getattr(request.state, "key_id", None) or get_client_ip(request) or "unknown"
-        rl_key    = f"endpoint:{request.url.path}:{identity}"
+        rl_key    = keyspace.endpoint_rate_limit(request.url.path, identity)
         is_limited, _, _ = await is_rate_limited(rl_key, limit=limit)
         if is_limited:
             raise RateLimitError()

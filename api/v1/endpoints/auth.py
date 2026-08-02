@@ -3,6 +3,7 @@
 # WrapSec v1.0 | AI Security Gateway - https://wrapsec.com
 
 import logging
+from cache import keyspace
 from services.time import to_iso_z, utc_now
 
 from fastapi import APIRouter, Depends, Request, Response
@@ -184,7 +185,7 @@ async def login(
     if os.getenv("TESTING") != "true":
         try:
             from cache.rate_limit_store import is_rate_limited
-            _rl_key = f"login:ip:{ip_address or 'unknown'}"
+            _rl_key = keyspace.login_rate_limit(ip_address or "unknown")
             _limited, _, _ = await is_rate_limited(_rl_key, limit=_settings.login_rate_limit_per_minute)
             if _limited:
                 return JSONResponse(

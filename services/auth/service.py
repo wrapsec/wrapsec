@@ -3,6 +3,7 @@
 # WrapSec v1.0 | AI Security Gateway - https://wrapsec.com
 
 import logging
+from cache import keyspace
 from services.time import ensure_utc, utc_now
 from dataclasses import dataclass
 from datetime import datetime, timedelta
@@ -383,7 +384,7 @@ class AuthService:
 
         try:
             from cache.redis_client import get_redis
-            await get_redis().delete(f"auth:user:{user_id}")
+            await get_redis().delete(keyspace.auth_user(user_id))
         except Exception:
             pass  # stale cache will fail token_version check at next request
 
