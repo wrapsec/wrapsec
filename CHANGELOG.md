@@ -2,6 +2,23 @@
 
 All notable changes to WrapSec are documented here.
 
+## [1.4.1] - 2026-08-02
+
+### Fixed
+- **API key grace-period badge.** After the 1.4.0 timestamp change, the
+  "Expiring - grace period active" badge on a rotated key stopped appearing
+  (along with the grace-aware Rotate/Revoke states), because a stale
+  client-side workaround double-appended `Z` to the now-`Z`-suffixed
+  `expires_at`, producing an invalid date. The dashboard now parses the value
+  correctly.
+
+### Changed
+- **Dashboard date, number, and cache-key handling consolidated.** Date and
+  time formatting plus time-range logic moved to a single module, number
+  formatting to another, and the shared entity cache keys to a third. Behaviour
+  is unchanged apart from a more consistent relative-time label on the overview
+  key-activity card.
+
 ## [1.4.0] - 2026-08-02
 
 ### Changed
