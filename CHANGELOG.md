@@ -2,7 +2,7 @@
 
 All notable changes to WrapSec are documented here.
 
-## [Unreleased]
+## [1.6.0] - 2026-08-04
 
 ### Added
 - **Input normalization and evasion-resistant detection.** A new deterministic
