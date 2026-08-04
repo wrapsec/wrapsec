@@ -39,16 +39,19 @@ The pipeline combines rule-based, machine learning, and optional LLM-based analy
 ```
 Input
   |-- InputGuard          PII detection (30 entity types), redaction if triggered
-  |-- RuleDetector        Regex and heuristic patterns, ~1ms
-  |-- DetectionPipeline   Two-tier ML detection
+  |-- Normalize           Canonical form (folds homoglyph / zero-width / whitespace) + decode-views (leet, base64)
+  |-- RuleDetector        Regex and heuristic patterns, ~1ms (scans canonical + views, max signal)
+  |-- DetectionPipeline   Two-tier ML detection (scans canonical + views, max signal)
   |   |-- Tier 1          TF-IDF + logistic regression, always on, ~5ms
   |   |-- Tier 2          DeBERTa-v3 transformer (optional), ~20-50ms
   |   +-- ToxicityDetector    Extracts toxicity signal from ML output (no extra compute)
-  |-- LLMDetector         Semantic analysis, full mode only, ~100-500ms additional
+  |-- LLMDetector         Semantic analysis, full mode only, ~100-500ms additional (original text)
   +-- PolicyEngine        BLOCK / SANITIZE / ALLOW
 ```
 
 Tier 2 is optional. Without transformer dependencies installed, Tier 1 handles all detection. Both tiers run independently - a transformer failure degrades to Tier 1 only without affecting the request.
+
+Normalization runs after the input guard and produces a canonical form - folding cross-script homoglyphs, zero-width and bidi controls, and whitespace - plus bounded decode-views for leetspeak and base64. The rule and ML layers scan the canonical form and every view and take the strongest signal, so obfuscated attacks cannot slip past by hiding intent in an alternate encoding. It is deterministic preprocessing only: it never rewrites the prompt sent to the model (the LLM detector and proxy always use the original text) and never contributes to the risk score. Benign prompts produce no views, so normal traffic is unaffected.
 
 > **Note on bundled models:** The Tier 1 model (`ml_detector.pkl`) shipped in this repository is trained on a curated open-source dataset for demonstration and evaluation purposes. The Tier 2 transformer uses [`protectai/deberta-v3-base-prompt-injection-v2`](https://huggingface.co/protectai/deberta-v3-base-prompt-injection-v2) from HuggingFace. WrapSec's core focus is purpose-built ML models trained on significantly larger, more diverse, and production-representative datasets - these will be available for production deployments and are not part of this open-source release.
 

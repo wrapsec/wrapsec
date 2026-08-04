@@ -2,6 +2,24 @@
 
 All notable changes to WrapSec are documented here.
 
+## [Unreleased]
+
+### Added
+- **Input normalization and evasion-resistant detection.** A new deterministic
+  preprocessing subsystem (`engine/normalization`) canonicalizes every prompt
+  before detection -- folding cross-script homoglyphs (a TR39-style confusable
+  table, beyond what NFKC alone catches), zero-width and bidi controls, and
+  whitespace -- and emits bounded decode-views for leetspeak and base64. Rule and
+  ML detection now scan the canonical form plus every view and take the strongest
+  signal (`engine/detection/view_evaluator`), so obfuscation can no longer evade
+  by hiding intent in an alternate encoding. The LLM detector and the proxy call
+  always receive the original text; normalization makes no policy decision and
+  does not affect the risk score. On the evaluation corpus this lifts
+  encoding-evasion catch-rate from 83.3% to 100% with the false-positive rate
+  unchanged (benign inputs generate no views, so they pay no extra latency and
+  cannot be newly false-flagged). Obfuscated inputs incur a bounded number of
+  extra detection passes, capped by the view limits and the per-detector timeout.
+
 ## [1.5.0] - 2026-08-02
 
 ### Added
