@@ -44,9 +44,10 @@ _INPUT_SOURCE_DESC = (
     "Trust-boundary provenance of `input`: where the text came from. One of "
     "user_prompt (the default when omitted), tool_output, retrieved_document, "
     "external_content. The untrusted origins mark content an agent pulled in -- "
-    "the primary indirect prompt-injection surface. v1 labels, persists, and "
-    "scans it with the same pipeline; it never relaxes detection (source-aware "
-    "policy is a later release)."
+    "the primary indirect prompt-injection surface. It is labelled, persisted, "
+    "and scanned by the same pipeline; it never relaxes detection (identical "
+    "content scores identically), but can, opt-in, tighten policy thresholds "
+    "for untrusted origins (source-aware posture, off by default)."
 )
 
 

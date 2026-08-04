@@ -34,6 +34,11 @@ class IncomingRequest:
     detection_mode: DetectionMode          = DetectionMode.FAST
     execution_mode: ExecutionMode          = ExecutionMode.SCAN_ONLY
     model:          str | None             = None
+    # Trust-boundary provenance of `input` (the InputSource enum value as a plain
+    # string, e.g. "user_prompt", "retrieved_document"). Kept as a str so a new
+    # source needs no entity change. Carried through so the policy layer can apply
+    # source-aware posture; detection never reads it.
+    input_source:   str                    = "user_prompt"
     metadata:       RequestMetadata        = field(default_factory=RequestMetadata)
     context:        RequestContext         = field(default_factory=RequestContext)
     options:        RequestOptions         = field(default_factory=RequestOptions)

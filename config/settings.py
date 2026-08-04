@@ -90,6 +90,30 @@ class Settings(BaseSettings):
     # BLOCK. Default 2s is generous versus the ~5ms happy path.
     detector_timeout_seconds:  float = 2.0
 
+    # -- Source-aware policy posture (opt-in) ------------------
+    # Trust-boundary provenance drives policy strictness, never detection.
+    # Each scan carries an input_source (domain.enums.InputSource); the Source
+    # Registry classifies it into a trust tier and the Policy Adapter tightens
+    # the block/sanitize thresholds for untrusted origins. Fully opt-in:
+    # untrusted_threshold_delta defaults to 0.0, so behavior is unchanged until
+    # an operator sets it. Detection output is identical regardless of source --
+    # a caller cannot weaken detection by misdeclaring provenance.
+    trusted_input_sources:      list[str] = Field(
+        default_factory=lambda: ["user_prompt"]
+    )
+    untrusted_input_sources:    list[str] = Field(
+        default_factory=lambda: ["tool_output", "retrieved_document", "external_content"]
+    )
+    # A source in neither list resolves to the "unknown" tier. By default
+    # unknown gets BASE posture (no tightening) so a newly introduced source
+    # never surprise-blocks on upgrade; set true for a full Zero-Trust stance
+    # where anything unclassified is treated as untrusted.
+    treat_unknown_as_untrusted: bool  = False
+    # Amount to LOWER the block AND sanitize thresholds for untrusted sources
+    # (both shifted by the same delta, so block > sanitize is preserved). 0.0
+    # disables the feature; a calibrated recommendation ships in the docs.
+    untrusted_threshold_delta:  float = 0.0
+
     # ── LLM Provider ──────────────────────────────────────────
     llm_provider:             str = Field(default="ollama")  # ollama | openai | groq
     llm_model:                str = Field(default="llama3.2")
@@ -207,6 +231,16 @@ class Settings(BaseSettings):
                 f"than sanitize_threshold ({self.sanitize_threshold})"
             )
 
+    def validate_source_posture(self) -> None:
+        # A negative delta would LOOSEN thresholds for untrusted sources -- the
+        # opposite of the feature's intent. Reject it so a sign typo cannot
+        # weaken policy for the exact origins that warrant more scrutiny.
+        if self.untrusted_threshold_delta < 0:
+            raise ValueError(
+                f"untrusted_threshold_delta ({self.untrusted_threshold_delta}) "
+                f"must be >= 0; it lowers thresholds for untrusted sources."
+            )
+
     def validate_secrets(self) -> None:
         import os
         if os.getenv("TESTING") == "true":
@@ -251,6 +285,7 @@ class Settings(BaseSettings):
 def get_settings() -> Settings:
     settings = Settings()
     settings.validate_thresholds()
+    settings.validate_source_posture()
     settings.validate_secrets()
     settings.validate_cookie_security()
     return settings

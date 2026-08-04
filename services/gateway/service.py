@@ -26,6 +26,8 @@ from engine.guardrails.output_guard import OutputGuard
 from engine.scoring.risk_scorer import RiskScorer
 from engine.policy.engine import PolicyEngine
 from engine.policy.rules import PolicyRules
+from engine.provenance.registry import SourceRegistry
+from engine.policy.posture.source import resolve_source_posture, apply_posture
 from config.settings import get_settings
 
 logger = logging.getLogger("wrapsec.gateway")
@@ -250,12 +252,44 @@ class GatewayService:
                 toxicity_result = input_result.toxicity_result,
             )
 
+            # -- Step 5.5: Source-aware policy posture (opt-in) --
+            # Provenance affects POLICY only. Classify input_source into a trust
+            # tier and, for untrusted origins with a configured delta, tighten
+            # the block/sanitize thresholds the policy engine applies. The
+            # detection scores above are untouched -- identical content scores
+            # identically no matter what source it claims. Identity (no change)
+            # when the delta is 0, so this is a no-op until an operator opts in.
+            source_descriptor = SourceRegistry.from_settings().resolve(request.input_source)
+            source_posture    = resolve_source_posture(
+                source_descriptor, _settings.untrusted_threshold_delta
+            )
+            effective = apply_posture(block_threshold, sanitize_threshold, source_posture)
+
+            # Surface the posture only when it actually shifted the thresholds,
+            # so the feature-off response shape is byte-for-byte unchanged.
+            posture_info = None
+            if (
+                effective.block    != block_threshold
+                or effective.sanitize != sanitize_threshold
+            ):
+                # Round the surfaced floats to shed IEEE-754 noise (0.7 - 0.3 =
+                # 0.39999...); the decision itself uses the unrounded effective
+                # thresholds, and the difference is far below any real score.
+                posture_info = {
+                    "dimension":          source_posture.dimension,
+                    "input_source":       source_descriptor.input_source,
+                    "tier":               source_posture.tier,
+                    "applied_delta":      round(source_posture.threshold_delta, 4),
+                    "effective_block":    round(effective.block, 4),
+                    "effective_sanitize": round(effective.sanitize, 4),
+                }
+
             # ── Step 6: Policy decision ───────────────────────
             policy = self._policy_engine.decide(
                 risk_score                  = scoring.final_score,
                 threats                     = scoring.threats,
-                block_threshold             = block_threshold,
-                sanitize_threshold          = sanitize_threshold,
+                block_threshold             = effective.block,
+                sanitize_threshold          = effective.sanitize,
                 pii_score                   = scoring.pii_score,
                 pii_block_threshold         = pii_block_threshold,
                 pii_sanitize_threshold      = pii_sanitize_threshold,
@@ -385,6 +419,7 @@ class GatewayService:
                 primary_reason  = primary_reason,
                 confidence      = confidence,
                 confidence_band = confidence_band,
+                posture         = posture_info,
             )
 
             audit_log = AuditLog(

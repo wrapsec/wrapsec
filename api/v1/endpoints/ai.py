@@ -125,6 +125,12 @@ def _build_response(
                 }
             }
 
+    # Source-aware posture, present only when provenance shifted the thresholds.
+    # Additive and optional -- absent on the feature-off path, so back-compat is
+    # preserved for every existing caller.
+    if getattr(decision, "posture", None):
+        assessment["posture"] = decision.posture
+
     response["assessment"] = assessment
     return response
 
@@ -245,6 +251,7 @@ async def ai_request(
         detection_mode = DetectionMode(det_mode_str),
         execution_mode = ExecutionMode(exe_mode_str),
         model          = body.model,
+        input_source   = body.input_source,
         metadata       = RequestMetadata(
             tenant_id = getattr(request.state, "tenant_id", None),
             source    = body.metadata.source  if body.metadata else None,

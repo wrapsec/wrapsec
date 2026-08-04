@@ -108,6 +108,11 @@ class GatewayDecision:
     primary_reason:  str | None            = None
     confidence:      float | None          = None
     confidence_band: str | None            = None
+    # Source-aware policy posture, surfaced for explainability. Present only
+    # when provenance actually shifted the thresholds (an untrusted source with
+    # a configured delta); None otherwise, so the feature-off path is unchanged.
+    # A plain dict keeps this entity free of engine dependencies.
+    posture:         dict | None           = None
     decided_at:      datetime              = field(default_factory=lambda: datetime.now(timezone.utc))
 
     @property

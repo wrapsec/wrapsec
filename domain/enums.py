@@ -42,8 +42,10 @@ class InputSource(str, Enum):
     """Trust-boundary provenance of the scanned input: where the text came from.
     user_prompt is trusted-origin; the rest mark content an agent pulled in
     (tool results, retrieved documents, other external text) -- the primary
-    indirect prompt-injection surface. Labels and audits only; never relaxes
-    detection. Source-aware policy is deferred to v2."""
+    indirect prompt-injection surface. Source never relaxes detection: identical
+    content scores identically whatever origin it claims. It can, opt-in, tighten
+    the policy thresholds applied to untrusted origins (source-aware posture,
+    off by default)."""
     USER_PROMPT        = "user_prompt"
     TOOL_OUTPUT        = "tool_output"
     RETRIEVED_DOCUMENT = "retrieved_document"
