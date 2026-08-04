@@ -20,6 +20,18 @@ All notable changes to WrapSec are documented here.
   cannot be newly false-flagged). Obfuscated inputs incur a bounded number of
   extra detection passes, capped by the view limits and the per-detector timeout.
 
+### Changed
+- **Reduced detection over-defense (rule precision).** The `jailbreak` and
+  `developer mode` rule patterns were bare nouns that fired on legitimate non-AI
+  uses (device jailbreaking, IDE/browser developer mode) and definitional
+  questions about the terms. They now match the attack construction (activation
+  and targeting forms -- "enable developer mode", "in developer mode you...",
+  "jailbroken", "jailbreak mode"), which is evasion-robust because real attacks use
+  those forms. On the evaluation corpus this cuts the benign-but-suspicious
+  false-positive rate from 32% to 20% and the overall false-positive rate from
+  14.5% to 9.1%, with catch-rate, out-of-distribution catch, and every attack
+  category unchanged.
+
 ## [1.5.0] - 2026-08-02
 
 ### Added
