@@ -2,6 +2,8 @@
 # Copyright (c) 2026 WrapSec. All rights reserved.
 # WrapSec v1.0 | AI Security Gateway - https://wrapsec.com
 
+from __future__ import annotations
+
 from datetime import datetime
 from services.time import ensure_utc, utc_now
 from sqlalchemy import select, func, case, cast, text
@@ -178,6 +180,39 @@ class AuditRepository(BaseRepository):
         items  = result.scalars().all()
 
         return total or 0, list(items)
+
+    async def list_run(
+        self,
+        run_id:     str | None = None,
+        session_id: str | None = None,
+        tenant_id:  str | None = None,
+        dept_id:    str | None = None,
+        limit:      int = 500,
+    ) -> list[AuditLogModel]:
+        """Every scan in one agent run (run_id) or conversation (session_id),
+        ordered as a timeline: turn_index (NULLs last on PostgreSQL), then
+        created_at. Scoped to tenant/dept so a run_id from another tenant returns
+        an empty list, never another tenant's rows. Uses the ix_audit_run_created
+        / ix_audit_session_created indexes."""
+        if not run_id and not session_id:
+            return []
+
+        query = select(AuditLogModel)
+        if run_id:
+            query = query.where(AuditLogModel.run_id == run_id)
+        if session_id:
+            query = query.where(AuditLogModel.session_id == session_id)
+        if tenant_id:
+            query = query.where(AuditLogModel.tenant_id == tenant_id)
+        if dept_id:
+            query = query.where(AuditLogModel.dept_id == dept_id)
+
+        query = query.order_by(
+            AuditLogModel.turn_index.asc(),
+            AuditLogModel.created_at.asc(),
+        ).limit(limit)
+        result = await self.session.execute(query)
+        return list(result.scalars().all())
 
     async def get_stats(
         self,

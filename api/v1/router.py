@@ -4,7 +4,7 @@
 
 from fastapi import APIRouter
 from api.v1.endpoints import (
-    health, ai, audit, settings, keys,
+    health, ai, audit, agent_runs, settings, keys,
     departments, applications, tenant,
     proxy_settings, proxy,
     auth, setup, webhooks, capabilities,
@@ -17,6 +17,7 @@ router.include_router(health.router,              tags=["Health"])
 router.include_router(capabilities.router,        tags=["Capabilities"])
 router.include_router(ai.router,                  prefix="/v1/ai",                 tags=["Gateway"])
 router.include_router(audit.router,               prefix="/v1/audit",              tags=["Audit"])
+router.include_router(agent_runs.router,          prefix="/v1/agent-runs",         tags=["Agent Runs"])
 router.include_router(settings.router,            prefix="/v1/settings",           tags=["Settings"])
 router.include_router(keys.router,                prefix="/v1/keys",               tags=["API Keys"])
 router.include_router(tenant.router,              prefix="/v1/admin/tenant",       tags=["Tenant"])

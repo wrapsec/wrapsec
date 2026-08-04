@@ -58,6 +58,7 @@ async def _seed_two_tenants(db):
         uid    = uuid.uuid4()
         keyid  = f"wsk_live_{letter.lower()}_" + uuid.uuid4().hex[:12]
         trace  = f"trace-{letter.lower()}-" + uuid.uuid4().hex[:8]
+        runid  = f"run-{letter.lower()}-" + uuid.uuid4().hex[:8]
 
         db.add(TenantModel(
             id            = tid,
@@ -121,6 +122,7 @@ async def _seed_two_tenants(db):
             key_id         = keyid,
             user_id        = str(uid),
             source         = "api",
+            run_id         = runid,
         ))
         db.add(ProxyInteractionModel(
             id                   = uuid.uuid4(),
@@ -146,6 +148,7 @@ async def _seed_two_tenants(db):
             "user_id":   uid,
             "key_id":    keyid,
             "trace_id":  trace,
+            "run_id":    runid,
         }
 
     await db.commit()
@@ -238,6 +241,28 @@ async def test_audit_repo_list_scoped_to_tenant(test_db):
     assert items_a[0].tenant_id == str(fx["A"]["tenant_id"])
     assert items_a[0].trace_id == fx["A"]["trace_id"]
     assert fx["B"]["trace_id"] not in {r.trace_id for r in items_a}
+
+
+@pytest.mark.asyncio
+async def test_audit_repo_list_run_scoped_to_tenant(test_db):
+    """list_run backs the agent-run timeline endpoint. It must never return
+    another tenant's run rows, and its no-filter guard must return nothing
+    (not every row)."""
+    fx   = await _seed_two_tenants(test_db)
+    repo = AuditRepository(test_db)
+
+    # Tenant A asks for A's run -> its own row only
+    rows = await repo.list_run(run_id=fx["A"]["run_id"], tenant_id=str(fx["A"]["tenant_id"]))
+    assert len(rows) == 1
+    assert rows[0].trace_id == fx["A"]["trace_id"]
+
+    # Tenant A asks for B's run -> empty, never B's row
+    rows = await repo.list_run(run_id=fx["B"]["run_id"], tenant_id=str(fx["A"]["tenant_id"]))
+    assert rows == []
+
+    # Neither run_id nor session_id -> empty (guard against returning all rows)
+    rows = await repo.list_run(tenant_id=str(fx["A"]["tenant_id"]))
+    assert rows == []
 
 
 @pytest.mark.asyncio
