@@ -351,6 +351,10 @@ async def ai_request(
         "confidence":            result.decision.confidence,
         "confidence_band":       result.decision.confidence_band,
         "input_length":          len(body.input),
+        "session_id":            body.session_id,
+        "turn_index":            body.turn_index,
+        "run_id":                body.run_id,
+        "input_source":          body.input_source,
         "proxy_interaction_id":  None,
         "severity":              compute_severity(
             decision       = result.decision.decision.value,

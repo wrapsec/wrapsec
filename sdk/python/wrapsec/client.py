@@ -44,6 +44,7 @@ from wrapsec.core.validation import (
     validate_input,
     validate_session_id,
     validate_turn_index,
+    validate_input_source,
 )
 from wrapsec.exceptions import WrapSecAuthError, WrapSecSystemError
 from wrapsec.models import AuditLog, AuditStats, ScanResult
@@ -161,6 +162,7 @@ class Client:
         session_id:     str | None = None,
         turn_index:     int | None = None,
         run_id:         str | None = None,
+        input_source:   str = "user_prompt",
     ) -> ScanResult:
         """
         Scan a single input for security risks.
@@ -180,6 +182,11 @@ class Client:
         run_id:         Opaque identifier for one agent execution (may span
                         multiple scans, tool calls, LLM calls). Matches LangSmith
                         / OpenAI Assistants run_id semantics. Max 200 chars.
+        input_source:   Trust-boundary provenance of `text`: one of "user_prompt"
+                        (default), "tool_output", "retrieved_document",
+                        "external_content". Untrusted origins mark agent-pulled
+                        content (the indirect prompt-injection surface). Labels
+                        and audits only; never relaxes detection.
 
         Returns ScanResult. BLOCK is not an exception - check result.decision.
 
@@ -197,9 +204,10 @@ class Client:
         if execution_mode == "proxy" and not model:
             raise ValueError("model is required when execution_mode='proxy'")
 
-        session_id = validate_session_id(session_id, "session_id")
-        run_id     = validate_session_id(run_id, "run_id")
-        turn_index = validate_turn_index(turn_index)
+        session_id   = validate_session_id(session_id, "session_id")
+        run_id       = validate_session_id(run_id, "run_id")
+        turn_index   = validate_turn_index(turn_index)
+        input_source = validate_input_source(input_source)
 
         text = normalize_text(text)
         text = validate_input(text)
@@ -219,6 +227,7 @@ class Client:
         if run_id:     body["run_id"]     = run_id
         if turn_index is not None:
             body["turn_index"] = turn_index
+        body["input_source"] = input_source
 
         data = self._request(method="POST", path="/ai/request", timeout=t, json=body)
         return ScanResult.from_dict(data)

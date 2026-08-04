@@ -67,6 +67,22 @@ def validate_turn_index(value: int | None) -> int | None:
     return value
 
 
+# Input provenance (trust boundary). Mirrors domain.enums.InputSource server-side.
+VALID_INPUT_SOURCES = (
+    "user_prompt", "tool_output", "retrieved_document", "external_content",
+)
+
+
+def validate_input_source(value: str) -> str:
+    """Validate input_source; mirrors AIRequestSchema / InputSource. One of
+    VALID_INPUT_SOURCES; defaults to user_prompt at the call site."""
+    if value not in VALID_INPUT_SOURCES:
+        raise ValueError(
+            f"input_source must be one of {VALID_INPUT_SOURCES}, got {value!r}"
+        )
+    return value
+
+
 def normalize_text(text: str) -> str:
     """
     Normalize input text before scanning.

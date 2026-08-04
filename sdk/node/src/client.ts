@@ -304,6 +304,19 @@ function validateTurnIndex(value: number | undefined): number | undefined {
   return value
 }
 
+const VALID_INPUT_SOURCES = [
+  "user_prompt", "tool_output", "retrieved_document", "external_content",
+] as const
+
+function validateInputSource(value: string): string {
+  if (!VALID_INPUT_SOURCES.includes(value as any)) {
+    throw new WrapSecError(
+      `inputSource must be one of ${JSON.stringify(VALID_INPUT_SOURCES)}, got ${JSON.stringify(value)}`
+    )
+  }
+  return value
+}
+
 function makeScanResult(data: Record<string, unknown>): ScanResult {
   const d        = camelizeKeys(data)
   const decision = String(d["decision"] ?? "")
@@ -495,6 +508,7 @@ export class WrapSec {
       sessionId,
       turnIndex,
       runId,
+      inputSource = "user_prompt",
     } = options
 
     if (!text || typeof text !== "string") {
@@ -523,9 +537,10 @@ export class WrapSec {
       throw new WrapSecError("model is required when executionMode is 'proxy'")
     }
 
-    const validSessionId = validateSessionId(sessionId, "sessionId")
-    const validRunId     = validateSessionId(runId, "runId")
-    const validTurnIndex = validateTurnIndex(turnIndex)
+    const validSessionId   = validateSessionId(sessionId, "sessionId")
+    const validRunId       = validateSessionId(runId, "runId")
+    const validTurnIndex   = validateTurnIndex(turnIndex)
+    const validInputSource = validateInputSource(inputSource)
 
     const t    = this.resolveTimeout(timeout)
     const body: Record<string, unknown> = {
@@ -538,6 +553,7 @@ export class WrapSec {
     if (validSessionId) body["session_id"] = validSessionId
     if (validRunId)     body["run_id"]     = validRunId
     if (validTurnIndex !== undefined) body["turn_index"] = validTurnIndex
+    body["input_source"] = validInputSource
 
     const data = await this.request("POST", "/ai/request", t, body)
     return makeScanResult(data as Record<string, unknown>)

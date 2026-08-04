@@ -98,6 +98,7 @@ def _format_item(
         "session_id":            item.session_id,
         "turn_index":            item.turn_index,
         "run_id":                item.run_id,
+        "input_source":          item.input_source,
         "record_hash":           item.record_hash,
         "prev_hash":             item.prev_hash,
     }

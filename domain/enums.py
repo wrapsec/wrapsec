@@ -38,6 +38,18 @@ class ExecutionMode(str, Enum):
     PROXY     = "proxy"
 
 
+class InputSource(str, Enum):
+    """Trust-boundary provenance of the scanned input: where the text came from.
+    user_prompt is trusted-origin; the rest mark content an agent pulled in
+    (tool results, retrieved documents, other external text) -- the primary
+    indirect prompt-injection surface. Labels and audits only; never relaxes
+    detection. Source-aware policy is deferred to v2."""
+    USER_PROMPT        = "user_prompt"
+    TOOL_OUTPUT        = "tool_output"
+    RETRIEVED_DOCUMENT = "retrieved_document"
+    EXTERNAL_CONTENT   = "external_content"
+
+
 class LLMProvider(str, Enum):
     OLLAMA = "ollama"
     OPENAI = "openai"

@@ -124,6 +124,10 @@ class AuditLogModel(Base):
     session_id     = Column(String(200), nullable=True)
     turn_index     = Column(Integer,     nullable=True)
     run_id         = Column(String(200), nullable=True)
+    # v1.7.0 input provenance (trust boundary): where the scanned text came from.
+    # NOT NULL with a server default so every row carries an explicit source and
+    # the engine/audit never see NULL. Values are the InputSource enum.
+    input_source   = Column(String(32),  nullable=False, server_default="user_prompt")
     # v1.2.0 tamper-evident hash chain. SHA-256 hex = 64 chars.
     # Populated by the hash-chained audit writer; UPDATE blocked by trigger.
     record_hash    = Column(String(64),  nullable=True)

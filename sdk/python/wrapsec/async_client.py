@@ -38,6 +38,7 @@ from wrapsec.core.validation import (
     validate_input,
     validate_session_id,
     validate_turn_index,
+    validate_input_source,
 )
 from wrapsec.exceptions import WrapSecAuthError
 from wrapsec.models import AuditLog, AuditStats, ScanResult
@@ -136,6 +137,7 @@ class AsyncClient:
         session_id:     str | None = None,
         turn_index:     int | None = None,
         run_id:         str | None = None,
+        input_source:   str = "user_prompt",
     ) -> ScanResult:
         """
         Scan a single input for security risks. Async version.
@@ -153,9 +155,10 @@ class AsyncClient:
         if execution_mode == "proxy" and not model:
             raise ValueError("model is required when execution_mode='proxy'")
 
-        session_id = validate_session_id(session_id, "session_id")
-        run_id     = validate_session_id(run_id, "run_id")
-        turn_index = validate_turn_index(turn_index)
+        session_id   = validate_session_id(session_id, "session_id")
+        run_id       = validate_session_id(run_id, "run_id")
+        turn_index   = validate_turn_index(turn_index)
+        input_source = validate_input_source(input_source)
 
         text = normalize_text(text)
         text = validate_input(text)
@@ -175,6 +178,7 @@ class AsyncClient:
         if run_id:     body["run_id"]     = run_id
         if turn_index is not None:
             body["turn_index"] = turn_index
+        body["input_source"] = input_source
 
         data = await self._request(method="POST", path="/ai/request", timeout=t, json=body)
         return ScanResult.from_dict(data)

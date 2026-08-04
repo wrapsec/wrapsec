@@ -70,6 +70,7 @@ CANONICAL_FIELDS: tuple[str, ...] = (
     "guardrail_scores",
     "input_hash",
     "input_length",
+    "input_source",
     "ip_address",
     "key_id",
     "latency_ms",

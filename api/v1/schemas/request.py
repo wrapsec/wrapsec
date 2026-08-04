@@ -4,7 +4,7 @@
 
 import math
 from pydantic import BaseModel, Field, model_validator
-from domain.enums import DetectionMode, ExecutionMode
+from domain.enums import DetectionMode, ExecutionMode, InputSource
 from errors.exceptions import StreamNotSupportedError, ModelRequiredError, WrapSecError
 from config.settings import get_settings
 
@@ -40,6 +40,14 @@ _RUN_ID_DESC = (
     "identifies a single scan. Matches LangSmith / OpenAI Assistants run_id "
     "semantics. Opaque string, max 200 chars, [A-Za-z0-9_.:-] only."
 )
+_INPUT_SOURCE_DESC = (
+    "Trust-boundary provenance of `input`: where the text came from. One of "
+    "user_prompt (the default when omitted), tool_output, retrieved_document, "
+    "external_content. The untrusted origins mark content an agent pulled in -- "
+    "the primary indirect prompt-injection surface. v1 labels, persists, and "
+    "scans it with the same pipeline; it never relaxes detection (source-aware "
+    "policy is a later release)."
+)
 
 
 class AIRequestSchema(BaseModel):
@@ -64,6 +72,10 @@ class AIRequestSchema(BaseModel):
         max_length     = 200,
         pattern        = _SESSION_ID_PATTERN,
         description    = _RUN_ID_DESC,
+    )
+    input_source:   InputSource               = Field(
+        default     = InputSource.USER_PROMPT,
+        description = _INPUT_SOURCE_DESC,
     )
     metadata:       RequestMetadataSchema     = Field(default_factory=RequestMetadataSchema)
     context:        RequestContextSchema      = Field(default_factory=RequestContextSchema)

@@ -161,6 +161,13 @@ export interface ScanOptions {
    * Assistants run_id semantics. Max 200 chars.
    */
   runId?:          string
+  /**
+   * Trust-boundary provenance of the scanned text: "user_prompt" (default),
+   * "tool_output", "retrieved_document", or "external_content". Untrusted
+   * origins mark agent-pulled content (indirect prompt-injection surface).
+   * Labels and audits only; never relaxes detection.
+   */
+  inputSource?:    string
 }
 
 // ── audit list options ─────────────────────────────────────────────────────

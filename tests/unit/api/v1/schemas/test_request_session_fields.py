@@ -104,3 +104,26 @@ class TestCombination:
         req = AIRequestSchema(**_base(session_id="s1"))
         assert req.session_id == "s1"
         assert req.run_id is None
+
+
+class TestInputSource:
+    """v1.7.0 input provenance (trust boundary). Defaults to user_prompt so the
+    engine and audit never see None."""
+
+    def test_defaults_to_user_prompt(self):
+        req = AIRequestSchema(**_base())
+        assert req.input_source == "user_prompt"
+
+    def test_accepts_each_valid_value(self):
+        for v in ("user_prompt", "tool_output", "retrieved_document", "external_content"):
+            req = AIRequestSchema(**_base(input_source=v))
+            assert req.input_source == v
+
+    def test_rejects_unknown_value(self):
+        with pytest.raises(ValidationError):
+            AIRequestSchema(**_base(input_source="nope"))
+
+    def test_rejects_none(self):
+        # explicit null is not a valid enum value; omit the field to get the default
+        with pytest.raises(ValidationError):
+            AIRequestSchema(**_base(input_source=None))

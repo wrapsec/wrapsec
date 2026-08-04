@@ -902,6 +902,34 @@ class TestAuditExport:
         asyncio.run(_test())
 
 
+# --- Input provenance kwarg (v1.7.0) -----------------------------------------
+
+class TestInputSourceKwarg:
+    """input_source defaults to user_prompt, is always forwarded in snake_case,
+    and invalid values fail before the HTTP request is sent."""
+
+    def test_defaults_to_user_prompt_and_forwarded(self):
+        client = make_client()
+        client._request = MagicMock(return_value=ALLOW_RESPONSE)
+        client.scan("hello world")
+        body = client._request.call_args.kwargs["json"]
+        assert body["input_source"] == "user_prompt"
+
+    def test_valid_value_forwarded(self):
+        client = make_client()
+        client._request = MagicMock(return_value=ALLOW_RESPONSE)
+        client.scan("hello", input_source="tool_output")
+        body = client._request.call_args.kwargs["json"]
+        assert body["input_source"] == "tool_output"
+
+    def test_invalid_value_rejected_before_network(self):
+        client = make_client()
+        client._request = MagicMock()
+        with pytest.raises(ValueError, match="input_source"):
+            client.scan("hello", input_source="nope")
+        client._request.assert_not_called()
+
+
 # ── Session tracking kwargs (v1.2.0) ─────────────────────────────────────────
 
 class TestSessionKwargsSync:
