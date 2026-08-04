@@ -72,10 +72,26 @@ def _build_response(
     if decision.output is not None:
         response["output"] = decision.output
 
-    if debug and decision.layer_scores:
-        # F-6: fetch settings only if the caller-supplied thresholds are
-        # missing (they normally aren't). Avoids a get_settings() call on
-        # every scan response for a defensive-default branch.
+    # v1.7.0 Security Assessment: an always-present, self-contained structured
+    # verdict -- the decision, reasons, threats, and confidence, plus per-layer
+    # contributions from the FULL layer bag (not just the five fixed keys). This
+    # is the object agents and the MCP tool consume; the flat fields above stay
+    # for back-compat, and the debug block below is unchanged.
+    assessment = {
+        "decision":        decision.decision.value,
+        "risk_score":      decision.risk_score.value,
+        "risk_level":      decision.risk_level.value,
+        "primary_reason":  decision.primary_reason,
+        "confidence":      decision.confidence,
+        "confidence_band": decision.confidence_band,
+        "threats":         [t.value for t in decision.threats],
+        "layers":          [],
+    }
+
+    if decision.layer_scores:
+        # F-6: fetch settings only if the caller-supplied thresholds are missing
+        # (they normally aren't). Thresholds classify each layer's contribution
+        # for both the assessment and the debug block.
         if block_threshold is None or sanitize_threshold is None:
             _fallback = get_settings()
             _bt = block_threshold    if block_threshold    is not None else _fallback.block_threshold
@@ -91,18 +107,25 @@ def _build_response(
                 return DecisionType.SANITIZE.value
             return DecisionType.ALLOW.value
 
-        response["debug"] = {
-            "rule_score": decision.layer_scores.rule_score,
-            "ml_score":   decision.layer_scores.ml_score,
-            "llm_score":  decision.layer_scores.llm_score,
-            "pii_score":  decision.layer_scores.pii_score,
-            "layer_decisions": {
-                "rule": layer_decision(decision.layer_scores.rule_score),
-                "ml":   layer_decision(decision.layer_scores.ml_score),
-                "llm":  layer_decision(decision.layer_scores.llm_score),
-            }
-        }
+        assessment["layers"] = [
+            {"name": name, "score": score, "decision": layer_decision(score)}
+            for name, score in decision.layer_scores.as_dict().items()
+        ]
 
+        if debug:
+            response["debug"] = {
+                "rule_score": decision.layer_scores.rule_score,
+                "ml_score":   decision.layer_scores.ml_score,
+                "llm_score":  decision.layer_scores.llm_score,
+                "pii_score":  decision.layer_scores.pii_score,
+                "layer_decisions": {
+                    "rule": layer_decision(decision.layer_scores.rule_score),
+                    "ml":   layer_decision(decision.layer_scores.ml_score),
+                    "llm":  layer_decision(decision.layer_scores.llm_score),
+                }
+            }
+
+    response["assessment"] = assessment
     return response
 
 

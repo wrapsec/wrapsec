@@ -59,6 +59,11 @@ export interface ScanResult {
   sanitizedInput?: string
   /** LLM output. Only present when executionMode === "proxy" */
   output?:         string
+  /**
+   * v1.7.0 Security Assessment: the always-present structured verdict --
+   * decision, reasons, threats, confidence, and per-layer contributions.
+   */
+  assessment?:     Record<string, unknown>
 
   // Convenience properties
   readonly isBlocked:     boolean

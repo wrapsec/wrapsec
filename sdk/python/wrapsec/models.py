@@ -42,6 +42,9 @@ class ScanResult:
     sanitization_applied:  bool        = False
     sanitized_input:       str | None  = None
     output:                str | None  = None
+    # v1.7.0 Security Assessment: the always-present structured verdict
+    # (decision, reasons, threats, confidence, and per-layer contributions).
+    assessment:            dict[str, Any] | None = None
 
     @classmethod
     def from_dict(cls, data: dict[str, Any]) -> "ScanResult":
@@ -63,6 +66,7 @@ class ScanResult:
             sanitization_applied = bool(data.get("sanitization_applied", False)),
             sanitized_input      = data.get("sanitized_input"),
             output               = data.get("output"),
+            assessment           = data.get("assessment"),
         )
 
     @property

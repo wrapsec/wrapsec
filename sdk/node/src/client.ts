@@ -342,6 +342,9 @@ function makeScanResult(data: Record<string, unknown>): ScanResult {
     sanitizationApplied:  Boolean(d["sanitizationApplied"] ?? false),
     sanitizedInput:       d["sanitizedInput"] != null ? String(d["sanitizedInput"]) : undefined,
     output:               d["output"] != null ? String(d["output"]) : undefined,
+    // v1.7.0 Security Assessment: structured verdict passed through as-is
+    // (camelizeKeys has already camelCased its keys).
+    assessment:           (d["assessment"] as Record<string, unknown> | undefined) ?? undefined,
   }
 
   return {
