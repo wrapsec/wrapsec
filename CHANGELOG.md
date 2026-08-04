@@ -2,7 +2,7 @@
 
 All notable changes to WrapSec are documented here.
 
-## [Unreleased]
+## [1.7.0] - 2026-08-04
 
 ### Added
 - **Input provenance (trust boundary).** An optional `input_source` field on the
