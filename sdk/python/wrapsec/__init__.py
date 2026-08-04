@@ -13,6 +13,12 @@ Spec reference: Section 4 (Public API Surface)
 from wrapsec.client       import Client
 from wrapsec.async_client import AsyncClient
 from wrapsec.models       import ScanResult, AuditLog, AuditStats
+from wrapsec.tool_schema  import (
+    scan_tool_schema,
+    openai_tool,
+    anthropic_tool,
+    SCAN_TOOL_NAME,
+)
 from wrapsec.exceptions   import (
     WrapSecError,
     WrapSecAuthError,
@@ -31,6 +37,11 @@ __all__ = [
     "ScanResult",
     "AuditLog",
     "AuditStats",
+    # Agent / function-calling tool manifest
+    "scan_tool_schema",
+    "openai_tool",
+    "anthropic_tool",
+    "SCAN_TOOL_NAME",
     # Exceptions
     "WrapSecError",
     "WrapSecAuthError",
