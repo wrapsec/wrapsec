@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: MIT
 // Copyright (c) 2026 WrapSec. All rights reserved.
 // WrapSec v1.0 | AI Security Gateway - https://wrapsec.com
+import Link from "next/link"
 import { DecisionBadge, ThreatBadge } from "@/components/ui/Badge"
 import { AuditLogItem } from "@/lib/types"
 import { timeAgo } from "@/lib/datetime"
@@ -90,7 +91,18 @@ export function RequestsTable({ items, onSelect }: {
               onMouseLeave={e => (e.currentTarget as HTMLElement).style.background = ""}
             >
               <td style={{ padding: "10px 16px", fontFamily: "monospace", fontSize: "12px", color: "#6b7280", whiteSpace: "nowrap" }}>
-                {item.trace_id}
+                <div>{item.trace_id}</div>
+                {item.run_id && (
+                  <Link
+                    href={`/agent-runs/${encodeURIComponent(item.run_id)}`}
+                    onClick={e => e.stopPropagation()}
+                    title={`Agent run ${item.run_id} - view timeline`}
+                    style={{ fontSize: "10px", color: "#670FEF", textDecoration: "none" }}
+                  >
+                    run {item.run_id.slice(-6)}
+                    {item.turn_index != null ? ` - turn ${item.turn_index}` : ""}
+                  </Link>
+                )}
               </td>
               <td style={{ padding: "10px 16px" }}>
                 <SeverityBadge severity={item.severity} />

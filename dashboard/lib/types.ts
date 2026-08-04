@@ -100,11 +100,22 @@ export interface AuditLogItem {
   ip_address:           string | null
   attribution_verified: boolean
   policy_source:        string | null
+  // v1.7.0 agentic fields
+  run_id:               string | null
+  session_id:           string | null
+  turn_index:           number | null
+  input_source:         string | null
 }
 
 export interface AuditLogsResponse {
   total: number
   items: AuditLogItem[]
+}
+
+export interface AgentRunResponse {
+  run_id: string
+  count:  number
+  turns:  AuditLogItem[]
 }
 
 export interface ThreatCount {

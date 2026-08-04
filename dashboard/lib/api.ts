@@ -6,6 +6,7 @@ import {
   AIRequest,
   GatewayResponse,
   AuditLogsResponse,
+  AgentRunResponse,
   AuditStatsResponse,
   Thresholds,
   Layers,
@@ -158,6 +159,10 @@ export async function getAuditLogs(
 
   const qs = params.toString()
   return request<AuditLogsResponse>(`/v1/audit/logs${qs ? `?${qs}` : ""}`)
+}
+
+export async function getAgentRun(runId: string): Promise<AgentRunResponse> {
+  return request<AgentRunResponse>(`/v1/agent-runs/${encodeURIComponent(runId)}`)
 }
 
 export async function getAuditStats(params: {
