@@ -18,6 +18,8 @@ from engine.detection.pipeline import DetectionPipeline
 from engine.detection.profiles import get_profile
 from engine.detection.llm_detector import LLMDetector
 from engine.detection.base import DetectionResult
+from engine.detection.view_evaluator import evaluate_views
+from engine.normalization import normalize, NormalizedInput
 from engine.guardrails.pii.detector import PIIDetector
 from engine.guardrails.input_guard import InputGuard
 from engine.guardrails.output_guard import OutputGuard
@@ -146,6 +148,20 @@ class GatewayService:
 
             effective_input = input_result.sanitized_text or request.input
 
+            # Normalize once: canonical form (folds homoglyph/invisible/whitespace)
+            # plus bounded decode-views (leet/base64). Steps 2 and 3 scan every
+            # representation and take the max signal, so obfuscation cannot evade by
+            # hiding intent in an alternate encoding. effective_input (the original)
+            # is preserved for the LLM/proxy path; decode-views are never forwarded
+            # downstream. Best-effort: on the unlikely event normalization itself
+            # raises, fall back to scanning the raw text (today's behavior) rather
+            # than failing the request -- a normalizer fault must not block traffic.
+            try:
+                normalized = normalize(effective_input)
+            except Exception as e:
+                logger.error(f"Normalization failed: {e} trace_id={request.trace_id}")
+                normalized = NormalizedInput(canonical=effective_input)
+
             # ── Step 2: Rule detection (CPU-bound -> thread) ──
             # H2: bound execution with asyncio.wait_for so ReDoS payloads
             # cannot hang the request. On timeout we mark detection_failed
@@ -153,7 +169,10 @@ class GatewayService:
             try:
                 if rule_enabled:
                     rule_result = await asyncio.wait_for(
-                        asyncio.to_thread(self._rule_detector.detect, effective_input),
+                        evaluate_views(
+                            lambda t: asyncio.to_thread(self._rule_detector.detect, t),
+                            normalized,
+                        ),
                         timeout=_timeout,
                     )
                 else:
@@ -175,7 +194,7 @@ class GatewayService:
             try:
                 if ml_enabled:
                     ml_result = await asyncio.wait_for(
-                        self._detection_pipeline.run(effective_input),
+                        evaluate_views(self._detection_pipeline.run, normalized),
                         timeout=_timeout,
                     )
                 else:
