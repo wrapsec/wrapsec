@@ -32,8 +32,19 @@ PROMPT_INJECTION_PATTERNS = [
 
 JAILBREAK_PATTERNS = [
     r"\bdan\s+mode\b",
-    r"\bdeveloper\s+mode\b",
-    r"\bjailbreak\b",
+    # "developer mode" is a legitimate term (IDEs, browsers, phones, OSes). Match
+    # only the AI-activation construction, not the bare noun, so "developer mode of
+    # my IDE" is not flagged while "enable developer mode" / "in developer mode you
+    # ignore ..." still is.
+    r"(enable|enter|activate|switch\s+to)\s+developer\s+mode",
+    r"developer\s+mode\s*(?::|enabled|activated|is\s+(on|enabled|active))",
+    r"in\s+developer\s+mode[\s,]+you\b",
+    # "jailbreak" as a bare noun matches device jailbreaking and definitional
+    # questions ("what does jailbreak mean", "a jailbreak technique"). Match the
+    # attack construction instead: jailbroken, jailbreak-as-mode, jailbreak-the-AI.
+    r"\bjailbroken\b",
+    r"jailbreak\s+(mode|prompt|this|the\s+(ai|assistant|model|bot|system))",
+    r"(enable|activate|perform|do\s+a)\s+jailbreak",
     r"\bunrestricted\s+mode\b",
     r"\bgod\s+mode\b",
     r"do\s+anything\s+now",
