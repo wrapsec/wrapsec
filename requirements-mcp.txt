@@ -1,0 +1,14 @@
+# WrapSec MCP server (opt-in interface adapter). Exposes the wrapsec_scan tool
+# over the Model Context Protocol so any MCP-compatible agent can call it.
+#
+# The server is a thin CLIENT of the WrapSec API via the Python SDK -- it does
+# NOT need the full gateway requirements (no fastapi, torch, db drivers, ...).
+#
+# Install (on the machine that runs the MCP server):
+#   pip install -r requirements-mcp.txt
+#   pip install -e sdk/python/          # the wrapsec client the adapter wraps
+#
+# Run (stdio transport -- the default for agent-spawned tool servers):
+#   WRAPSEC_API_KEY=wsk_live_... WRAPSEC_BASE_URL=http://localhost:8000 \
+#       python -m mcp_server
+mcp>=1.0.0
