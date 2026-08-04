@@ -25,6 +25,10 @@ import type {
   AuditListOptions,
   AuditLog,
   AuditStats,
+  BatchItem,
+  BatchItemResult,
+  BatchScanOptions,
+  BatchScanResult,
   ScanOptions,
   ScanResult,
   WrapSecConfig,
@@ -317,6 +321,81 @@ function validateInputSource(value: string): string {
   return value
 }
 
+const MAX_INPUT_BYTES = 64 * 1024
+
+interface NormalizedBatchItem {
+  input:        string
+  input_source: string
+  id:           string | null
+}
+
+/**
+ * Normalize a batch-scan input list into the wire shape the endpoint expects:
+ * [{input, input_source, id}, ...]. Each item may be a plain string or an
+ * object {input|text, inputSource?, id?}. Text is size-checked per item and
+ * inputSource validated against the allowed set. Idempotent.
+ */
+function normalizeBatchItems(
+  items:         (string | BatchItem)[],
+  defaultSource: string,
+): NormalizedBatchItem[] {
+  if (!Array.isArray(items)) {
+    throw new WrapSecError("items must be an array")
+  }
+  return items.map((item, idx) => {
+    let text:   string | undefined
+    let source: string
+    let id:     string | null
+
+    if (typeof item === "string") {
+      text   = item
+      source = defaultSource
+      id     = null
+    } else if (item && typeof item === "object") {
+      text   = item.input ?? item.text
+      source = item.inputSource ?? defaultSource
+      id     = item.id ?? null
+    } else {
+      throw new WrapSecError(`batch item ${idx} must be a string or object`)
+    }
+
+    if (!text || typeof text !== "string") {
+      throw new WrapSecError(`batch item ${idx} must have a non-empty 'input' (or 'text')`)
+    }
+    if (Buffer.byteLength(text, "utf8") > MAX_INPUT_BYTES) {
+      throw new WrapSecError(`batch item ${idx} exceeds maximum size of 64KB`)
+    }
+    return { input: text, input_source: validateInputSource(source), id }
+  })
+}
+
+function makeBatchItemResult(r: Record<string, unknown>): BatchItemResult {
+  const base = {
+    id:         r["id"] != null ? String(r["id"]) : null,
+    traceId:    String(r["traceId"] ?? ""),
+    decision:   String(r["decision"] ?? ""),
+    assessment: (r["assessment"] as Record<string, unknown> | undefined) ?? undefined,
+  }
+  return {
+    ...base,
+    get isBlocked():   boolean { return base.decision === "BLOCK" },
+    get isSanitized(): boolean { return base.decision === "SANITIZE" },
+    get isAllowed():   boolean { return base.decision === "ALLOW" },
+  }
+}
+
+function makeBatchScanResult(data: Record<string, unknown>): BatchScanResult {
+  const d          = camelizeKeys(data)
+  const rawResults = Array.isArray(d["results"]) ? (d["results"] as Record<string, unknown>[]) : []
+  const results    = rawResults.map(makeBatchItemResult)
+  return {
+    count:   Number(d["count"] ?? results.length),
+    summary: (d["summary"] as Record<string, unknown>) ?? {},
+    results,
+    get blocked(): BatchItemResult[] { return results.filter(r => r.decision === "BLOCK") },
+  }
+}
+
 function makeScanResult(data: Record<string, unknown>): ScanResult {
   const d        = camelizeKeys(data)
   const decision = String(d["decision"] ?? "")
@@ -583,6 +662,81 @@ export class WrapSec {
     }
 
     return results
+  }
+
+  /**
+   * Scan many items in a single request via POST /v1/ai/scan-batch.
+   *
+   * items: an array of strings, or objects { input|text, inputSource?, id? }.
+   *        A per-item id is echoed back on the matching result so you can
+   *        correlate inputs to outcomes (e.g. chunk -> document).
+   *
+   * Returns a BatchScanResult (count, summary, per-item results). One round-trip;
+   * each item is scanned and audited exactly like a single scan. BLOCK is not
+   * thrown - inspect result.results / result.blocked.
+   */
+  async scanBatch(
+    items:         (string | BatchItem)[],
+    options:       BatchScanOptions & { defaultSource?: string } = {},
+  ): Promise<BatchScanResult> {
+    const { mode = "fast", timeout, defaultSource = "user_prompt" } = options
+    const _VALID_MODES = ["fast", "full"] as const
+    if (!_VALID_MODES.includes(mode as any)) {
+      throw new WrapSecError(
+        `mode must be one of ${JSON.stringify(_VALID_MODES)}, got ${JSON.stringify(mode)}`
+      )
+    }
+    const normalized = normalizeBatchItems(items, defaultSource)
+    if (normalized.length === 0) {
+      throw new WrapSecError("items must be a non-empty array")
+    }
+    const t    = this.resolveTimeout(timeout)
+    const body = { detection_mode: mode, items: normalized }
+    const data = await this.request("POST", "/ai/scan-batch", t, body)
+    return makeBatchScanResult(data as Record<string, unknown>)
+  }
+
+  /** Scan retrieved documents/chunks (inputSource=retrieved_document). */
+  async scanDocuments(
+    items: (string | BatchItem)[], options: BatchScanOptions = {},
+  ): Promise<BatchScanResult> {
+    return this.scanBatch(items, { ...options, defaultSource: "retrieved_document" })
+  }
+
+  /** Scan tool/function-call results (inputSource=tool_output). */
+  async scanToolOutputs(
+    items: (string | BatchItem)[], options: BatchScanOptions = {},
+  ): Promise<BatchScanResult> {
+    return this.scanBatch(items, { ...options, defaultSource: "tool_output" })
+  }
+
+  /** Scan other external content (inputSource=external_content). */
+  async scanExternal(
+    items: (string | BatchItem)[], options: BatchScanOptions = {},
+  ): Promise<BatchScanResult> {
+    return this.scanBatch(items, { ...options, defaultSource: "external_content" })
+  }
+
+  /**
+   * Scan items and return only the input texts safe to use (decision !== "BLOCK"),
+   * in original order - the one-call "drop poisoned chunks" helper for a RAG
+   * pipeline. Defaults to treating items as retrieved documents. Use scanBatch()
+   * when you need the blocked set, per-item ids, or the aggregate summary.
+   */
+  async filterSafe(
+    items:    (string | BatchItem)[],
+    options:  BatchScanOptions & { defaultSource?: string } = {},
+  ): Promise<string[]> {
+    const defaultSource = options.defaultSource ?? "retrieved_document"
+    // Normalize locally to recover the input texts; scanBatch re-normalizes the
+    // same items in the same order, so results[i] aligns with normalized[i].
+    const normalized     = normalizeBatchItems(items, defaultSource)
+    const result         = await this.scanBatch(items, { ...options, defaultSource })
+    const safe: string[] = []
+    for (let i = 0; i < normalized.length; i++) {
+      if (result.results[i]?.decision !== "BLOCK") safe.push(normalized[i].input)
+    }
+    return safe
   }
 
   /**

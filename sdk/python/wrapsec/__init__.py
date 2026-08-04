@@ -12,7 +12,13 @@ Spec reference: Section 4 (Public API Surface)
 
 from wrapsec.client       import Client
 from wrapsec.async_client import AsyncClient
-from wrapsec.models       import ScanResult, AuditLog, AuditStats
+from wrapsec.models       import (
+    ScanResult,
+    BatchItemResult,
+    BatchScanResult,
+    AuditLog,
+    AuditStats,
+)
 from wrapsec.tool_schema  import (
     scan_tool_schema,
     openai_tool,
@@ -35,6 +41,8 @@ __all__ = [
     "AsyncClient",
     # Models
     "ScanResult",
+    "BatchItemResult",
+    "BatchScanResult",
     "AuditLog",
     "AuditStats",
     # Agent / function-calling tool manifest

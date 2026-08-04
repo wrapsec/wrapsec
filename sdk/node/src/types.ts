@@ -175,6 +175,53 @@ export interface ScanOptions {
   inputSource?:    string
 }
 
+// --- Batch scan --------------------------------------------------------------
+
+/** One input in a batch scan: a plain string, or an object with provenance/id. */
+export interface BatchItem {
+  /** The text to scan. `text` is accepted as an alias for `input`. */
+  input?:       string
+  text?:        string
+  /** Trust-boundary provenance for this item. Defaults per method. */
+  inputSource?: string
+  /** Opaque caller reference echoed back on the matching result. */
+  id?:          string
+}
+
+export interface BatchScanOptions {
+  /** "fast" (default) or "full" (adds LLM analysis). */
+  mode?:    "fast" | "full"
+  /** Per-request timeout in seconds. Overrides client default. */
+  timeout?: number
+}
+
+/** One item's outcome within a batch scan. */
+export interface BatchItemResult {
+  /** Caller-supplied reference echoed back (null if not given). */
+  id:          string | null
+  /** This item's own scan trace_id -- correlates to the audit trail. */
+  traceId:     string
+  /** "ALLOW" | "BLOCK" | "SANITIZE" */
+  decision:    string
+  /** Structured security assessment for this item. */
+  assessment?: Record<string, unknown>
+  readonly isBlocked:   boolean
+  readonly isSanitized: boolean
+  readonly isAllowed:   boolean
+}
+
+/** Result of a batch scan (POST /v1/ai/scan-batch). */
+export interface BatchScanResult {
+  /** Number of items scanned. */
+  count:   number
+  /** Aggregate: blocked/sanitized/allowed counts, highestRisk (+ item id), threats. */
+  summary: Record<string, unknown>
+  /** Per-item outcomes, in the same order as the inputs. */
+  results: BatchItemResult[]
+  /** The subset of results with decision === "BLOCK". */
+  readonly blocked: BatchItemResult[]
+}
+
 // ── audit list options ─────────────────────────────────────────────────────
 
 export interface AuditListOptions {

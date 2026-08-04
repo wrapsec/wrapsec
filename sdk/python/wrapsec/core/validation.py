@@ -83,6 +83,47 @@ def validate_input_source(value: str) -> str:
     return value
 
 
+def normalize_batch_items(
+    items: list,
+    default_source: str = "user_prompt",
+) -> list[dict]:
+    """
+    Normalize a heterogeneous batch-scan input list into the wire shape the
+    /v1/ai/scan-batch endpoint expects: [{input, input_source, id}, ...].
+
+    Each item may be:
+      - a plain string             -> input_source defaults to default_source
+      - a dict {input|text, input_source?, id?}
+
+    Text is normalized and length-validated per item (same rules as a single
+    scan); input_source is validated against the allowed set. Idempotent, so a
+    caller (or filter_safe) can pass an already-normalized list back through.
+    """
+    if not isinstance(items, (list, tuple)):
+        raise ValueError(f"items must be a list, got {type(items).__name__}")
+
+    normalized: list[dict] = []
+    for idx, item in enumerate(items):
+        if isinstance(item, str):
+            text, source, item_id = item, default_source, None
+        elif isinstance(item, dict):
+            text = item.get("input", item.get("text"))
+            if text is None:
+                raise ValueError(f"batch item {idx} must have an 'input' (or 'text') field")
+            source  = item.get("input_source") or default_source
+            item_id = item.get("id")
+        else:
+            raise ValueError(
+                f"batch item {idx} must be a str or dict, got {type(item).__name__}"
+            )
+
+        text   = validate_input(normalize_text(text))
+        source = validate_input_source(source)
+        normalized.append({"input": text, "input_source": source, "id": item_id})
+
+    return normalized
+
+
 def normalize_text(text: str) -> str:
     """
     Normalize input text before scanning.

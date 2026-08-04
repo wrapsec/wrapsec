@@ -91,6 +91,82 @@ class ScanResult:
 
 
 @dataclass(frozen=True)
+class BatchItemResult:
+    """
+    One item's outcome within a batch scan (POST /v1/ai/scan-batch).
+
+    id         : the caller-supplied reference echoed back (None if not given)
+    trace_id   : this item's own scan trace_id (correlates to the audit trail)
+    decision   : "ALLOW" | "BLOCK" | "SANITIZE"
+    assessment : the structured security assessment for this item
+    """
+
+    id:         str | None
+    trace_id:   str
+    decision:   str
+    assessment: dict[str, Any] | None = None
+
+    @classmethod
+    def from_dict(cls, data: dict[str, Any]) -> "BatchItemResult":
+        return cls(
+            id         = data.get("id"),
+            trace_id   = data.get("trace_id", ""),
+            decision   = data.get("decision", ""),
+            assessment = data.get("assessment"),
+        )
+
+    @property
+    def is_blocked(self) -> bool:
+        return self.decision == "BLOCK"
+
+    @property
+    def is_sanitized(self) -> bool:
+        return self.decision == "SANITIZE"
+
+    @property
+    def is_allowed(self) -> bool:
+        return self.decision == "ALLOW"
+
+
+@dataclass(frozen=True)
+class BatchScanResult:
+    """
+    Result of a batch scan (POST /v1/ai/scan-batch).
+
+    count   : number of items scanned
+    summary : aggregate over the batch - blocked / sanitized / allowed counts,
+              highest_risk (+ highest_risk_item id), and the union of threats
+    results : per-item outcomes, in the same order as the inputs
+    """
+
+    count:   int
+    summary: dict[str, Any]
+    results: list[BatchItemResult]
+
+    @classmethod
+    def from_dict(cls, data: dict[str, Any]) -> "BatchScanResult":
+        return cls(
+            count   = int(data.get("count", 0)),
+            summary = data.get("summary") or {},
+            results = [BatchItemResult.from_dict(r) for r in data.get("results", [])],
+        )
+
+    def __iter__(self):
+        return iter(self.results)
+
+    def __len__(self) -> int:
+        return len(self.results)
+
+    @property
+    def blocked(self) -> list["BatchItemResult"]:
+        return [r for r in self.results if r.is_blocked]
+
+    @property
+    def highest_risk(self) -> float | None:
+        return self.summary.get("highest_risk")
+
+
+@dataclass(frozen=True)
 class AuditLog:
     """
     A single audit log entry returned from GET /v1/audit/logs.
@@ -228,6 +304,8 @@ class AuditStats:
 
 __all__ = [
     "ScanResult",
+    "BatchItemResult",
+    "BatchScanResult",
     "AuditLog",
     "AuditStats",
 ]

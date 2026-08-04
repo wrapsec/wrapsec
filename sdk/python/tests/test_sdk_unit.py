@@ -1168,3 +1168,75 @@ class TestBatchCliSessionFlags:
             )
             assert result.exit_code == 1
             MockClient.assert_not_called()
+
+
+# --- batch scan (v1.8.0) ------------------------------------------------------
+
+BATCH_RESPONSE = {
+    "count": 2,
+    "summary": {
+        "blocked": 1, "sanitized": 0, "allowed": 1,
+        "highest_risk": 0.9, "highest_risk_item": "b",
+        "threats": ["PROMPT_INJECTION"],
+    },
+    "results": [
+        {"id": "a", "trace_id": "req_a", "decision": "ALLOW",
+         "assessment": {"decision": "ALLOW"}},
+        {"id": "b", "trace_id": "req_b", "decision": "BLOCK",
+         "assessment": {"decision": "BLOCK"}},
+    ],
+}
+
+
+class TestScanBatch:
+    def test_scan_batch_parses_response(self):
+        client = make_client()
+        client._request = MagicMock(return_value=BATCH_RESPONSE)
+        result = client.scan_batch(["hello", {"input": "bad", "id": "b"}])
+        assert result.count == 2
+        assert len(result) == 2
+        assert result.highest_risk == 0.9
+        assert [r.id for r in result.blocked] == ["b"]
+
+    def test_scan_batch_sends_items_and_mode(self):
+        client = make_client()
+        client._request = MagicMock(return_value=BATCH_RESPONSE)
+        client.scan_batch(["hello"], mode="full")
+        body = client._request.call_args.kwargs["json"]
+        assert body["detection_mode"] == "full"
+        assert body["items"][0]["input"] == "hello"
+        assert body["items"][0]["input_source"] == "user_prompt"
+
+    def test_scan_documents_sets_default_source(self):
+        client = make_client()
+        client._request = MagicMock(return_value=BATCH_RESPONSE)
+        client.scan_documents(["chunk one", "chunk two"])
+        body = client._request.call_args.kwargs["json"]
+        assert all(i["input_source"] == "retrieved_document" for i in body["items"])
+
+    def test_scan_tool_outputs_and_external_sources(self):
+        client = make_client()
+        client._request = MagicMock(return_value=BATCH_RESPONSE)
+        client.scan_tool_outputs(["t"])
+        assert client._request.call_args.kwargs["json"]["items"][0]["input_source"] == "tool_output"
+        client.scan_external(["e"])
+        assert client._request.call_args.kwargs["json"]["items"][0]["input_source"] == "external_content"
+
+    def test_explicit_item_source_overrides_default(self):
+        client = make_client()
+        client._request = MagicMock(return_value=BATCH_RESPONSE)
+        client.scan_documents([{"input": "x", "input_source": "tool_output"}])
+        body = client._request.call_args.kwargs["json"]
+        assert body["items"][0]["input_source"] == "tool_output"
+
+    def test_filter_safe_drops_blocked_in_order(self):
+        client = make_client()
+        client._request = MagicMock(return_value=BATCH_RESPONSE)
+        # BATCH_RESPONSE: item 0 ALLOW, item 1 BLOCK -> only the first survives.
+        safe = client.filter_safe(["good text", "bad text"])
+        assert safe == ["good text"]
+
+    def test_invalid_mode_rejected(self):
+        client = make_client()
+        with pytest.raises(ValueError):
+            client.scan_batch(["x"], mode="turbo")

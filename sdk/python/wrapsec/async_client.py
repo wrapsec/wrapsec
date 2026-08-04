@@ -35,13 +35,14 @@ from wrapsec.core.http import (
 from wrapsec.core.retry import with_retry_async
 from wrapsec.core.validation import (
     normalize_text,
+    normalize_batch_items,
     validate_input,
     validate_session_id,
     validate_turn_index,
     validate_input_source,
 )
 from wrapsec.exceptions import WrapSecAuthError
-from wrapsec.models import AuditLog, AuditStats, ScanResult
+from wrapsec.models import AuditLog, AuditStats, BatchScanResult, ScanResult
 
 logger = logging.getLogger("wrapsec.async_client")
 
@@ -257,6 +258,71 @@ class AsyncClient:
                 await asyncio.sleep(delay_ms / 1000)
             results.append(await self.scan(text, mode=mode, user=user, timeout=timeout))
         return results
+
+    async def scan_batch(
+        self,
+        items:          list,
+        mode:           str = "fast",
+        timeout:        int | None = None,
+        default_source: str = "user_prompt",
+    ) -> BatchScanResult:
+        """
+        Scan many items in a single request via POST /v1/ai/scan-batch. Async
+        version. See Client.scan_batch() for full documentation.
+        """
+        _VALID_MODES = ("fast", "full")
+        if mode not in _VALID_MODES:
+            raise ValueError(f"mode must be one of {_VALID_MODES}, got {mode!r}")
+
+        normalized = normalize_batch_items(items, default_source)
+        if not normalized:
+            raise ValueError("items must be a non-empty list")
+
+        body = {"detection_mode": mode, "items": normalized}
+        t    = self._resolve_timeout(timeout)
+        data = await self._request(method="POST", path="/ai/scan-batch", timeout=t, json=body)
+        return BatchScanResult.from_dict(data)
+
+    async def scan_documents(
+        self, items: list, mode: str = "fast", timeout: int | None = None,
+    ) -> BatchScanResult:
+        """Scan retrieved documents/chunks (input_source=retrieved_document)."""
+        return await self.scan_batch(items, mode=mode, timeout=timeout,
+                                    default_source="retrieved_document")
+
+    async def scan_tool_outputs(
+        self, items: list, mode: str = "fast", timeout: int | None = None,
+    ) -> BatchScanResult:
+        """Scan tool/function-call results (input_source=tool_output)."""
+        return await self.scan_batch(items, mode=mode, timeout=timeout,
+                                    default_source="tool_output")
+
+    async def scan_external(
+        self, items: list, mode: str = "fast", timeout: int | None = None,
+    ) -> BatchScanResult:
+        """Scan other external content (input_source=external_content)."""
+        return await self.scan_batch(items, mode=mode, timeout=timeout,
+                                    default_source="external_content")
+
+    async def filter_safe(
+        self,
+        items:          list,
+        mode:           str = "fast",
+        timeout:        int | None = None,
+        default_source: str = "retrieved_document",
+    ) -> list[str]:
+        """
+        Scan items and return only the input texts safe to use (decision != BLOCK),
+        in original order. Async version. See Client.filter_safe().
+        """
+        normalized = normalize_batch_items(items, default_source)
+        result     = await self.scan_batch(normalized, mode=mode, timeout=timeout,
+                                          default_source=default_source)
+        return [
+            item["input"]
+            for item, r in zip(normalized, result.results)
+            if r.decision != "BLOCK"
+        ]
 
     async def audit_list(
         self,

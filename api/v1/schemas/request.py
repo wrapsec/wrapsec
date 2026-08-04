@@ -123,3 +123,56 @@ class AIRequestSchema(BaseModel):
         return self
 
     model_config = {"use_enum_values": True, "populate_by_name": True}
+
+
+class ScanBatchItem(BaseModel):
+    """One item in a batch scan. Carries its own provenance and an optional
+    caller-supplied id echoed back on the result so callers can correlate
+    inputs to outcomes (e.g. map a chunk back to its document)."""
+    input:        str         = Field(..., min_length=1)
+    input_source: InputSource = Field(
+        default          = InputSource.USER_PROMPT,
+        validate_default = True,   # coerce the default through use_enum_values -> plain str
+        description      = _INPUT_SOURCE_DESC,
+    )
+    id:           str | None  = Field(
+        default     = None,
+        max_length  = 200,
+        description = "Opaque caller reference echoed back in the matching result.",
+    )
+
+    # use_enum_values so input_source is a plain string end to end, matching the
+    # single-scan path (audit, hash-chain, and webhook payloads see "user_prompt",
+    # never the enum repr).
+    model_config = {"use_enum_values": True, "populate_by_name": True}
+
+
+class ScanBatchSchema(BaseModel):
+    """Generic multi-item scan. Every item runs the same pipeline as a single
+    scan (scan-only; no proxy/LLM forwarding) and is audited independently."""
+    items:          list[ScanBatchItem] = Field(..., min_length=1)
+    detection_mode: DetectionMode       = DetectionMode.FAST
+
+    @model_validator(mode="after")
+    def validate_batch(self) -> "ScanBatchSchema":
+        settings = get_settings()
+
+        # Fan-out cap - bounds both work and rate-limit amplification.
+        if len(self.items) > settings.max_batch_items:
+            raise ValueError(
+                f"Batch exceeds the maximum of {settings.max_batch_items} items "
+                f"(received {len(self.items)})."
+            )
+
+        # Per-item input size limit - same ceiling as a single scan.
+        for idx, item in enumerate(self.items):
+            if len(item.input) > settings.max_input_chars:
+                raise ValueError(
+                    f"Item {idx} exceeds the maximum length of "
+                    f"{settings.max_input_chars} characters "
+                    f"(received {len(item.input)})."
+                )
+
+        return self
+
+    model_config = {"use_enum_values": True, "populate_by_name": True}

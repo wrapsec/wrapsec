@@ -4,6 +4,7 @@
 
 import logging
 from services.time import to_iso_z
+import asyncio
 import time
 import uuid
 import hashlib
@@ -12,7 +13,7 @@ from fastapi.responses import JSONResponse
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from api.v1.schemas.request import AIRequestSchema
+from api.v1.schemas.request import AIRequestSchema, ScanBatchSchema
 from api.v1.dependencies.auth import get_current_principal
 from api.v1.dependencies.scope import get_scoped_audit_record
 from api.v1.dependencies.db import get_db
@@ -133,6 +134,83 @@ def _build_response(
 
     response["assessment"] = assessment
     return response
+
+
+def _build_audit_data(
+    *,
+    request,
+    result,
+    trace_id_str:  str,
+    det_mode_str:  str,
+    exe_mode_str:  str,
+    policy_source: str | None,
+    source:        str,
+    user_id:       str | None,
+    input_length:  int,
+    session_id:    str | None,
+    turn_index:    int | None,
+    run_id:        str | None,
+    input_source:  str,
+) -> dict:
+    """Project a GatewayResult + request context into the audit row dict.
+
+    Single source of truth shared by the single-scan and batch endpoints so the
+    persisted shape (and the webhook payload derived from it) can never drift
+    between the two paths.
+    """
+    decision = result.decision
+
+    detection_scores = {}
+    guardrail_scores = {}
+    if decision.layer_scores:
+        detection_scores = {
+            "rule": decision.layer_scores.rule_score,
+            "ml":   decision.layer_scores.ml_score,
+            "llm":  decision.layer_scores.llm_score,
+        }
+        guardrail_scores = {
+            "pii": decision.layer_scores.pii_score,
+        }
+        if decision.layer_scores.toxicity_score > 0.0:
+            guardrail_scores["toxicity"] = decision.layer_scores.toxicity_score
+
+    return {
+        "trace_id":              trace_id_str,
+        "decision":              decision.decision.value,
+        "risk_score":            decision.risk_score.value,
+        "threats":               [t.value for t in decision.threats],
+        "input_hash":            result.audit_log.input_hash,
+        "detection_mode":        det_mode_str,
+        "execution_mode":        exe_mode_str,
+        "llm_invoked":           decision.llm_invoked,
+        "latency_ms":            round(decision.latency_ms, 2),
+        "detection_scores":      detection_scores,
+        "guardrail_scores":      guardrail_scores,
+        "tenant_id":             getattr(request.state, "tenant_id", None),
+        "source":                source,
+        "user_id":               user_id,
+        "key_id":                getattr(request.state, "key_id",     None),
+        "ip_address":            getattr(request.state, "ip_address",  None),
+        "user_agent":            getattr(request.state, "user_agent",  None),
+        "attribution_verified":  False,
+        "app_id":                getattr(request.state, "app_id",     None),
+        "dept_id":               getattr(request.state, "dept_id",    None),
+        "policy_source":         policy_source,
+        "primary_reason":        decision.primary_reason,
+        "confidence":            decision.confidence,
+        "confidence_band":       decision.confidence_band,
+        "input_length":          input_length,
+        "session_id":            session_id,
+        "turn_index":            turn_index,
+        "run_id":                run_id,
+        "input_source":          input_source,
+        "proxy_interaction_id":  None,
+        "severity":              compute_severity(
+            decision       = decision.decision.value,
+            risk_score     = decision.risk_score.value,
+            primary_reason = decision.primary_reason,
+        ),
+    }
 
 
 @router.post("/request", response_model=None)
@@ -333,20 +411,6 @@ async def ai_request(
         llm_settings,
     )
 
-    detection_scores = {}
-    guardrail_scores = {}
-    if result.decision.layer_scores:
-        detection_scores = {
-            "rule": result.decision.layer_scores.rule_score,
-            "ml":   result.decision.layer_scores.ml_score,
-            "llm":  result.decision.layer_scores.llm_score,
-        }
-        guardrail_scores = {
-            "pii": result.decision.layer_scores.pii_score,
-        }
-        if result.decision.layer_scores.toxicity_score > 0.0:
-            guardrail_scores["toxicity"] = result.decision.layer_scores.toxicity_score
-
     source = (
         (body.metadata.source if body.metadata and body.metadata.source else None)
         or getattr(request.state, "key_name", None)
@@ -355,43 +419,21 @@ async def ai_request(
 
     # Single audit dict shared between the DB write and the webhook emit,
     # so the wire payload is a faithful subset of the row that was persisted.
-    audit_data = {
-        "trace_id":              str(incoming.trace_id),
-        "decision":              result.decision.decision.value,
-        "risk_score":            result.decision.risk_score.value,
-        "threats":               [t.value for t in result.decision.threats],
-        "input_hash":            result.audit_log.input_hash,
-        "detection_mode":        det_mode_str,
-        "execution_mode":        exe_mode_str,
-        "llm_invoked":           result.decision.llm_invoked,
-        "latency_ms":            round(result.decision.latency_ms, 2),
-        "detection_scores":      detection_scores,
-        "guardrail_scores":      guardrail_scores,
-        "tenant_id":             getattr(request.state, "tenant_id", None),
-        "source":                source,
-        "user_id":               body.metadata.user_id if body.metadata else None,
-        "key_id":                getattr(request.state, "key_id",     None),
-        "ip_address":            getattr(request.state, "ip_address",  None),
-        "user_agent":            getattr(request.state, "user_agent",  None),
-        "attribution_verified":  False,
-        "app_id":                getattr(request.state, "app_id",     None),
-        "dept_id":               getattr(request.state, "dept_id",    None),
-        "policy_source":         policy_source,
-        "primary_reason":        result.decision.primary_reason,
-        "confidence":            result.decision.confidence,
-        "confidence_band":       result.decision.confidence_band,
-        "input_length":          len(body.input),
-        "session_id":            body.session_id,
-        "turn_index":            body.turn_index,
-        "run_id":                body.run_id,
-        "input_source":          body.input_source,
-        "proxy_interaction_id":  None,
-        "severity":              compute_severity(
-            decision       = result.decision.decision.value,
-            risk_score     = result.decision.risk_score.value,
-            primary_reason = result.decision.primary_reason,
-        ),
-    }
+    audit_data = _build_audit_data(
+        request       = request,
+        result        = result,
+        trace_id_str  = str(incoming.trace_id),
+        det_mode_str  = det_mode_str,
+        exe_mode_str  = exe_mode_str,
+        policy_source = policy_source,
+        source        = source,
+        user_id       = body.metadata.user_id if body.metadata else None,
+        input_length  = len(body.input),
+        session_id    = body.session_id,
+        turn_index    = body.turn_index,
+        run_id        = body.run_id,
+        input_source  = body.input_source,
+    )
 
     repo = AuditRepository(db)
     await repo.create(audit_data)
@@ -435,6 +477,190 @@ async def ai_request(
     await set_cached_result(body.input, det_mode_str, exe_mode_str, _tenant_id, cache_body)
 
     return JSONResponse(content=response)
+
+
+@router.post("/scan-batch", response_model=None)
+async def ai_scan_batch(
+    body:            ScanBatchSchema,
+    request:         Request,
+    background_tasks: BackgroundTasks,
+    db:              AsyncSession = Depends(get_db),
+    _principal:      Principal    = Depends(get_current_principal),
+):
+    """
+    Batch security scan - scan many items in one call.
+
+    Every item runs the SAME detection pipeline as POST /request (scan-only; no
+    proxy or LLM forwarding) and is audited independently, so batch scans appear
+    in the audit trail and timeline exactly like single scans. Each item carries
+    its own input_source, so a RAG caller can scan a page of retrieved chunks
+    and drop the ones that come back BLOCK.
+
+    A batch is charged as N units against the caller's rate-limit budget (not 1),
+    so it cannot amplify throughput past the per-minute limit. Detection runs
+    concurrently (bounded by batch_concurrency); audit writes stay sequential
+    because the audit hash-chain is per-tenant. The semantic cache is bypassed.
+
+    Response: { count, summary, results: [{ id, trace_id, decision, assessment }] }.
+    Auth: any valid principal (API key). Trial keys keep the single-scan per-item
+    input cap.
+    """
+    _settings    = get_settings()
+    items        = body.items
+    n            = len(items)
+    det_mode_str = _mode_str(body.detection_mode)
+
+    # Trial-key per-item input cap (mirrors the single-scan restriction).
+    key_type = getattr(request.state, "key_type", "live")
+    if key_type == "trial":
+        for idx, item in enumerate(items):
+            if len(item.input) > _settings.trial_max_input_chars:
+                from errors.exceptions import ValidationError
+                raise ValidationError(
+                    f"Trial keys are limited to {_settings.trial_max_input_chars} "
+                    f"characters per item (item {idx} exceeds it). "
+                    f"Upgrade to a live key for full input limits."
+                )
+
+    # Rate-limit accounting: charge the batch as N units. The middleware already
+    # consumed 1 slot for this HTTP request, so consume the remaining N-1 against
+    # the same per-key bucket. Fails open if Redis is unavailable, as elsewhere.
+    if n > 1:
+        try:
+            from cache.rate_limit_store import is_rate_limited
+            key_id = getattr(request.state, "key_id", None)
+            rl_id  = (
+                f"key:{key_id}" if key_id
+                else f"ip:{getattr(request.state, 'ip_address', None) or 'unknown'}"
+            )
+            is_limited, _, _ = await is_rate_limited(rl_id, cost=n - 1)
+            if is_limited:
+                from errors.exceptions import RateLimitError
+                raise RateLimitError()
+        except RateLimitError:
+            raise
+        except Exception:
+            pass  # Fail open if Redis unavailable
+
+    # Resolve policy once - the whole batch shares the caller's tenant/dept/app
+    # scope. Per-item scope is not a batch concern.
+    from services.policy_resolver import resolve_policy
+    policy, policy_source = await resolve_policy(
+        db        = db,
+        tenant_id = getattr(request.state, "tenant_id", None),
+        dept_id   = getattr(request.state, "dept_id",   None),
+        app_id    = getattr(request.state, "app_id",    None),
+    )
+    block_threshold    = policy["thresholds"]["block"]
+    sanitize_threshold = policy["thresholds"]["sanitize"]
+    rule_enabled       = policy["detection"]["rule_enabled"]
+    ml_enabled         = policy["detection"]["ml_enabled"]
+    llm_enabled        = policy["detection"]["llm_enabled"]
+    llm_settings       = policy["llm"]
+
+    pii_policy             = policy.get("guardrails", {}).get("pii", {})
+    pii_block_threshold    = pii_policy.get("block_threshold",    None)
+    pii_sanitize_threshold = pii_policy.get("sanitize_threshold", None)
+    toxicity_policy             = policy.get("guardrails", {}).get("toxicity", {})
+    toxicity_block_threshold    = toxicity_policy.get("block_threshold",    None)
+    toxicity_sanitize_threshold = toxicity_policy.get("sanitize_threshold", None)
+
+    source = getattr(request.state, "key_name", None) or "unknown"
+
+    # Scan concurrently (bounded), then persist sequentially (hash-chain order).
+    sem = asyncio.Semaphore(max(1, _settings.batch_concurrency))
+
+    async def _scan(item):
+        async with sem:
+            incoming = IncomingRequest(
+                input          = item.input,
+                detection_mode = DetectionMode(det_mode_str),
+                execution_mode = ExecutionMode.SCAN_ONLY,
+                input_source   = item.input_source,
+                metadata       = RequestMetadata(
+                    tenant_id = getattr(request.state, "tenant_id", None),
+                    source    = source,
+                ),
+            )
+            result = await _gateway.process(
+                incoming,
+                block_threshold,
+                sanitize_threshold,
+                pii_block_threshold,
+                pii_sanitize_threshold,
+                toxicity_block_threshold,
+                toxicity_sanitize_threshold,
+                rule_enabled,
+                ml_enabled,
+                llm_enabled,
+                llm_settings,
+            )
+            return incoming, result
+
+    scanned = await asyncio.gather(*[_scan(item) for item in items])
+
+    repo    = AuditRepository(db)
+    results = []
+    summary = {
+        "blocked":           0,
+        "sanitized":         0,
+        "allowed":           0,
+        "highest_risk":      0.0,
+        "highest_risk_item": None,
+        "threats":           [],
+    }
+    threat_set: set[str] = set()
+
+    for item, (incoming, result) in zip(items, scanned):
+        audit_data = _build_audit_data(
+            request       = request,
+            result        = result,
+            trace_id_str  = str(incoming.trace_id),
+            det_mode_str  = det_mode_str,
+            exe_mode_str  = "scan_only",
+            policy_source = policy_source,
+            source        = source,
+            user_id       = None,
+            input_length  = len(item.input),
+            session_id    = None,
+            turn_index    = None,
+            run_id        = None,
+            input_source  = item.input_source,
+        )
+        await repo.create(audit_data)
+        background_tasks.add_task(emit_from_audit_background, audit_data)
+
+        decision   = result.decision
+        item_resp  = _build_response(
+            decision,
+            block_threshold    = block_threshold,
+            sanitize_threshold = sanitize_threshold,
+        )
+        results.append({
+            "id":         item.id,
+            "trace_id":   str(incoming.trace_id),
+            "decision":   decision.decision.value,
+            "assessment": item_resp["assessment"],
+        })
+
+        dv = decision.decision.value
+        if dv == DecisionType.BLOCK.value:
+            summary["blocked"] += 1
+        elif dv == DecisionType.SANITIZE.value:
+            summary["sanitized"] += 1
+        else:
+            summary["allowed"] += 1
+
+        risk = decision.risk_score.value
+        if risk > summary["highest_risk"]:
+            summary["highest_risk"]      = risk
+            summary["highest_risk_item"] = item.id
+        threat_set.update(t.value for t in decision.threats)
+
+    summary["threats"]      = sorted(threat_set)
+    summary["highest_risk"] = round(summary["highest_risk"], 4)
+
+    return JSONResponse(content={"count": n, "summary": summary, "results": results})
 
 
 @router.get("/requests/{trace_id}")

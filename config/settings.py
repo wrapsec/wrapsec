@@ -114,6 +114,14 @@ class Settings(BaseSettings):
     # disables the feature; a calibrated recommendation ships in the docs.
     untrusted_threshold_delta:  float = 0.0
 
+    # -- Batch scanning ----------------------------------------
+    # POST /v1/ai/scan-batch scans many items in one call. max_batch_items
+    # bounds the fan-out (and the rate-limit amplification, since a batch is
+    # charged as N units); batch_concurrency bounds how many items run the
+    # detection pipeline in parallel per request.
+    max_batch_items:   int = 50
+    batch_concurrency: int = 8
+
     # ── LLM Provider ──────────────────────────────────────────
     llm_provider:             str = Field(default="ollama")  # ollama | openai | groq
     llm_model:                str = Field(default="llama3.2")

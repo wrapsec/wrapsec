@@ -41,13 +41,14 @@ from wrapsec.core.http import (
 from wrapsec.core.retry import with_retry
 from wrapsec.core.validation import (
     normalize_text,
+    normalize_batch_items,
     validate_input,
     validate_session_id,
     validate_turn_index,
     validate_input_source,
 )
 from wrapsec.exceptions import WrapSecAuthError, WrapSecSystemError
-from wrapsec.models import AuditLog, AuditStats, ScanResult
+from wrapsec.models import AuditLog, AuditStats, BatchScanResult, ScanResult
 
 logger = logging.getLogger("wrapsec.client")
 
@@ -316,6 +317,85 @@ class Client:
                 time.sleep(delay_ms / 1000)
             results.append(self.scan(text, mode=mode, user=user, timeout=timeout))
         return results
+
+    def scan_batch(
+        self,
+        items:          list,
+        mode:           str = "fast",
+        timeout:        int | None = None,
+        default_source: str = "user_prompt",
+    ) -> BatchScanResult:
+        """
+        Scan many items in a single request via POST /v1/ai/scan-batch.
+
+        items:          list of strings, or dicts {input|text, input_source?, id?}.
+                        A per-item id is echoed back on the matching result so you
+                        can correlate inputs to outcomes (e.g. chunk -> document).
+        mode:           "fast" (default) or "full".
+        default_source: input_source applied to items that do not specify one.
+                        The per-source wrappers below set this for you.
+
+        Returns a BatchScanResult (count, summary, per-item results). One server
+        round-trip; each item is scanned and audited exactly like a single scan.
+        BLOCK is not an exception - inspect result.results / result.blocked.
+        """
+        _VALID_MODES = ("fast", "full")
+        if mode not in _VALID_MODES:
+            raise ValueError(f"mode must be one of {_VALID_MODES}, got {mode!r}")
+
+        normalized = normalize_batch_items(items, default_source)
+        if not normalized:
+            raise ValueError("items must be a non-empty list")
+
+        body = {"detection_mode": mode, "items": normalized}
+        t    = self._resolve_timeout(timeout)
+        data = self._request(method="POST", path="/ai/scan-batch", timeout=t, json=body)
+        return BatchScanResult.from_dict(data)
+
+    def scan_documents(
+        self, items: list, mode: str = "fast", timeout: int | None = None,
+    ) -> BatchScanResult:
+        """Scan retrieved documents/chunks (input_source=retrieved_document)."""
+        return self.scan_batch(items, mode=mode, timeout=timeout,
+                               default_source="retrieved_document")
+
+    def scan_tool_outputs(
+        self, items: list, mode: str = "fast", timeout: int | None = None,
+    ) -> BatchScanResult:
+        """Scan tool/function-call results (input_source=tool_output)."""
+        return self.scan_batch(items, mode=mode, timeout=timeout,
+                               default_source="tool_output")
+
+    def scan_external(
+        self, items: list, mode: str = "fast", timeout: int | None = None,
+    ) -> BatchScanResult:
+        """Scan other external content (input_source=external_content)."""
+        return self.scan_batch(items, mode=mode, timeout=timeout,
+                               default_source="external_content")
+
+    def filter_safe(
+        self,
+        items:          list,
+        mode:           str = "fast",
+        timeout:        int | None = None,
+        default_source: str = "retrieved_document",
+    ) -> list[str]:
+        """
+        Scan items and return only the input texts safe to use (decision != BLOCK),
+        in original order - the one-call "drop poisoned chunks" helper for a RAG
+        pipeline. Defaults to treating items as retrieved documents.
+
+        Use scan_batch() instead when you need the blocked set, per-item ids, or
+        the aggregate summary.
+        """
+        normalized = normalize_batch_items(items, default_source)
+        result     = self.scan_batch(normalized, mode=mode, timeout=timeout,
+                                     default_source=default_source)
+        return [
+            item["input"]
+            for item, r in zip(normalized, result.results)
+            if r.decision != "BLOCK"
+        ]
 
     def audit_list(
         self,
