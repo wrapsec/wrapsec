@@ -2,6 +2,37 @@
 
 All notable changes to WrapSec are documented here.
 
+## [Unreleased]
+
+### Added
+- **Input provenance (trust boundary).** An optional `input_source` field on the
+  scan request (`user_prompt` default, plus `tool_output`, `retrieved_document`,
+  `external_content`) records where the scanned text came from. The untrusted
+  origins mark content an agent pulled in -- the indirect prompt-injection
+  surface. It is labeled, persisted, and scanned by the same pipeline and never
+  relaxes detection. Stored on `audit_logs` (NOT NULL, default `user_prompt`) and
+  forwarded by the Python and Node SDKs.
+- **Security assessment in the scan response.** Every scan now returns an
+  always-present `assessment` object -- a self-contained structured verdict
+  (decision, risk score, risk level, primary reason, threats, confidence) plus
+  per-layer detector contributions from the full layer bag (not just the five
+  fixed keys). Exposed on the Python and Node SDK `ScanResult`, so agents and
+  tools can reason about the "why", not just BLOCK/ALLOW.
+- **Agent-run timeline.** A new `GET /v1/agent-runs/{run_id}` endpoint returns
+  every scan in one agent run, ordered by turn index and tenant/department
+  scoped, plus a dashboard timeline view that renders the run with per-turn
+  decision and provenance (reachable from a run link on each request row). The
+  scan endpoint now also persists the previously-accepted `session_id`,
+  `turn_index`, and `run_id` fields.
+- **Function-calling tool manifest.** The Python SDK exposes `wrapsec_scan` as a
+  function-calling tool: `scan_tool_schema()` (a canonical JSON-Schema
+  definition) plus `openai_tool()` and `anthropic_tool()` adapters, so any agent
+  framework can register WrapSec as a security tool.
+- **MCP server (opt-in).** A Model Context Protocol server (`python -m
+  mcp_server`, installed via `requirements-mcp.txt`) exposes `wrapsec_scan` over
+  MCP so any MCP-compatible agent can call it natively. It is a thin interface
+  adapter over the SDK client and enforces the API key on every scan.
+
 ## [1.6.0] - 2026-08-04
 
 ### Added

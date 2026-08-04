@@ -78,6 +78,17 @@ Guardrails (PII, toxicity) are architecturally separate from the detection score
 `primary_reason = SYSTEM_ERROR` means the detection pipeline failed. The returned `ALLOW` decision is not trustworthy and must not be used. Applications must treat this as a failure and must not forward input to the LLM.
 
 
+## Agent and MCP Integration
+
+WrapSec is built for agentic use, not just single prompts:
+
+- **Content provenance.** Tag each scan with `input_source` (`user_prompt`, `tool_output`, `retrieved_document`, `external_content`) so untrusted content an agent pulled in - the indirect prompt-injection surface - is labeled and audited. Scored the same; never relaxes detection.
+- **Security assessment.** Every scan returns a structured `assessment` (decision, risk, reasons, threats, and per-layer detector contributions) an agent can reason about, not just BLOCK/ALLOW.
+- **Agent-run timeline.** `GET /v1/agent-runs/{run_id}` returns a run's scans as an ordered timeline; the dashboard renders it, showing where risk entered a multi-turn run.
+- **Function-calling tool.** The Python SDK exposes `wrapsec_scan` as a function-calling tool - `openai_tool()` / `anthropic_tool()` / `scan_tool_schema()` - for any agent framework.
+- **MCP server (opt-in).** `python -m mcp_server` (see `requirements-mcp.txt`) exposes `wrapsec_scan` over the Model Context Protocol so any MCP-compatible agent can call it natively.
+
+
 ## Stack
 
 | Component | Technology |

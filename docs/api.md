@@ -61,6 +61,7 @@ Used by dashboard users. Issued via `POST /v1/auth/login`.
 | `POST /v1/auth/logout`, `GET /v1/auth/me`, `POST /v1/auth/change-password` | no | yes any role |
 | `POST /v1/ai/request`, `POST /v1/chat/completions` | yes | yes any role |
 | `GET /v1/ai/requests/{trace_id}` | yes | yes any role |
+| `GET /v1/agent-runs/{run_id}` | yes | yes any role |
 | `GET /v1/audit/*` | yes | yes any role |
 | `GET /v1/proxy/interactions/*` | yes | yes any role |
 | `GET /v1/settings/*` | yes | yes any role |
@@ -523,6 +524,10 @@ Scan-only mode. Inspect input, get a security decision, then forward to your LLM
   "input":          "string - required, 1-8000 chars",
   "detection_mode": "fast | full  (default: fast)",
   "execution_mode": "scan_only  (default)",
+  "input_source":   "user_prompt (default) | tool_output | retrieved_document | external_content",
+  "session_id":     "string - optional, opaque, groups a multi-turn conversation",
+  "turn_index":     "int - optional, 0-based turn within session_id",
+  "run_id":         "string - optional, opaque, one agent execution",
   "metadata": {
     "user_id": "string - optional, self-reported, stored in audit",
     "source":  "string - optional, audit label"
@@ -538,6 +543,10 @@ Scan-only mode. Inspect input, get a security decision, then forward to your LLM
 **detection_mode:**
 - `fast` - rule + ML only (~5ms)
 - `full` - rule + ML + LLM semantic (~100-500ms additional)
+
+**input_source** is the trust-boundary provenance of `input`: where the text came from. Use `tool_output`, `retrieved_document`, or `external_content` for content an agent pulled in (the indirect prompt-injection surface); `user_prompt` (the default) for the end user's own message. It is labeled and audited only - it never relaxes detection.
+
+**session_id / turn_index / run_id** are optional correlation identifiers, persisted on the audit record. `run_id` groups one agent execution; its turns are returned as a timeline by `GET /v1/agent-runs/{run_id}`.
 
 **Response 200:**
 ```json
@@ -556,9 +565,24 @@ Scan-only mode. Inspect input, get a security decision, then forward to your LLM
     "llm_invoked":    false,
     "detection_mode": "fast",
     "execution_mode": "scan_only"
+  },
+  "assessment": {
+    "decision":        "BLOCK",
+    "risk_score":      0.85,
+    "risk_level":      "HIGH",
+    "primary_reason":  "RULE_DETECTOR",
+    "confidence":      0.75,
+    "confidence_band": "HIGH",
+    "threats":         ["PROMPT_INJECTION"],
+    "layers": [
+      { "name": "rule_score", "score": 0.85, "decision": "BLOCK" },
+      { "name": "ml_score",   "score": 0.20, "decision": "ALLOW" }
+    ]
   }
 }
 ```
+
+The `assessment` object is an always-present, self-contained security verdict - the decision, reasons, threats, and confidence, plus per-layer detector contributions (the full layer bag, not just the fixed keys). Agents and the MCP tool consume this single object; the top-level fields remain for backward compatibility.
 
 `sanitized_input` is present only when `decision = SANITIZE`. Use it instead of the original input when forwarding to your LLM.
 
@@ -592,6 +616,40 @@ Scan-only mode. Inspect input, get a security decision, then forward to your LLM
 **`risk_score = 0.0` does not mean safe.** Guardrails can BLOCK with `risk_score = 0.0`. Always check `decision`.
 
 **Toxicity guardrail is BLOCK-or-ALLOW only.** Unlike PII (which has an ANONYMIZE / SANITIZE tier), toxic content cannot be safely rewritten by pattern substitution without changing meaning. Toxicity above the block threshold returns `decision = BLOCK` with `primary_reason = TOXICITY_GUARDRAIL_BLOCK`; below it, the toxicity guardrail does not fire (the request may still SANITIZE or BLOCK via PII or detection tiers). This mirrors AWS Bedrock content filter semantics.
+
+---
+
+### GET /v1/agent-runs/{run_id}
+
+Return every scan belonging to one agent run (shared `run_id`), ordered as a timeline (`turn_index`, then `created_at`). Read-only, derived from `audit_logs`. Models the run as a first-class agentic resource (aligned with OpenTelemetry GenAI / LangSmith / OpenAI-Assistants run semantics).
+
+**Auth:** API key OR JWT Bearer.
+
+**Scoping:** tenant/department scoped. A `run_id` outside the caller's scope returns an empty timeline (never another tenant's rows).
+
+**Query params:**
+- `limit` - int, 1-1000 (default 500)
+
+**Response 200:**
+```json
+{
+  "run_id": "run_2d14a30194b1",
+  "count":  4,
+  "turns": [
+    {
+      "trace_id":       "req_...",
+      "turn_index":     0,
+      "decision":       "ALLOW",
+      "input_source":   "user_prompt",
+      "primary_reason": "NO_THREAT_DETECTED",
+      "risk_score":     0.02,
+      "timestamp":      "2026-08-04T18:51:00.000Z"
+    }
+  ]
+}
+```
+
+Each turn is a full audit item (same shape as `GET /v1/audit/logs` items), including `input_source`, `session_id`, and `turn_index`.
 
 ---
 
