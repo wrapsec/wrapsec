@@ -160,6 +160,10 @@ function RequestsPageInner() {
           onTo={v           => setFilter({ to: v })}
           onSortBy={v       => setFilter({ sort_by: v })}
           onSortOrder={v    => setFilter({ sort_order: v })}
+          onClearDates={() => setParams({ from: "", to: "", offset: "0" })}
+          onClearAll={() => setParams({
+            decision: "", threat: "", mode: "", dept_id: "", from: "", to: "", offset: "0",
+          })}
         />
 
         <div style={{ background: "#fff", border: "1px solid #e5e7eb", borderRadius: "8px", overflow: "hidden" }}>

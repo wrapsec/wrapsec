@@ -77,12 +77,15 @@ interface RequestFiltersProps {
   onDeptId: (v: string) => void
   onFrom: (v: string) => void; onTo: (v: string) => void
   onSortBy: (v: string) => void; onSortOrder: (v: string) => void
+  // Atomic multi-clears -- one URL update, so they cannot clobber each other.
+  onClearDates: () => void; onClearAll: () => void
 }
 
 export function RequestFilters({
   traceId, decision, threatCategory, executionMode, deptId, from, to, sortBy, sortOrder,
   departments,
   onTraceId, onDecision, onThreat, onExecutionMode, onDeptId, onFrom, onTo, onSortBy, onSortOrder,
+  onClearDates, onClearAll,
 }: RequestFiltersProps) {
   const deptName     = departments.find(d => d.id === deptId)?.name
   const hasFilters   = !!(decision || threatCategory || executionMode || deptId || from || to)
@@ -93,7 +96,7 @@ export function RequestFilters({
     threatCategory && { label: threatCategory.replace(/_/g, " "), clear: () => onThreat("") },
     executionMode  && { label: executionMode.replace(/_/g, " "),  clear: () => onExecutionMode("") },
     deptId         && { label: deptName ?? deptId,                clear: () => onDeptId("") },
-    (from || to)   && { label: `${from || ""} -> ${to || ""}`,  clear: () => { onFrom(""); onTo("") } },
+    (from || to)   && { label: `${from || ""} -> ${to || ""}`,  clear: onClearDates },
   ].filter(Boolean) as { label: string; clear: () => void }[]
 
   return (
@@ -189,7 +192,7 @@ export function RequestFilters({
           ))}
           {(from || to) && (
             <button
-              onClick={() => { onFrom(""); onTo("") }}
+              onClick={onClearDates}
               style={{
                 display: "flex", alignItems: "center", justifyContent: "center",
                 width: 26, height: 26, borderRadius: "50%",
@@ -244,7 +247,7 @@ export function RequestFilters({
           <>
             <VDivider />
             <button
-              onClick={() => { onDecision(""); onThreat(""); onExecutionMode(""); onDeptId(""); onFrom(""); onTo("") }}
+              onClick={onClearAll}
               style={{
                 fontSize: "11px", fontWeight: 500, color: "#9ca3af",
                 background: "none", border: "none", cursor: "pointer",

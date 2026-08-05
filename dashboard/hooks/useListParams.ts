@@ -3,7 +3,7 @@
 // WrapSec v1.0 | AI Security Gateway - https://wrapsec.com
 "use client"
 
-import { useCallback, useEffect, useMemo, useRef, useState } from "react"
+import { useCallback, useMemo, useRef, useState } from "react"
 import { usePathname, useRouter, useSearchParams } from "next/navigation"
 
 /**
@@ -45,18 +45,12 @@ export function useListParams<T extends ParamSpec>(spec: T) {
     return out
   }, [searchParams, spec])
 
-  // Accumulate updates made within the same tick. router.replace is async, so
-  // several setParams calls in one handler (e.g. "Clear all", or clearing a date
-  // range that resets both `from` and `to`) would each read the same stale
-  // `search` and clobber one another -- only the last would stick. Sharing a
-  // pending URLSearchParams across synchronous calls makes them compose; the
-  // ref resets once the URL actually changes.
-  const pendingRef = useRef<URLSearchParams | null>(null)
-  useEffect(() => { pendingRef.current = null }, [search])
-
+  // Apply one or more param updates atomically. Pass every field that changes
+  // together in a SINGLE call (e.g. "Clear all", or clearing a date range that
+  // resets both `from` and `to`) -- issuing several setParams calls in the same
+  // tick would each read the same stale `search` and clobber one another.
   const setParams = useCallback((updates: Partial<Record<keyof T, string>>) => {
-    const params = pendingRef.current ?? new URLSearchParams(search)
-    pendingRef.current = params
+    const params = new URLSearchParams(search)
     for (const [key, val] of Object.entries(updates)) {
       const def = spec[key as keyof T]?.default
       // Drop a param at its default so canonical/default URLs stay clean.
