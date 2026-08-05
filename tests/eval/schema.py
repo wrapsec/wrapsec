@@ -31,14 +31,15 @@ _VALID_LABELS = {"malicious", "benign"}
 
 @dataclass(frozen=True)
 class Case:
-    id:       str
-    text:     str
-    category: str          # ThreatCategory value, or "BENIGN"
-    label:    str          # "malicious" | "benign"
-    split:    str          # "attacks" | "benign" | "ood" (from the directory)
-    group:    str          # corpus file stem, e.g. "encoding_evasion", "benign_hard"
-    source:   str = "wrapsec-authored"
-    license:  str = "MIT"
+    id:           str
+    text:         str
+    category:     str          # ThreatCategory value, or "BENIGN"
+    label:        str          # "malicious" | "benign"
+    split:        str          # "attacks" | "benign" | "ood" (from the directory)
+    group:        str          # corpus file stem, e.g. "encoding_evasion", "benign_hard"
+    input_source: str = "user_prompt"   # trust-boundary provenance for source-aware eval
+    source:       str = "wrapsec-authored"
+    license:      str = "MIT"
 
 
 def load_corpus(corpus_dir: Path | None = None) -> list[Case]:
@@ -69,14 +70,15 @@ def load_corpus(corpus_dir: Path | None = None) -> list[Case]:
             seen.add(obj["id"])
 
             cases.append(Case(
-                id       = obj["id"],
-                text     = obj["text"],
-                category = obj["category"],
-                label    = obj["label"],
-                split    = split,
-                group    = path.stem,
-                source   = obj.get("source", "wrapsec-authored"),
-                license  = obj.get("license", "MIT"),
+                id           = obj["id"],
+                text         = obj["text"],
+                category     = obj["category"],
+                label        = obj["label"],
+                split        = split,
+                group        = path.stem,
+                input_source = obj.get("input_source", "user_prompt"),
+                source       = obj.get("source", "wrapsec-authored"),
+                license      = obj.get("license", "MIT"),
             ))
 
     if not cases:

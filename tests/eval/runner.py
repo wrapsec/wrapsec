@@ -45,6 +45,7 @@ async def _run_one(svc: GatewayService, case: Case) -> CaseResult:
         input          = case.text,
         detection_mode = DetectionMode.FAST,
         execution_mode = ExecutionMode.SCAN_ONLY,
+        input_source   = case.input_source,
     )
     d = (await svc.process(req)).decision
 

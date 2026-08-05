@@ -2,6 +2,55 @@
 
 All notable changes to WrapSec are documented here.
 
+## [1.8.0] - 2026-08-05
+
+### Added
+- **Source-aware policy posture (opt-in).** Trust-boundary provenance can now
+  influence the policy decision: untrusted origins (`retrieved_document`,
+  `tool_output`, `external_content`) may be held to tighter block/sanitize
+  thresholds than `user_prompt`. A small pipeline does it -- a Source Registry
+  (`engine/provenance`) classifies `input_source` into a trust tier, and a
+  Posture + Policy Adapter (`engine/policy/posture`) lowers the thresholds the
+  policy engine applies. Config-driven and fully opt-in:
+  `UNTRUSTED_THRESHOLD_DELTA` defaults to `0` (no change on upgrade), with
+  `TRUSTED_INPUT_SOURCES` / `UNTRUSTED_INPUT_SOURCES` /
+  `TREAT_UNKNOWN_AS_UNTRUSTED` controlling classification. When a source shifts
+  the thresholds, the scan response `assessment` gains a `posture` block
+  (`tier`, `applied_delta`, effective thresholds) for transparency.
+  **Architectural rule: source affects POLICY only -- never detection or the
+  assessment's detector scores.** Identical content scores identically whatever
+  origin it claims, so a caller cannot weaken detection by misdeclaring a source.
+- **Batch scan endpoint.** `POST /v1/ai/scan-batch` scans many items in one
+  call, each with its own `input_source`, and returns a per-item decision +
+  assessment plus a `summary` (blocked/sanitized/allowed, highest risk and the
+  item that produced it, and the union of threats). Every item runs the same
+  pipeline as a single scan and is audited independently; a batch is charged as
+  N units against the rate limit so it cannot amplify throughput.
+- **RAG-security SDK helpers.** The Python and Node SDKs gain `scan_batch()`
+  plus per-source convenience wrappers `scan_documents()` / `scan_tool_outputs()`
+  / `scan_external()` and `filter_safe()` -- a one-call "drop the poisoned
+  chunks" helper for a retrieval pipeline. New `BatchScanResult` / `BatchItemResult`
+  models.
+- **Security by Source dashboard.** A new `/sources` view and
+  `GET /v1/audit/by-source` endpoint group audit data by `input_source`: per
+  source it shows scan volume, decision mix, block rate, risk distribution, and
+  threat-category counts, plus a **Top Attack Origins** leaderboard ranking
+  sources by attack volume.
+- **RAG evaluation corpora + calibration.** New `tests/eval/corpus_rag/`
+  (poisoned retrieved documents + benign documents that legitimately discuss
+  attacks) and a `calibrate_source_posture.py` sweep that reports poisoned-doc
+  catch-rate versus benign false-positive rate across delta values. On the
+  current FAST-mode detector the aggregated risk score is bimodal, so the delta
+  shows no change on this corpus -- the calibrated recommendation is to keep the
+  default `0` until graded/mid-band scoring (Tier-2 transformer) lands. The
+  eval harness now carries `input_source` per case.
+
+### Fixed
+- **Webhook deletion 500.** Removing a webhook endpoint that had delivery
+  history failed with a foreign-key violation (the `webhook_delivery_attempts`
+  FK has no `ON DELETE CASCADE`). Deletion now clears the endpoint's delivery
+  history first, in the same transaction.
+
 ## [1.7.0] - 2026-08-04
 
 ### Added

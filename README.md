@@ -82,7 +82,9 @@ Guardrails (PII, toxicity) are architecturally separate from the detection score
 
 WrapSec is built for agentic use, not just single prompts:
 
-- **Content provenance.** Tag each scan with `input_source` (`user_prompt`, `tool_output`, `retrieved_document`, `external_content`) so untrusted content an agent pulled in - the indirect prompt-injection surface - is labeled and audited. Scored the same; never relaxes detection.
+- **Content provenance.** Tag each scan with `input_source` (`user_prompt`, `tool_output`, `retrieved_document`, `external_content`) so untrusted content an agent pulled in - the indirect prompt-injection surface - is labeled and audited. Scored the same whatever origin it claims; it can, opt-in, tighten *policy* thresholds for untrusted sources (source-aware posture, off by default).
+- **RAG batch scanning.** `POST /v1/ai/scan-batch` scans a page of retrieved chunks in one call, each with its own `input_source`, returning per-item decisions plus a summary. SDK helpers `scan_documents()` / `scan_tool_outputs()` / `scan_external()` and `filter_safe()` (drop the poisoned chunks in one call) wrap it.
+- **Security by Source.** The `/sources` dashboard and `GET /v1/audit/by-source` break the threat picture down by provenance - volume, decision mix, threats per source - plus a Top Attack Origins leaderboard showing which knowledge sources deliver attacks.
 - **Security assessment.** Every scan returns a structured `assessment` (decision, risk, reasons, threats, and per-layer detector contributions) an agent can reason about, not just BLOCK/ALLOW.
 - **Agent-run timeline.** `GET /v1/agent-runs/{run_id}` returns a run's scans as an ordered timeline; the dashboard renders it, showing where risk entered a multi-turn run.
 - **Function-calling tool.** The Python SDK exposes `wrapsec_scan` as a function-calling tool - `openai_tool()` / `anthropic_tool()` / `scan_tool_schema()` - for any agent framework.

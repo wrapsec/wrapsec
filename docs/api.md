@@ -544,7 +544,7 @@ Scan-only mode. Inspect input, get a security decision, then forward to your LLM
 - `fast` - rule + ML only (~5ms)
 - `full` - rule + ML + LLM semantic (~100-500ms additional)
 
-**input_source** is the trust-boundary provenance of `input`: where the text came from. Use `tool_output`, `retrieved_document`, or `external_content` for content an agent pulled in (the indirect prompt-injection surface); `user_prompt` (the default) for the end user's own message. It is labeled and audited only - it never relaxes detection.
+**input_source** is the trust-boundary provenance of `input`: where the text came from. Use `tool_output`, `retrieved_document`, or `external_content` for content an agent pulled in (the indirect prompt-injection surface); `user_prompt` (the default) for the end user's own message. It never relaxes detection - identical content scores identically whatever origin it claims. It can, opt-in, tighten the *policy* thresholds applied to untrusted origins (see [Source-aware policy posture](#source-aware-policy-posture)); off by default.
 
 **session_id / turn_index / run_id** are optional correlation identifiers, persisted on the audit record. `run_id` groups one agent execution; its turns are returned as a timeline by `GET /v1/agent-runs/{run_id}`.
 
@@ -616,6 +616,61 @@ The `assessment` object is an always-present, self-contained security verdict - 
 **`risk_score = 0.0` does not mean safe.** Guardrails can BLOCK with `risk_score = 0.0`. Always check `decision`.
 
 **Toxicity guardrail is BLOCK-or-ALLOW only.** Unlike PII (which has an ANONYMIZE / SANITIZE tier), toxic content cannot be safely rewritten by pattern substitution without changing meaning. Toxicity above the block threshold returns `decision = BLOCK` with `primary_reason = TOXICITY_GUARDRAIL_BLOCK`; below it, the toxicity guardrail does not fire (the request may still SANITIZE or BLOCK via PII or detection tiers). This mirrors AWS Bedrock content filter semantics.
+
+---
+
+### POST /v1/ai/scan-batch
+
+Scan many items in one request. Every item runs the same pipeline as
+`POST /v1/ai/request` (scan-only; no proxy/LLM forwarding) and is audited
+independently, so batch scans appear in the audit trail and timeline exactly
+like single scans. Built for retrieval-augmented flows: scan a page of retrieved
+chunks and drop the ones that come back `BLOCK`.
+
+**Auth:** API key OR JWT Bearer.
+
+**Rate limit:** a batch is charged as N units (one per item), not 1, so it cannot
+amplify throughput past the per-minute limit. Item count is capped by
+`MAX_BATCH_ITEMS` (default 50). The semantic cache is bypassed.
+
+**Request:**
+```json
+{
+  "detection_mode": "fast | full  (default: fast)",
+  "items": [
+    { "input": "string - required, 1-8000 chars",
+      "input_source": "user_prompt (default) | tool_output | retrieved_document | external_content",
+      "id": "string - optional, echoed back on the matching result" }
+  ]
+}
+```
+
+**Response 200:**
+```json
+{
+  "count": 2,
+  "summary": {
+    "blocked":           1,
+    "sanitized":         0,
+    "allowed":           1,
+    "highest_risk":      0.91,
+    "highest_risk_item": "chunk-7",
+    "threats":           ["PROMPT_INJECTION"]
+  },
+  "results": [
+    { "id": "chunk-3", "trace_id": "req_...", "decision": "ALLOW", "assessment": { } },
+    { "id": "chunk-7", "trace_id": "req_...", "decision": "BLOCK", "assessment": { } }
+  ]
+}
+```
+
+`results` preserve input order; each carries the same `assessment` object as a
+single scan. Read `summary` for a quick health check (and jump to the riskiest
+item via `highest_risk_item`), then drop the `results` whose `decision == BLOCK`.
+
+SDK helpers wrap this endpoint: `scan_batch()` plus the per-source sugar
+`scan_documents()` / `scan_tool_outputs()` / `scan_external()`, and
+`filter_safe()` which returns only the inputs safe to use.
 
 ---
 
@@ -747,6 +802,50 @@ Note: `input_decision` is absent from the `proxy` block. The top-level `decision
 | `TIMEOUT` | Provider did not respond within `timeout_seconds` |
 
 **`input_raw` field:** Stores text according to `DATA_STORAGE_MODE` - not always the original unmodified text. In `masked` mode it contains PII-redacted text.
+
+---
+
+## Source-aware policy posture
+
+Trust-boundary provenance (`input_source`) can, opt-in, tighten the **policy**
+thresholds applied to untrusted origins. It is off by default and never touches
+detection: the same content produces the same risk score and the same per-layer
+contributions regardless of the source it claims. Source changes only how
+strictly WrapSec *acts* on that score, so a caller cannot weaken detection by
+misdeclaring a source.
+
+**How it works.** A Source Registry classifies each `input_source` into a trust
+tier (`trusted` / `untrusted` / `unknown`); for an untrusted tier a Policy
+Adapter lowers the block and sanitize thresholds by a configured delta (both by
+the same amount, preserving `block > sanitize`). The policy engine then decides
+on those effective thresholds. When a source actually shifts the thresholds, the
+scan `assessment` gains a `posture` block:
+
+```json
+"posture": {
+  "dimension":          "source",
+  "input_source":       "retrieved_document",
+  "tier":               "untrusted",
+  "applied_delta":      0.1,
+  "effective_block":    0.6,
+  "effective_sanitize": 0.3
+}
+```
+
+**Configuration** (all environment variables; feature off when the delta is 0):
+
+| Var | Default | Meaning |
+|---|---|---|
+| `UNTRUSTED_THRESHOLD_DELTA` | `0.0` | Amount to lower block/sanitize thresholds for untrusted sources. `0` disables the feature. |
+| `TRUSTED_INPUT_SOURCES` | `["user_prompt"]` | Sources classified as trusted. |
+| `UNTRUSTED_INPUT_SOURCES` | `["tool_output","retrieved_document","external_content"]` | Sources classified as untrusted. |
+| `TREAT_UNKNOWN_AS_UNTRUSTED` | `false` | Treat a source in neither list as untrusted (full Zero-Trust) instead of base posture. |
+
+**Calibration note.** On the current FAST-mode detector the aggregated risk
+score is bimodal (near 0 or near 1), so a threshold delta has little to move -
+`tests/eval/calibrate_source_posture.py` measures this against the RAG corpus.
+Keep the default `0` until graded/mid-band scoring lands; the delta is the knob
+for operators who want a stricter stance on untrusted content once it does.
 
 ---
 
@@ -1172,6 +1271,45 @@ Time-series trend data grouped by time period.
   ]
 }
 ```
+
+### GET /v1/audit/by-source
+
+Security by Source: audit aggregates grouped by `input_source` (trust-boundary
+provenance), plus a Top Attack Origins ranking. Read-only over data already on
+`audit_logs`; groups by whatever sources exist, so a new source appears with no
+code change. Tenant/department scoped like `/stats`.
+
+**Query params:** `from`, `to` (ISO dates), `dept_id` (admin only).
+
+**Response 200:**
+```json
+{
+  "period_from": "2026-08-01T00:00:00Z",
+  "period_to":   "2026-08-05T00:00:00Z",
+  "dept_id":     null,
+  "sources": [
+    {
+      "input_source":    "retrieved_document",
+      "total":           320,
+      "blocked":         41,
+      "sanitized":       3,
+      "allowed":         276,
+      "block_rate":      0.1281,
+      "avg_risk":        0.18,
+      "max_risk":        0.99,
+      "high_risk_count": 44,
+      "attacks":         44,
+      "threats":         { "PROMPT_INJECTION": 38, "DATA_EXFILTRATION": 6 }
+    }
+  ],
+  "top_attack_origins": [
+    { "input_source": "retrieved_document", "attacks": 44, "total": 320 }
+  ]
+}
+```
+
+`attacks` is enforced-decision volume (BLOCK + SANITIZE). `top_attack_origins`
+lists only sources that delivered attacks, ranked descending.
 
 ### GET /v1/audit/export
 
