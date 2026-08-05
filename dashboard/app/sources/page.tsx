@@ -6,6 +6,7 @@
 import useSWR from "swr"
 import { useTimeRange } from "@/hooks/useTimeRange"
 import { Shell } from "@/components/layout/Shell"
+import { PageHeader } from "@/components/ui/PageHeader"
 import { PageSpinner } from "@/components/ui/Spinner"
 import { getBySource } from "@/lib/api"
 import { SourceStats, AttackOrigin } from "@/lib/types"
@@ -247,12 +248,9 @@ export default function SourcesPage() {
 
   return (
     <Shell title="Security by Source">
-      <div style={{ display: "flex", flexDirection: "column", gap: "20px" }}>
-
-        <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
-          <p style={{ fontSize: "13px", color: "#6b7280", margin: 0 }}>
-            Threat picture by trust-boundary provenance -- which knowledge sources deliver attacks.
-          </p>
+      <PageHeader
+        description="Threat picture by trust-boundary provenance -- which knowledge sources deliver attacks."
+        actions={
           <div style={{ display: "flex", gap: "2px", background: "#f3f4f6", borderRadius: "7px", padding: "3px" }}>
             {timeRangeOptions.map(r => (
               <button key={r} onClick={() => setTimeRange(r)} style={{
@@ -267,7 +265,9 @@ export default function SourcesPage() {
               </button>
             ))}
           </div>
-        </div>
+        }
+      />
+      <div style={{ display: "flex", flexDirection: "column", gap: "20px" }}>
 
         {sources.length === 0 ? (
           <div style={{ ...CARD, textAlign: "center", padding: "48px 20px" }}>

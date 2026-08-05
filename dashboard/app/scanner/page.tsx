@@ -5,6 +5,7 @@
 
 import { useState } from "react"
 import { Shell } from "@/components/layout/Shell"
+import { PageHeader } from "@/components/ui/PageHeader"
 import { Card, CardHeader } from "@/components/ui/Card"
 import { ScannerInput } from "@/components/scanner/ScannerInput"
 import { ScanResult } from "@/components/scanner/ScanResult"
@@ -31,6 +32,7 @@ export default function ScannerPage() {
 
   return (
     <Shell title="Scanner">
+      <PageHeader description="Test any prompt against the detection pipeline before it reaches your LLM." />
       <div className="max-w-3xl space-y-5">
         <Card>
           <CardHeader

@@ -7,6 +7,7 @@ import { useState } from "react"
 import useSWR from "swr"
 import { useAuthMode } from "@/hooks/useAuthMode"
 import { Shell } from "@/components/layout/Shell"
+import { PageHeader } from "@/components/ui/PageHeader"
 import { Card } from "@/components/ui/Card"
 import { Button, PlusIcon } from "@/components/ui/Button"
 import { PageSpinner } from "@/components/ui/Spinner"
@@ -81,13 +82,10 @@ export default function IntegrationsPage() {
 
   return (
     <Shell title="Integrations">
-      <div className="space-y-4">
-        <div className="flex items-center justify-between">
-          <p className="text-sm text-slate-500">
-            Forward BLOCK and SANITIZE events to your SIEM (Splunk, Datadog, Microsoft
-            Sentinel, Elastic) or a signed webhook.
-          </p>
-          {isJwt ? (
+      <PageHeader
+        description="Forward BLOCK and SANITIZE events to your SIEM (Splunk, Datadog, Microsoft Sentinel, Elastic) or a signed webhook."
+        actions={
+          isJwt ? (
             <Button size="sm" onClick={() => setShowCreate(true)}>
               <PlusIcon /> Add integration
             </Button>
@@ -99,8 +97,10 @@ export default function IntegrationsPage() {
                 <a href="/login" style={{ color: "#670FEF", textDecoration: "underline" }}>sign in with email</a>
               </span>
             </div>
-          )}
-        </div>
+          )
+        }
+      />
+      <div className="space-y-4">
 
         {actionError && (
           <div className="bg-red-50 border border-red-200 rounded-md px-4 py-2.5 flex items-center justify-between">

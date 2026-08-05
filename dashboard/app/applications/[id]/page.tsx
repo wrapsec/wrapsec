@@ -17,7 +17,8 @@ import {
   updateAppLLMOverride, updateAppProxyOverride,
 } from "@/lib/api"
 import Link from "next/link"
-import { Breadcrumb } from "@/components/ui/Breadcrumb"
+import { PageHeader } from "@/components/ui/PageHeader"
+import { useBackNav } from "@/hooks/useBackNav"
 
 const PROVIDERS = [
   { value: "openai", label: "OpenAI / OpenAI-compatible" },
@@ -225,6 +226,8 @@ export default function ApplicationDetailPage() {
     }
   }
 
+  const goBack = useBackNav("/applications")
+
   if (isLoading) return <Shell title="Application"><PageSpinner /></Shell>
   if (!app)      return <Shell title="Application"><p className="text-sm text-slate-500">Application not found.</p></Shell>
 
@@ -236,10 +239,13 @@ export default function ApplicationDetailPage() {
     <Shell title={app.name}>
       <div className="max-w-2xl space-y-5">
 
-        <Breadcrumb items={[
-          { label: "Applications", href: "/applications" },
-          { label: app.name },
-        ]} />
+        <PageHeader
+          breadcrumb={[
+            { label: "Applications", href: "/applications" },
+            { label: app.name },
+          ]}
+          onBack={goBack}
+        />
 
         {/* Application info */}
         <Card>

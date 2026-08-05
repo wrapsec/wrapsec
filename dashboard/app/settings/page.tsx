@@ -6,6 +6,7 @@
 import { useState } from "react"
 import useSWR from "swr"
 import { Shell } from "@/components/layout/Shell"
+import { PageHeader } from "@/components/ui/PageHeader"
 import { Card, CardHeader } from "@/components/ui/Card"
 import { ThresholdForm } from "@/components/settings/ThresholdForm"
 import { LayerToggles } from "@/components/settings/LayerToggles"
@@ -76,6 +77,7 @@ export default function SettingsPage() {
 
   return (
     <Shell title="Settings">
+      <PageHeader description="Configure detection thresholds, layers, LLM provider, rate limits, and retention." />
       <div>
 
         {/* Tab bar */}

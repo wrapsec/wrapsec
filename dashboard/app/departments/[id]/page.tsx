@@ -15,8 +15,8 @@ import {
   getDepartment, updateDepartment, getApplicationsByDept, getDepartmentStats,
   updateDeptLLMOverride, updateDeptProxyOverride,
 } from "@/lib/api"
-import Link from "next/link"
-import { Breadcrumb } from "@/components/ui/Breadcrumb"
+import { PageHeader } from "@/components/ui/PageHeader"
+import { useBackNav } from "@/hooks/useBackNav"
 import { formatNumber } from "@/lib/format"
 
 const PROVIDERS = [
@@ -201,16 +201,21 @@ export default function DepartmentDetailPage() {
     }
   }
 
+  const goBack = useBackNav("/departments")
+
   if (isLoading) return <Shell title="Department"><PageSpinner /></Shell>
   if (!dept)     return <Shell title="Department"><p className="text-sm text-slate-500">Department not found.</p></Shell>
 
   return (
     <Shell title={dept.name}>
       <div className="max-w-2xl space-y-5">
-        <Breadcrumb items={[
-          { label: "Departments", href: "/departments" },
-          { label: dept.name },
-        ]} />
+        <PageHeader
+          breadcrumb={[
+            { label: "Departments", href: "/departments" },
+            { label: dept.name },
+          ]}
+          onBack={goBack}
+        />
 
         {/* Stats */}
         {stats && (

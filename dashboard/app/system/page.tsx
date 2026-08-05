@@ -5,6 +5,7 @@
 
 import useSWR from "swr"
 import { Shell } from "@/components/layout/Shell"
+import { PageHeader } from "@/components/ui/PageHeader"
 import { Card, CardHeader } from "@/components/ui/Card"
 import { PageSpinner } from "@/components/ui/Spinner"
 import { getHealth, getHealthConfig } from "@/lib/api"
@@ -36,6 +37,7 @@ export default function SystemPage() {
 
   return (
     <Shell title="System Status">
+      <PageHeader description="Service health and runtime configuration." />
       <div className="max-w-2xl space-y-5">
 
         {/* Service health */}

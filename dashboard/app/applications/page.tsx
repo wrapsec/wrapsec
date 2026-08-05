@@ -8,6 +8,7 @@ import { swrKeys } from "@/lib/swrKeys"
 import { useAuthMode } from "@/hooks/useAuthMode"
 import useSWR from "swr"
 import { Shell } from "@/components/layout/Shell"
+import { PageHeader } from "@/components/ui/PageHeader"
 import { Card } from "@/components/ui/Card"
 import { Button, PlusIcon } from "@/components/ui/Button"
 import { PageSpinner } from "@/components/ui/Spinner"
@@ -75,12 +76,10 @@ export default function ApplicationsPage() {
 
   return (
     <Shell title="Applications">
-      <div className="space-y-4">
-        <div className="flex items-center justify-between">
-          <p className="text-sm text-slate-500">
-            Manage applications and their API key assignments.
-          </p>
-          {isJwt ? (
+      <PageHeader
+        description="Manage applications and their API key assignments."
+        actions={
+          isJwt ? (
             <Button size="sm" onClick={() => setShowCreate(true)}>
               <PlusIcon /> Add application
             </Button>
@@ -92,8 +91,10 @@ export default function ApplicationsPage() {
                 <a href="/login" style={{ color: "#670FEF", textDecoration: "underline" }}>sign in with email</a>
               </span>
             </div>
-          )}
-        </div>
+          )
+        }
+      />
+      <div className="space-y-4">
 
         {/* Create form */}
         {showCreate && (

@@ -7,6 +7,7 @@ import { useState } from "react"
 import { useAuthMode } from "@/hooks/useAuthMode"
 import useSWR from "swr"
 import { Shell } from "@/components/layout/Shell"
+import { PageHeader } from "@/components/ui/PageHeader"
 import { Card } from "@/components/ui/Card"
 import { Button, PlusIcon } from "@/components/ui/Button"
 import { ApiKeyTable } from "@/components/settings/ApiKeyTable"
@@ -45,14 +46,10 @@ export default function ApiKeysPage() {
 
   return (
     <Shell title="API Keys">
-      <div className="space-y-4">
-
-        {/* Description + primary action */}
-        <div className="flex items-center justify-between">
-          <p className="text-sm text-slate-500">
-            Manage access credentials for the WrapSec API.
-          </p>
-          {isJwt ? (
+      <PageHeader
+        description="Manage access credentials for the WrapSec API."
+        actions={
+          isJwt ? (
             <Button size="sm" onClick={() => setShowModal(true)}>
               <PlusIcon /> Create key
             </Button>
@@ -64,8 +61,10 @@ export default function ApiKeysPage() {
                 <a href="/login" style={{ color: "#670FEF", textDecoration: "underline" }}>sign in with email</a>
               </span>
             </div>
-          )}
-        </div>
+          )
+        }
+      />
+      <div className="space-y-4">
 
         <Card padding={false}>
           <div className="px-5 py-3 border-b border-slate-100">

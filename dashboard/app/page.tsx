@@ -8,6 +8,7 @@ import { formatNumber } from "@/lib/format"
 import { useState } from "react"
 import Link from "next/link"
 import { Shell } from "@/components/layout/Shell"
+import { PageHeader } from "@/components/ui/PageHeader"
 import { PageSpinner } from "@/components/ui/Spinner"
 import { TopThreats } from "@/components/overview/TopThreats"
 import { RecentRequests } from "@/components/overview/RecentRequests"
@@ -458,6 +459,7 @@ export default function OverviewPage() {
 
   return (
     <Shell title="Overview">
+      <PageHeader description="Security posture across all AI requests." />
       <div style={{ display: "flex", flexDirection: "column", gap: "16px" }}>
 
         {/* Time range selector - affects cards, donut, threats, severity */}

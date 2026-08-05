@@ -7,6 +7,7 @@ import useSWR from "swr"
 import { useState } from "react"
 import { useTimeRange } from "@/hooks/useTimeRange"
 import { Shell } from "@/components/layout/Shell"
+import { PageHeader } from "@/components/ui/PageHeader"
 import { PageSpinner } from "@/components/ui/Spinner"
 import { POLL_INTERVAL, THREAT_LABELS } from "@/lib/constants"
 import { getAuditStats, getAttribution, getAnalytics, getDepartments, getApplications } from "@/lib/api"
@@ -533,14 +534,12 @@ export default function AnalyticsPage() {
 
   return (
     <Shell title="Analytics">
+      <PageHeader description="Security intelligence and attribution report." />
       <div style={{ display: "flex", flexDirection: "column", gap: "20px" }}>
 
         {/* Time range selector */}
         <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
           <div style={{ display: "flex", alignItems: "center", gap: "10px" }}>
-            <p style={{ fontSize: "13px", color: "#6b7280", margin: 0 }}>
-              Security intelligence and attribution report
-            </p>
             {(statsLoading || attrLoading) && stats && (
               <svg style={{ width: 14, height: 14, animation: "spin 1s linear infinite", color: "#670FEF" }} fill="none" viewBox="0 0 24 24">
                 <style>{`@keyframes spin{to{transform:rotate(360deg)}}`}</style>

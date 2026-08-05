@@ -6,8 +6,12 @@
 import { useParams } from "next/navigation"
 import useSWR from "swr"
 import { Shell } from "@/components/layout/Shell"
+import { PageHeader } from "@/components/ui/PageHeader"
 import { PageSpinner } from "@/components/ui/Spinner"
+import { EmptyState } from "@/components/ui/EmptyState"
+import { ErrorState } from "@/components/ui/ErrorState"
 import { DecisionBadge } from "@/components/ui/Badge"
+import { useBackNav } from "@/hooks/useBackNav"
 import { formatTimestamp } from "@/lib/datetime"
 import { getAgentRun } from "@/lib/api"
 import type { AuditLogItem } from "@/lib/types"
@@ -35,6 +39,7 @@ function SourceBadge({ source }: { source: string | null }) {
 
 function AgentRunInner() {
   const { runId } = useParams<{ runId: string }>()
+  const goBack = useBackNav("/requests")
 
   const { data, isLoading, error } = useSWR(
     ["agent-run", runId],
@@ -49,6 +54,10 @@ function AgentRunInner() {
 
   return (
     <Shell title="Agent Run">
+      <PageHeader
+        breadcrumb={[{ label: "Requests", href: "/requests" }, { label: `Run ${runId.slice(-6)}` }]}
+        onBack={goBack}
+      />
       <div className="flex flex-col gap-4">
 
         {/* Header */}
@@ -77,15 +86,15 @@ function AgentRunInner() {
           {isLoading && !data ? (
             <PageSpinner />
           ) : error ? (
-            <div className="py-12 text-center">
-              <p className="text-sm font-semibold text-slate-700 mb-1">Failed to load agent run</p>
-              <p className="text-xs text-slate-400">{(error as { message?: string })?.message ?? "Unable to reach the API."}</p>
-            </div>
+            <ErrorState
+              title="Failed to load agent run"
+              message={(error as { message?: string })?.message ?? "Unable to reach the API."}
+            />
           ) : turns.length === 0 ? (
-            <div className="py-12 text-center">
-              <p className="text-sm font-semibold text-slate-700 mb-1">No turns for this run</p>
-              <p className="text-xs text-slate-400">Scans tagged with this run_id appear here as an ordered timeline.</p>
-            </div>
+            <EmptyState
+              title="No turns for this run"
+              message="Scans tagged with this run_id appear here as an ordered timeline."
+            />
           ) : (
             <ol className="relative border-l border-slate-200 ml-3">
               {turns.map((t, i) => (

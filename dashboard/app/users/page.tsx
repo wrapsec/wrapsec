@@ -7,6 +7,7 @@ import { useState, useEffect } from "react"
 import { swrKeys } from "@/lib/swrKeys"
 import useSWR from "swr"
 import { Shell } from "@/components/layout/Shell"
+import { PageHeader } from "@/components/ui/PageHeader"
 import { Card } from "@/components/ui/Card"
 import { Button, PlusIcon } from "@/components/ui/Button"
 import { useAuthMode } from "@/hooks/useAuthMode"
@@ -414,15 +415,15 @@ export default function UsersPage() {
 
   return (
     <Shell title="Users">
-      <div className="space-y-4">
-        <div className="flex items-center justify-between">
-          <p className="text-sm text-slate-500">
-            Manage dashboard users and their access.
-          </p>
+      <PageHeader
+        description="Manage dashboard users and their access."
+        actions={
           <Button size="sm" onClick={() => setShowCreate(true)} disabled={!isJwt} title={!isJwt ? "Requires admin login" : undefined}>
             <PlusIcon /> Add user
           </Button>
-        </div>
+        }
+      />
+      <div className="space-y-4">
 
         <Card padding={false}>
           {/* Search bar */}
