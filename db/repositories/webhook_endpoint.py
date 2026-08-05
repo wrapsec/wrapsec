@@ -40,10 +40,10 @@ from datetime import datetime, timedelta, timezone
 from typing import Any
 from uuid import UUID
 
-from sqlalchemy import select, update
+from sqlalchemy import select, update, delete as sa_delete
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from db.models import WebhookEndpointModel
+from db.models import WebhookEndpointModel, WebhookDeliveryAttemptModel
 
 
 class WebhookEndpointRepository:
@@ -289,6 +289,18 @@ class WebhookEndpointRepository:
         ep = await self._db.get(WebhookEndpointModel, endpoint_id)
         if ep is None:
             return False
+        # Remove dependent delivery-attempt history first. The FK
+        # webhook_delivery_attempts.endpoint_id has no ON DELETE CASCADE, so
+        # hard-deleting an endpoint that has ever delivered raises a
+        # ForeignKeyViolation (the row is still referenced). Those attempts are
+        # per-endpoint operational history with nothing left to correlate to
+        # once the endpoint is gone; the admin_events trail still records that
+        # the endpoint was deleted. Same transaction, so it is all-or-nothing.
+        await self._db.execute(
+            sa_delete(WebhookDeliveryAttemptModel).where(
+                WebhookDeliveryAttemptModel.endpoint_id == endpoint_id
+            )
+        )
         await self._db.delete(ep)
         await self._db.flush()
         return True

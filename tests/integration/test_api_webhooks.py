@@ -27,7 +27,7 @@ from datetime import datetime
 
 import pytest
 
-from db.models import TenantModel, WebhookEndpointModel
+from db.models import TenantModel, WebhookEndpointModel, WebhookDeliveryAttemptModel
 
 
 # ─── helpers ────────────────────────────────────────────────────────
@@ -405,6 +405,42 @@ async def test_delete_removes_endpoint(client, admin_jwt_headers, test_db):
 
     r = await client.get(f"/v1/admin/webhooks/{ep.id}", headers=admin_jwt_headers)
     assert r.status_code == 404
+
+
+@pytest.mark.asyncio
+async def test_delete_endpoint_with_delivery_history(client, admin_jwt_headers, test_db):
+    # Regression: a webhook that has ever delivered leaves rows in
+    # webhook_delivery_attempts, whose FK has no ON DELETE CASCADE. Deleting the
+    # endpoint must first remove that history in the same transaction, not 500
+    # with a ForeignKeyViolation.
+    tenant_id = _tenant_id_from_headers(admin_jwt_headers)
+    ep = await _seed_endpoint(test_db, tenant_id)
+
+    test_db.add(WebhookDeliveryAttemptModel(
+        id             = uuid.uuid4(),
+        created_at     = datetime.utcnow(),
+        endpoint_id    = ep.id,
+        tenant_id      = tenant_id,
+        msg_id         = "msg_" + uuid.uuid4().hex[:12],
+        url            = ep.url,
+        event_type     = "BLOCK",
+        attempt_number = 1,
+        status         = "success",
+    ))
+    await test_db.commit()
+
+    r = await client.delete(f"/v1/admin/webhooks/{ep.id}", headers=admin_jwt_headers)
+    assert r.status_code == 200, r.text
+    assert r.json()["deleted"] is True
+
+    assert await test_db.get(WebhookEndpointModel, ep.id) is None
+    from sqlalchemy import select, func
+    remaining = await test_db.scalar(
+        select(func.count())
+        .select_from(WebhookDeliveryAttemptModel)
+        .where(WebhookDeliveryAttemptModel.endpoint_id == ep.id)
+    )
+    assert remaining == 0
 
 
 @pytest.mark.asyncio
