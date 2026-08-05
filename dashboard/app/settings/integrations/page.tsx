@@ -10,10 +10,13 @@ import { Shell } from "@/components/layout/Shell"
 import { Card } from "@/components/ui/Card"
 import { Button, PlusIcon } from "@/components/ui/Button"
 import { PageSpinner } from "@/components/ui/Spinner"
+import { ConfirmModal } from "@/components/ui/ConfirmModal"
 import { IntegrationsTable } from "@/components/settings/IntegrationsTable"
 import { CreateIntegrationModal } from "@/components/settings/CreateIntegrationModal"
 import { TestResultModal } from "@/components/settings/TestResultModal"
-import { getWebhooks, testWebhook, deleteWebhook } from "@/lib/api"
+import {
+  getWebhooks, testWebhook, deleteWebhook, pauseWebhook, resumeWebhook,
+} from "@/lib/api"
 import { WebhookEndpoint, WebhookTestResult } from "@/lib/types"
 
 export default function IntegrationsPage() {
@@ -21,33 +24,58 @@ export default function IntegrationsPage() {
   const { data, isLoading, mutate } = useSWR("webhooks", getWebhooks)
   const endpoints = data?.endpoints ?? []
 
-  const [showCreate,  setShowCreate]  = useState(false)
-  const [testingId,   setTestingId]   = useState<string | null>(null)
-  const [deletingId,  setDeletingId]  = useState<string | null>(null)
-  const [testTarget,  setTestTarget]  = useState<WebhookEndpoint | null>(null)
-  const [testResult,  setTestResult]  = useState<WebhookTestResult | null>(null)
-  const [testLoading, setTestLoading] = useState(false)
+  const [showCreate,   setShowCreate]   = useState(false)
+  const [testingId,    setTestingId]    = useState<string | null>(null)
+  const [pausingId,    setPausingId]    = useState<string | null>(null)
+  const [testTarget,   setTestTarget]   = useState<WebhookEndpoint | null>(null)
+  const [testResult,   setTestResult]   = useState<WebhookTestResult | null>(null)
+  const [testLoading,  setTestLoading]  = useState(false)
+
+  // Delete confirmation (replaces window.confirm) + its own in-flight/error state.
+  const [deleteTarget, setDeleteTarget] = useState<WebhookEndpoint | null>(null)
+  const [deleting,     setDeleting]     = useState(false)
+  const [deleteError,  setDeleteError]  = useState<string | null>(null)
+
+  // Surfaced above the table so a failed pause/resume/test is never silent.
+  const [actionError,  setActionError]  = useState<string | null>(null)
+
+  const errMessage = (e: unknown) => (e instanceof Error ? e.message : String(e))
 
   const handleTest = async (ep: WebhookEndpoint) => {
+    setActionError(null)
     setTestTarget(ep); setTestResult(null); setTestLoading(true); setTestingId(ep.id)
     try {
       setTestResult(await testWebhook(ep.id))
     } catch (e) {
-      const error = e instanceof Error ? e.message : String(e)
-      setTestResult({ ok: false, status_code: null, response_snippet: null, duration_ms: null, error })
+      setTestResult({ ok: false, status_code: null, response_snippet: null, duration_ms: null, error: errMessage(e) })
     } finally {
       setTestLoading(false); setTestingId(null)
     }
   }
 
-  const handleDelete = async (ep: WebhookEndpoint) => {
-    if (!window.confirm("Remove this integration? Events will stop being forwarded to it.")) return
-    setDeletingId(ep.id)
+  const handlePauseToggle = async (ep: WebhookEndpoint) => {
+    setActionError(null); setPausingId(ep.id)
     try {
-      await deleteWebhook(ep.id)
+      await (ep.disabled ? resumeWebhook(ep.id) : pauseWebhook(ep.id))
       await mutate()
+    } catch (e) {
+      setActionError(`Could not ${ep.disabled ? "resume" : "pause"} the integration: ${errMessage(e)}`)
     } finally {
-      setDeletingId(null)
+      setPausingId(null)
+    }
+  }
+
+  const confirmDelete = async () => {
+    if (!deleteTarget) return
+    setDeleting(true); setDeleteError(null)
+    try {
+      await deleteWebhook(deleteTarget.id)
+      await mutate()
+      setDeleteTarget(null)
+    } catch (e) {
+      setDeleteError(errMessage(e))
+    } finally {
+      setDeleting(false)
     }
   }
 
@@ -74,6 +102,13 @@ export default function IntegrationsPage() {
           )}
         </div>
 
+        {actionError && (
+          <div className="bg-red-50 border border-red-200 rounded-md px-4 py-2.5 flex items-center justify-between">
+            <p className="text-xs text-red-700">{actionError}</p>
+            <button onClick={() => setActionError(null)} className="text-xs text-red-400 hover:text-red-600">Dismiss</button>
+          </div>
+        )}
+
         <Card padding={false}>
           {isLoading ? (
             <div className="py-12"><PageSpinner /></div>
@@ -82,9 +117,12 @@ export default function IntegrationsPage() {
               endpoints={endpoints}
               canWrite={isJwt}
               testingId={testingId}
-              deletingId={deletingId}
+              deletingId={deleting ? deleteTarget?.id ?? null : null}
+              pausingId={pausingId}
               onTest={handleTest}
-              onDelete={handleDelete}
+              onPause={handlePauseToggle}
+              onResume={handlePauseToggle}
+              onDelete={setDeleteTarget}
             />
           )}
         </Card>
@@ -94,6 +132,19 @@ export default function IntegrationsPage() {
         <CreateIntegrationModal
           onCreated={() => mutate()}
           onClose={() => setShowCreate(false)}
+        />
+      )}
+
+      {deleteTarget && (
+        <ConfirmModal
+          title="Remove integration"
+          message={`Events will stop being forwarded to ${deleteTarget.url}. This cannot be undone.`}
+          confirmLabel="Remove"
+          danger
+          loading={deleting}
+          error={deleteError}
+          onConfirm={confirmDelete}
+          onClose={() => { if (!deleting) { setDeleteTarget(null); setDeleteError(null) } }}
         />
       )}
 

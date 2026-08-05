@@ -518,6 +518,71 @@ async def test_rotate_rejects_out_of_range_grace(
         assert r.status_code == 422, f"grace_hours={bad} should be rejected"
 
 
+# --- pause ----------------------------------------------------------
+
+@pytest.mark.asyncio
+async def test_pause_disables_a_healthy_endpoint(client, admin_jwt_headers, test_db):
+    tenant_id = _tenant_id_from_headers(admin_jwt_headers)
+    ep = await _seed_endpoint(test_db, tenant_id)
+
+    r = await client.post(f"/v1/admin/webhooks/{ep.id}/pause", headers=admin_jwt_headers)
+    assert r.status_code == 200, r.text
+    body = r.json()
+    assert body["disabled"] is True
+    # A manual pause on a healthy endpoint reads as "paused", not "auto_disabled".
+    assert body["status"] == "paused"
+    assert body["first_failure_at"] is None
+
+
+@pytest.mark.asyncio
+async def test_pause_then_reactivate_round_trip(client, admin_jwt_headers, test_db):
+    tenant_id = _tenant_id_from_headers(admin_jwt_headers)
+    ep = await _seed_endpoint(test_db, tenant_id)
+
+    await client.post(f"/v1/admin/webhooks/{ep.id}/pause", headers=admin_jwt_headers)
+    r = await client.post(f"/v1/admin/webhooks/{ep.id}/reactivate", headers=admin_jwt_headers)
+    assert r.status_code == 200, r.text
+    assert r.json()["status"] == "active"
+
+
+@pytest.mark.asyncio
+async def test_circuit_breaker_disabled_reads_as_auto_disabled(client, admin_jwt_headers, test_db):
+    # A disabled endpoint that carries a failure timestamp is the circuit
+    # breaker's doing, not a manual pause -- it must read as auto_disabled.
+    tenant_id = _tenant_id_from_headers(admin_jwt_headers)
+    ep = await _seed_endpoint(
+        test_db, tenant_id,
+        disabled=True,
+        first_failure_at=datetime(2026, 7, 1, 12, 0, 0),
+    )
+    r = await client.get(f"/v1/admin/webhooks/{ep.id}", headers=admin_jwt_headers)
+    assert r.status_code == 200
+    assert r.json()["status"] == "auto_disabled"
+
+
+@pytest.mark.asyncio
+async def test_pause_cross_tenant_returns_404(client, admin_jwt_headers, test_db):
+    other_tenant = uuid.uuid4()
+    ep = await _seed_endpoint(test_db, other_tenant)
+    r = await client.post(f"/v1/admin/webhooks/{ep.id}/pause", headers=admin_jwt_headers)
+    assert r.status_code == 404
+
+
+@pytest.mark.asyncio
+async def test_create_error_names_webhook_url_not_base_url(client, admin_jwt_headers):
+    # The rejection must name the field the caller set, not the LLM validator's
+    # internal "base_url".
+    r = await client.post(
+        "/v1/admin/webhooks",
+        json={"url": "http://192.168.1.50/hook"},
+        headers=admin_jwt_headers,
+    )
+    assert r.status_code == 422, r.text
+    msg = r.json()["error"]["message"]
+    assert "Webhook URL" in msg
+    assert "base_url" not in msg
+
+
 # ─── reactivate ─────────────────────────────────────────────────────
 
 @pytest.mark.asyncio

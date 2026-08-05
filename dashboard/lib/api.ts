@@ -766,6 +766,14 @@ export async function deleteWebhook(id: string): Promise<void> {
   return request<void>(`/v1/admin/webhooks/${id}`, { method: "DELETE" })
 }
 
+export async function pauseWebhook(id: string): Promise<WebhookEndpoint> {
+  return request<WebhookEndpoint>(`/v1/admin/webhooks/${id}/pause`, { method: "POST" })
+}
+
+export async function resumeWebhook(id: string): Promise<WebhookEndpoint> {
+  return request<WebhookEndpoint>(`/v1/admin/webhooks/${id}/reactivate`, { method: "POST" })
+}
+
 export async function testWebhook(id: string): Promise<WebhookTestResult> {
   return request<WebhookTestResult>(`/v1/admin/webhooks/${id}/test`, {
     method: "POST",

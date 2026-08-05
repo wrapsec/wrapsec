@@ -100,6 +100,7 @@ class AdminEventAction(str, Enum):
     WEBHOOK_ENDPOINT_CREATED     = "webhook_endpoint_created"
     WEBHOOK_ENDPOINT_UPDATED     = "webhook_endpoint_updated"
     WEBHOOK_ENDPOINT_DELETED     = "webhook_endpoint_deleted"
+    WEBHOOK_ENDPOINT_PAUSED      = "webhook_endpoint_paused"
     WEBHOOK_ENDPOINT_REACTIVATED = "webhook_endpoint_reactivated"
     WEBHOOK_SECRET_ROTATED       = "webhook_secret_rotated"
     # Admin-triggered synthetic test delivery. Audited because it makes the

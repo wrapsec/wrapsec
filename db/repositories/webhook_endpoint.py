@@ -361,6 +361,30 @@ class WebhookEndpointRepository:
         await self._db.flush()
         return await self.get_by_id(endpoint_id)
 
+    async def pause(
+        self,
+        *,
+        endpoint_id: UUID,
+        now:         datetime | None = None,
+    ) -> WebhookEndpointModel | None:
+        """
+        Manually pause delivery to an endpoint (admin action).
+
+        Sets `disabled = True` without touching `first_failure_at`, so a paused
+        healthy endpoint is distinguishable from one the circuit breaker retired
+        (that one carries a failure timestamp). Config, secret, and delivery
+        history are all preserved; resume via reactivate(). Idempotent.
+        """
+        current = ensure_utc(now or utc_now())
+        stmt = (
+            update(WebhookEndpointModel)
+            .where(WebhookEndpointModel.id == endpoint_id)
+            .values(disabled=True, updated_at=current)
+        )
+        await self._db.execute(stmt)
+        await self._db.flush()
+        return await self.get_by_id(endpoint_id)
+
     async def reactivate(
         self,
         *,

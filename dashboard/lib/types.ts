@@ -422,7 +422,7 @@ export interface WebhookEndpoint {
   connector_type:   string | null
   config:           Record<string, string> | null
   disabled:         boolean
-  status:           "active" | "failing" | "auto_disabled"
+  status:           "active" | "failing" | "auto_disabled" | "paused"
   first_failure_at: string | null
   secret_masked:    string
   created_at:       string | null

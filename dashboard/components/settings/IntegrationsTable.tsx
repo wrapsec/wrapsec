@@ -19,6 +19,7 @@ function typeLabel(t: string | null): string {
 const STATUS_STYLE: Record<string, { bg: string; fg: string; bd: string; label: string }> = {
   active:        { bg: "#f0fdf4", fg: "#15803d", bd: "#bbf7d0", label: "Active" },
   failing:       { bg: "#fffbeb", fg: "#b45309", bd: "#fde68a", label: "Failing" },
+  paused:        { bg: "#f3f4f6", fg: "#4b5563", bd: "#e5e7eb", label: "Paused" },
   auto_disabled: { bg: "#fef2f2", fg: "#b91c1c", bd: "#fecaca", label: "Disabled" },
 }
 
@@ -41,11 +42,17 @@ interface Props {
   canWrite:   boolean
   testingId:  string | null
   deletingId: string | null
+  pausingId:  string | null
   onTest:     (ep: WebhookEndpoint) => void
+  onPause:    (ep: WebhookEndpoint) => void
+  onResume:   (ep: WebhookEndpoint) => void
   onDelete:   (ep: WebhookEndpoint) => void
 }
 
-export function IntegrationsTable({ endpoints, canWrite, testingId, deletingId, onTest, onDelete }: Props) {
+export function IntegrationsTable({
+  endpoints, canWrite, testingId, deletingId, pausingId,
+  onTest, onPause, onResume, onDelete,
+}: Props) {
   if (endpoints.length === 0) {
     return (
       <div className="text-center py-12 text-sm text-slate-400">
@@ -84,6 +91,23 @@ export function IntegrationsTable({ endpoints, canWrite, testingId, deletingId, 
                 >
                   {testingId === ep.id ? "Testing..." : "Send test"}
                 </button>
+                {ep.disabled ? (
+                  <button
+                    disabled={!canWrite || pausingId === ep.id}
+                    onClick={() => onResume(ep)}
+                    className="text-xs font-medium text-green-700 hover:underline disabled:opacity-40 disabled:no-underline"
+                  >
+                    {pausingId === ep.id ? "Resuming..." : "Resume"}
+                  </button>
+                ) : (
+                  <button
+                    disabled={!canWrite || pausingId === ep.id}
+                    onClick={() => onPause(ep)}
+                    className="text-xs font-medium text-slate-600 hover:underline disabled:opacity-40 disabled:no-underline"
+                  >
+                    {pausingId === ep.id ? "Pausing..." : "Pause"}
+                  </button>
+                )}
                 <button
                   disabled={!canWrite || deletingId === ep.id}
                   onClick={() => onDelete(ep)}

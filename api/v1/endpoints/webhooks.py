@@ -114,7 +114,12 @@ class WebhookCreateSchema(BaseModel):
         # targets so a compromised admin cannot repurpose the
         # delivery worker as an egress SSRF primitive. SIEM ingest hosts
         # are public HTTPS, so this holds for connector endpoints too.
-        return validate_llm_base_url(v)
+        # Remap the validator's "base_url" wording to "Webhook URL" so the
+        # rejection names the field the caller actually set.
+        try:
+            return validate_llm_base_url(v)
+        except ValueError as exc:
+            raise ValueError(str(exc).replace("base_url", "Webhook URL")) from None
 
     @model_validator(mode="after")
     def _validate_connector(self) -> "WebhookCreateSchema":
@@ -154,7 +159,10 @@ class WebhookUpdateSchema(BaseModel):
     def _url_must_be_ssrf_safe(cls, v: str | None) -> str | None:
         if v is None:
             return v
-        return validate_llm_base_url(v)
+        try:
+            return validate_llm_base_url(v)
+        except ValueError as exc:
+            raise ValueError(str(exc).replace("base_url", "Webhook URL")) from None
 
 
 class WebhookRotateSchema(BaseModel):
@@ -164,11 +172,13 @@ class WebhookRotateSchema(BaseModel):
 # ─── Formatting helpers ─────────────────────────────────────────────
 
 def _health_status(ep: WebhookEndpointModel) -> str:
-    """Computed lifecycle status for the dashboard health chip (v1.3.1):
-    auto_disabled (circuit breaker retired it), failing (in a failure
-    window), or active."""
+    """Computed lifecycle status for the dashboard health chip:
+    paused (admin disabled a healthy endpoint), auto_disabled (circuit breaker
+    retired a failing one), failing (in a failure window), or active. Paused vs
+    auto_disabled is told apart by first_failure_at: the breaker only disables
+    endpoints that carry a failure timestamp, a manual pause leaves it clear."""
     if ep.disabled:
-        return "auto_disabled"
+        return "auto_disabled" if ep.first_failure_at is not None else "paused"
     if ep.first_failure_at is not None:
         return "failing"
     return "active"
@@ -481,6 +491,31 @@ async def rotate_webhook_secret(
         },
     )
     return JSONResponse(content=_format_with_plaintext(ep, plaintext_secret))
+
+
+@router.post("/{endpoint_id}/pause")
+async def pause_webhook(
+    endpoint_id: uuid.UUID,
+    request:     Request,
+    db:          AsyncSession = Depends(get_db),
+    principal:   Principal    = Depends(require_admin()),
+):
+    """Manually pause delivery to an endpoint. Stops events being forwarded
+    while keeping the config, secret, and history intact -- resume with
+    /reactivate. Idempotent on an already-paused endpoint."""
+    tenant_id = uuid.UUID(request.state.tenant_id)
+    repo      = WebhookEndpointRepository(db)
+    await _get_owned_endpoint_or_404(repo, endpoint_id, tenant_id)
+
+    ep = await repo.pause(endpoint_id=endpoint_id)
+    await db.commit()
+
+    await _log_admin_event(
+        db, request, principal, tenant_id,
+        AdminEventAction.WEBHOOK_ENDPOINT_PAUSED,
+        {"endpoint_id": str(endpoint_id)},
+    )
+    return JSONResponse(content=_format_masked(ep))
 
 
 @router.post("/{endpoint_id}/reactivate")
