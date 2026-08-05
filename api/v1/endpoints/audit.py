@@ -542,6 +542,58 @@ async def get_analytics(
         "trend":      trend,
     })
 
+@router.get("/by-source")
+async def get_audit_by_source(
+    request:    Request,
+    from_:      str | None = Query(None, alias="from"),
+    to:         str | None = Query(None),
+    dept_id:    str | None = Query(None),
+    db:         AsyncSession = Depends(get_db),
+    _principal: Principal    = Depends(get_current_principal),
+):
+    """
+    Security by Source: audit aggregates grouped by input_source (trust-boundary
+    provenance) plus a Top Attack Origins ranking. Per source it returns volume,
+    decision mix, block rate, risk distribution, and threat-category counts.
+
+    Read-only over data already stored on audit_logs (input_source since v1.7.0);
+    groups by whatever sources exist, so a new source appears with no code change.
+    Non-admin keys are scoped to their tenant/dept, mirroring /stats.
+    """
+    scope     = get_audit_scope(request)
+    tenant_id = scope.get("tenant_id")
+    dept_id   = scope.get("dept_id", dept_id)
+
+    from_dt, to_dt = _date_range(from_, to)
+
+    repo    = AuditRepository(db)
+    sources = await repo.get_stats_by_source(
+        tenant_id = tenant_id,
+        dept_id   = dept_id,
+        from_dt   = from_dt,
+        to_dt     = to_dt,
+    )
+
+    # Top Attack Origins: sources ranked by enforced-decision volume. Only
+    # sources that actually delivered attacks appear, so the widget stays crisp.
+    top_attack_origins = sorted(
+        [
+            {"input_source": s["input_source"], "attacks": s["attacks"], "total": s["total"]}
+            for s in sources if s["attacks"] > 0
+        ],
+        key=lambda x: x["attacks"],
+        reverse=True,
+    )
+
+    return JSONResponse(content={
+        "period_from":        from_ or to_iso_z(utc_now()),
+        "period_to":          to    or to_iso_z(utc_now()),
+        "dept_id":            dept_id,
+        "sources":            sources,
+        "top_attack_origins": top_attack_origins,
+    })
+
+
 @router.get("/export")
 async def export_audit_logs(
     request:         Request,

@@ -8,6 +8,7 @@ import {
   AuditLogsResponse,
   AgentRunResponse,
   AuditStatsResponse,
+  BySourceResponse,
   Thresholds,
   Layers,
   LLMSettings,
@@ -219,6 +220,19 @@ export async function getAnalytics(params: {
       avg_latency_ms: number
     }[]
   }>(`/v1/audit/analytics?${p.toString()}`)
+}
+
+export async function getBySource(params: {
+  from?:    string
+  to?:      string
+  dept_id?: string
+} = {}): Promise<BySourceResponse> {
+  const p = new URLSearchParams()
+  if (params.from)    p.set("from",    params.from)
+  if (params.to)      p.set("to",      params.to)
+  if (params.dept_id) p.set("dept_id", params.dept_id)
+  const qs = p.toString()
+  return request<BySourceResponse>(`/v1/audit/by-source${qs ? `?${qs}` : ""}`)
 }
 
 export async function exportAuditLogs(params: {

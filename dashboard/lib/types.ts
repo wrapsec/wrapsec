@@ -144,6 +144,35 @@ export interface AuditStatsResponse {
   }
 }
 
+// --- Security by Source ---------------------------------------
+export interface SourceStats {
+  input_source:    string
+  total:           number
+  blocked:         number
+  sanitized:       number
+  allowed:         number
+  block_rate:      number
+  avg_risk:        number
+  max_risk:        number
+  high_risk_count: number
+  attacks:         number
+  threats:         Record<string, number>
+}
+
+export interface AttackOrigin {
+  input_source: string
+  attacks:      number
+  total:        number
+}
+
+export interface BySourceResponse {
+  period_from:        string
+  period_to:          string
+  dept_id:            string | null
+  sources:            SourceStats[]
+  top_attack_origins: AttackOrigin[]
+}
+
 // ── Settings ──────────────────────────────────────────────────
 export interface Thresholds {
   block_threshold:    number

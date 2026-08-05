@@ -336,3 +336,102 @@ class AuditRepository(BaseRepository):
             "p95_latency_ms": p95_latency,
             "top_threats":    top_threats,
         }
+
+    async def get_stats_by_source(
+        self,
+        tenant_id:      str | None = None,
+        dept_id:        str | None = None,
+        from_dt:        datetime | None = None,
+        to_dt:          datetime | None = None,
+        high_risk_floor: float = 0.7,
+    ) -> list[dict]:
+        """
+        Aggregate audit rows grouped by input_source (trust-boundary provenance).
+
+        Per source: volume, decision mix, average/peak risk, high-risk count, and
+        threat-category counts. Powers the Security by Source dashboard and the
+        Top Attack Origins widget. Same scope/date filters and same PG-SQL /
+        SQLite-Python split as get_stats; NULL input_source (pre-v1.7.0 rows) is
+        folded into "user_prompt", the documented default.
+        """
+        filters = []
+        if tenant_id:
+            filters.append(AuditLogModel.tenant_id == tenant_id)
+        if dept_id:
+            filters.append(AuditLogModel.dept_id == dept_id)
+        if from_dt:
+            filters.append(AuditLogModel.created_at >= ensure_utc(from_dt))
+        if to_dt:
+            filters.append(AuditLogModel.created_at <= ensure_utc(to_dt))
+
+        is_pg  = self.session.bind.dialect.name == "postgresql"
+        source = func.coalesce(AuditLogModel.input_source, "user_prompt").label("input_source")
+
+        agg_q = select(
+            source,
+            func.count().label("total"),
+            func.sum(case((AuditLogModel.decision == "BLOCK",    1), else_=0)).label("block_count"),
+            func.sum(case((AuditLogModel.decision == "SANITIZE", 1), else_=0)).label("sanitize_count"),
+            func.sum(case((AuditLogModel.decision == "ALLOW",    1), else_=0)).label("allow_count"),
+            func.avg(AuditLogModel.risk_score).label("avg_risk"),
+            func.max(AuditLogModel.risk_score).label("max_risk"),
+            func.sum(case((AuditLogModel.risk_score >= high_risk_floor, 1), else_=0)).label("high_risk_count"),
+        )
+        if filters:
+            agg_q = agg_q.where(*filters)
+        agg_q = agg_q.group_by(source)
+
+        sources: dict[str, dict] = {}
+        for r in (await self.session.execute(agg_q)).fetchall():
+            key = r.input_source or "user_prompt"
+            sources[key] = {
+                "input_source":    key,
+                "total":           r.total or 0,
+                "blocked":         r.block_count    or 0,
+                "sanitized":       r.sanitize_count or 0,
+                "allowed":         r.allow_count    or 0,
+                "avg_risk":        round(float(r.avg_risk or 0), 4),
+                "max_risk":        round(float(r.max_risk or 0), 4),
+                "high_risk_count": r.high_risk_count or 0,
+                "threats":         {},
+            }
+
+        # Threat-category counts per source. jsonb_array_elements_text unnests the
+        # threats array on PostgreSQL; SQLite falls through to a Python pass.
+        if is_pg:
+            threat_where = list(filters) + [AuditLogModel.threats.isnot(None)]
+            threat_elem  = func.jsonb_array_elements_text(AuditLogModel.threats).label("threat")
+            inner = select(source, threat_elem).where(*threat_where).subquery()
+            tq = (
+                select(inner.c.input_source, inner.c.threat, func.count().label("cnt"))
+                .group_by(inner.c.input_source, inner.c.threat)
+            )
+            for r in (await self.session.execute(tq)).fetchall():
+                key = r.input_source or "user_prompt"
+                if key in sources:
+                    sources[key]["threats"][r.threat] = r.cnt
+        else:
+            tq = select(source, AuditLogModel.threats)
+            if filters:
+                tq = tq.where(*filters)
+            for r in (await self.session.execute(tq)).fetchall():
+                key = r.input_source or "user_prompt"
+                bucket = sources.get(key, {}).get("threats")
+                if bucket is None:
+                    continue
+                for t in (r.threats or []):
+                    bucket[t] = bucket.get(t, 0) + 1
+
+        # Attack volume = enforced decisions (BLOCK + SANITIZE) -- the rows the
+        # gateway acted on. Precise, per-row, no double counting; it drives the
+        # Top Attack Origins ranking, while the threats map above breaks those
+        # attacks down by category for the Security by Source panels.
+        result = []
+        for s in sources.values():
+            s["attacks"]    = s["blocked"] + s["sanitized"]
+            s["block_rate"] = round(s["blocked"] / s["total"], 4) if s["total"] else 0.0
+            result.append(s)
+
+        # Highest-volume sources first for a stable, scannable ordering.
+        result.sort(key=lambda x: x["total"], reverse=True)
+        return result
