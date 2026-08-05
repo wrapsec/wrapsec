@@ -3,6 +3,8 @@
 // WrapSec v1.0 | AI Security Gateway - https://wrapsec.com
 import { useState, Fragment } from "react"
 import { ApiKey } from "@/lib/types"
+import { Table, THead, TBody, Th, Tr } from "@/components/ui/Table"
+import { EmptyState } from "@/components/ui/EmptyState"
 import { formatTimestamp, timeAgo, ensureUtc } from "@/lib/datetime"
 
 interface ApiKeyTableProps {
@@ -21,11 +23,10 @@ export function ApiKeyTable({ keys, onRevoke, onRotate, revoking, canWrite = tru
 
   if (keys.length === 0) {
     return (
-      <div style={{ padding: "48px 16px", textAlign: "center" }}>
-        <div style={{ fontSize: "20px", marginBottom: "8px" }}></div>
-        <div style={{ fontSize: "13px", fontWeight: 600, color: "#374151", marginBottom: "4px" }}>No API keys yet</div>
-        <div style={{ fontSize: "12px", color: "#9ca3af" }}>Create a key to start sending requests to the gateway</div>
-      </div>
+      <EmptyState
+        title="No API keys yet"
+        message="Create a key to start sending requests to the gateway."
+      />
     )
   }
 
@@ -72,26 +73,24 @@ export function ApiKeyTable({ keys, onRevoke, onRotate, revoking, canWrite = tru
         </div>
       )}
 
-      <table className="w-full text-sm" style={{ tableLayout: "fixed" }}>
-          <colgroup>
-            <col style={{ width: "20%" }} />
-            <col style={{ width: "18%" }} />
-            <col style={{ width: "15%" }} />
-            <col style={{ width: "15%" }} />
-            <col style={{ width: "12%" }} />
-            <col style={{ width: "12%" }} />
-            <col style={{ width: "8%" }}  />
-          </colgroup>
-          <thead>
-          <tr className="border-b border-slate-100">
-            {["Name", "Key ID", "Department", "Application", "Created", "Last Used", ""].map((h) => (
-              <th key={h} className="text-left pb-2.5 text-xs font-medium text-slate-500 uppercase tracking-wide">
-                {h}
-              </th>
+      <Table className="table-fixed">
+        <colgroup>
+          <col style={{ width: "20%" }} />
+          <col style={{ width: "18%" }} />
+          <col style={{ width: "15%" }} />
+          <col style={{ width: "15%" }} />
+          <col style={{ width: "12%" }} />
+          <col style={{ width: "12%" }} />
+          <col style={{ width: "8%" }}  />
+        </colgroup>
+        <THead>
+          <tr>
+            {["Name", "Key ID", "Department", "Application", "Created", "Last Used", ""].map((h, i) => (
+              <Th key={h || "actions"} align={i === 6 ? "right" : "left"}>{h}</Th>
             ))}
           </tr>
-        </thead>
-        <tbody>
+        </THead>
+        <TBody>
           {keys.map((key) => {
             // Grace period is only active if expires_at is set AND in the future.
             // ensureUtc parses the API's aware-UTC value (already carries a Z);
@@ -100,14 +99,10 @@ export function ApiKeyTable({ keys, onRevoke, onRotate, revoking, canWrite = tru
 
             return (
               <Fragment key={key.key_id}>
-                <tr
-                  className="border-b border-slate-50"
-                  onMouseEnter={e => (e.currentTarget as HTMLElement).style.background = "#f9fafb"}
-                  onMouseLeave={e => (e.currentTarget as HTMLElement).style.background = ""}
-                >
+                <Tr hover>
 
                   {/* Name + badges */}
-                  <td className="py-3 text-sm font-medium text-slate-900">
+                  <td className="px-4 py-3 text-sm font-medium text-slate-900">
                     <div className="flex flex-col gap-1">
                       {key.name}
                       <div className="flex gap-1 flex-wrap">
@@ -125,11 +120,11 @@ export function ApiKeyTable({ keys, onRevoke, onRotate, revoking, canWrite = tru
                     </div>
                   </td>
 
-                  <td className="py-3 font-mono text-xs text-slate-500" style={{ overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+                  <td className="px-4 py-3 font-mono text-xs text-slate-500" style={{ overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
                     {key.key_id}
                   </td>
 
-                  <td className="py-3 text-xs text-slate-500">
+                  <td className="px-4 py-3 text-xs text-slate-500">
                     {key.dept_name || (key.dept_id ? (
                       <span className="font-mono">{key.dept_id.slice(0, 8)}...</span>
                     ) : (
@@ -137,22 +132,22 @@ export function ApiKeyTable({ keys, onRevoke, onRotate, revoking, canWrite = tru
                     ))}
                   </td>
 
-                  <td className="py-3 text-xs text-slate-500">
+                  <td className="px-4 py-3 text-xs text-slate-500">
                     {key.app_name || (
                       <span className="text-slate-300">Dept-scoped</span>
                     )}
                   </td>
 
-                  <td className="py-3 text-xs text-slate-500">
+                  <td className="px-4 py-3 text-xs text-slate-500">
                     {formatTimestamp(key.created_at)}
                   </td>
 
-                  <td className="py-3 text-xs text-slate-400">
+                  <td className="px-4 py-3 text-xs text-slate-400">
                     {key.last_used_at ? timeAgo(key.last_used_at) : "Never"}
                   </td>
 
                   {/* Actions */}
-                  <td className="py-3 text-right">
+                  <td className="px-4 py-3 text-right">
                     <div className="flex items-center justify-end gap-2">
                       {/* Rotate - hidden for API key sessions */}
                       {canWrite && <button
@@ -187,7 +182,7 @@ export function ApiKeyTable({ keys, onRevoke, onRotate, revoking, canWrite = tru
                       )}
                     </div>
                   </td>
-                </tr>
+                </Tr>
 
                 {/* Revoke confirmation row */}
                 {confirmRevoke === key.key_id && (
@@ -266,8 +261,8 @@ export function ApiKeyTable({ keys, onRevoke, onRotate, revoking, canWrite = tru
               </Fragment>
             )
           })}
-        </tbody>
-      </table>
+        </TBody>
+      </Table>
     </div>
   )
 }

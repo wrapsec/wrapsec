@@ -4,7 +4,7 @@
 import { Decision, ThreatCategory } from "@/lib/types"
 import { THREAT_LABELS } from "@/lib/constants"
 
-// ── DecisionBadge ─────────────────────────────────────────────────────────
+// --- DecisionBadge ---
 
 const DECISION_STYLES: Record<string, React.CSSProperties> = {
   BLOCK:    { background: "#fef2f2", color: "#b91c1c", border: "1px solid #fecaca" },
@@ -30,7 +30,7 @@ export function DecisionBadge({ decision, size = "md" }: { decision: Decision; s
   )
 }
 
-// ── ThreatBadge ───────────────────────────────────────────────────────────
+// --- ThreatBadge ---
 
 const THREAT_STYLES: Record<string, React.CSSProperties> = {
   PROMPT_INJECTION:  { background: "#fef2f2", color: "#b91c1c", border: "1px solid #fecaca" },
@@ -50,6 +50,66 @@ export function ThreatBadge({ threat }: { threat: ThreatCategory }) {
       ...style,
     }}>
       {THREAT_LABELS[threat] || threat}
+    </span>
+  )
+}
+
+// --- SeverityBadge ---
+
+const SEVERITY_STYLES: Record<string, React.CSSProperties> = {
+  CRITICAL: { color: "#dc2626", background: "rgba(220,38,38,0.08)",   border: "1px solid rgba(220,38,38,0.20)"   },
+  HIGH:     { color: "#d97706", background: "rgba(217,119,6,0.08)",   border: "1px solid rgba(217,119,6,0.20)"   },
+  MEDIUM:   { color: "#2563eb", background: "rgba(37,99,235,0.08)",   border: "1px solid rgba(37,99,235,0.20)"   },
+  LOW:      { color: "#6b7280", background: "rgba(107,114,128,0.08)", border: "1px solid rgba(107,114,128,0.20)" },
+}
+
+export function SeverityBadge({ severity }: { severity: string | null }) {
+  if (!severity) return <span style={{ fontSize: "12px", color: "#d1d5db" }}>-</span>
+  const s = SEVERITY_STYLES[severity] ?? SEVERITY_STYLES.LOW
+  return (
+    <span style={{
+      display: "inline-flex", alignItems: "center",
+      padding: "2px 7px", borderRadius: "4px", fontSize: "11px", fontWeight: 600,
+      ...s,
+    }}>
+      {severity}
+    </span>
+  )
+}
+
+// --- ModeBadge (detection / execution mode) ---
+
+export function ModeBadge({ label, active }: { label: string; active: boolean }) {
+  return (
+    <span style={{
+      display: "inline-flex", alignItems: "center",
+      padding: "2px 7px", borderRadius: "4px", fontSize: "11px", fontWeight: 500,
+      border:     active ? "1px solid rgba(103,15,239,0.20)" : "1px solid #e5e7eb",
+      background: active ? "rgba(103,15,239,0.06)" : "#f9fafb",
+      color:      active ? "#670FEF" : "#6b7280",
+    }}>
+      {label}
+    </span>
+  )
+}
+
+// --- SourceBadge (trust-boundary provenance) ---
+
+const UNTRUSTED_SOURCES = new Set(["tool_output", "retrieved_document", "external_content"])
+
+export function SourceBadge({ source }: { source: string | null }) {
+  const s = source ?? "user_prompt"
+  const untrusted = UNTRUSTED_SOURCES.has(s)
+  return (
+    <span
+      className={`inline-flex items-center px-2 py-0.5 rounded text-xs font-medium border ${
+        untrusted
+          ? "bg-amber-50 text-amber-700 border-amber-200"
+          : "bg-slate-50 text-slate-600 border-slate-200"
+      }`}
+      title={untrusted ? "Untrusted origin - indirect prompt-injection surface" : "End-user prompt"}
+    >
+      {s}
     </span>
   )
 }

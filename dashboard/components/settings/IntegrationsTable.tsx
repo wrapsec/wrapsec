@@ -4,6 +4,8 @@
 "use client"
 
 import { WebhookEndpoint } from "@/lib/types"
+import { Table, THead, TBody, Th, Tr, Td } from "@/components/ui/Table"
+import { EmptyState } from "@/components/ui/EmptyState"
 
 const CONNECTOR_LABEL: Record<string, string> = {
   splunk_hec:               "Splunk HEC",
@@ -55,34 +57,35 @@ export function IntegrationsTable({
 }: Props) {
   if (endpoints.length === 0) {
     return (
-      <div className="text-center py-12 text-sm text-slate-400">
-        No integrations yet. Add one to forward BLOCK and SANITIZE events to your SIEM.
-      </div>
+      <EmptyState
+        title="No integrations yet"
+        message="Add one to forward BLOCK and SANITIZE events to your SIEM."
+      />
     )
   }
 
   return (
-    <table className="w-full text-sm">
-      <thead>
-        <tr className="text-left text-xs font-medium text-slate-500 border-b border-slate-200">
-          <th className="px-4 py-2.5">Destination</th>
-          <th className="px-4 py-2.5">Status</th>
-          <th className="px-4 py-2.5">Events</th>
-          <th className="px-4 py-2.5 text-right">Actions</th>
+    <Table>
+      <THead>
+        <tr>
+          <Th>Destination</Th>
+          <Th>Status</Th>
+          <Th>Events</Th>
+          <Th align="right">Actions</Th>
         </tr>
-      </thead>
-      <tbody>
+      </THead>
+      <TBody>
         {endpoints.map(ep => (
-          <tr key={ep.id} className="border-b border-slate-100 last:border-0">
-            <td className="px-4 py-3">
+          <Tr key={ep.id}>
+            <Td>
               <div className="font-medium text-slate-800">{typeLabel(ep.connector_type)}</div>
               <div className="text-xs text-slate-400 break-all">{ep.url}</div>
-            </td>
-            <td className="px-4 py-3"><StatusChip status={ep.status} /></td>
-            <td className="px-4 py-3 text-xs text-slate-500">
+            </Td>
+            <Td><StatusChip status={ep.status} /></Td>
+            <Td className="text-xs text-slate-500">
               {ep.event_types === null ? "All events" : ep.event_types.join(", ")}
-            </td>
-            <td className="px-4 py-3">
+            </Td>
+            <Td align="right">
               <div className="flex items-center justify-end gap-2">
                 <button
                   disabled={!canWrite || testingId === ep.id}
@@ -116,10 +119,10 @@ export function IntegrationsTable({
                   {deletingId === ep.id ? "Removing..." : "Remove"}
                 </button>
               </div>
-            </td>
-          </tr>
+            </Td>
+          </Tr>
         ))}
-      </tbody>
-    </table>
+      </TBody>
+    </Table>
   )
 }

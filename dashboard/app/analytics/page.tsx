@@ -8,6 +8,7 @@ import { useState } from "react"
 import { useTimeRange } from "@/hooks/useTimeRange"
 import { Shell } from "@/components/layout/Shell"
 import { PageHeader } from "@/components/ui/PageHeader"
+import { RangeTabs } from "@/components/ui/RangeTabs"
 import { PageSpinner } from "@/components/ui/Spinner"
 import { POLL_INTERVAL, THREAT_LABELS } from "@/lib/constants"
 import { getAuditStats, getAttribution, getAnalytics, getDepartments, getApplications } from "@/lib/api"
@@ -549,20 +550,12 @@ export default function AnalyticsPage() {
             )}
           </div>
           <div style={{ display: "flex", flexDirection: "column", alignItems: "flex-end", gap: "6px" }}>
-            <div style={{ display: "flex", gap: "2px", background: "#f3f4f6", borderRadius: "7px", padding: "3px" }}>
-              {timeRangeOptions.map(r => (
-                <button key={r} onClick={() => setTimeRange(r)} style={{
-                  fontSize: "12px", fontWeight: timeRange === r ? 600 : 400,
-                  padding: "5px 12px", borderRadius: "5px", border: "none", cursor: "pointer",
-                  background: timeRange === r ? "#fff" : "transparent",
-                  color: timeRange === r ? "#111827" : "#6b7280",
-                  boxShadow: timeRange === r ? "0 1px 3px rgba(0,0,0,0.10)" : "none",
-                  transition: "all 0.15s",
-                }}>
-                  {r === "custom" ? "Custom" : r}
-                </button>
-              ))}
-            </div>
+            <RangeTabs
+              options={timeRangeOptions}
+              value={timeRange}
+              onChange={setTimeRange}
+              format={r => (r === "custom" ? "Custom" : r)}
+            />
 
             {/* Custom date pickers - shown only when "custom" is active */}
             {timeRange === "custom" && (

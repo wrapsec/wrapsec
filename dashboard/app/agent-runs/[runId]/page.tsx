@@ -10,32 +10,11 @@ import { PageHeader } from "@/components/ui/PageHeader"
 import { PageSpinner } from "@/components/ui/Spinner"
 import { EmptyState } from "@/components/ui/EmptyState"
 import { ErrorState } from "@/components/ui/ErrorState"
-import { DecisionBadge } from "@/components/ui/Badge"
+import { DecisionBadge, SourceBadge } from "@/components/ui/Badge"
 import { useBackNav } from "@/hooks/useBackNav"
 import { formatTimestamp } from "@/lib/datetime"
 import { getAgentRun } from "@/lib/api"
 import type { AuditLogItem } from "@/lib/types"
-
-// Untrusted origins -- content the agent pulled in (the indirect prompt-injection
-// surface). Highlighted so a reviewer can see where risk entered the run.
-const UNTRUSTED = new Set(["tool_output", "retrieved_document", "external_content"])
-
-function SourceBadge({ source }: { source: string | null }) {
-  const s = source ?? "user_prompt"
-  const untrusted = UNTRUSTED.has(s)
-  return (
-    <span
-      className={`inline-flex items-center px-2 py-0.5 rounded text-xs font-medium border ${
-        untrusted
-          ? "bg-amber-50 text-amber-700 border-amber-200"
-          : "bg-slate-50 text-slate-600 border-slate-200"
-      }`}
-      title={untrusted ? "Untrusted origin - indirect prompt-injection surface" : "End-user prompt"}
-    >
-      {s}
-    </span>
-  )
-}
 
 function AgentRunInner() {
   const { runId } = useParams<{ runId: string }>()

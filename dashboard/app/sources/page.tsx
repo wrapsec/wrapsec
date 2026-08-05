@@ -7,6 +7,11 @@ import useSWR from "swr"
 import { useTimeRange } from "@/hooks/useTimeRange"
 import { Shell } from "@/components/layout/Shell"
 import { PageHeader } from "@/components/ui/PageHeader"
+import { RangeTabs } from "@/components/ui/RangeTabs"
+import { StatCard } from "@/components/ui/StatCard"
+import { EmptyState } from "@/components/ui/EmptyState"
+import { ErrorState } from "@/components/ui/ErrorState"
+import { Card } from "@/components/ui/Card"
 import { PageSpinner } from "@/components/ui/Spinner"
 import { getBySource } from "@/lib/api"
 import { SourceStats, AttackOrigin } from "@/lib/types"
@@ -60,11 +65,6 @@ const STAT_LABEL: React.CSSProperties = {
   letterSpacing: "0.05em",
   textTransform: "uppercase",
   color: "#9ca3af",
-}
-const STAT_VALUE: React.CSSProperties = {
-  fontSize: "18px",
-  fontWeight: 700,
-  color: "#111827",
 }
 
 // --- Top Attack Origins -------------------------------------------------------
@@ -168,22 +168,13 @@ function SourceCard({ s }: { s: SourceStats }) {
       </div>
 
       <div style={{ display: "grid", gridTemplateColumns: "repeat(4, 1fr)", gap: "12px", marginBottom: "16px" }}>
-        <div>
-          <div style={STAT_LABEL}>Scans</div>
-          <div style={STAT_VALUE}>{formatNumber(s.total)}</div>
-        </div>
-        <div>
-          <div style={STAT_LABEL}>Block Rate</div>
-          <div style={STAT_VALUE}>{(s.block_rate * 100).toFixed(1)}%</div>
-        </div>
-        <div>
-          <div style={STAT_LABEL}>Avg / Peak Risk</div>
-          <div style={STAT_VALUE}>{s.avg_risk.toFixed(2)} <span style={{ fontSize: "12px", color: "#9ca3af", fontWeight: 600 }}>/ {s.max_risk.toFixed(2)}</span></div>
-        </div>
-        <div>
-          <div style={STAT_LABEL}>High Risk</div>
-          <div style={STAT_VALUE}>{formatNumber(s.high_risk_count)}</div>
-        </div>
+        <StatCard label="Scans" value={formatNumber(s.total)} />
+        <StatCard label="Block Rate" value={`${(s.block_rate * 100).toFixed(1)}%`} />
+        <StatCard
+          label="Avg / Peak Risk"
+          value={<>{s.avg_risk.toFixed(2)} <span className="text-xs text-slate-400 font-semibold">/ {s.max_risk.toFixed(2)}</span></>}
+        />
+        <StatCard label="High Risk" value={formatNumber(s.high_risk_count)} />
       </div>
 
       <div style={{ marginBottom: threatEntries.length ? "16px" : 0 }}>
@@ -233,12 +224,10 @@ export default function SourcesPage() {
   if (error && !data) {
     return (
       <Shell title="Security by Source">
-        <div className="max-w-2xl">
-          <div className="bg-red-50 border border-red-200 rounded-xl p-5">
-            <p className="text-sm font-semibold text-red-700 mb-1">Failed to load source analytics</p>
-            <p className="text-xs text-red-500">{error?.message ?? "An unexpected error occurred"}</p>
-          </div>
-        </div>
+        <PageHeader description="Threat picture by trust-boundary provenance." />
+        <Card>
+          <ErrorState title="Failed to load source analytics" message={error?.message} />
+        </Card>
       </Shell>
     )
   }
@@ -250,31 +239,17 @@ export default function SourcesPage() {
     <Shell title="Security by Source">
       <PageHeader
         description="Threat picture by trust-boundary provenance -- which knowledge sources deliver attacks."
-        actions={
-          <div style={{ display: "flex", gap: "2px", background: "#f3f4f6", borderRadius: "7px", padding: "3px" }}>
-            {timeRangeOptions.map(r => (
-              <button key={r} onClick={() => setTimeRange(r)} style={{
-                fontSize: "12px", fontWeight: timeRange === r ? 600 : 400,
-                padding: "5px 12px", borderRadius: "5px", border: "none", cursor: "pointer",
-                background: timeRange === r ? "#fff" : "transparent",
-                color: timeRange === r ? "#111827" : "#6b7280",
-                boxShadow: timeRange === r ? "0 1px 3px rgba(0,0,0,0.10)" : "none",
-                transition: "all 0.15s",
-              }}>
-                {r}
-              </button>
-            ))}
-          </div>
-        }
+        actions={<RangeTabs options={timeRangeOptions} value={timeRange} onChange={setTimeRange} />}
       />
       <div style={{ display: "flex", flexDirection: "column", gap: "20px" }}>
 
         {sources.length === 0 ? (
-          <div style={{ ...CARD, textAlign: "center", padding: "48px 20px" }}>
-            <p style={{ fontSize: "14px", color: "#6b7280", margin: 0 }}>
-              No requests recorded in this time window. Try a different range.
-            </p>
-          </div>
+          <Card>
+            <EmptyState
+              title="No source activity yet"
+              message="No requests recorded in this time window. Try a different range."
+            />
+          </Card>
         ) : (
           <>
             <TopAttackOrigins origins={origins} />

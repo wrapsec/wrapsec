@@ -9,6 +9,7 @@ import { useState } from "react"
 import Link from "next/link"
 import { Shell } from "@/components/layout/Shell"
 import { PageHeader } from "@/components/ui/PageHeader"
+import { RangeTabs } from "@/components/ui/RangeTabs"
 import { PageSpinner } from "@/components/ui/Spinner"
 import { TopThreats } from "@/components/overview/TopThreats"
 import { RecentRequests } from "@/components/overview/RecentRequests"
@@ -470,20 +471,7 @@ export default function OverviewPage() {
               {range === "24h" ? "last 24 hours" : range === "7d" ? "last 7 days" : "last 30 days"}
             </span>
           </p>
-          <div style={{ display: "flex", gap: "2px", background: "#f3f4f6", borderRadius: "7px", padding: "3px" }}>
-            {options.map(r => (
-              <button key={r} onClick={() => setRange(r)} style={{
-                fontSize: "12px", fontWeight: range === r ? 600 : 400,
-                padding: "4px 10px", borderRadius: "5px", border: "none", cursor: "pointer",
-                background: range === r ? "#fff" : "transparent",
-                color:      range === r ? "#111827" : "#6b7280",
-                boxShadow:  range === r ? "0 1px 3px rgba(0,0,0,0.10)" : "none",
-                transition: "all 0.15s",
-              }}>
-                {r}
-              </button>
-            ))}
-          </div>
+          <RangeTabs options={options} value={range} onChange={setRange} />
         </div>
 
         {/* Row 1 - Request summary (time-scoped) */}
