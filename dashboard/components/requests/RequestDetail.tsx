@@ -4,14 +4,24 @@
 "use client"
 
 import { useEffect, useState } from "react"
+import Link from "next/link"
 import { RequestDetail } from "@/lib/types"
 import { getRequest } from "@/lib/api"
-import { DecisionBadge, ThreatBadge, SourceBadge } from "@/components/ui/Badge"
+import { DecisionBadge, ThreatBadge, SourceBadge, SeverityBadge } from "@/components/ui/Badge"
 import { RunPill } from "@/components/ui/RunPill"
+import { CopyButton } from "@/components/ui/CopyButton"
 import { Spinner } from "@/components/ui/Spinner"
+import { Drawer } from "@/components/ui/Drawer"
+import { Tabs, TabDef } from "@/components/ui/Tabs"
+import { DetailGrid, DetailRow, SectionLabel } from "@/components/ui/DetailRow"
 import { formatTimestamp } from "@/lib/datetime"
-import { formatScore, formatLatency } from "@/lib/format"
+import { formatScore, formatLatency, truncateId } from "@/lib/format"
 import { primaryReasonLabel, contentSourceLabel, contentSourceTier } from "@/lib/constants"
+
+interface RequestDetailModalProps {
+  traceId: string
+  onClose: () => void
+}
 
 const TRUST_TIER_LABELS: Record<string, string> = {
   trusted:   "Trusted origin",
@@ -19,49 +29,40 @@ const TRUST_TIER_LABELS: Record<string, string> = {
   unknown:   "Unknown origin",
 }
 
-interface RequestDetailModalProps {
-  traceId: string
-  onClose: () => void
+// Per-layer presentation for the Security Assessment list. Kept here (not in the
+// shared constants) because the colors are drawer-visual, not domain labels.
+const DETECTION_LAYERS = [
+  { key: "rule", label: "Rule detector",         color: "#3b82f6" },
+  { key: "ml",   label: "ML classifier",         color: "#8b5cf6" },
+  { key: "llm",  label: "LLM semantic analysis", color: "#f59e0b" },
+] as const
+
+const GUARDRAIL_META: Record<string, { label: string; color: string }> = {
+  pii:      { label: "PII guardrail",      color: "#ec4899" },
+  toxicity: { label: "Toxicity guardrail", color: "#f97316" },
 }
+
+function riskColor(score: number): string {
+  return score >= 0.7 ? "#dc2626" : score >= 0.4 ? "#d97706" : "#16a34a"
+}
+
+// --- Small building blocks ---------------------------------------------------
 
 function ScoreBar({ score, color }: { score: number; color: string }) {
   return (
     <div className="h-1.5 bg-slate-100 rounded-full overflow-hidden">
-      <div
-        className="h-full rounded-full"
-        style={{ width: `${Math.round(score * 100)}%`, backgroundColor: color }}
-      />
-    </div>
-  )
-}
-
-function MetaChip({ label, value }: { label: string; value: string }) {
-  return (
-    <div className="bg-slate-50 rounded-lg px-3 py-2.5">
-      <p className="text-xs text-slate-400 mb-0.5">{label}</p>
-      <p className="text-xs font-mono text-slate-700 truncate">{value}</p>
+      <div className="h-full rounded-full" style={{ width: `${Math.round(score * 100)}%`, backgroundColor: color }} />
     </div>
   )
 }
 
 function DecisionChip({ label, decision }: { label: string; decision: string | null }) {
-  if (!decision) return (
-    <div className="flex flex-col gap-0.5">
-      <p className="text-xs text-slate-400">{label}</p>
-      <span className="text-xs text-slate-300">--</span>
-    </div>
-  )
-  const colors: Record<string, string> = {
-    ALLOW:    "bg-green-50 text-green-700 border-green-200",
-    SANITIZE: "bg-yellow-50 text-yellow-700 border-yellow-200",
-    BLOCK:    "bg-red-50 text-red-700 border-red-200",
-  }
   return (
     <div className="flex flex-col gap-1">
-      <p className="text-xs text-slate-400">{label}</p>
-      <span className={`inline-flex items-center px-2 py-0.5 rounded text-xs font-medium border w-fit ${colors[decision] ?? "bg-slate-50 text-slate-600 border-slate-200"}`}>
-        {decision}
-      </span>
+      <p className="text-[11px] text-slate-400">{label}</p>
+      {decision
+        ? <DecisionBadge decision={decision as any} size="sm" />
+        : <span className="text-xs text-slate-300">--</span>}
     </div>
   )
 }
@@ -81,412 +82,360 @@ function StatusChip({ status }: { status: string }) {
   )
 }
 
-function TextBlock({
-  label,
-  value,
-  note,
-}: {
-  label: string
-  value: string | null
-  note?: string
+function RawBlock({ label, value, note, open = false }: {
+  label: string; value: string | null; note?: string; open?: boolean
 }) {
   if (!value) return null
   return (
-    <div>
-      <div className="flex items-center gap-2 mb-1.5">
-        <p className="text-xs font-medium text-slate-500">{label}</p>
-        {note && (
-          <span className="text-xs text-yellow-600 font-normal">{note}</span>
-        )}
-      </div>
-      <div className="bg-slate-50 border border-slate-100 rounded-lg px-3 py-2.5 text-xs text-slate-700 font-mono whitespace-pre-wrap break-words max-h-36 overflow-y-auto">
+    <details open={open} className="group">
+      <summary className="flex items-center gap-2 cursor-pointer text-xs font-medium text-slate-500 mb-1.5 list-none">
+        <svg className="w-3 h-3 transition-transform group-open:rotate-90" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24">
+          <path strokeLinecap="round" strokeLinejoin="round" d="M9 5l7 7-7 7" />
+        </svg>
+        {label}
+        {note && <span className="text-yellow-600 font-normal">{note}</span>}
+      </summary>
+      <div className="bg-slate-50 border border-slate-100 rounded-lg px-3 py-2.5 text-xs text-slate-700 font-mono whitespace-pre-wrap break-words max-h-64 overflow-y-auto">
         {value}
+      </div>
+    </details>
+  )
+}
+
+// --- Tab bodies --------------------------------------------------------------
+
+function OverviewTab({ detail }: { detail: RequestDetail }) {
+  const hasAgent = Boolean(detail.run_id || detail.session_id || detail.turn_index != null)
+  const a = detail.attribution
+  return (
+    <div className="space-y-6">
+      <div>
+        <SectionLabel>Verdict</SectionLabel>
+        <DetailGrid>
+          <DetailRow label="Confidence">
+            {detail.confidence !== null
+              ? <span className="inline-flex items-center gap-1.5">
+                  {Math.round((detail.confidence ?? 0) * 100)}%
+                  {detail.confidence_band && (
+                    <span className={`text-[10px] px-1.5 py-0.5 rounded-full font-medium ${
+                      detail.confidence_band === "HIGH"   ? "bg-green-50 text-green-700 border border-green-200"
+                      : detail.confidence_band === "MEDIUM" ? "bg-amber-50 text-amber-700 border border-amber-200"
+                      : "bg-red-50 text-red-700 border border-red-200"
+                    }`}>{detail.confidence_band}</span>
+                  )}
+                </span>
+              : "--"}
+          </DetailRow>
+          <DetailRow label="Latency">{formatLatency(detail.processing.latency_ms)}</DetailRow>
+          <DetailRow label="Primary reason" span>{primaryReasonLabel(detail.primary_reason)}</DetailRow>
+          <DetailRow label="Detection mode">{detail.processing.detection_mode}</DetailRow>
+          <DetailRow label="Execution mode">{detail.processing.execution_mode}</DetailRow>
+          <DetailRow label="LLM invoked">{detail.processing.llm_invoked ? "Yes" : "No"}</DetailRow>
+          <DetailRow label="Input length">
+            {detail.input_length != null ? `${detail.input_length} chars` : "--"}
+          </DetailRow>
+        </DetailGrid>
+      </div>
+
+      {hasAgent && (
+        <div>
+          <SectionLabel>Agent Context</SectionLabel>
+          <DetailGrid>
+            <DetailRow label="Run">
+              {detail.run_id
+                ? <RunPill runId={detail.run_id} turnIndex={detail.turn_index} />
+                : <span className="text-slate-300">--</span>}
+            </DetailRow>
+            <DetailRow label="Turn">{detail.turn_index != null ? String(detail.turn_index) : "--"}</DetailRow>
+            <DetailRow label="Session" mono span>{detail.session_id || "--"}</DetailRow>
+          </DetailGrid>
+        </div>
+      )}
+
+      <div>
+        <div className="flex items-center justify-between mb-3">
+          <SectionLabel>Attribution</SectionLabel>
+          <span className={`text-[11px] px-2 py-0.5 rounded-full ${
+            a.attribution_verified
+              ? "bg-green-50 text-green-700 border border-green-200"
+              : "bg-amber-50 text-amber-700 border border-amber-200"
+          }`}>
+            {a.attribution_verified ? "Verified" : "Self-reported"}
+          </span>
+        </div>
+        <DetailGrid>
+          <DetailRow label="Source">{a.source || "--"}</DetailRow>
+          <DetailRow label="Key ID" mono>{a.key_id || "--"}</DetailRow>
+          <DetailRow label="Department">{a.dept_name || a.dept_id || "--"}</DetailRow>
+          <DetailRow label="Application">{a.app_name || a.app_id || "--"}</DetailRow>
+          <DetailRow label="User ID" mono>{a.user_id || "--"}</DetailRow>
+          <DetailRow label="IP address" mono>{a.ip_address || "--"}</DetailRow>
+          <DetailRow label="Input hash" mono span>{detail.input_hash}</DetailRow>
+        </DetailGrid>
       </div>
     </div>
   )
 }
 
+function AssessmentTab({ detail }: { detail: RequestDetail }) {
+  // One list of scored contributions, highest-first: the "why was this decided?"
+  // answer. Detection layers plus any triggered guardrail.
+  const contributions = [
+    ...DETECTION_LAYERS.map(m => ({
+      label: m.label,
+      color: m.color,
+      score: detail.detection_scores?.[m.key as keyof typeof detail.detection_scores] ?? 0,
+    })),
+    ...Object.entries(detail.guardrail_scores || {}).map(([k, v]) => ({
+      label: GUARDRAIL_META[k]?.label ?? k,
+      color: GUARDRAIL_META[k]?.color ?? "#94a3b8",
+      score: (v as number) ?? 0,
+    })),
+  ].sort((x, y) => y.score - x.score)
+
+  return (
+    <div className="space-y-6">
+      <div>
+        <div className="flex items-center gap-2 mb-3">
+          <SectionLabel>Layer contributions</SectionLabel>
+          <span className="text-[11px] text-slate-400 mb-3">({detail.processing.detection_mode} mode)</span>
+        </div>
+        <div className="space-y-3">
+          {contributions.map(c => (
+            <div key={c.label}>
+              <div className="flex items-center justify-between mb-1.5">
+                <div className="flex items-center gap-2">
+                  <span className="h-2 w-2 rounded-full" style={{ backgroundColor: c.color }} />
+                  <span className="text-sm text-slate-700">{c.label}</span>
+                </div>
+                <span className="text-xs font-mono text-slate-600">{formatScore(c.score)}</span>
+              </div>
+              <ScoreBar score={c.score} color={c.color} />
+            </div>
+          ))}
+        </div>
+      </div>
+
+      {detail.threats.length > 0 && (
+        <div>
+          <SectionLabel>Threats detected</SectionLabel>
+          <div className="flex flex-wrap gap-2">
+            {detail.threats.map(t => <ThreatBadge key={t} threat={t} />)}
+          </div>
+        </div>
+      )}
+    </div>
+  )
+}
+
+function ContentContextTab({ detail }: { detail: RequestDetail }) {
+  const tier = contentSourceTier(detail.input_source)
+  return (
+    <div className="space-y-6">
+      <div>
+        <SectionLabel>Content Context</SectionLabel>
+        <div className="flex items-center gap-3 flex-wrap mb-4">
+          <SourceBadge source={detail.input_source} />
+          <span className="text-xs text-slate-500">{TRUST_TIER_LABELS[tier]}</span>
+        </div>
+        <DetailGrid>
+          <DetailRow label="Content source">{contentSourceLabel(detail.input_source)}</DetailRow>
+          <DetailRow label="Trust boundary">{tier}</DetailRow>
+        </DetailGrid>
+      </div>
+      <p className="text-xs text-slate-400 leading-relaxed">
+        Untrusted content (tool output, retrieved documents, external content) is the
+        indirect prompt-injection surface. Detection runs identically across sources;
+        policy posture can tighten thresholds per source.
+      </p>
+    </div>
+  )
+}
+
+function ProxyTab({ detail }: { detail: RequestDetail }) {
+  const p = detail.proxy!
+  return (
+    <div className="space-y-5">
+      <div className="grid grid-cols-3 gap-3">
+        <DecisionChip label="Input decision"  decision={detail.decision} />
+        <DecisionChip label="Output decision" decision={p.output_decision} />
+        <div className="flex flex-col gap-1">
+          <p className="text-[11px] text-slate-400">Execution status</p>
+          <div className="w-fit"><StatusChip status={p.execution_status} /></div>
+        </div>
+      </div>
+      <DetailGrid>
+        <DetailRow label="Provider">{p.provider || "--"}</DetailRow>
+        <DetailRow label="Model">{p.model || "--"}</DetailRow>
+        <DetailRow label="Provider latency">
+          {p.provider_latency_ms != null ? `${p.provider_latency_ms}ms` : "--"}
+        </DetailRow>
+        <DetailRow label="Attack type">{p.input_attack_type || "--"}</DetailRow>
+      </DetailGrid>
+      {p.output_threats && p.output_threats.length > 0 && (
+        <div>
+          <SectionLabel>Output threats detected</SectionLabel>
+          <div className="flex flex-wrap gap-1">
+            {p.output_threats.map((t: string) => (
+              <span key={t} className="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-pink-50 text-pink-700 border border-pink-200">
+                {t}
+              </span>
+            ))}
+          </div>
+        </div>
+      )}
+    </div>
+  )
+}
+
+function RawTab({ detail }: { detail: RequestDetail }) {
+  const p = detail.proxy!
+  const inputRedacted  = Boolean(p.input_sanitized && p.input_sanitized !== p.input_raw)
+  const outputRedacted = Boolean(p.output_sanitized && p.output_sanitized !== p.output_raw)
+  return (
+    <div className="space-y-3">
+      <RawBlock label="Input - what the user sent" value={p.input_raw} open />
+      {inputRedacted && (
+        <RawBlock label="Input - what the provider received" value={p.input_sanitized} note="(PII redacted)" />
+      )}
+      <RawBlock label="Output - what the provider returned" value={p.output_raw} />
+      {outputRedacted && (
+        <RawBlock label="Output - what the client received" value={p.output_sanitized} note="(PII redacted)" />
+      )}
+    </div>
+  )
+}
+
+// --- Drawer ------------------------------------------------------------------
+
 export function RequestDetailModal({ traceId, onClose }: RequestDetailModalProps) {
   const [detail,  setDetail]  = useState<RequestDetail | null>(null)
   const [loading, setLoading] = useState(true)
   const [error,   setError]   = useState<string | null>(null)
+  const [tab,     setTab]     = useState("overview")
 
   useEffect(() => {
+    let cancelled = false
     const load = async () => {
       try {
         const data = await getRequest(traceId)
-        setDetail(data)
+        if (!cancelled) setDetail(data)
       } catch (e: any) {
-        setError(e.message)
+        if (!cancelled) setError(e.message)
       } finally {
-        setLoading(false)
+        if (!cancelled) setLoading(false)
       }
     }
     load()
+    return () => { cancelled = true }
   }, [traceId])
 
-  useEffect(() => {
-    const handler = (e: KeyboardEvent) => { if (e.key === "Escape") onClose() }
-    document.addEventListener("keydown", handler)
-    return () => document.removeEventListener("keydown", handler)
-  }, [onClose])
+  const hasRaw = Boolean(detail?.proxy && (detail.proxy.input_raw || detail.proxy.output_raw))
 
-  return (
-    <div className="fixed inset-0 bg-black/40 flex items-start justify-center z-50 p-6 overflow-y-auto">
-      <div className="bg-white rounded-xl border border-slate-200 w-full max-w-2xl shadow-lg flex flex-col" style={{ maxHeight: "90vh" }}>
-
-        {/* Header */}
-        <div className="flex items-center justify-between px-6 py-4 border-b border-slate-100 flex-shrink-0">
-          <div>
-            <div className="flex items-center gap-2">
-              <h2 className="text-sm font-semibold text-slate-900">Request Detail</h2>
-              {detail?.is_proxy && (
-                <span style={{
-                  display: "inline-flex",
-                  alignItems: "center",
-                  padding: "2px 6px",
-                  borderRadius: "4px",
-                  fontSize: "11px",
-                  fontWeight: 500,
-                  border: "1px solid #ddd6fe",
-                  backgroundColor: "#f5f3ff",
-                  color: "#6d28d9",
-                }}>
-                  proxy
-                </span>
-              )}
-            </div>
-            <p className="text-xs font-mono text-slate-400 mt-0.5">{traceId}</p>
-          </div>
-          <button onClick={onClose} className="text-slate-400 hover:text-slate-600 transition-colors">
-            <svg className="h-5 w-5" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" />
-            </svg>
-          </button>
-        </div>
-
-        {/* Scrollable content */}
-        <div className="px-6 py-5 space-y-6 overflow-y-auto flex-1">
-
-          {loading && (
-            <div className="flex items-center justify-center py-12">
-              <Spinner className="h-6 w-6" />
-            </div>
-          )}
-
-          {error && (
-            <div className="px-4 py-3 text-sm text-red-700 bg-red-50 border border-red-200 rounded-lg">
-              {error}
-            </div>
-          )}
-
-          {detail && (
-            <>
-              {/* ── Security summary ── */}
-              <div className="flex items-center gap-4 p-4 bg-slate-50 rounded-lg border border-slate-100 flex-wrap">
-                <div>
-                  <p className="text-xs text-slate-500 mb-1">
-                    {detail.is_proxy ? "Input decision" : "Decision"}
-                  </p>
-                  <DecisionBadge decision={detail.decision} />
-                </div>
-                <div className="h-8 w-px bg-slate-200" />
-                <div>
-                  <p className="text-xs text-slate-500 mb-1">Severity</p>
-                  {(() => {
-                    const styles: Record<string, [string, string, string]> = {
-                      CRITICAL: ["#fef2f2", "#b91c1c", "#fecaca"],
-                      HIGH:     ["#fff7ed", "#c2410c", "#fed7aa"],
-                      MEDIUM:   ["#fffbeb", "#b45309", "#fde68a"],
-                      LOW:      ["#f0fdf4", "#15803d", "#bbf7d0"],
-                    }
-                    const [bg, color, border] = styles[detail.severity] ?? styles.LOW
-                    return (
-                      <span style={{
-                        display: "inline-flex", alignItems: "center",
-                        padding: "2px 8px", borderRadius: "4px",
-                        fontSize: "12px", fontWeight: 600,
-                        border: `1px solid ${border}`,
-                        backgroundColor: bg, color,
-                      }}>
-                        {detail.severity}
-                      </span>
-                    )
-                  })()}
-                </div>
-                <div className="h-8 w-px bg-slate-200" />
-                <div>
-                  <p className="text-xs text-slate-500 mb-1">Risk score</p>
-                  <p className="text-sm font-semibold text-slate-900">{formatScore(detail.risk_score)}</p>
-                </div>
-                <div className="h-8 w-px bg-slate-200" />
-                <div>
-                  <p className="text-xs text-slate-500 mb-1">Confidence</p>
-                  <div className="flex items-center gap-1.5">
-                    <p className="text-sm font-semibold text-slate-900">
-                      {detail.confidence !== null ? `${Math.round((detail.confidence ?? 0) * 100)}%` : "--"}
-                    </p>
-                    {detail.confidence_band && (
-                      <span className={`text-xs px-2 py-0.5 rounded-full font-medium ${
-                        detail.confidence_band === "HIGH"   ? "bg-green-50 text-green-700 border border-green-200"
-                        : detail.confidence_band === "MEDIUM" ? "bg-amber-50 text-amber-700 border border-amber-200"
-                        : "bg-red-50 text-red-700 border border-red-200"
-                      }`}>
-                        {detail.confidence_band}
-                      </span>
-                    )}
-                  </div>
-                </div>
-                <div className="h-8 w-px bg-slate-200" />
-                <div>
-                  <p className="text-xs text-slate-500 mb-1">Primary reason</p>
-                  <p className="text-xs text-slate-600">{primaryReasonLabel(detail.primary_reason)}</p>
-                </div>
-                <div className="h-8 w-px bg-slate-200" />
-                <div>
-                  <p className="text-xs text-slate-500 mb-1">Latency</p>
-                  <p className="text-sm font-semibold text-slate-900">{formatLatency(detail.processing.latency_ms)}</p>
-                </div>
-                <div className="h-8 w-px bg-slate-200" />
-                <div>
-                  <p className="text-xs text-slate-500 mb-1">Timestamp</p>
-                  <p className="text-sm text-slate-700">{formatTimestamp(detail.timestamp)}</p>
-                </div>
-              </div>
-
-              {/* Threats */}
-              {detail.threats.length > 0 && (
-                <div>
-                  <p className="text-xs font-semibold text-slate-500 uppercase tracking-wide mb-2">
-                    Threats Detected
-                  </p>
-                  <div className="flex flex-wrap gap-2">
-                    {detail.threats.map((t) => <ThreatBadge key={t} threat={t} />)}
-                  </div>
-                </div>
-              )}
-
-              {/* Content Context -- provenance / trust boundary of the input */}
-              <div>
-                <p className="text-xs font-semibold text-slate-500 uppercase tracking-wide mb-3">
-                  Content Context
-                </p>
-                <div className="flex items-center gap-3 flex-wrap">
-                  <SourceBadge source={detail.input_source} />
-                  <span className="text-xs text-slate-500">
-                    {TRUST_TIER_LABELS[contentSourceTier(detail.input_source)]}
-                  </span>
-                </div>
-              </div>
-
-              {/* Agent Context -- run / session / turn (agentic requests only) */}
-              {(detail.run_id || detail.session_id || detail.turn_index != null) && (
-                <div>
-                  <p className="text-xs font-semibold text-slate-500 uppercase tracking-wide mb-3">
-                    Agent Context
-                  </p>
-                  <div className="grid grid-cols-2 gap-3">
-                    <div className="flex flex-col gap-1">
-                      <p className="text-xs text-slate-400">Run</p>
-                      {detail.run_id
-                        ? <RunPill runId={detail.run_id} turnIndex={detail.turn_index} />
-                        : <span className="text-xs text-slate-300">--</span>}
-                    </div>
-                    <MetaChip label="Turn" value={detail.turn_index != null ? String(detail.turn_index) : "--"} />
-                    <MetaChip label="Session" value={detail.session_id || "--"} />
-                    <MetaChip label="Content source" value={contentSourceLabel(detail.input_source)} />
-                  </div>
-                </div>
-              )}
-
-              {/* Detection layers */}
-              <div>
-                <p className="text-xs font-semibold text-slate-500 uppercase tracking-wide mb-3">
-                  Detection Layers
-                  <span className="ml-2 font-normal normal-case text-slate-400">
-                    ({detail.processing.detection_mode} mode)
-                  </span>
-                </p>
-                <div className="space-y-3">
-                  {[
-                    { label: "Rule-based",    key: "rule", color: "#3b82f6" },
-                    { label: "ML classifier", key: "ml",   color: "#8b5cf6" },
-                    { label: "LLM semantic",  key: "llm",  color: "#f59e0b" },
-                  ].map(({ label, key, color }) => {
-                    const score = detail.detection_scores?.[key as keyof typeof detail.detection_scores] ?? 0
-                    return (
-                      <div key={key}>
-                        <div className="flex items-center justify-between mb-1.5">
-                          <div className="flex items-center gap-2">
-                            <span className="h-2 w-2 rounded-full" style={{ backgroundColor: color }} />
-                            <span className="text-sm text-slate-700">{label}</span>
-                          </div>
-                          <span className="text-xs font-mono text-slate-600">{formatScore(score)}</span>
-                        </div>
-                        <ScoreBar score={score} color={color} />
-                      </div>
-                    )
-                  })}
-                </div>
-              </div>
-
-              <div className="border-t border-slate-100" />
-
-              {/* Guardrail layers */}
-              <div>
-                <p className="text-xs font-semibold text-slate-500 uppercase tracking-wide mb-3">
-                  Guardrail Layers
-                </p>
-                <div className="space-y-3">
-                  {Object.entries(detail.guardrail_scores || {}).map(([key, score]) => {
-                    const label = key === "pii" ? "PII guardrail"
-                      : key === "toxicity" ? "Toxicity guardrail"
-                      : key
-                    const color = key === "toxicity" ? "#f97316" : "#ec4899"
-                    return (
-                      <div key={key}>
-                        <div className="flex items-center justify-between mb-1.5">
-                          <div className="flex items-center gap-2">
-                            <span className="h-2 w-2 rounded-full" style={{ backgroundColor: color }} />
-                            <span className="text-sm text-slate-700">{label}</span>
-                          </div>
-                          <span className="text-xs font-mono text-slate-600">{formatScore(score as number)}</span>
-                        </div>
-                        <ScoreBar score={score as number} color={color} />
-                      </div>
-                    )
-                  })}
-                  {Object.keys(detail.guardrail_scores || {}).length === 0 && (
-                    <p className="text-sm text-slate-400">No guardrails triggered</p>
-                  )}
-                </div>
-              </div>
-
-              {/* ── Proxy lifecycle -- only for proxy requests ── */}
-              {detail.is_proxy && detail.proxy && (
-                <>
-                  <div className="border-t border-slate-100" />
-                  <div>
-                    <div className="flex items-center gap-2 mb-4">
-                      <p className="text-xs font-semibold text-slate-500 uppercase tracking-wide">
-                        Proxy Lifecycle
-                      </p>
-                      <span className="text-xs text-slate-400">
-                        {detail.proxy.provider} / {detail.proxy.model}
-                      </span>
-                    </div>
-
-                    {/* Decisions and status -- clear separation */}
-                    <div className="grid grid-cols-3 gap-3 mb-4">
-                      <DecisionChip label="Input decision"  decision={detail.decision} />
-                      <DecisionChip label="Output decision" decision={detail.proxy.output_decision} />
-                      <div className="flex flex-col gap-1">
-                        <p className="text-xs text-slate-400">Execution status</p>
-                        <div className="w-fit">
-                          <StatusChip status={detail.proxy.execution_status} />
-                        </div>
-                      </div>
-                    </div>
-
-                    {/* Latency breakdown */}
-                    <div className="grid grid-cols-2 gap-3 mb-4">
-                      <MetaChip
-                        label="Provider latency"
-                        value={detail.proxy.provider_latency_ms != null ? `${detail.proxy.provider_latency_ms}ms` : "--"}
-                      />
-                      <MetaChip
-                        label="Attack type"
-                        value={detail.proxy.input_attack_type ?? "--"}
-                      />
-                    </div>
-
-                    {/* Text blocks -- show only what is relevant */}
-                    <div className="space-y-3">
-                      {/* Always show what user sent */}
-                      <TextBlock
-                        label="Input -- what the user sent"
-                        value={detail.proxy.input_raw}
-                      />
-
-                      {/* Show sanitized input only if different from raw */}
-                      {detail.proxy.input_sanitized && detail.proxy.input_sanitized !== detail.proxy.input_raw && (
-                        <TextBlock
-                          label="Input -- what the provider received"
-                          value={detail.proxy.input_sanitized}
-                          note="(PII redacted)"
-                        />
-                      )}
-
-                      {/* Provider response */}
-                      <TextBlock
-                        label="Output -- what the provider returned"
-                        value={detail.proxy.output_raw}
-                      />
-
-                      {/* Show sanitized output only if redaction happened */}
-                      {detail.proxy.output_sanitized && (
-                        <TextBlock
-                          label="Output -- what the client received"
-                          value={detail.proxy.output_sanitized}
-                          note="(PII redacted)"
-                        />
-                      )}
-                    </div>
-
-                    {/* Output threats */}
-                    {detail.proxy.output_threats && detail.proxy.output_threats.length > 0 && (
-                      <div className="mt-3">
-                        <p className="text-xs font-medium text-slate-500 mb-1.5">Output threats detected</p>
-                        <div className="flex flex-wrap gap-1">
-                          {detail.proxy.output_threats.map((t: string) => (
-                            <span key={t} className="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-pink-50 text-pink-700 border border-pink-200">
-                              {t}
-                            </span>
-                          ))}
-                        </div>
-                      </div>
-                    )}
-                  </div>
-                </>
-              )}
-
-              {/* Attribution */}
-              <div className="border-t border-slate-100 pt-4">
-                <div className="flex items-center justify-between mb-3">
-                  <p className="text-xs font-semibold text-slate-500 uppercase tracking-wide">
-                    Attribution
-                  </p>
-                  <span className={`text-xs px-2 py-0.5 rounded-full ${
-                    detail.attribution.attribution_verified
-                      ? "bg-green-50 text-green-700 border border-green-200"
-                      : "bg-amber-50 text-amber-700 border border-amber-200"
-                  }`}>
-                    {detail.attribution.attribution_verified ? "Verified" : "Self-reported"}
-                  </span>
-                </div>
-                <div className="grid grid-cols-2 gap-3">
-                  {[
-                    { label: "Source",          value: detail.attribution.source      || "--" },
-                    { label: "Key ID",          value: detail.attribution.key_id      || "--" },
-                    { label: "Department",      value: detail.attribution.dept_name || detail.attribution.dept_id || "--" },
-                    { label: "Application",     value: detail.attribution.app_name  || detail.attribution.app_id  || "--" },
-                    { label: "User ID",         value: detail.attribution.user_id     || "--" },
-                    { label: "IP address",      value: detail.attribution.ip_address  || "--" },
-                    { label: "Detection mode",  value: detail.processing.detection_mode },
-                    { label: "Execution mode",  value: detail.processing.execution_mode },
-                    { label: "LLM invoked",     value: detail.processing.llm_invoked ? "Yes" : "No" },
-                    { label: "Input length",    value: detail.input_length != null ? `${detail.input_length} chars` : "--" },
-                    { label: "Input hash",      value: detail.input_hash },
-                  ].map(({ label, value }) => (
-                    <MetaChip key={label} label={label} value={value} />
-                  ))}
-                </div>
-              </div>
-
-            </>
-          )}
-        </div>
+  const header = (
+    <div className="px-6 py-4 pr-12">
+      <div className="flex items-center gap-2">
+        <h2 className="text-sm font-semibold text-slate-900">Request Detail</h2>
+        {detail?.is_proxy && (
+          <span className="inline-flex items-center px-1.5 py-0.5 rounded text-[11px] font-medium border border-violet-200 bg-violet-50 text-violet-700">
+            proxy
+          </span>
+        )}
       </div>
     </div>
   )
+
+  const footer = detail ? (
+    <div className="px-6 py-3 flex items-center gap-2 flex-wrap">
+      <span className="text-[11px] font-semibold text-slate-400 uppercase tracking-wide mr-1">
+        Recommended actions
+      </span>
+      {detail.run_id && (
+        <ActionButton href={`/agent-runs/${encodeURIComponent(detail.run_id)}`}>
+          Open Agent Run
+        </ActionButton>
+      )}
+      {hasRaw && (
+        <ActionButton onClick={() => setTab("raw")}>View Raw Request</ActionButton>
+      )}
+      <ActionButton onClick={() => navigator.clipboard?.writeText(traceId)}>
+        Copy Trace ID
+      </ActionButton>
+    </div>
+  ) : undefined
+
+  const tabs: TabDef[] = detail ? [
+    { id: "overview",   label: "Overview",            render: () => <OverviewTab detail={detail} /> },
+    { id: "assessment", label: "Security Assessment", render: () => <AssessmentTab detail={detail} /> },
+    { id: "content",    label: "Content Context",     render: () => <ContentContextTab detail={detail} /> },
+    { id: "proxy",      label: "Proxy",  visible: Boolean(detail.is_proxy && detail.proxy), render: () => <ProxyTab detail={detail} /> },
+    { id: "raw",        label: "Raw",    visible: hasRaw,                                    render: () => <RawTab detail={detail} /> },
+  ] : []
+
+  return (
+    <Drawer onClose={onClose} header={header} footer={footer} label="Request detail">
+      {loading && (
+        <div className="flex items-center justify-center py-16">
+          <Spinner className="h-6 w-6" />
+        </div>
+      )}
+
+      {error && (
+        <div className="m-6 px-4 py-3 text-sm text-red-700 bg-red-50 border border-red-200 rounded-lg">
+          {error}
+        </div>
+      )}
+
+      {detail && (
+        <>
+          {/* Verdict hero: Decision -> Risk (primary, horizontal bar) -> Severity */}
+          <div className="px-6 pt-5 pb-5 border-b border-slate-100">
+            <div className="flex items-center gap-2">
+              <DecisionBadge decision={detail.decision} />
+              {detail.proxy?.output_decision && detail.proxy.output_decision !== detail.decision && (
+                <>
+                  <span className="text-[11px] text-slate-400">-&gt;</span>
+                  <DecisionBadge decision={detail.proxy.output_decision as any} />
+                </>
+              )}
+            </div>
+
+            <div className="mt-4">
+              <div className="flex items-baseline justify-between mb-1.5">
+                <span className="text-[11px] font-medium text-slate-500 uppercase tracking-wide">Risk score</span>
+                <div className="flex items-center gap-2">
+                  <span className="text-2xl font-bold tabular-nums" style={{ color: riskColor(detail.risk_score) }}>
+                    {formatScore(detail.risk_score)}
+                  </span>
+                  <SeverityBadge severity={detail.severity} />
+                </div>
+              </div>
+              <ScoreBar score={detail.risk_score} color={riskColor(detail.risk_score)} />
+            </div>
+
+            <div className="mt-4 flex items-center gap-2 flex-wrap text-xs text-slate-500">
+              <span className="font-mono text-slate-600">{truncateId(traceId)}</span>
+              <CopyButton value={traceId} title="Copy trace id" />
+              <span className="text-slate-300">.</span>
+              <span>{formatTimestamp(detail.timestamp)}</span>
+              <SourceBadge source={detail.input_source} />
+              {detail.run_id && <RunPill runId={detail.run_id} turnIndex={detail.turn_index} />}
+            </div>
+          </div>
+
+          <Tabs tabs={tabs} activeId={tab} onChange={setTab} />
+        </>
+      )}
+    </Drawer>
+  )
+}
+
+// --- Recommended-action button ----------------------------------------------
+
+function ActionButton({ href, onClick, children }: {
+  href?: string; onClick?: () => void; children: React.ReactNode
+}) {
+  const cls = "inline-flex items-center gap-1.5 px-2.5 py-1.5 rounded-md border border-slate-200 text-xs font-medium text-slate-600 hover:bg-slate-50 hover:text-slate-900 transition-colors"
+  if (href) return <Link href={href} className={cls}>{children}</Link>
+  return <button type="button" onClick={onClick} className={cls}>{children}</button>
 }
