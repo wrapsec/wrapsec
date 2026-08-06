@@ -151,6 +151,11 @@ async def test_retrieve_request_by_trace_id(client, admin_headers):
     assert data["decision"] in ("ALLOW", "SANITIZE", "BLOCK")
     assert "input_hash" in data
     assert "processing" in data
+    # Agentic + provenance projection (drives the drawer's Agent / Content Context).
+    for field in ("run_id", "session_id", "turn_index", "input_source"):
+        assert field in data
+    # A plain scan defaults to the user_prompt trust boundary.
+    assert data["input_source"] == "user_prompt"
 
 
 @pytest.mark.asyncio

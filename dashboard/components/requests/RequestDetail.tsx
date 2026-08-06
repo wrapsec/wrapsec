@@ -6,10 +6,18 @@
 import { useEffect, useState } from "react"
 import { RequestDetail } from "@/lib/types"
 import { getRequest } from "@/lib/api"
-import { DecisionBadge, ThreatBadge } from "@/components/ui/Badge"
+import { DecisionBadge, ThreatBadge, SourceBadge } from "@/components/ui/Badge"
+import { RunPill } from "@/components/ui/RunPill"
 import { Spinner } from "@/components/ui/Spinner"
 import { formatTimestamp } from "@/lib/datetime"
 import { formatScore, formatLatency } from "@/lib/format"
+import { primaryReasonLabel, contentSourceLabel, contentSourceTier } from "@/lib/constants"
+
+const TRUST_TIER_LABELS: Record<string, string> = {
+  trusted:   "Trusted origin",
+  untrusted: "Untrusted origin - indirect injection surface",
+  unknown:   "Unknown origin",
+}
 
 interface RequestDetailModalProps {
   traceId: string
@@ -232,7 +240,7 @@ export function RequestDetailModal({ traceId, onClose }: RequestDetailModalProps
                 <div className="h-8 w-px bg-slate-200" />
                 <div>
                   <p className="text-xs text-slate-500 mb-1">Primary reason</p>
-                  <p className="text-xs font-mono text-slate-600">{detail.primary_reason || "--"}</p>
+                  <p className="text-xs text-slate-600">{primaryReasonLabel(detail.primary_reason)}</p>
                 </div>
                 <div className="h-8 w-px bg-slate-200" />
                 <div>
@@ -254,6 +262,39 @@ export function RequestDetailModal({ traceId, onClose }: RequestDetailModalProps
                   </p>
                   <div className="flex flex-wrap gap-2">
                     {detail.threats.map((t) => <ThreatBadge key={t} threat={t} />)}
+                  </div>
+                </div>
+              )}
+
+              {/* Content Context -- provenance / trust boundary of the input */}
+              <div>
+                <p className="text-xs font-semibold text-slate-500 uppercase tracking-wide mb-3">
+                  Content Context
+                </p>
+                <div className="flex items-center gap-3 flex-wrap">
+                  <SourceBadge source={detail.input_source} />
+                  <span className="text-xs text-slate-500">
+                    {TRUST_TIER_LABELS[contentSourceTier(detail.input_source)]}
+                  </span>
+                </div>
+              </div>
+
+              {/* Agent Context -- run / session / turn (agentic requests only) */}
+              {(detail.run_id || detail.session_id || detail.turn_index != null) && (
+                <div>
+                  <p className="text-xs font-semibold text-slate-500 uppercase tracking-wide mb-3">
+                    Agent Context
+                  </p>
+                  <div className="grid grid-cols-2 gap-3">
+                    <div className="flex flex-col gap-1">
+                      <p className="text-xs text-slate-400">Run</p>
+                      {detail.run_id
+                        ? <RunPill runId={detail.run_id} turnIndex={detail.turn_index} />
+                        : <span className="text-xs text-slate-300">--</span>}
+                    </div>
+                    <MetaChip label="Turn" value={detail.turn_index != null ? String(detail.turn_index) : "--"} />
+                    <MetaChip label="Session" value={detail.session_id || "--"} />
+                    <MetaChip label="Content source" value={contentSourceLabel(detail.input_source)} />
                   </div>
                 </div>
               )}

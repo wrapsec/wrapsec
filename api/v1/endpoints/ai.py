@@ -735,6 +735,12 @@ async def get_request(
         "threats":         record.threats or [],
         "input_hash":        record.input_hash,
         "input_length":      record.input_length or 0,
+        # Agentic + provenance context (drives the drawer's Agent / Content
+        # Context sections and a cold ?peek deep-link).
+        "run_id":            record.run_id,
+        "session_id":        record.session_id,
+        "turn_index":        record.turn_index,
+        "input_source":      record.input_source,
         "detection_scores":  record.detection_scores or {},
         "guardrail_scores":  record.guardrail_scores or {},
         "processing": {

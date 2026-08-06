@@ -28,3 +28,15 @@ export function formatLatency(ms: number): string {
   if (ms < 1000) return ms.toFixed(0) + "ms"
   return (ms / 1000).toFixed(1) + "s"
 }
+
+/**
+ * Compact form of a long opaque id for table rows: keeps a readable head and the
+ * last `tail` chars so rows stay scannable while the id stays recognizable. The
+ * full id lives in the detail drawer (with copy). Short ids are returned as-is.
+ */
+export function truncateId(id: string, tail = 7): string {
+  if (id.length <= tail + 5) return id
+  const us = id.indexOf("_")
+  const head = us > 0 && us <= 6 ? id.slice(0, us + 1) : id.slice(0, 4)
+  return head + "..." + id.slice(-tail)
+}

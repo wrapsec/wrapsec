@@ -1,17 +1,21 @@
 // SPDX-License-Identifier: MIT
 // Copyright (c) 2026 WrapSec. All rights reserved.
 // WrapSec v1.0 | AI Security Gateway - https://wrapsec.com
-import Link from "next/link"
-import { DecisionBadge, ThreatBadge, SeverityBadge, ModeBadge } from "@/components/ui/Badge"
+import { DecisionBadge, ThreatBadge, SeverityBadge, SourceBadge } from "@/components/ui/Badge"
 import { Table, THead, TBody, Th, Tr, Td } from "@/components/ui/Table"
 import { EmptyState } from "@/components/ui/EmptyState"
+import { CopyButton } from "@/components/ui/CopyButton"
+import { RunPill } from "@/components/ui/RunPill"
 import { AuditLogItem } from "@/lib/types"
 import { timeAgo } from "@/lib/datetime"
-import { formatLatency } from "@/lib/format"
+import { formatLatency, formatScore, truncateId } from "@/lib/format"
 
+// Triage-first column set: color anchors (Severity / Decision) and the product's
+// headline signal (Content Source) lead; the opaque trace id is demoted to a
+// compact, copyable cell; low-signal Detection / Execution move to the drawer.
 const HEADERS = [
-  "Trace ID", "Severity", "Decision", "Dept / App",
-  "Threats", "Detection", "Execution", "Latency", "Time",
+  "Request", "Time", "Severity", "Decision",
+  "Content Source", "Threats", "Dept / App", "Risk", "Latency",
 ]
 
 export function RequestsTable({ items, onSelect }: {
@@ -21,7 +25,11 @@ export function RequestsTable({ items, onSelect }: {
   return (
     <Table>
       <THead>
-        <tr>{HEADERS.map(h => <Th key={h}>{h}</Th>)}</tr>
+        <tr>
+          {HEADERS.map(h => (
+            <Th key={h} align={h === "Risk" || h === "Latency" ? "right" : "left"}>{h}</Th>
+          ))}
+        </tr>
       </THead>
       <TBody>
         {items.length === 0 ? (
@@ -35,19 +43,23 @@ export function RequestsTable({ items, onSelect }: {
           </tr>
         ) : items.map(item => (
           <Tr key={item.trace_id} onClick={() => onSelect(item.trace_id)}>
-            <Td className="font-mono text-xs text-slate-500 whitespace-nowrap">
-              <div>{item.trace_id}</div>
+            <Td className="whitespace-nowrap">
+              <div className="group flex items-center gap-1.5">
+                <span className="font-mono text-xs text-slate-600">{truncateId(item.trace_id)}</span>
+                <CopyButton
+                  value={item.trace_id}
+                  title="Copy trace id"
+                  className="opacity-0 group-hover:opacity-100"
+                />
+              </div>
               {item.run_id && (
-                <Link
-                  href={`/agent-runs/${encodeURIComponent(item.run_id)}`}
-                  onClick={e => e.stopPropagation()}
-                  title={`Agent run ${item.run_id} - view timeline`}
-                  className="text-[10px] text-[#670FEF] no-underline"
-                >
-                  run {item.run_id.slice(-6)}
-                  {item.turn_index != null ? ` - turn ${item.turn_index}` : ""}
-                </Link>
+                <div className="mt-1">
+                  <RunPill runId={item.run_id} turnIndex={item.turn_index} />
+                </div>
               )}
+            </Td>
+            <Td className="text-xs text-slate-400 whitespace-nowrap">
+              {timeAgo(item.timestamp)}
             </Td>
             <Td><SeverityBadge severity={item.severity} /></Td>
             <Td>
@@ -61,6 +73,13 @@ export function RequestsTable({ items, onSelect }: {
                 <DecisionBadge decision={item.decision} size="sm" />
               )}
             </Td>
+            <Td><SourceBadge source={item.input_source} /></Td>
+            <Td>
+              {item.threats.length === 0
+                ? <span className="text-xs text-slate-300">-</span>
+                : <div className="flex flex-wrap gap-[3px]">{item.threats.map(t => <ThreatBadge key={t} threat={t} />)}</div>
+              }
+            </Td>
             <Td>
               {(item.dept_name || item.app_name) ? (
                 <div className="flex flex-col gap-px">
@@ -71,27 +90,26 @@ export function RequestsTable({ items, onSelect }: {
                 <span className="text-xs text-slate-300">-</span>
               )}
             </Td>
-            <Td>
-              {item.threats.length === 0
-                ? <span className="text-xs text-slate-300">-</span>
-                : <div className="flex flex-wrap gap-[3px]">{item.threats.map(t => <ThreatBadge key={t} threat={t} />)}</div>
-              }
+            <Td className="text-right">
+              <RiskValue score={item.risk_score} />
             </Td>
-            <Td>
-              <ModeBadge label={item.detection_mode === "full" ? "full" : "fast"} active={item.detection_mode === "full"} />
-            </Td>
-            <Td>
-              <ModeBadge label={item.execution_mode === "proxy" ? "proxy" : "scan"} active={item.execution_mode === "proxy"} />
-            </Td>
-            <Td className="text-xs text-slate-500 whitespace-nowrap tabular-nums">
+            <Td className="text-right text-xs text-slate-500 whitespace-nowrap tabular-nums">
               {formatLatency(item.latency_ms)}
-            </Td>
-            <Td className="text-xs text-slate-400 whitespace-nowrap">
-              {timeAgo(item.timestamp)}
             </Td>
           </Tr>
         ))}
       </TBody>
     </Table>
+  )
+}
+
+// Compact risk readout for the row. Color mirrors the policy bands (block /
+// sanitize / allow) so a scan of the column matches the decision column.
+function RiskValue({ score }: { score: number }) {
+  const color = score >= 0.7 ? "#dc2626" : score >= 0.4 ? "#d97706" : "#16a34a"
+  return (
+    <span className="text-xs font-semibold tabular-nums" style={{ color }}>
+      {formatScore(score)}
+    </span>
   )
 }

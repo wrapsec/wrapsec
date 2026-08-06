@@ -259,6 +259,11 @@ export interface RequestDetail {
   threats:         ThreatCategory[]
   input_hash:      string
   input_length:    number | null
+  // v1.7.0 agentic + provenance fields (projected from the audit record)
+  run_id:          string | null
+  session_id:      string | null
+  turn_index:      number | null
+  input_source:    string | null
   detection_scores: {
     rule: number
     ml:   number

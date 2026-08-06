@@ -2,7 +2,7 @@
 // Copyright (c) 2026 WrapSec. All rights reserved.
 // WrapSec v1.0 | AI Security Gateway - https://wrapsec.com
 import { Decision, ThreatCategory } from "@/lib/types"
-import { THREAT_LABELS } from "@/lib/constants"
+import { THREAT_LABELS, contentSourceLabel, isUntrustedSource } from "@/lib/constants"
 
 // --- DecisionBadge ---
 
@@ -95,11 +95,8 @@ export function ModeBadge({ label, active }: { label: string; active: boolean })
 
 // --- SourceBadge (trust-boundary provenance) ---
 
-const UNTRUSTED_SOURCES = new Set(["tool_output", "retrieved_document", "external_content"])
-
 export function SourceBadge({ source }: { source: string | null }) {
-  const s = source ?? "user_prompt"
-  const untrusted = UNTRUSTED_SOURCES.has(s)
+  const untrusted = isUntrustedSource(source)
   return (
     <span
       className={`inline-flex items-center px-2 py-0.5 rounded text-xs font-medium border ${
@@ -109,7 +106,7 @@ export function SourceBadge({ source }: { source: string | null }) {
       }`}
       title={untrusted ? "Untrusted origin - indirect prompt-injection surface" : "End-user prompt"}
     >
-      {s}
+      {contentSourceLabel(source)}
     </span>
   )
 }

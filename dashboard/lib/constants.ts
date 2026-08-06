@@ -37,3 +37,57 @@ export const PAGE_SIZE = 20
 export const VALID_DECISIONS  = Object.keys(DECISION_COLORS)  // ["BLOCK", "SANITIZE", "ALLOW"]
 export const VALID_THREATS    = Object.keys(THREAT_LABELS)     // ["PROMPT_INJECTION", ...]
 export const VALID_EXEC_MODES = ["scan_only", "proxy"] as const // ExecutionMode from types.ts
+
+// --- Content source (input_source / trust-boundary provenance) ---------------
+// One home for the human labels + trust classification so the requests table,
+// the detail drawer, the Sources page, and future RAG / MCP / Agent pages render
+// the same wording. Trust tiers mirror the shipped backend defaults
+// (config/settings.py).
+export const CONTENT_SOURCE_LABELS: Record<string, string> = {
+  user_prompt:        "User Prompt",
+  retrieved_document: "Retrieved Document",
+  tool_output:        "Tool Output",
+  external_content:   "External Content",
+}
+
+const TRUSTED_CONTENT_SOURCES   = new Set(["user_prompt"])
+const UNTRUSTED_CONTENT_SOURCES = new Set([
+  "tool_output", "retrieved_document", "external_content",
+])
+
+/** Human label for an input_source; title-cases unknown values as a fallback. */
+export function contentSourceLabel(source: string | null | undefined): string {
+  const s = source ?? "user_prompt"
+  return CONTENT_SOURCE_LABELS[s] ?? s.replace(/_/g, " ").replace(/\b\w/g, c => c.toUpperCase())
+}
+
+/** Trust classification of a content source (mirrors the backend default config). */
+export function contentSourceTier(source: string | null | undefined): "trusted" | "untrusted" | "unknown" {
+  const s = source ?? "user_prompt"
+  if (UNTRUSTED_CONTENT_SOURCES.has(s)) return "untrusted"
+  if (TRUSTED_CONTENT_SOURCES.has(s))   return "trusted"
+  return "unknown"
+}
+
+/** True for agent-pulled content (the indirect prompt-injection surface). */
+export function isUntrustedSource(source: string | null | undefined): boolean {
+  return contentSourceTier(source) === "untrusted"
+}
+
+// --- Primary reason (why the decision was made) ------------------------------
+export const PRIMARY_REASON_LABELS: Record<string, string> = {
+  RULE_DETECTOR:            "Rule detector",
+  ML_DETECTOR:              "ML classifier",
+  LLM_DETECTOR:             "LLM semantic analysis",
+  PII_GUARDRAIL_BLOCK:      "PII guardrail - blocked",
+  PII_GUARDRAIL_SANITIZE:   "PII guardrail - sanitized",
+  TOXICITY_GUARDRAIL_BLOCK: "Toxicity guardrail - blocked",
+  NO_THREAT_DETECTED:       "No threat detected",
+  SYSTEM_ERROR:             "System error",
+}
+
+/** Human phrase for a primary_reason enum; falls back to the raw value. */
+export function primaryReasonLabel(reason: string | null | undefined): string {
+  if (!reason) return "--"
+  return PRIMARY_REASON_LABELS[reason] ?? reason
+}

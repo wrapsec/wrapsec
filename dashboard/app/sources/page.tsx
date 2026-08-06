@@ -15,29 +15,12 @@ import { Card } from "@/components/ui/Card"
 import { PageSpinner } from "@/components/ui/Spinner"
 import { getBySource } from "@/lib/api"
 import { SourceStats, AttackOrigin } from "@/lib/types"
-import { DECISION_COLORS, THREAT_LABELS } from "@/lib/constants"
+import { DECISION_COLORS, THREAT_LABELS, contentSourceLabel, contentSourceTier } from "@/lib/constants"
 import { formatNumber } from "@/lib/format"
 
-// Provenance display metadata. Trust tiers mirror the shipped default config
-// (config/settings.py); they are a visual hint only -- policy still lives on the
-// backend. An unrecognized source falls back to a title-cased label / unknown.
-const SOURCE_LABELS: Record<string, string> = {
-  user_prompt:        "User Prompt",
-  retrieved_document: "Retrieved Document",
-  tool_output:        "Tool Output",
-  external_content:   "External Content",
-}
-const TRUSTED   = new Set(["user_prompt"])
-const UNTRUSTED = new Set(["tool_output", "retrieved_document", "external_content"])
-
-function sourceLabel(s: string): string {
-  return SOURCE_LABELS[s] ?? s.replace(/_/g, " ").replace(/\b\w/g, c => c.toUpperCase())
-}
-function trustTier(s: string): "trusted" | "untrusted" | "unknown" {
-  if (TRUSTED.has(s))   return "trusted"
-  if (UNTRUSTED.has(s)) return "untrusted"
-  return "unknown"
-}
+// Content-source labels + trust tiers come from the centralized constants
+// (lib/constants.ts) so the table, drawer, and this page stay in sync. TIER_STYLE
+// is this page's local visual mapping for the tier badge.
 const TIER_STYLE: Record<string, { text: string; bg: string; border: string }> = {
   untrusted: { text: "#dc2626", bg: "#fef2f2", border: "#fecaca" },
   trusted:   { text: "#16a34a", bg: "#f0fdf4", border: "#bbf7d0" },
@@ -94,7 +77,7 @@ function TopAttackOrigins({ origins }: { origins: AttackOrigin[] }) {
               {i + 1}
             </div>
             <div style={{ width: "170px", fontSize: "13px", fontWeight: 600, color: "#111827" }}>
-              {sourceLabel(o.input_source)}
+              {contentSourceLabel(o.input_source)}
             </div>
             <div style={{ flex: 1, background: "#f3f4f6", borderRadius: "5px", height: "22px", overflow: "hidden" }}>
               <div style={{
@@ -149,14 +132,14 @@ function DecisionMix({ s }: { s: SourceStats }) {
 // --- Per-source card ----------------------------------------------------------
 
 function SourceCard({ s }: { s: SourceStats }) {
-  const tier   = trustTier(s.input_source)
+  const tier   = contentSourceTier(s.input_source)
   const badge  = TIER_STYLE[tier]
   const threatEntries = Object.entries(s.threats).sort((a, b) => b[1] - a[1])
   return (
     <div style={CARD}>
       <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: "16px" }}>
         <div style={{ fontSize: "15px", fontWeight: 700, color: "#111827" }}>
-          {sourceLabel(s.input_source)}
+          {contentSourceLabel(s.input_source)}
         </div>
         <span style={{
           fontSize: "10px", fontWeight: 700, letterSpacing: "0.04em", textTransform: "uppercase",
