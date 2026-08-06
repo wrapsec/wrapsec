@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: MIT
 // Copyright (c) 2026 WrapSec. All rights reserved.
 // WrapSec v1.0 | AI Security Gateway - https://wrapsec.com
-import { logout, isLoggingOut } from "@/lib/auth"
+import { logout, isLoggingOut, refreshSession } from "@/lib/auth"
 import {
   AIRequest,
   GatewayResponse,
@@ -76,9 +76,9 @@ async function request<T>(
         throw new Error("Logging out")
       }
 
-      // Attempt silent refresh
-      const refreshed = await fetch("/api/auth/refresh", { method: "POST" })
-      if (!refreshed.ok) {
+      // Attempt silent refresh (single-flight: concurrent 401s share one call)
+      const refreshed = await refreshSession()
+      if (!refreshed) {
         await logout("expired")
         window.location.href = "/login"
         throw new Error("Session expired")

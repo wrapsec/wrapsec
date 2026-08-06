@@ -82,15 +82,18 @@ async function handler(request: NextRequest) {
       })
     }
 
-    // JWT token expired - clear cookies and return JSON 401
+    // JWT access token rejected (usually just expired). Return a JSON 401 but do
+    // NOT clear the session cookies here: an expired access token is recoverable
+    // via the refresh token, and the client (lib/api.ts) performs a single-flight
+    // silent refresh + retry on 401. Clearing wrapsec_session preemptively would
+    // open a window where a concurrent page navigation hits the middleware with
+    // no session and gets bounced to /login mid-refresh. Cookie teardown is owned
+    // by the refresh route (on refresh failure) and the logout route.
     if (response.status === 401 && jwtToken && !apiKey) {
-      const res = NextResponse.json(
+      return NextResponse.json(
         { error: { code: "UNAUTHORIZED", message: "Session expired" } },
         { status: 401 }
       )
-      res.cookies.set("wrapsec_jwt",     "", { maxAge: 0, path: "/" })
-      res.cookies.set("wrapsec_session", "", { maxAge: 0, path: "/" })
-      return res
     }
 
     // Parse response as JSON - if backend returns non-JSON, return 502

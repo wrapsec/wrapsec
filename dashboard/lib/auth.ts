@@ -27,6 +27,28 @@
 // See session_management.md Convention 42.
 export let isLoggingOut = false
 
+// ── Single-flight token refresh ───────────────────────────────────────────
+// The backend ROTATES the refresh token on every /auth/refresh (the presented
+// token is revoked and a new one issued). If two refreshes run concurrently
+// with the same token, the second presents an already-rotated token, gets a
+// 401, and forces a spurious logout even though the first refresh succeeded.
+// An actively-browsing user fires several parallel API calls, so when the
+// 30-min access token expires they all 401 at once. Sharing ONE in-flight
+// promise (and routing initAuth/refreshJWT/api.ts through it) guarantees a
+// single rotation per expiry, after which every waiter retries with the new
+// token. Module singletons are shared across the whole client bundle.
+let inflightRefresh: Promise<boolean> | null = null
+
+export function refreshSession(): Promise<boolean> {
+  if (!inflightRefresh) {
+    inflightRefresh = fetch("/api/auth/refresh", { method: "POST" })
+      .then(r => r.ok)
+      .catch(() => false)
+      .finally(() => { inflightRefresh = null })
+  }
+  return inflightRefresh
+}
+
 // ── Mode A: API key login ───────────────────────────────────────────────────
 // Use loginWithApiKey() for API key auth from login page.
 
@@ -90,8 +112,7 @@ export async function refreshJWT(): Promise<boolean> {
    * the proxy reads wrapsec_jwt - which doesn't exist yet on page load.
    * We call it through a dedicated route handler instead.
    */
-  const response = await fetch("/api/auth/refresh", { method: "POST" })
-  return response.ok
+  return refreshSession()
 }
 
 // ── Change password ───────────────────────────────────────────────────────
@@ -183,8 +204,8 @@ export interface LoginResponse {
 
 export async function initAuth(): Promise<AuthUser> {
   isLoggingOut = false  // clear flag - a new session is being established
-  const refreshed = await fetch("/api/auth/refresh", { method: "POST" })
-  if (!refreshed.ok) {
+  const refreshed = await refreshSession()
+  if (!refreshed) {
     throw new Error("No active session")
   }
   return getMe()
