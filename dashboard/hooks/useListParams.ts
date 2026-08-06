@@ -50,7 +50,11 @@ export function useListParams<T extends ParamSpec>(spec: T) {
   // resets both `from` and `to`) -- issuing several setParams calls in the same
   // tick would each read the same stale `search` and clobber one another.
   const setParams = useCallback((updates: Partial<Record<keyof T, string>>) => {
-    const params = new URLSearchParams(search)
+    // Read the LIVE address bar rather than a captured `search` snapshot, so a
+    // write never builds off a stale closure (router.replace updates
+    // window.location synchronously). Falls back to `search` during SSR.
+    const current = typeof window !== "undefined" ? window.location.search : search
+    const params = new URLSearchParams(current)
     for (const [key, val] of Object.entries(updates)) {
       const def = spec[key as keyof T]?.default
       // Drop a param at its default so canonical/default URLs stay clean.
