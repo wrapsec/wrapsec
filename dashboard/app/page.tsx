@@ -6,10 +6,10 @@
 import useSWR from "swr"
 import { formatNumber } from "@/lib/format"
 import { useState } from "react"
-import Link from "next/link"
 import { Shell } from "@/components/layout/Shell"
 import { PageHeader } from "@/components/ui/PageHeader"
 import { RangeTabs } from "@/components/ui/RangeTabs"
+import { KpiCard } from "@/components/ui/KpiCard"
 import { PageSpinner } from "@/components/ui/Spinner"
 import { TopThreats } from "@/components/overview/TopThreats"
 import { RecentRequests } from "@/components/overview/RecentRequests"
@@ -51,24 +51,17 @@ function RequestCards({ stats, from, to }: { stats: AuditStatsResponse; from: st
   ]
 
   return (
-    <div style={{ display: "grid", gridTemplateColumns: "repeat(4, 1fr)", gap: "14px" }}>
+    <div style={{ display: "grid", gridTemplateColumns: "repeat(4, 1fr)", gap: "16px" }}>
       {CARDS.map(card => (
-        <Link key={card.label} href={card.href} style={{ textDecoration: "none" }}>
-          <div style={{
-            ...CARD, borderTop: `3px solid ${card.accent}`, padding: "16px 20px",
-            cursor: "pointer", transition: "box-shadow 0.15s",
-          }}
-            onMouseEnter={e => (e.currentTarget as HTMLElement).style.boxShadow = "0 2px 8px rgba(0,0,0,0.08)"}
-            onMouseLeave={e => (e.currentTarget as HTMLElement).style.boxShadow = "none"}
-          >
-            <p style={LABEL}>{card.label}</p>
-            <p style={{ fontSize: "30px", fontWeight: 700, color: card.color,
-              lineHeight: 1, margin: "0 0 5px 0", fontVariantNumeric: "tabular-nums" }}>
-              {formatNumber(card.value)}
-            </p>
-            <p style={{ fontSize: "11px", color: "#9ca3af", margin: 0 }}>{card.sub}</p>
-          </div>
-        </Link>
+        <KpiCard
+          key={card.label}
+          label={card.label}
+          value={formatNumber(card.value)}
+          sub={card.sub}
+          accent={card.accent}
+          valueColor={card.color}
+          href={card.href}
+        />
       ))}
     </div>
   )

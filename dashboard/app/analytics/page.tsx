@@ -9,6 +9,7 @@ import { useTimeRange } from "@/hooks/useTimeRange"
 import { Shell } from "@/components/layout/Shell"
 import { PageHeader } from "@/components/ui/PageHeader"
 import { RangeTabs } from "@/components/ui/RangeTabs"
+import { KpiCard } from "@/components/ui/KpiCard"
 import { PageSpinner } from "@/components/ui/Spinner"
 import { POLL_INTERVAL, THREAT_LABELS } from "@/lib/constants"
 import { getAuditStats, getAttribution, getAnalytics, getDepartments, getApplications } from "@/lib/api"
@@ -71,20 +72,7 @@ function SecuritySummary({ stats, attribution }: { stats: AuditStatsResponse; at
   return (
     <div style={{ display: "grid", gridTemplateColumns: "repeat(4, 1fr)", gap: "16px" }}>
       {KPIS.map(k => (
-        <div key={k.label} style={{ ...CARD, borderTop: `3px solid ${k.accent}` }}>
-          <div style={{ display: "flex", alignItems: "flex-start", justifyContent: "space-between", marginBottom: "10px" }}>
-            <p style={{ fontSize: "11px", fontWeight: 600, color: "#6b7280", textTransform: "uppercase", letterSpacing: "0.07em", margin: 0, lineHeight: 1.3 }}>
-              {k.label}
-            </p>
-            <div style={{ width: 32, height: 32, borderRadius: "8px", background: k.accent + "12", display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>
-              <svg style={{ width: 16, height: 16 }} fill="none" stroke={k.accent} strokeWidth={1.75} viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" d={k.icon}/>
-              </svg>
-            </div>
-          </div>
-          <p style={{ fontSize: "26px", fontWeight: 700, color: "#111827", lineHeight: 1, margin: "0 0 5px 0" }}>{k.value}</p>
-          <p style={{ fontSize: "11px", color: "#9ca3af", margin: 0 }}>{k.sub}</p>
-        </div>
+        <KpiCard key={k.label} label={k.label} value={k.value} sub={k.sub} accent={k.accent} icon={k.icon} />
       ))}
     </div>
   )
