@@ -4,7 +4,6 @@
 "use client"
 
 import { Suspense, useState } from "react"
-import { formatNumber } from "@/lib/format"
 import { swrKeys } from "@/lib/swrKeys"
 import useSWR from "swr"
 import { Shell } from "@/components/layout/Shell"
@@ -122,17 +121,6 @@ function RequestsPageInner() {
 
   const actions = (
     <>
-      {data && (
-        <div style={{
-          display: "flex", alignItems: "center", gap: "6px", padding: "6px 12px",
-          borderRadius: "6px", background: "#f9fafb", border: "1px solid #e5e7eb",
-        }}>
-          <span style={{ fontSize: "12px", fontWeight: 600, color: "#374151", fontVariantNumeric: "tabular-nums" }}>
-            {formatNumber(data.total)}
-          </span>
-          <span style={{ fontSize: "11px", color: "#9ca3af" }}>requests</span>
-        </div>
-      )}
       {exporting.error && (
         <span style={{ fontSize: "11px", color: "#dc2626", maxWidth: 180 }}>{exporting.error}</span>
       )}
