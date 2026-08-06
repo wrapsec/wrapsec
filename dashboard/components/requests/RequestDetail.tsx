@@ -243,11 +243,6 @@ function ContentContextTab({ detail }: { detail: RequestDetail }) {
           <DetailRow label="Trust boundary">{tier}</DetailRow>
         </DetailGrid>
       </div>
-      <p className="text-xs text-slate-400 leading-relaxed">
-        Untrusted content (tool output, retrieved documents, external content) is the
-        indirect prompt-injection surface. Detection runs identically across sources;
-        policy posture can tighten thresholds per source.
-      </p>
     </div>
   )
 }
