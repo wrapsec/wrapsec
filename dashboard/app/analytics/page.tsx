@@ -523,20 +523,9 @@ export default function AnalyticsPage() {
 
   return (
     <Shell title="Analytics">
-      <PageHeader description="Security intelligence and attribution report." />
-      <div style={{ display: "flex", flexDirection: "column", gap: "20px" }}>
-
-        {/* Time range selector */}
-        <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
-          <div style={{ display: "flex", alignItems: "center", gap: "10px" }}>
-            {(statsLoading || attrLoading) && stats && (
-              <svg style={{ width: 14, height: 14, animation: "spin 1s linear infinite", color: "#670FEF" }} fill="none" viewBox="0 0 24 24">
-                <style>{`@keyframes spin{to{transform:rotate(360deg)}}`}</style>
-                <circle style={{ opacity: 0.25 }} cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"/>
-                <path style={{ opacity: 0.75 }} fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z"/>
-              </svg>
-            )}
-          </div>
+      <PageHeader
+        description="Security intelligence and attribution report."
+        actions={
           <div style={{ display: "flex", flexDirection: "column", alignItems: "flex-end", gap: "6px" }}>
             <RangeTabs
               options={timeRangeOptions}
@@ -578,7 +567,9 @@ export default function AnalyticsPage() {
               </div>
             )}
           </div>
-        </div>
+        }
+      />
+      <div style={{ display: "flex", flexDirection: "column", gap: "20px" }}>
 
         {stats && attribution && <SecuritySummary stats={stats} attribution={attribution} />}
 

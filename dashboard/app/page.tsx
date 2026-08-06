@@ -453,19 +453,11 @@ export default function OverviewPage() {
 
   return (
     <Shell title="Overview">
-      <PageHeader description="Security posture across all AI requests." />
+      <PageHeader
+        description="Security posture across all AI requests."
+        actions={<RangeTabs options={options} value={range} onChange={setRange} />}
+      />
       <div style={{ display: "flex", flexDirection: "column", gap: "16px" }}>
-
-        {/* Time range selector - affects cards, donut, threats, severity */}
-        <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
-          <p style={{ fontSize: "12px", color: "#9ca3af", margin: 0 }}>
-            Request activity ·{" "}
-            <span style={{ color: "#670FEF", fontWeight: 600 }}>
-              {range === "24h" ? "last 24 hours" : range === "7d" ? "last 7 days" : "last 30 days"}
-            </span>
-          </p>
-          <RangeTabs options={options} value={range} onChange={setRange} />
-        </div>
 
         {/* Row 1 - Request summary (time-scoped) */}
         {stats

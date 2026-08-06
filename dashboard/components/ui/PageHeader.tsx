@@ -43,7 +43,7 @@ export function PageHeader({
       {breadcrumb && breadcrumb.length > 0 && <Breadcrumb items={breadcrumb} />}
 
       {showRow && (
-        <div className="flex items-start justify-between gap-3">
+        <div className="flex items-center justify-between gap-3">
           <div className="flex items-center gap-3 min-w-0">
             {showBack && <BackButton onBack={onBack} backHref={backHref} label={backLabel} />}
             {description && (
