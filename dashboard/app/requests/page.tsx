@@ -12,13 +12,14 @@ import { PageHeader } from "@/components/ui/PageHeader"
 import { ErrorState } from "@/components/ui/ErrorState"
 import { RequestFilters } from "@/components/requests/RequestFilters"
 import { RequestsTable } from "@/components/requests/RequestsTable"
+import { SecurityOverview } from "@/components/requests/SecurityOverview"
 import { Pagination } from "@/components/requests/Pagination"
 import { PageSpinner } from "@/components/ui/Spinner"
 import { RequestDetailModal } from "@/components/requests/RequestDetail"
 import { useListParams } from "@/hooks/useListParams"
 import { useDrawerParam } from "@/hooks/useDrawerParam"
 import { PAGE_SIZE } from "@/lib/constants"
-import { getAuditLogs, exportAuditLogs, getDepartments } from "@/lib/api"
+import { getAuditLogs, getAuditStats, exportAuditLogs, getDepartments } from "@/lib/api"
 
 // The URL is the single source of truth for the list view: filters, sort, and
 // pagination all live here, so Back / refresh / deep-links restore the exact
@@ -74,6 +75,23 @@ function RequestsPageInner() {
       sort_order:      sortOrder,
       limit:           PAGE_SIZE,
       offset,
+    }),
+    { refreshInterval: 30000 },
+  )
+
+  // Posture strip, scoped to the SAME filters as the table so its counts match
+  // the rows below. dept_id is honored for admins and ignored (scope-pinned)
+  // for dept-scoped keys, server-side.
+  const { data: stats, isLoading: statsLoading } = useSWR(
+    ["requests-stats", values.trace_id, decision, threat, mode, deptId, from, to],
+    () => getAuditStats({
+      trace_id:        values.trace_id || undefined,
+      decision:        decision || undefined,
+      threat_category: threat || undefined,
+      execution_mode:  mode || undefined,
+      dept_id:         deptId || undefined,
+      from:            from && isValidDateRange ? withStart(from) : undefined,
+      to:              to && isValidDateRange ? withEnd(to) : undefined,
     }),
     { refreshInterval: 30000 },
   )
@@ -165,6 +183,8 @@ function RequestsPageInner() {
             decision: "", threat: "", mode: "", dept_id: "", from: "", to: "", offset: "0",
           })}
         />
+
+        <SecurityOverview stats={stats} loading={statsLoading} />
 
         <div style={{ background: "#fff", border: "1px solid #e5e7eb", borderRadius: "8px", overflow: "hidden" }}>
           {isLoading && !data ? (

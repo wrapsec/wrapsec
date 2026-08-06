@@ -135,6 +135,7 @@ export interface AuditStatsResponse {
   allow_rate:      number
   avg_latency_ms:  number
   p95_latency_ms:  number
+  avg_risk:        number
   top_threats:     ThreatCount[]
   severity_counts: {
     CRITICAL: number

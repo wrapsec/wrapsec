@@ -216,10 +216,14 @@ class AuditRepository(BaseRepository):
 
     async def get_stats(
         self,
-        tenant_id: str | None = None,
-        dept_id:   str | None = None,
-        from_dt:   datetime | None = None,
-        to_dt:     datetime | None = None,
+        tenant_id:       str | None = None,
+        dept_id:         str | None = None,
+        from_dt:         datetime | None = None,
+        to_dt:           datetime | None = None,
+        decision:        str | None = None,
+        threat_category: str | None = None,
+        execution_mode:  str | None = None,
+        trace_id:        str | None = None,
     ) -> dict:
         # Aggregation is done in SQL on PostgreSQL so we do not fan out every
         # latency and threats row into a Python list -- that pattern OOMs once
@@ -246,6 +250,17 @@ class AuditRepository(BaseRepository):
             filters.append(AuditLogModel.created_at >= ensure_utc(from_dt))
         if to_dt:
             filters.append(AuditLogModel.created_at <= ensure_utc(to_dt))
+        # The list-view filters (decision/threat/execution/trace) so a filter-scoped
+        # "Security Overview" strip matches the rows the table shows exactly.
+        # Mirror the same predicates used by list() to avoid strip-vs-table drift.
+        if decision:
+            filters.append(AuditLogModel.decision == decision.upper())
+        if threat_category:
+            filters.append(cast(AuditLogModel.threats, JSONB).contains([threat_category.upper()]))
+        if execution_mode:
+            filters.append(AuditLogModel.execution_mode == execution_mode)
+        if trace_id:
+            filters.append(AuditLogModel.trace_id.ilike(f"%{trace_id}%"))
 
         is_pg = self.session.bind.dialect.name == "postgresql"
 
@@ -255,6 +270,7 @@ class AuditRepository(BaseRepository):
             func.sum(case((AuditLogModel.decision == "SANITIZE", 1), else_=0)).label("sanitize_count"),
             func.sum(case((AuditLogModel.decision == "ALLOW",    1), else_=0)).label("allow_count"),
             func.avg(AuditLogModel.latency_ms).label("avg_latency"),
+            func.avg(AuditLogModel.risk_score).label("avg_risk"),
         ]
         if is_pg:
             # percentile_cont interpolates -- same definition Grafana, Datadog,
@@ -279,10 +295,26 @@ class AuditRepository(BaseRepository):
                 "allow_count":    0,
                 "avg_latency_ms": 0.0,
                 "p95_latency_ms": 0.0,
+                "avg_risk":       0.0,
+                "severities_map": {},
                 "top_threats":    [],
             }
 
         avg_latency = float(row.avg_latency or 0)
+        avg_risk    = float(row.avg_risk or 0)
+
+        # Severity distribution over the SAME filtered set (drives the strip's
+        # severity mini-bar). Kept in the repo so every stats filter applies
+        # uniformly rather than being re-derived at the endpoint.
+        sev_q = select(AuditLogModel.severity, func.count().label("cnt"))
+        if filters:
+            sev_q = sev_q.where(*filters)
+        sev_q = sev_q.group_by(AuditLogModel.severity)
+        severities_map = {
+            r.severity: r.cnt
+            for r in (await self.session.execute(sev_q)).fetchall()
+            if r.severity
+        }
 
         if is_pg:
             p95_latency = float(row.p95_latency or 0)
@@ -334,6 +366,8 @@ class AuditRepository(BaseRepository):
             "allow_count":    row.allow_count    or 0,
             "avg_latency_ms": avg_latency,
             "p95_latency_ms": p95_latency,
+            "avg_risk":       avg_risk,
+            "severities_map": severities_map,
             "top_threats":    top_threats,
         }
 

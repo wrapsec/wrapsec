@@ -167,12 +167,22 @@ export async function getAgentRun(runId: string): Promise<AgentRunResponse> {
 }
 
 export async function getAuditStats(params: {
-  from?: string
-  to?:   string
+  from?:            string
+  to?:              string
+  decision?:        string
+  threat_category?: string
+  execution_mode?:  string
+  dept_id?:         string
+  trace_id?:        string
 } = {}): Promise<AuditStatsResponse> {
   const p = new URLSearchParams()
-  if (params.from) p.set("from", params.from)
-  if (params.to)   p.set("to",   params.to)
+  if (params.from)            p.set("from",            params.from)
+  if (params.to)             p.set("to",             params.to)
+  if (params.decision)        p.set("decision",        params.decision)
+  if (params.threat_category) p.set("threat_category", params.threat_category)
+  if (params.execution_mode)  p.set("execution_mode",  params.execution_mode)
+  if (params.dept_id)         p.set("dept_id",         params.dept_id)
+  if (params.trace_id)        p.set("trace_id",        params.trace_id)
   const qs = p.toString()
   return request<AuditStatsResponse>(`/v1/audit/stats${qs ? `?${qs}` : ""}`)
 }

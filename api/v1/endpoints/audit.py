@@ -223,53 +223,49 @@ async def get_audit_logs(
 
 @router.get("/stats")
 async def get_audit_stats(
-    request:   Request,
-    tenant_id: str | None = Query(None),
-    from_:     str | None = Query(None, alias="from"),
-    to:        str | None = Query(None),
+    request:         Request,
+    tenant_id:       str | None = Query(None),
+    dept_id:         str | None = Query(None),
+    from_:           str | None = Query(None, alias="from"),
+    to:              str | None = Query(None),
+    decision:        str | None = Query(None),
+    threat_category: str | None = Query(None),
+    execution_mode:  str | None = Query(None),
+    trace_id:        str | None = Query(None),
     db:        AsyncSession = Depends(get_db),
     _principal: Principal    = Depends(get_current_principal),
 ):
     """
     Returns aggregated statistics for the given time range.
     Includes: total request count, block/sanitize/allow rates, avg and p95 latency,
-    top threat categories, and severity breakdown (CRITICAL/HIGH/MEDIUM/LOW).
+    average risk, top threat categories, and severity breakdown
+    (CRITICAL/HIGH/MEDIUM/LOW).
+    The list-view filters (decision/threat_category/execution_mode/trace_id) are
+    accepted so a filter-scoped overview matches the rows shown by /logs.
     Non-admin keys are scoped to their own tenant_id.
     Returns zeroed stats (not 404) when no requests match the filters.
     """
     scope     = get_audit_scope(request)
     tenant_id = scope.get("tenant_id", tenant_id)
-    # dept_id enforcement mirrors /logs and /attribution. Without this line
-    # a non-admin (dept-scoped) caller would receive tenant-wide aggregate
-    # counts covering departments they are not allowed to list -- the very
-    # same cross-scope leak we already close for the per-row list endpoint.
-    dept_id   = scope.get("dept_id")
+    # dept_id enforcement mirrors /logs: a non-admin's scope pins dept_id (so any
+    # dept_id query param is ignored and they cannot read across departments),
+    # while an admin (no dept in scope) may narrow by the dept_id query param so
+    # the overview matches a dept-filtered table.
+    dept_id   = scope.get("dept_id", dept_id)
 
     from_dt, to_dt = _date_range(from_, to)
 
     repo  = AuditRepository(db)
     stats = await repo.get_stats(
-        tenant_id = tenant_id,
-        dept_id   = dept_id,
-        from_dt   = from_dt,
-        to_dt     = to_dt,
+        tenant_id       = tenant_id,
+        dept_id         = dept_id,
+        from_dt         = from_dt,
+        to_dt           = to_dt,
+        decision        = decision,
+        threat_category = threat_category,
+        execution_mode  = execution_mode,
+        trace_id        = trace_id,
     )
-
-    # Fetch severity counts - direct query for SIEM-compatible dashboard metrics
-    sev_where = []
-    if tenant_id:
-        sev_where.append(AuditLogModel.tenant_id == tenant_id)
-    if dept_id:
-        sev_where.append(AuditLogModel.dept_id == dept_id)
-    if from_dt:
-        sev_where.append(AuditLogModel.created_at >= from_dt)
-    if to_dt:
-        sev_where.append(AuditLogModel.created_at <= to_dt)
-
-    sev_query  = select(AuditLogModel.severity, func.count().label("count")).where(*sev_where).group_by(AuditLogModel.severity)
-    sev_result = await db.execute(sev_query)
-    sev_rows   = sev_result.fetchall()
-    stats["severities_map"] = {row[0]: row[1] for row in sev_rows if row[0]}
 
     total = stats["total"]
     if total == 0:
@@ -285,7 +281,9 @@ async def get_audit_stats(
             "allow_rate":     0.0,
             "avg_latency_ms": 0.0,
             "p95_latency_ms": 0.0,
+            "avg_risk":       0.0,
             "top_threats":    [],
+            "severity_counts": {"CRITICAL": 0, "HIGH": 0, "MEDIUM": 0, "LOW": 0},
         })
 
     # Severity breakdown - for SIEM compatibility and dashboard triage
@@ -313,6 +311,7 @@ async def get_audit_stats(
         "allow_rate":     round(stats["allow_count"]    / total, 4),
         "avg_latency_ms": round(stats["avg_latency_ms"], 2),
         "p95_latency_ms": round(stats["p95_latency_ms"], 2),
+        "avg_risk":       round(stats["avg_risk"], 4),
         "top_threats":    stats["top_threats"],
         "severity_counts": severity_counts,
     })
