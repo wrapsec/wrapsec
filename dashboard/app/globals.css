@@ -95,3 +95,9 @@ select.ws-input {
 ::-webkit-scrollbar-track { background: transparent; }
 ::-webkit-scrollbar-thumb { background: #d1d5db; border-radius: 3px; }
 ::-webkit-scrollbar-thumb:hover { background: #9ca3af; }
+
+/* Scrollable regions that must stay scrollable but hide the bar (e.g. the
+   collapsed sidebar rail, where a 5px light bar in the narrow dark rail looks
+   like a defect). Scroll still works via wheel/trackpad/keyboard. */
+.no-scrollbar { scrollbar-width: none; -ms-overflow-style: none; }
+.no-scrollbar::-webkit-scrollbar { display: none; }

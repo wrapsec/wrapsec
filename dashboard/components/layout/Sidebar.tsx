@@ -7,7 +7,6 @@ import { useState } from "react"
 import Link from "next/link"
 import { usePathname } from "next/navigation"
 import { useSidebar } from "@/contexts/SidebarContext"
-import { cn } from "@/lib/utils"
 import { AboutModal } from "./AboutModal"
 
 // ── WrapSec logo mark (4 strokes from SVG) ────────────────────────────────
@@ -273,7 +272,7 @@ export function Sidebar() {
         )}
 
         {/* Nav */}
-        <nav style={{
+        <nav className="no-scrollbar" style={{
           flex:       1,
           overflowY:  "auto",
           overflowX:  "hidden",
