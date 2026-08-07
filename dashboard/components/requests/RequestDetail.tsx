@@ -8,14 +8,13 @@ import Link from "next/link"
 import { RequestDetail } from "@/lib/types"
 import { getRequest } from "@/lib/api"
 import { DecisionBadge, ThreatBadge, SourceBadge, SeverityBadge } from "@/components/ui/Badge"
-import { RunPill } from "@/components/ui/RunPill"
 import { CopyButton } from "@/components/ui/CopyButton"
 import { Spinner } from "@/components/ui/Spinner"
 import { Drawer } from "@/components/ui/Drawer"
 import { Tabs, TabDef } from "@/components/ui/Tabs"
 import { DetailGrid, DetailRow, SectionLabel } from "@/components/ui/DetailRow"
 import { formatTimestamp } from "@/lib/datetime"
-import { formatScore, formatLatency, truncateId } from "@/lib/format"
+import { formatScore, formatLatency, truncateId, formatRun } from "@/lib/format"
 import { primaryReasonLabel, contentSourceLabel, contentSourceTier } from "@/lib/constants"
 
 interface RequestDetailModalProps {
@@ -141,11 +140,7 @@ function OverviewTab({ detail }: { detail: RequestDetail }) {
         <div>
           <SectionLabel>Agent Context</SectionLabel>
           <DetailGrid>
-            <DetailRow label="Run">
-              {detail.run_id
-                ? <RunPill runId={detail.run_id} turnIndex={detail.turn_index} />
-                : <span className="text-slate-300">--</span>}
-            </DetailRow>
+            <DetailRow label="Run" mono>{detail.run_id || "--"}</DetailRow>
             <DetailRow label="Turn">{detail.turn_index != null ? String(detail.turn_index) : "--"}</DetailRow>
             <DetailRow label="Session" mono span>{detail.session_id || "--"}</DetailRow>
           </DetailGrid>
@@ -414,7 +409,12 @@ export function RequestDetailModal({ traceId, onClose }: RequestDetailModalProps
               <span className="text-slate-300">.</span>
               <span>{formatTimestamp(detail.timestamp)}</span>
               <SourceBadge source={detail.input_source} />
-              {detail.run_id && <RunPill runId={detail.run_id} turnIndex={detail.turn_index} />}
+              {detail.run_id && (
+                <>
+                  <span className="text-slate-300">.</span>
+                  <span>{formatRun(detail.run_id, detail.turn_index)}</span>
+                </>
+              )}
             </div>
           </div>
 

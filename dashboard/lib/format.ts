@@ -40,3 +40,9 @@ export function truncateId(id: string, tail = 7): string {
   const head = us > 0 && us <= 6 ? id.slice(0, us + 1) : id.slice(0, 4)
   return head + "..." + id.slice(-tail)
 }
+
+/** Short agent-run label for a row/hero, e.g. "run 63c9b6 . turn 1". */
+export function formatRun(runId: string, turnIndex?: number | null): string {
+  const base = `run ${runId.slice(-6)}`
+  return turnIndex != null ? `${base} . turn ${turnIndex}` : base
+}

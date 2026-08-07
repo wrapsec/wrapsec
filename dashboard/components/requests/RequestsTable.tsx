@@ -5,59 +5,72 @@ import { DecisionBadge, ThreatBadge, SeverityBadge, SourceBadge } from "@/compon
 import { Table, THead, TBody, Th, Tr, Td } from "@/components/ui/Table"
 import { EmptyState } from "@/components/ui/EmptyState"
 import { CopyButton } from "@/components/ui/CopyButton"
-import { RunPill } from "@/components/ui/RunPill"
 import { AuditLogItem } from "@/lib/types"
 import { timeAgo } from "@/lib/datetime"
-import { formatLatency, formatScore, truncateId } from "@/lib/format"
+import { formatLatency, formatScore, truncateId, formatRun } from "@/lib/format"
 
-// Triage-first column set: color anchors (Severity / Decision) and the product's
-// headline signal (Content Source) lead; the opaque trace id is demoted to a
-// compact, copyable cell; low-signal Detection / Execution move to the drawer.
-const HEADERS = [
-  "Request", "Time", "Severity", "Decision",
-  "Content Source", "Threats", "Dept / App", "Risk", "Latency",
+// Column set. `compact` columns also appear in the Overview "Recent requests"
+// card (which reuses this table via the compact variant); the rest are full-view
+// only. Keeping one definition means both surfaces stay in sync.
+type Col = { key: string; label: string; compact: boolean; align?: "right" }
+const COLS: Col[] = [
+  { key: "request",  label: "Request",        compact: false },
+  { key: "time",     label: "Time",           compact: true  },
+  { key: "severity", label: "Severity",       compact: true  },
+  { key: "decision", label: "Decision",       compact: true  },
+  { key: "source",   label: "Content Source", compact: false },
+  { key: "threats",  label: "Threats",        compact: true  },
+  { key: "deptapp",  label: "Dept / App",     compact: false },
+  { key: "risk",     label: "Risk",           compact: true,  align: "right" },
+  { key: "latency",  label: "Latency",        compact: false, align: "right" },
 ]
 
-export function RequestsTable({ items, onSelect }: {
+export function RequestsTable({ items, onSelect, compact = false }: {
   items:    AuditLogItem[]
   onSelect: (traceId: string) => void
+  compact?: boolean
 }) {
+  const cols = COLS.filter(c => !compact || c.compact)
+  const show = (key: string) => cols.some(c => c.key === key)
+
   return (
     <Table>
       <THead>
         <tr>
-          {HEADERS.map(h => (
-            <Th key={h} align={h === "Risk" || h === "Latency" ? "right" : "left"}>{h}</Th>
-          ))}
+          {cols.map(c => <Th key={c.key} align={c.align ?? "left"}>{c.label}</Th>)}
         </tr>
       </THead>
       <TBody>
         {items.length === 0 ? (
           <tr>
-            <Td colSpan={HEADERS.length}>
+            <Td colSpan={cols.length}>
               <EmptyState
-                title="No requests found"
-                message="Try adjusting your filters or expanding the time range."
+                title={compact ? "No requests yet" : "No requests found"}
+                message={compact
+                  ? "Requests will appear here as they arrive."
+                  : "Try adjusting your filters or expanding the time range."}
               />
             </Td>
           </tr>
         ) : items.map(item => (
           <Tr key={item.trace_id} onClick={() => onSelect(item.trace_id)}>
-            <Td className="whitespace-nowrap">
-              <div className="group flex items-center gap-1.5">
-                <span className="font-mono text-xs text-slate-600">{truncateId(item.trace_id)}</span>
-                <CopyButton
-                  value={item.trace_id}
-                  title="Copy trace id"
-                  className="opacity-0 group-hover:opacity-100"
-                />
-              </div>
-              {item.run_id && (
-                <div className="mt-1">
-                  <RunPill runId={item.run_id} turnIndex={item.turn_index} />
+            {show("request") && (
+              <Td className="whitespace-nowrap">
+                <div className="group flex items-center gap-1.5">
+                  <span className="font-mono text-xs text-slate-600">{truncateId(item.trace_id)}</span>
+                  <CopyButton
+                    value={item.trace_id}
+                    title="Copy trace id"
+                    className="opacity-0 group-hover:opacity-100"
+                  />
                 </div>
-              )}
-            </Td>
+                {item.run_id && (
+                  <div className="mt-1 text-[10px] text-slate-400 whitespace-nowrap">
+                    {formatRun(item.run_id, item.turn_index)}
+                  </div>
+                )}
+              </Td>
+            )}
             <Td className="text-xs text-slate-400 whitespace-nowrap">
               {timeAgo(item.timestamp)}
             </Td>
@@ -73,29 +86,33 @@ export function RequestsTable({ items, onSelect }: {
                 <DecisionBadge decision={item.decision} size="sm" />
               )}
             </Td>
-            <Td><SourceBadge source={item.input_source} /></Td>
+            {show("source") && <Td><SourceBadge source={item.input_source} /></Td>}
             <Td>
               {item.threats.length === 0
                 ? <span className="text-xs text-slate-300">-</span>
                 : <div className="flex flex-wrap gap-[3px]">{item.threats.map(t => <ThreatBadge key={t} threat={t} />)}</div>
               }
             </Td>
-            <Td>
-              {(item.dept_name || item.app_name) ? (
-                <div className="flex flex-col gap-px">
-                  {item.dept_name && <span className="text-xs text-slate-700 font-medium">{item.dept_name}</span>}
-                  {item.app_name && <span className="text-[11px] text-slate-400">{item.app_name}</span>}
-                </div>
-              ) : (
-                <span className="text-xs text-slate-300">-</span>
-              )}
-            </Td>
+            {show("deptapp") && (
+              <Td>
+                {(item.dept_name || item.app_name) ? (
+                  <div className="flex flex-col gap-px">
+                    {item.dept_name && <span className="text-xs text-slate-700 font-medium">{item.dept_name}</span>}
+                    {item.app_name && <span className="text-[11px] text-slate-400">{item.app_name}</span>}
+                  </div>
+                ) : (
+                  <span className="text-xs text-slate-300">-</span>
+                )}
+              </Td>
+            )}
             <Td className="text-right">
               <RiskValue score={item.risk_score} />
             </Td>
-            <Td className="text-right text-xs text-slate-500 whitespace-nowrap tabular-nums">
-              {formatLatency(item.latency_ms)}
-            </Td>
+            {show("latency") && (
+              <Td className="text-right text-xs text-slate-500 whitespace-nowrap tabular-nums">
+                {formatLatency(item.latency_ms)}
+              </Td>
+            )}
           </Tr>
         ))}
       </TBody>
