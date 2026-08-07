@@ -15,6 +15,15 @@ const COOKIE_SECURE    = process.env.COOKIE_SECURE === "true"
 // should be set via REFRESH_COOKIE_PATH=/api/auth in the api container env.
 const DASHBOARD_ORIGIN = process.env.DASHBOARD_ORIGIN || ""
 const BFF_COOKIE_PATH  = "/api/auth"
+// The middleware routing indicator (wrapsec_session) must outlive the 30-min
+// access token: it marks that a SESSION exists, and the session lives as long as
+// the refresh token (default 30 days). If it expired with the access token, a
+// page navigation in the window before an API call triggered a refresh would hit
+// the middleware with no session cookie and get bounced to /login mid-session.
+// Real access control stays on the JWT (validated on every proxied API call);
+// this cookie only gates the app shell. Override to match the backend's
+// jwt_refresh_token_expire_days if that is not the 30-day default.
+const SESSION_MAX_AGE_S = Number(process.env.SESSION_COOKIE_MAX_AGE_S) || 60 * 60 * 24 * 30
 
 /**
  * Copy every Set-Cookie header the backend emitted onto our BFF response,
@@ -146,12 +155,14 @@ export async function POST(request: NextRequest) {
       path:     "/",
     })
 
-    // Session indicator - httpOnly, used by middleware for route protection only
+    // Session indicator - httpOnly, used by middleware for route protection only.
+    // Lives as long as the refresh token (not the access token) so an active
+    // session is not bounced to /login the moment the access token lapses.
     res.cookies.set("wrapsec_session", "jwt", {
       httpOnly: true,
       secure:   COOKIE_SECURE,
       sameSite: "strict",
-      maxAge:   data.expires_in || 1800,
+      maxAge:   SESSION_MAX_AGE_S,
       path:     "/",
     })
 

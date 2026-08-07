@@ -8,6 +8,10 @@ const COOKIE_SECURE    = process.env.COOKIE_SECURE === "true"
 // M5: BFF Path handshake - see login/route.ts for the full explanation.
 const DASHBOARD_ORIGIN = process.env.DASHBOARD_ORIGIN || ""
 const BFF_COOKIE_PATH  = "/api/auth"
+// See login/route.ts: the middleware session indicator must live as long as the
+// refresh token (default 30 days), not the 30-min access token, or an active
+// session is bounced to /login the moment the access token lapses.
+const SESSION_MAX_AGE_S = Number(process.env.SESSION_COOKIE_MAX_AGE_S) || 60 * 60 * 24 * 30
 
 function forwardBackendSetCookies(backend: Response, out: NextResponse): void {
   const anyHeaders = backend.headers as unknown as { getSetCookie?: () => string[] }
@@ -70,13 +74,15 @@ export async function POST(request: NextRequest) {
     path:     "/",
   })
 
-  // Keep session indicator alive - httpOnly matches login/route.ts
-  // Middleware reads this server-side via request.cookies; JS never needs it.
+  // Keep session indicator alive - httpOnly matches login/route.ts. Lives as
+  // long as the refresh token (not the access token), so navigating after the
+  // access token lapses passes the middleware and the page's first API call
+  // silently refreshes rather than redirecting to /login.
   res.cookies.set("wrapsec_session", "jwt", {
     httpOnly: true,
     secure:   COOKIE_SECURE,
     sameSite: "strict",
-    maxAge:   data.expires_in || 1800,
+    maxAge:   SESSION_MAX_AGE_S,
     path:     "/",
   })
 
