@@ -69,6 +69,20 @@ def _format(app) -> dict:
     }
 
 
+_VALID_ENVIRONMENTS = {"production", "staging", "development"}
+
+
+def _validate_environment(v: str | None) -> str | None:
+    if v is None:
+        return v
+    s = v.strip().lower()
+    if s not in _VALID_ENVIRONMENTS:
+        raise ValueError(
+            f"environment must be one of: {', '.join(sorted(_VALID_ENVIRONMENTS))}"
+        )
+    return s
+
+
 class ApplicationCreateSchema(BaseModel):
     dept_id:            str
     slug:               str
@@ -90,6 +104,11 @@ class ApplicationCreateSchema(BaseModel):
             raise ValueError("slug must contain at least one letter or digit")
         return s
 
+    @field_validator("environment")
+    @classmethod
+    def _valid_environment(cls, v: str | None) -> str | None:
+        return _validate_environment(v)
+
 
 class ApplicationUpdateSchema(BaseModel):
     name:               str  | None = None
@@ -101,6 +120,11 @@ class ApplicationUpdateSchema(BaseModel):
     policy_override:    dict | None = None
     rate_limit_override: int | None = Field(None, ge=1, le=10000)
     is_active:          bool | None = None
+
+    @field_validator("environment")
+    @classmethod
+    def _valid_environment(cls, v: str | None) -> str | None:
+        return _validate_environment(v)
 
 
 @router.post("")

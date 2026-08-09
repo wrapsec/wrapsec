@@ -74,3 +74,27 @@ async def test_application_duplicate_slug_conflicts(auth_client, two_tenant_setu
     )
     assert dup.status_code == 409
     assert dup.json()["error"]["code"] == "CONFLICT"
+
+
+@pytest.mark.asyncio
+async def test_application_environment_enum_enforced(auth_client, two_tenant_setup):
+    a       = two_tenant_setup["A"]
+    token   = a["admin_token"]
+    dept_id = str(a["dept"].id)
+
+    # Invalid environment is rejected (not a free string anymore).
+    bad = await auth_client.post(
+        "/v1/admin/applications",
+        json={"dept_id": dept_id, "slug": "env-bad", "name": "Env Bad", "environment": "prod"},
+        headers=_auth(token),
+    )
+    assert bad.status_code == 422
+
+    # A valid value in mixed case is normalized to lowercase.
+    ok = await auth_client.post(
+        "/v1/admin/applications",
+        json={"dept_id": dept_id, "slug": "env-ok", "name": "Env OK", "environment": "Staging"},
+        headers=_auth(token),
+    )
+    assert ok.status_code == 201, ok.text
+    assert ok.json()["environment"] == "staging"
