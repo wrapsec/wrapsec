@@ -2,13 +2,25 @@
 # Copyright (c) 2026 WrapSec. All rights reserved.
 # WrapSec v1.0 | AI Security Gateway - https://wrapsec.com
 
-from sqlalchemy import select
+from sqlalchemy import select, func
 from sqlalchemy.ext.asyncio import AsyncSession
 from db.models import ApplicationModel
 from db.repositories.base import BaseRepository
 
 
 class ApplicationRepository(BaseRepository):
+
+    async def count_active_by_dept(self, tenant_id) -> dict[str, int]:
+        """Active application count per department for a tenant (dept_id -> count)."""
+        result = await self.session.execute(
+            select(ApplicationModel.dept_id, func.count())
+            .where(
+                ApplicationModel.tenant_id == tenant_id,
+                ApplicationModel.is_active == True,
+            )
+            .group_by(ApplicationModel.dept_id)
+        )
+        return {str(dept_id): count for dept_id, count in result.all()}
 
     async def get_by_slug(self, tenant_id, slug: str) -> ApplicationModel | None:
         result = await self.session.execute(

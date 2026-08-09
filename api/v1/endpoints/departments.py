@@ -15,6 +15,7 @@ from api.v1.middleware.auth import get_client_ip
 from config.settings import get_settings
 from db.models import AuditLogModel
 from db.repositories.admin_event import AdminEventRepository
+from db.repositories.application import ApplicationRepository
 from db.repositories.department import DepartmentRepository
 from domain.entities.principal import Principal
 from domain.enums import AdminEventAction
@@ -66,17 +67,18 @@ def _mask_policy_override(override: dict | None) -> dict | None:
     return result
 
 
-def _format(dept) -> dict:
+def _format(dept, application_count: int = 0) -> dict:
     return {
-        "id":              str(dept.id),
-        "tenant_id":       str(dept.tenant_id),
-        "slug":            dept.slug,
-        "name":            dept.name,
-        "description":     dept.description,
-        "policy_override": _mask_policy_override(dept.policy_override),
-        "contact_email":   dept.contact_email,
-        "is_active":       dept.is_active,
-        "created_at":      to_iso_z(dept.created_at),
+        "id":                str(dept.id),
+        "tenant_id":         str(dept.tenant_id),
+        "slug":              dept.slug,
+        "name":              dept.name,
+        "description":       dept.description,
+        "policy_override":   _mask_policy_override(dept.policy_override),
+        "contact_email":     dept.contact_email,
+        "is_active":         dept.is_active,
+        "application_count": application_count,
+        "created_at":        to_iso_z(dept.created_at),
     }
 
 
@@ -226,7 +228,11 @@ async def list_departments(
     else:
         dept = await repo.get_by_id(uuid.UUID(request.state.dept_id))
         items = [dept] if dept else []
-    return JSONResponse(content={"departments": [_format(d) for d in items]})
+
+    counts = await ApplicationRepository(db).count_active_by_dept(tenant_id)
+    return JSONResponse(content={
+        "departments": [_format(d, counts.get(str(d.id), 0)) for d in items],
+    })
 
 
 @router.get("/{dept_id}/stats")

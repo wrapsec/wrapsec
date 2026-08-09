@@ -15,6 +15,8 @@ import { PageSpinner } from "@/components/ui/Spinner"
 import { getDepartments, createDepartment, deleteDepartment } from "@/lib/api"
 import Link from "next/link"
 import { slugify } from "@/lib/utils"
+import { Table, THead, TBody, Th, Tr, Td } from "@/components/ui/Table"
+import { NameSlug, PolicyBadge } from "@/components/admin/ListCells"
 
 export default function DepartmentsPage() {
   const [showCreate,        setShowCreate]        = useState(false)
@@ -162,111 +164,80 @@ export default function DepartmentsPage() {
             </div>
           ) : (
             <div style={{ overflowY: "auto", maxHeight: "520px" }}>
-            <table className="w-full text-sm">
-              <thead>
-                <tr className="border-b border-slate-100 bg-slate-50">
-                  {["Name", "Slug", "Description", "Contact", "Policy Override", ""].map((h) => (
-                    <th key={h} className="text-left px-5 py-2.5 text-xs font-medium text-slate-500 uppercase tracking-wide">
-                      {h}
-                    </th>
-                  ))}
-                </tr>
-              </thead>
-              <tbody>
-                {(data?.departments ?? []).length === 0 ? (
+              <Table>
+                <THead>
                   <tr>
-                    <td colSpan={6} className="px-5 py-14 text-center">
-                      <div style={{ fontSize: "20px", marginBottom: "8px" }}></div>
-                      <div className="text-sm font-semibold text-slate-700 mb-1">No departments yet</div>
-                      <div className="text-xs text-slate-400">Create a department to organise your API keys and policy overrides</div>
-                    </td>
+                    {["Name", "Apps", "Contact", "Policy", ""].map((h) => (
+                      <Th key={h} align={h === "Apps" ? "right" : "left"}>{h}</Th>
+                    ))}
                   </tr>
-                ) : (
-                  (data?.departments ?? [])
-                    .filter((dept) => {
-                      if (!search) return true
-                      const q = search.toLowerCase()
-                      return (
-                        dept.name.toLowerCase().includes(q) ||
-                        dept.slug.toLowerCase().includes(q) ||
-                        (dept.description ?? "").toLowerCase().includes(q)
-                      )
-                    })
-                    .map((dept) => (
-                    <Fragment key={dept.id}>
-                      <tr
-                        className="border-b border-slate-50"
-                        onMouseEnter={e => (e.currentTarget as HTMLElement).style.background = "#f9fafb"}
-                        onMouseLeave={e => (e.currentTarget as HTMLElement).style.background = ""}
-                      >
-                        <td className="px-5 py-3 font-medium text-slate-900">{dept.name}</td>
-                        <td className="px-5 py-3 font-mono text-xs text-slate-500">{dept.slug}</td>
-                        <td className="px-5 py-3 text-xs text-slate-500">{dept.description || "-"}</td>
-                        <td className="px-5 py-3 text-xs text-slate-500">{dept.contact_email || "-"}</td>
-                        <td className="px-5 py-3">
-                          {dept.policy_override ? (
-                            <span className="text-xs px-2 py-0.5 rounded-full bg-blue-50 text-blue-700 border border-blue-200">
-                              Overridden
-                            </span>
-                          ) : (
-                            <span className="text-xs text-slate-400">Inherits global</span>
-                          )}
-                        </td>
-                        <td className="px-5 py-3 text-right">
-                          <div className="flex items-center justify-end gap-3">
-                            <Link
-                              href={`/departments/${dept.id}`}
-                              style={{ fontSize: "12px", color: "#1d4ed8" }}
-                              onMouseEnter={e => (e.currentTarget as HTMLElement).style.textDecoration = "underline"}
-                              onMouseLeave={e => (e.currentTarget as HTMLElement).style.textDecoration = "none"}
-                            >
-                              Manage
-                            </Link>
-                            {isJwt && dept.slug !== "default" && (
-                              <button
-                                onClick={() => setConfirmDeactivate(confirmDeactivate === dept.id ? null : dept.id)}
-                                style={{ fontSize: "12px", color: "#dc2626", background: "none", border: "none", cursor: "pointer", padding: 0 }}
-                                onMouseEnter={e => (e.currentTarget as HTMLElement).style.textDecoration = "underline"}
-                                onMouseLeave={e => (e.currentTarget as HTMLElement).style.textDecoration = "none"}
-                              >
-                                Deactivate
-                              </button>
-                            )}
-                          </div>
-                        </td>
-                      </tr>
-                      {confirmDeactivate === dept.id && (
-                        <tr style={{ background: "#fff5f5" }}>
-                          <td colSpan={6} className="px-5 py-3">
-                            <div className="flex items-center gap-3">
-                              <p className="text-xs text-red-700 whitespace-nowrap">
-                                This will permanently deactivate the department and all its keys.
-                              </p>
-                              <button
-                                onClick={() => handleDeactivate(dept.id)}
-                                style={{ fontSize: "12px", fontWeight: 500, color: "#fff", background: "#dc2626", border: "none", cursor: "pointer", padding: "4px 12px", borderRadius: "4px", whiteSpace: "nowrap" }}
-                                onMouseEnter={e => (e.currentTarget as HTMLElement).style.background = "#b91c1c"}
-                                onMouseLeave={e => (e.currentTarget as HTMLElement).style.background = "#dc2626"}
-                              >
-                                Confirm deactivate
-                              </button>
-                              <button
-                                onClick={() => setConfirmDeactivate(null)}
-                                style={{ fontSize: "12px", color: "#6b7280", background: "none", border: "none", cursor: "pointer", padding: 0 }}
-                                onMouseEnter={e => (e.currentTarget as HTMLElement).style.color = "#374151"}
-                                onMouseLeave={e => (e.currentTarget as HTMLElement).style.color = "#6b7280"}
-                              >
-                                Cancel
-                              </button>
+                </THead>
+                <TBody>
+                  {(data?.departments ?? []).length === 0 ? (
+                    <tr>
+                      <Td colSpan={5}>
+                        <div className="px-5 py-14 text-center">
+                          <div className="text-sm font-semibold text-slate-700 mb-1">No departments yet</div>
+                          <div className="text-xs text-slate-400">Create a department to organise your API keys and policy overrides</div>
+                        </div>
+                      </Td>
+                    </tr>
+                  ) : (
+                    (data?.departments ?? [])
+                      .filter((dept) => {
+                        if (!search) return true
+                        const q = search.toLowerCase()
+                        return dept.name.toLowerCase().includes(q) || dept.slug.toLowerCase().includes(q)
+                      })
+                      .map((dept) => (
+                      <Fragment key={dept.id}>
+                        <Tr hover>
+                          <Td><NameSlug name={dept.name} slug={dept.slug} /></Td>
+                          <Td align="right" className="text-sm text-slate-700 tabular-nums">{dept.application_count ?? 0}</Td>
+                          <Td className="text-xs text-slate-500">{dept.contact_email || "-"}</Td>
+                          <Td><PolicyBadge overridden={!!dept.policy_override} inheritsLabel="Inherits global" /></Td>
+                          <Td align="right">
+                            <div className="flex items-center justify-end gap-3">
+                              <Link href={`/departments/${dept.id}`} className="text-xs text-blue-700 hover:underline">Manage</Link>
+                              {isJwt && dept.slug !== "default" && (
+                                <button
+                                  onClick={() => setConfirmDeactivate(confirmDeactivate === dept.id ? null : dept.id)}
+                                  className="text-xs text-red-600 hover:underline cursor-pointer"
+                                >
+                                  Deactivate
+                                </button>
+                              )}
                             </div>
-                          </td>
-                        </tr>
-                      )}
-                    </Fragment>
-                  ))
-                )}
-              </tbody>
-            </table>
+                          </Td>
+                        </Tr>
+                        {confirmDeactivate === dept.id && (
+                          <tr className="bg-red-50">
+                            <Td colSpan={5}>
+                              <div className="flex items-center gap-3">
+                                <p className="text-xs text-red-700 whitespace-nowrap">
+                                  This will permanently deactivate the department and all its keys.
+                                </p>
+                                <button
+                                  onClick={() => handleDeactivate(dept.id)}
+                                  className="text-xs font-medium text-white bg-red-600 hover:bg-red-700 px-3 py-1 rounded whitespace-nowrap cursor-pointer"
+                                >
+                                  Confirm deactivate
+                                </button>
+                                <button
+                                  onClick={() => setConfirmDeactivate(null)}
+                                  className="text-xs text-slate-500 hover:text-slate-700 cursor-pointer"
+                                >
+                                  Cancel
+                                </button>
+                              </div>
+                            </Td>
+                          </tr>
+                        )}
+                      </Fragment>
+                    ))
+                  )}
+                </TBody>
+              </Table>
             </div>
           )}
         </Card>

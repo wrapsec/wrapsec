@@ -357,6 +357,7 @@ export interface Department {
   } | null
   contact_email:   string | null
   is_active:       boolean
+  application_count?: number
   created_at:      string
 }
 
