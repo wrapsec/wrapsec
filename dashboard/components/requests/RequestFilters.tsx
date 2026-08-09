@@ -80,31 +80,32 @@ export function RequestFilters({
         borderRadius: "8px", padding: "8px 12px",
       }}>
 
-        {/* Left group: search + attribute filters */}
-        <div style={{ display: "flex", alignItems: "center", gap: "8px", flexWrap: "wrap" as const }}>
-          <div style={{ position: "relative", flexShrink: 0 }}>
-            <svg style={{
-              position: "absolute", left: 8, top: "50%", transform: "translateY(-50%)",
-              pointerEvents: "none", width: 13, height: 13, color: "#9ca3af",
-            }} fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"/>
-            </svg>
-            <input
-              type="text" value={traceId}
-              onChange={e => onTraceId(e.target.value)}
-              placeholder="Search trace ID"
-              style={{
-                height: "32px", paddingLeft: "26px", paddingRight: "8px",
-                fontSize: "12px", fontFamily: "inherit",
-                borderRadius: "6px",
-                border: `1px solid ${traceId ? "rgba(103,15,239,0.35)" : "#e5e7eb"}`,
-                background: traceId ? "rgba(103,15,239,0.06)" : "#f9fafb",
-                color: "#374151", width: "170px", outline: "none",
-              }}
-            />
-          </div>
+        {/* Search grows to absorb slack: the row fills with no dead space and
+            stays a single line on wide screens, wrapping cleanly (left-aligned)
+            only when the viewport is genuinely too narrow. */}
+        <div style={{ position: "relative", flex: "1 1 200px", minWidth: "180px" }}>
+          <svg style={{
+            position: "absolute", left: 8, top: "50%", transform: "translateY(-50%)",
+            pointerEvents: "none", width: 13, height: 13, color: "#9ca3af",
+          }} fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24">
+            <path strokeLinecap="round" strokeLinejoin="round" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"/>
+          </svg>
+          <input
+            type="text" value={traceId}
+            onChange={e => onTraceId(e.target.value)}
+            placeholder="Search trace ID"
+            style={{
+              height: "32px", paddingLeft: "26px", paddingRight: "8px",
+              fontSize: "12px", fontFamily: "inherit",
+              borderRadius: "6px",
+              border: `1px solid ${traceId ? "rgba(103,15,239,0.35)" : "#e5e7eb"}`,
+              background: traceId ? "rgba(103,15,239,0.06)" : "#f9fafb",
+              color: "#374151", width: "100%", outline: "none",
+            }}
+          />
+        </div>
 
-          <FilterSelect value={decision} onChange={onDecision} width={128}
+        <FilterSelect value={decision} onChange={onDecision} width={128}
             options={[
               { value: "", label: "Decision" }, { value: "BLOCK", label: "Block" },
               { value: "SANITIZE", label: "Sanitize" }, { value: "ALLOW", label: "Allow" },
@@ -136,13 +137,9 @@ export function RequestFilters({
               ]}
             />
           )}
-        </div>
 
-        {/* Right group: sort + date range, pushed to fill the row */}
-        <div style={{
-          display: "flex", alignItems: "center", gap: "8px",
-          flexWrap: "wrap" as const, marginLeft: "auto",
-        }}>
+          <VDivider />
+
           {/* Sort */}
           <FilterSelect value={sortBy} onChange={onSortBy} width={120}
             options={[
@@ -232,7 +229,6 @@ export function RequestFilters({
               </button>
             </>
           )}
-        </div>
       </div>
 
       {/* Date-range validation only. Rare and self-correcting, so a small line
