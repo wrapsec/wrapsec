@@ -58,6 +58,11 @@ class DepartmentModel(Base):
 
     __table_args__ = (
         Index("ix_dept_tenant", "tenant_id"),
+        # A department slug is a stable per-tenant identifier (used in policy
+        # resolution). Unique among ACTIVE departments only, so a slug frees up
+        # when a department is deactivated (soft-deleted).
+        Index("uq_dept_tenant_slug_active", "tenant_id", "slug",
+              unique=True, postgresql_where="is_active"),
     )
 
 
@@ -81,6 +86,9 @@ class ApplicationModel(Base):
 
     __table_args__ = (
         Index("ix_app_dept", "dept_id"),
+        # Application slug is unique per tenant among ACTIVE applications.
+        Index("uq_app_tenant_slug_active", "tenant_id", "slug",
+              unique=True, postgresql_where="is_active"),
     )
 
 

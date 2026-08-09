@@ -10,6 +10,16 @@ from db.repositories.base import BaseRepository
 
 class ApplicationRepository(BaseRepository):
 
+    async def get_by_slug(self, tenant_id, slug: str) -> ApplicationModel | None:
+        result = await self.session.execute(
+            select(ApplicationModel).where(
+                ApplicationModel.tenant_id == tenant_id,
+                ApplicationModel.slug      == slug,
+                ApplicationModel.is_active == True,
+            )
+        )
+        return result.scalar_one_or_none()
+
     async def get_by_id(self, app_id) -> ApplicationModel | None:
         result = await self.session.execute(
             select(ApplicationModel).where(

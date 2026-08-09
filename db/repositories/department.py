@@ -20,6 +20,16 @@ class DepartmentRepository(BaseRepository):
         )
         return result.scalar_one_or_none()
 
+    async def get_by_slug(self, tenant_id, slug: str) -> DepartmentModel | None:
+        result = await self.session.execute(
+            select(DepartmentModel).where(
+                DepartmentModel.tenant_id == tenant_id,
+                DepartmentModel.slug      == slug,
+                DepartmentModel.is_active == True,
+            )
+        )
+        return result.scalar_one_or_none()
+
     async def get_by_id(self, dept_id) -> DepartmentModel | None:
         result = await self.session.execute(
             select(DepartmentModel).where(

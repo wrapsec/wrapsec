@@ -146,6 +146,15 @@ class NotFoundError(WrapSecError):
         super().__init__(f"{resource} not found: {identifier}")
 
 
+# ── Conflict ──────────────────────────────────────────────────
+class ConflictError(WrapSecError):
+    """A resource with the same unique key (e.g. slug) already exists."""
+    code = "CONFLICT"
+    status_code = 409
+    def __init__(self, message: str = "Resource already exists", trace_id=None):
+        super().__init__(message, trace_id=trace_id)
+
+
 # ── Rate Limit ────────────────────────────────────────────────
 class RateLimitError(WrapSecError):
     code = "RATE_LIMIT_EXCEEDED"

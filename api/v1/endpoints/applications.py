@@ -17,7 +17,9 @@ from db.repositories.application import ApplicationRepository
 from db.repositories.department import DepartmentRepository
 from domain.entities.principal import Principal
 from domain.enums import AdminEventAction
-from errors.exceptions import NotFoundError
+from errors.exceptions import NotFoundError, ValidationError, ConflictError
+from services.slug import slugify, is_reserved_slug
+from sqlalchemy.exc import IntegrityError
 from security.encryption import encrypt, decrypt, mask
 from security.url_validator import validate_llm_base_url
 from services.policy_resolver import resolve_policy
@@ -79,6 +81,15 @@ class ApplicationCreateSchema(BaseModel):
     policy_override:    dict | None = None
     rate_limit_override: int | None = Field(None, ge=1, le=10000)
 
+    @field_validator("slug")
+    @classmethod
+    def _canonical_slug(cls, v: str) -> str:
+        # Canonicalize server-side regardless of caller (dashboard/SDK/raw API).
+        s = slugify(v)
+        if not s:
+            raise ValueError("slug must contain at least one letter or digit")
+        return s
+
 
 class ApplicationUpdateSchema(BaseModel):
     name:               str  | None = None
@@ -101,13 +112,19 @@ async def create_application(
 ):
     tenant_id = uuid.UUID(request.state.tenant_id)
 
+    if is_reserved_slug(body.slug):
+        raise ValidationError(f"slug '{body.slug}' is reserved")
+
     # Validate department belongs to authenticated tenant
     dept_repo = DepartmentRepository(db)
     dept      = await dept_repo.get_by_id(uuid.UUID(body.dept_id))
     if not dept or str(dept.tenant_id) != str(tenant_id):
         raise NotFoundError("department", body.dept_id)
 
-    repo   = ApplicationRepository(db)
+    repo = ApplicationRepository(db)
+    if await repo.get_by_slug(tenant_id, body.slug):
+        raise ConflictError(f"An application with slug '{body.slug}' already exists")
+
     record = await repo.create({
         "tenant_id":           tenant_id,
         "dept_id":             uuid.UUID(body.dept_id),
@@ -121,7 +138,11 @@ async def create_application(
         "policy_override":     body.policy_override,
         "rate_limit_override": body.rate_limit_override,
     })
-    await db.commit()
+    try:
+        await db.commit()
+    except IntegrityError:
+        await db.rollback()
+        raise ConflictError(f"An application with slug '{body.slug}' already exists")
     return JSONResponse(content=_format(record), status_code=201)
 
 

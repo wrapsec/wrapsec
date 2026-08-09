@@ -18,7 +18,9 @@ from db.repositories.admin_event import AdminEventRepository
 from db.repositories.department import DepartmentRepository
 from domain.entities.principal import Principal
 from domain.enums import AdminEventAction
-from errors.exceptions import NotFoundError
+from errors.exceptions import NotFoundError, ValidationError, ConflictError
+from services.slug import slugify, is_reserved_slug
+from sqlalchemy.exc import IntegrityError
 from security.encryption import encrypt, decrypt, mask
 from security.url_validator import validate_llm_base_url
 
@@ -84,6 +86,16 @@ class DepartmentCreateSchema(BaseModel):
     description:     str | None = None
     policy_override: dict | None = None
     contact_email:   str | None = None
+
+    @field_validator("slug")
+    @classmethod
+    def _canonical_slug(cls, v: str) -> str:
+        # Canonicalize server-side so the stored slug is identical whatever the
+        # caller sent (dashboard, SDK, raw API) -- never trust the client's form.
+        s = slugify(v)
+        if not s:
+            raise ValueError("slug must contain at least one letter or digit")
+        return s
 
 
 class DepartmentUpdateSchema(BaseModel):
@@ -170,7 +182,13 @@ async def create_department(
     """
     tenant_id = uuid.UUID(request.state.tenant_id)
 
-    repo   = DepartmentRepository(db)
+    if is_reserved_slug(body.slug):
+        raise ValidationError(f"slug '{body.slug}' is reserved")
+
+    repo = DepartmentRepository(db)
+    if await repo.get_by_slug(tenant_id, body.slug):
+        raise ConflictError(f"A department with slug '{body.slug}' already exists")
+
     record = await repo.create({
         "tenant_id":       tenant_id,
         "slug":            body.slug,
@@ -179,7 +197,13 @@ async def create_department(
         "policy_override": body.policy_override,
         "contact_email":   body.contact_email,
     })
-    await db.commit()
+    try:
+        await db.commit()
+    except IntegrityError:
+        # The (tenant_id, slug) unique index is the race-safe backstop for the
+        # pre-check above (two concurrent creates of the same slug).
+        await db.rollback()
+        raise ConflictError(f"A department with slug '{body.slug}' already exists")
     return JSONResponse(content=_format(record), status_code=201)
 
 
