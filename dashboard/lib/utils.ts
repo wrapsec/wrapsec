@@ -19,3 +19,18 @@ export function truncate(str: string, n: number): string {
 export function cn(...classes: (string | undefined | false)[]): string {
   return classes.filter(Boolean).join(" ")
 }
+
+/**
+ * Machine-friendly slug from a display name: lowercase, non-alphanumeric runs
+ * collapse to a single hyphen, no leading/trailing hyphens, max 50 chars (to
+ * match the backend slug column). Used to auto-derive department / application
+ * slugs from the Name field.
+ */
+export function slugify(value: string): string {
+  return value
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, "-")
+    .replace(/^-+/, "")
+    .slice(0, 50)
+    .replace(/-+$/, "")
+}

@@ -14,11 +14,13 @@ import { Button, PlusIcon } from "@/components/ui/Button"
 import { PageSpinner } from "@/components/ui/Spinner"
 import { getApplications, getDepartments, createApplication, deleteApplication } from "@/lib/api"
 import Link from "next/link"
+import { slugify } from "@/lib/utils"
 
 export default function ApplicationsPage() {
   const [showCreate,        setShowCreate]        = useState(false)
   const [name,              setName]              = useState("")
   const [slug,              setSlug]              = useState("")
+  const [slugEdited,        setSlugEdited]        = useState(false)
   const [deptId,            setDeptId]            = useState("")
   const [description,       setDescription]       = useState("")
   const [ownerName,         setOwnerName]         = useState("")
@@ -51,7 +53,7 @@ export default function ApplicationsPage() {
         environment,
       })
       setShowCreate(false)
-      setName(""); setSlug(""); setDeptId("")
+      setName(""); setSlug(""); setSlugEdited(false); setDeptId("")
       setDescription(""); setOwnerName(""); setOwnerEmail("")
       mutate()
     } catch (e: any) {
@@ -103,16 +105,18 @@ export default function ApplicationsPage() {
             <div className="grid grid-cols-2 gap-4">
               <div className="flex flex-col gap-1">
                 <label className="text-xs font-medium text-slate-700">Name *</label>
-                <input type="text" value={name} onChange={(e) => setName(e.target.value)}
+                <input type="text" value={name}
+                  onChange={(e) => { setName(e.target.value); if (!slugEdited) setSlug(slugify(e.target.value)) }}
                   placeholder="Finance Bot"
                   className="h-9 px-3 text-sm rounded-md border border-slate-200 bg-white text-slate-900 placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-purple-700" />
               </div>
               <div className="flex flex-col gap-1">
                 <label className="text-xs font-medium text-slate-700">Slug *</label>
                 <input type="text" value={slug}
-                  onChange={(e) => setSlug(e.target.value.toLowerCase().replace(/\s+/g, "-"))}
+                  onChange={(e) => { setSlugEdited(true); setSlug(e.target.value.toLowerCase().replace(/\s+/g, "-")) }}
                   placeholder="finance-bot"
                   className="h-9 px-3 text-sm rounded-md border border-slate-200 bg-white text-slate-900 placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-purple-700" />
+                <span className="text-[11px] text-slate-400">Auto-generated from the name; edit to override.</span>
               </div>
               <div className="flex flex-col gap-1">
                 <label className="text-xs font-medium text-slate-700">Department *</label>

@@ -14,11 +14,13 @@ import { Button, PlusIcon } from "@/components/ui/Button"
 import { PageSpinner } from "@/components/ui/Spinner"
 import { getDepartments, createDepartment, deleteDepartment } from "@/lib/api"
 import Link from "next/link"
+import { slugify } from "@/lib/utils"
 
 export default function DepartmentsPage() {
   const [showCreate,        setShowCreate]        = useState(false)
   const [name,              setName]              = useState("")
   const [slug,              setSlug]              = useState("")
+  const [slugEdited,        setSlugEdited]        = useState(false)
   const [description,       setDescription]       = useState("")
   const [contact,           setContact]           = useState("")
   const [saving,            setSaving]            = useState(false)
@@ -36,7 +38,7 @@ export default function DepartmentsPage() {
     try {
       await createDepartment({ name, slug, description, contact_email: contact })
       setShowCreate(false)
-      setName(""); setSlug(""); setDescription(""); setContact("")
+      setName(""); setSlug(""); setSlugEdited(false); setDescription(""); setContact("")
       mutate()
     } catch (e: any) {
       setError(e.message)
@@ -87,7 +89,10 @@ export default function DepartmentsPage() {
                 <input
                   type="text"
                   value={name}
-                  onChange={(e) => setName(e.target.value)}
+                  onChange={(e) => {
+                    setName(e.target.value)
+                    if (!slugEdited) setSlug(slugify(e.target.value))
+                  }}
                   placeholder="Finance Department"
                   className="h-9 px-3 text-sm rounded-md border border-slate-200 bg-white text-slate-900 placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-purple-700"
                 />
@@ -97,10 +102,11 @@ export default function DepartmentsPage() {
                 <input
                   type="text"
                   value={slug}
-                  onChange={(e) => setSlug(e.target.value.toLowerCase().replace(/\s+/g, "-"))}
+                  onChange={(e) => { setSlugEdited(true); setSlug(e.target.value.toLowerCase().replace(/\s+/g, "-")) }}
                   placeholder="finance"
                   className="h-9 px-3 text-sm rounded-md border border-slate-200 bg-white text-slate-900 placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-purple-700"
                 />
+                <span className="text-[11px] text-slate-400">Auto-generated from the name; edit to override.</span>
               </div>
               <div className="flex flex-col gap-1">
                 <label className="text-xs font-medium text-slate-700">Description</label>
