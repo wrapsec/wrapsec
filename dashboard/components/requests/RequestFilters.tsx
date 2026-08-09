@@ -45,28 +45,6 @@ function FilterSelect({ value, onChange, options, width = 140 }: {
   )
 }
 
-function FilterChip({ label, onRemove }: { label: string; onRemove: () => void }) {
-  return (
-    <span style={{
-      display: "inline-flex", alignItems: "center", gap: "4px",
-      padding: "2px 8px", borderRadius: "20px", fontSize: "11px", fontWeight: 500,
-      background: "rgba(103,15,239,0.07)", color: "#670FEF",
-      border: "1px solid rgba(103,15,239,0.18)",
-    }}>
-      {label}
-      <button onClick={onRemove} style={{
-        display: "flex", alignItems: "center",
-        background: "none", border: "none", cursor: "pointer", padding: 0,
-        color: "#670FEF", opacity: 0.6,
-      }}>
-        <svg style={{ width: 10, height: 10 }} fill="none" stroke="currentColor" strokeWidth={2.5} viewBox="0 0 24 24">
-          <path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12"/>
-        </svg>
-      </button>
-    </span>
-  )
-}
-
 interface RequestFiltersProps {
   traceId: string; decision: string; threatCategory: string
   executionMode: string; deptId: string; from: string; to: string
@@ -87,133 +65,85 @@ export function RequestFilters({
   onTraceId, onDecision, onThreat, onExecutionMode, onDeptId, onFrom, onTo, onSortBy, onSortOrder,
   onClearDates, onClearAll,
 }: RequestFiltersProps) {
-  const deptName     = departments.find(d => d.id === deptId)?.name
+  // Active state lives on the controls themselves (a set control tints violet and
+  // shows its value), so there is no separate chip row to make the page jump when
+  // a filter clears. Reset a single filter via its own control; "Clear all" resets
+  // everything at once.
   const hasFilters   = !!(decision || threatCategory || executionMode || deptId || from || to)
   const hasDateError = !!(from && to && from > to)
 
-  const chips = [
-    decision       && { label: decision,                           clear: () => onDecision("") },
-    threatCategory && { label: threatCategory.replace(/_/g, " "), clear: () => onThreat("") },
-    executionMode  && { label: executionMode.replace(/_/g, " "),  clear: () => onExecutionMode("") },
-    deptId         && { label: deptName ?? deptId,                clear: () => onDeptId("") },
-    (from || to)   && { label: `${from || ""} -> ${to || ""}`,  clear: onClearDates },
-  ].filter(Boolean) as { label: string; clear: () => void }[]
-
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: "8px", flex: 1 }}>
-
-      {/* Toolbar */}
       <div style={{
         display: "flex", alignItems: "center", gap: "8px", flexWrap: "wrap" as const,
         background: "#fff", border: "1px solid #e5e7eb",
         borderRadius: "8px", padding: "8px 12px",
       }}>
 
-        {/* Search */}
-        <div style={{ position: "relative", flexShrink: 0 }}>
-          <svg style={{
-            position: "absolute", left: 8, top: "50%", transform: "translateY(-50%)",
-            pointerEvents: "none", width: 13, height: 13, color: "#9ca3af",
-          }} fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24">
-            <path strokeLinecap="round" strokeLinejoin="round" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"/>
-          </svg>
-          <input
-            type="text" value={traceId}
-            onChange={e => onTraceId(e.target.value)}
-            placeholder="Search trace ID"
-            style={{
-              height: "32px", paddingLeft: "26px", paddingRight: "8px",
-              fontSize: "12px", fontFamily: "inherit",
-              borderRadius: "6px",
-              border: `1px solid ${traceId ? "rgba(103,15,239,0.35)" : "#e5e7eb"}`,
-              background: traceId ? "rgba(103,15,239,0.06)" : "#f9fafb",
-              color: "#374151", width: "170px", outline: "none",
-            }}
-          />
-        </div>
-
-        <VDivider />
-
-        <FilterSelect value={decision} onChange={onDecision} width={128}
-          options={[
-            { value: "", label: "Decision" }, { value: "BLOCK", label: "Block" },
-            { value: "SANITIZE", label: "Sanitize" }, { value: "ALLOW", label: "Allow" },
-          ]}
-        />
-        <FilterSelect value={threatCategory} onChange={onThreat} width={148}
-          options={[
-            { value: "", label: "Threat" },
-            { value: "PROMPT_INJECTION",  label: "Prompt Injection"  },
-            { value: "JAILBREAK",         label: "Jailbreak"         },
-            { value: "MALICIOUS_INTENT",  label: "Malicious Intent"  },
-            { value: "DATA_EXFILTRATION", label: "Data Exfiltration" },
-            { value: "PII",               label: "PII"               },
-            { value: "TOXICITY",          label: "Toxicity"          },
-          ]}
-        />
-        <FilterSelect value={executionMode} onChange={onExecutionMode} width={110}
-          options={[
-            { value: "", label: "Mode" },
-            { value: "scan_only", label: "Scan only" },
-            { value: "proxy",     label: "Proxy"     },
-          ]}
-        />
-        {departments.length > 0 && (
-          <FilterSelect value={deptId} onChange={onDeptId} width={148}
-            options={[
-              { value: "", label: "Department" },
-              ...departments.map(d => ({ value: d.id, label: d.name })),
-            ]}
-          />
-        )}
-
-        <VDivider />
-
-        {/* Date range */}
-        <div style={{ display: "flex", alignItems: "center", gap: "5px" }}>
-          {(["from", "to"] as const).map((type) => (
+        {/* Left group: search + attribute filters */}
+        <div style={{ display: "flex", alignItems: "center", gap: "8px", flexWrap: "wrap" as const }}>
+          <div style={{ position: "relative", flexShrink: 0 }}>
+            <svg style={{
+              position: "absolute", left: 8, top: "50%", transform: "translateY(-50%)",
+              pointerEvents: "none", width: 13, height: 13, color: "#9ca3af",
+            }} fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"/>
+            </svg>
             <input
-              key={type}
-              type="date"
-              value={type === "from" ? from : to}
-              min={type === "to" ? from || undefined : undefined}
-              max={type === "from" ? to || undefined : undefined}
-              onChange={e => type === "from" ? onFrom(e.target.value) : onTo(e.target.value)}
+              type="text" value={traceId}
+              onChange={e => onTraceId(e.target.value)}
+              placeholder="Search trace ID"
               style={{
-                height: "32px", padding: "0 8px",
+                height: "32px", paddingLeft: "26px", paddingRight: "8px",
                 fontSize: "12px", fontFamily: "inherit",
                 borderRadius: "6px",
-                border: `1px solid ${(type === "from" ? from : to) ? "rgba(103,15,239,0.35)" : "#e5e7eb"}`,
-                background: (type === "from" ? from : to) ? "rgba(103,15,239,0.06)" : "#fff",
-                color: (type === "from" ? from : to) ? "#670FEF" : "#374151",
-                width: "122px", outline: "none", cursor: "pointer",
+                border: `1px solid ${traceId ? "rgba(103,15,239,0.35)" : "#e5e7eb"}`,
+                background: traceId ? "rgba(103,15,239,0.06)" : "#f9fafb",
+                color: "#374151", width: "170px", outline: "none",
               }}
             />
-          ))}
-          {(from || to) && (
-            <button
-              onClick={onClearDates}
-              style={{
-                display: "flex", alignItems: "center", justifyContent: "center",
-                width: 26, height: 26, borderRadius: "50%",
-                border: "none", background: "#f3f4f6",
-                cursor: "pointer", color: "#6b7280", flexShrink: 0,
-              }}
-              title="Clear dates"
-              onMouseEnter={e => (e.currentTarget.style.background = "#e5e7eb")}
-              onMouseLeave={e => (e.currentTarget.style.background = "#f3f4f6")}
-            >
-              <svg style={{ width: 11, height: 11 }} fill="none" stroke="currentColor" strokeWidth={2.5} viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12"/>
-              </svg>
-            </button>
+          </div>
+
+          <FilterSelect value={decision} onChange={onDecision} width={128}
+            options={[
+              { value: "", label: "Decision" }, { value: "BLOCK", label: "Block" },
+              { value: "SANITIZE", label: "Sanitize" }, { value: "ALLOW", label: "Allow" },
+            ]}
+          />
+          <FilterSelect value={threatCategory} onChange={onThreat} width={148}
+            options={[
+              { value: "", label: "Threat" },
+              { value: "PROMPT_INJECTION",  label: "Prompt Injection"  },
+              { value: "JAILBREAK",         label: "Jailbreak"         },
+              { value: "MALICIOUS_INTENT",  label: "Malicious Intent"  },
+              { value: "DATA_EXFILTRATION", label: "Data Exfiltration" },
+              { value: "PII",               label: "PII"               },
+              { value: "TOXICITY",          label: "Toxicity"          },
+            ]}
+          />
+          <FilterSelect value={executionMode} onChange={onExecutionMode} width={110}
+            options={[
+              { value: "", label: "Mode" },
+              { value: "scan_only", label: "Scan only" },
+              { value: "proxy",     label: "Proxy"     },
+            ]}
+          />
+          {departments.length > 0 && (
+            <FilterSelect value={deptId} onChange={onDeptId} width={148}
+              options={[
+                { value: "", label: "Department" },
+                ...departments.map(d => ({ value: d.id, label: d.name })),
+              ]}
+            />
           )}
         </div>
 
-        <VDivider />
-
-        {/* Sort */}
-        <div style={{ display: "flex", alignItems: "center", gap: "5px" }}>
+        {/* Right group: sort + date range, pushed to fill the row */}
+        <div style={{
+          display: "flex", alignItems: "center", gap: "8px",
+          flexWrap: "wrap" as const, marginLeft: "auto",
+        }}>
+          {/* Sort */}
           <FilterSelect value={sortBy} onChange={onSortBy} width={120}
             options={[
               { value: "created_at", label: "Sort: Time"    },
@@ -240,43 +170,80 @@ export function RequestFilters({
               }
             </svg>
           </button>
-        </div>
 
-        {/* Clear all */}
-        {hasFilters && (
-          <>
-            <VDivider />
-            <button
-              onClick={onClearAll}
-              style={{
-                fontSize: "11px", fontWeight: 500, color: "#9ca3af",
-                background: "none", border: "none", cursor: "pointer",
-                padding: "4px 6px", borderRadius: "4px", whiteSpace: "nowrap" as const,
-              }}
-              onMouseEnter={e => { (e.currentTarget as HTMLElement).style.color = "#374151"; (e.currentTarget as HTMLElement).style.background = "#f3f4f6" }}
-              onMouseLeave={e => { (e.currentTarget as HTMLElement).style.color = "#9ca3af"; (e.currentTarget as HTMLElement).style.background = "none" }}
-            >
-              Clear all
-            </button>
-          </>
-        )}
+          <VDivider />
+
+          {/* Date range */}
+          <div style={{ display: "flex", alignItems: "center", gap: "5px" }}>
+            {(["from", "to"] as const).map((type) => (
+              <input
+                key={type}
+                type="date"
+                value={type === "from" ? from : to}
+                min={type === "to" ? from || undefined : undefined}
+                max={type === "from" ? to || undefined : undefined}
+                onChange={e => type === "from" ? onFrom(e.target.value) : onTo(e.target.value)}
+                style={{
+                  height: "32px", padding: "0 8px",
+                  fontSize: "12px", fontFamily: "inherit",
+                  borderRadius: "6px",
+                  border: `1px solid ${(type === "from" ? from : to) ? "rgba(103,15,239,0.35)" : (hasDateError ? "#fca5a5" : "#e5e7eb")}`,
+                  background: (type === "from" ? from : to) ? "rgba(103,15,239,0.06)" : "#fff",
+                  color: (type === "from" ? from : to) ? "#670FEF" : "#374151",
+                  width: "122px", outline: "none", cursor: "pointer",
+                }}
+              />
+            ))}
+            {(from || to) && (
+              <button
+                onClick={onClearDates}
+                style={{
+                  display: "flex", alignItems: "center", justifyContent: "center",
+                  width: 26, height: 26, borderRadius: "50%",
+                  border: "none", background: "#f3f4f6",
+                  cursor: "pointer", color: "#6b7280", flexShrink: 0,
+                }}
+                title="Clear dates"
+                onMouseEnter={e => (e.currentTarget.style.background = "#e5e7eb")}
+                onMouseLeave={e => (e.currentTarget.style.background = "#f3f4f6")}
+              >
+                <svg style={{ width: 11, height: 11 }} fill="none" stroke="currentColor" strokeWidth={2.5} viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12"/>
+                </svg>
+              </button>
+            )}
+          </div>
+
+          {/* Clear all */}
+          {hasFilters && (
+            <>
+              <VDivider />
+              <button
+                onClick={onClearAll}
+                style={{
+                  fontSize: "11px", fontWeight: 500, color: "#9ca3af",
+                  background: "none", border: "none", cursor: "pointer",
+                  padding: "4px 6px", borderRadius: "4px", whiteSpace: "nowrap" as const,
+                }}
+                onMouseEnter={e => { (e.currentTarget as HTMLElement).style.color = "#374151"; (e.currentTarget as HTMLElement).style.background = "#f3f4f6" }}
+                onMouseLeave={e => { (e.currentTarget as HTMLElement).style.color = "#9ca3af"; (e.currentTarget as HTMLElement).style.background = "none" }}
+              >
+                Clear all
+              </button>
+            </>
+          )}
+        </div>
       </div>
 
-      {/* Active chips + date error */}
-      {(chips.length > 0 || hasDateError) && (
-        <div style={{ display: "flex", alignItems: "center", gap: "6px", flexWrap: "wrap" as const }}>
-          {hasDateError && (
-            <span style={{ fontSize: "11px", color: "#dc2626", display: "flex", alignItems: "center", gap: "4px" }}>
-              <svg style={{ width: 12, height: 12 }} fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z"/>
-              </svg>
-              End date must be after start date
-            </span>
-          )}
-          {chips.map((chip, i) => (
-            <FilterChip key={i} label={chip.label} onRemove={chip.clear} />
-          ))}
-        </div>
+      {/* Date-range validation only. Rare and self-correcting, so a small line
+          under the toolbar is fine and does not cause the routine clear jump. */}
+      {hasDateError && (
+        <span style={{ fontSize: "11px", color: "#dc2626", display: "flex", alignItems: "center", gap: "4px" }}>
+          <svg style={{ width: 12, height: 12 }} fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24">
+            <path strokeLinecap="round" strokeLinejoin="round" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z"/>
+          </svg>
+          End date must be after start date
+        </span>
       )}
     </div>
   )

@@ -13,6 +13,15 @@ export function formatNumber(n: number): string {
   return n.toLocaleString()
 }
 
+/**
+ * Compact count for fixed-width KPI cards (e.g. "1.2K", "3.4M", "1.2B"). Keeps
+ * large values from overflowing a narrow card; pair with the full formatNumber
+ * in a hover title. Values under 1,000 render as-is.
+ */
+export function formatCompact(n: number): string {
+  return new Intl.NumberFormat("en-US", { notation: "compact", maximumFractionDigits: 1 }).format(n)
+}
+
 /** Risk score (0..1) as a whole-number percentage (e.g. "92%"). */
 export function formatScore(score: number): string {
   return (score * 100).toFixed(0) + "%"
