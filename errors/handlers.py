@@ -26,10 +26,32 @@ def wrapsec_exception_handler(request: Request, exc: WrapSecError) -> JSONRespon
     )
 
 
+def _friendly_field(loc) -> str:
+    """Human field label from a Pydantic error location, e.g.
+    ("body", "contact_email") -> "Contact email"."""
+    parts = [p for p in loc if isinstance(p, str) and p != "body"]
+    name  = parts[-1] if parts else "value"
+    nice  = name.replace("_", " ")
+    return nice[:1].upper() + nice[1:]
+
+
 async def validation_exception_handler(request: Request, exc: RequestValidationError) -> JSONResponse:
-    # Extract first error message
+    # Turn the first field error into a concise, human message. Pydantic's
+    # EmailStr emits a verbose email-validator sentence ("... The part after the
+    # @-sign is not valid. It should have a period."); collapse it to a clean,
+    # field-scoped line. Our own ValueError messages (and length limits) are
+    # already clear -- just strip the "Value error, " prefix Pydantic prepends.
     errors = exc.errors()
-    message = errors[0]["msg"].replace("Value error, ", "") if errors else "Validation error"
+    if errors:
+        first = errors[0]
+        raw   = first.get("msg", "Validation error")
+        if "valid email address" in raw:
+            message = f"{_friendly_field(first.get('loc', ()))} must be a valid email address."
+        else:
+            message = raw.replace("Value error, ", "")
+    else:
+        message = "Validation error"
+
     trace_id = getattr(request.state, "trace_id", "")
     return JSONResponse(
         status_code=422,
