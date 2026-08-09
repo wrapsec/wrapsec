@@ -6,7 +6,7 @@ import uuid
 from services.time import to_iso_z
 from fastapi import APIRouter, Depends, Request
 from fastapi.responses import JSONResponse
-from pydantic import BaseModel, Field, SecretStr, field_validator
+from pydantic import BaseModel, EmailStr, Field, SecretStr, field_validator
 from sqlalchemy.ext.asyncio import AsyncSession
 from api.v1.dependencies.auth import get_current_principal, require_admin
 from api.v1.dependencies.db import get_db
@@ -86,10 +86,10 @@ def _validate_environment(v: str | None) -> str | None:
 class ApplicationCreateSchema(BaseModel):
     dept_id:            str
     slug:               str
-    name:               str
-    description:        str  | None = None
-    owner_name:         str  | None = None
-    owner_email:        str  | None = None
+    name:               str = Field(min_length=1, max_length=100)
+    description:        str  | None = Field(None, max_length=2000)
+    owner_name:         str  | None = Field(None, max_length=100)
+    owner_email:        EmailStr | None = None
     environment:        str  | None = "production"
     metadata:           dict | None = None
     policy_override:    dict | None = None
@@ -111,10 +111,10 @@ class ApplicationCreateSchema(BaseModel):
 
 
 class ApplicationUpdateSchema(BaseModel):
-    name:               str  | None = None
-    description:        str  | None = None
-    owner_name:         str  | None = None
-    owner_email:        str  | None = None
+    name:               str  | None = Field(None, min_length=1, max_length=100)
+    description:        str  | None = Field(None, max_length=2000)
+    owner_name:         str  | None = Field(None, max_length=100)
+    owner_email:        EmailStr | None = None
     environment:        str  | None = None
     metadata:           dict | None = None
     policy_override:    dict | None = None

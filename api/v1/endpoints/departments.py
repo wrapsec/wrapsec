@@ -6,7 +6,7 @@ import uuid
 from services.time import to_iso_z
 from fastapi import APIRouter, Depends, Request
 from fastapi.responses import JSONResponse
-from pydantic import BaseModel, SecretStr, field_validator
+from pydantic import BaseModel, EmailStr, Field, SecretStr, field_validator
 from sqlalchemy import func, select as sa_select
 from sqlalchemy.ext.asyncio import AsyncSession
 from api.v1.dependencies.auth import get_current_principal, require_admin
@@ -84,10 +84,10 @@ def _format(dept, application_count: int = 0) -> dict:
 
 class DepartmentCreateSchema(BaseModel):
     slug:            str
-    name:            str
-    description:     str | None = None
+    name:            str = Field(min_length=1, max_length=100)
+    description:     str | None = Field(None, max_length=2000)
     policy_override: dict | None = None
-    contact_email:   str | None = None
+    contact_email:   EmailStr | None = None
 
     @field_validator("slug")
     @classmethod
@@ -101,10 +101,10 @@ class DepartmentCreateSchema(BaseModel):
 
 
 class DepartmentUpdateSchema(BaseModel):
-    name:            str | None = None
-    description:     str | None = None
+    name:            str | None = Field(None, min_length=1, max_length=100)
+    description:     str | None = Field(None, max_length=2000)
     policy_override: dict | None = None
-    contact_email:   str | None = None
+    contact_email:   EmailStr | None = None
     is_active:       bool | None = None
 
 

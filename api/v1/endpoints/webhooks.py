@@ -68,6 +68,22 @@ from db.repositories.webhook_endpoint import WebhookEndpointRepository
 from domain.entities.principal import Principal
 from domain.enums import AdminEventAction
 from errors.exceptions import NotFoundError, ValidationError
+from services.webhooks.emitter import EVENT_BLOCKED, EVENT_SANITIZED
+
+# The only event types WrapSec emits today (BLOCK / SANITIZE gateway decisions).
+_ALLOWED_EVENT_TYPES = {EVENT_BLOCKED, EVENT_SANITIZED}
+
+
+def _validate_event_types(v: list[str] | None) -> list[str] | None:
+    if v is None:
+        return v
+    bad = [e for e in v if e not in _ALLOWED_EVENT_TYPES]
+    if bad:
+        raise ValueError(
+            f"unknown event_types: {', '.join(bad)}; "
+            f"allowed: {', '.join(sorted(_ALLOWED_EVENT_TYPES))}"
+        )
+    return v
 from security.encryption import encrypt, mask
 from cache.redis_client import get_redis
 from security import webhook_ssrf
@@ -96,8 +112,8 @@ _DEFAULT_ROTATION_GRACE_HOURS = 24
 # ─── Schemas ────────────────────────────────────────────────────────
 
 class WebhookCreateSchema(BaseModel):
-    url:            str
-    description:    str        | None = None
+    url:            str        = Field(max_length=2048)
+    description:    str        | None = Field(None, max_length=1000)
     event_types:    list[str]  | None = None
     # NULL connector_type => generic HMAC webhook (signing secret generated
     # server-side). A connector slug routes to a SIEM connector: `secret` is
@@ -105,6 +121,11 @@ class WebhookCreateSchema(BaseModel):
     connector_type: str        | None = None
     config:         dict       | None = None
     secret:         str        | None = None
+
+    @field_validator("event_types")
+    @classmethod
+    def _valid_event_types(cls, v):
+        return _validate_event_types(v)
 
     @field_validator("url")
     @classmethod
@@ -146,13 +167,18 @@ class WebhookCreateSchema(BaseModel):
 
 
 class WebhookUpdateSchema(BaseModel):
-    url:         str        | None = None
-    description: str        | None = None
+    url:         str        | None = Field(None, max_length=2048)
+    description: str        | None = Field(None, max_length=1000)
     event_types: list[str]  | None = None
     # Per-connector options are editable; connector_type is immutable after
     # create (it governs how secret_enc is interpreted) and is dropped by the
     # repository if passed.
     config:      dict       | None = None
+
+    @field_validator("event_types")
+    @classmethod
+    def _valid_event_types(cls, v):
+        return _validate_event_types(v)
 
     @field_validator("url")
     @classmethod

@@ -9,7 +9,8 @@ import hashlib
 from datetime import timedelta
 from fastapi import APIRouter, Depends, Request
 from fastapi.responses import JSONResponse
-from pydantic import BaseModel, Field
+from typing import Literal
+from pydantic import BaseModel, Field, field_validator
 from sqlalchemy.ext.asyncio import AsyncSession
 from api.v1.dependencies.auth import get_current_principal, require_admin
 from api.v1.dependencies.db import get_db
@@ -37,15 +38,34 @@ def generate_key_id() -> str:
 
 
 class CreateKeySchema(BaseModel):
-    name:       str
+    name:       str = Field(min_length=1, max_length=100)
     dept_id:    str | None = None  # dept-scoped key (no app required)
     app_id:     str | None = None  # app-scoped key (dept+tenant derived from app)
-    key_type:   str        = "live"  # 'live' (default) | 'trial'
+    key_type:   Literal["live", "trial"] = "live"
     expires_at: str | None = None
 
-    def validate_key_type(self) -> None:
-        if self.key_type not in ("live", "trial"):
-            raise ValueError(f"key_type must be 'live' or 'trial', got '{self.key_type}'")
+    @field_validator("dept_id", "app_id")
+    @classmethod
+    def _valid_uuid(cls, v: str | None) -> str | None:
+        if v is None:
+            return v
+        try:
+            uuid.UUID(v)
+        except ValueError:
+            raise ValueError("must be a valid UUID")
+        return v
+
+    @field_validator("expires_at")
+    @classmethod
+    def _valid_expires_at(cls, v: str | None) -> str | None:
+        if v is None:
+            return v
+        from services.time import parse_utc_iso
+        try:
+            parse_utc_iso(v)
+        except Exception:
+            raise ValueError("expires_at must be an ISO-8601 datetime")
+        return v
 
 
 @router.post("")
@@ -241,7 +261,7 @@ async def get_key(
     })
 
 class UpdateKeySchema(BaseModel):
-    name: str
+    name: str = Field(min_length=1, max_length=100)
 
 @router.put("/{key_id}")
 async def update_key(
