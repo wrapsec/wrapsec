@@ -83,7 +83,7 @@ export default function IntegrationsPage() {
   return (
     <Shell title="Integrations">
       <PageHeader
-        description="Forward BLOCK and SANITIZE events to your SIEM (Splunk, Datadog, Microsoft Sentinel, Elastic) or a signed webhook."
+        description="Connect WrapSec to external security platforms and webhooks."
         actions={
           isJwt ? (
             <Button size="sm" onClick={() => setShowCreate(true)}>

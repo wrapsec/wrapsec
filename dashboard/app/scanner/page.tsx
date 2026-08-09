@@ -32,7 +32,7 @@ export default function ScannerPage() {
 
   return (
     <Shell title="Scanner">
-      <PageHeader description="Test any prompt against the detection pipeline before it reaches your LLM." />
+      <PageHeader description="Scan prompts through the detection pipeline before they reach your LLM." />
       <div className="max-w-3xl space-y-5">
         <Card>
           <CardHeader

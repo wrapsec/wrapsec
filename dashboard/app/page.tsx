@@ -454,7 +454,7 @@ export default function OverviewPage() {
   return (
     <Shell title="Overview">
       <PageHeader
-        description="Security posture across all AI requests."
+        description="Monitor the security posture of AI requests across your organization."
         actions={<RangeTabs options={options} value={range} onChange={setRange} />}
       />
       <div style={{ display: "flex", flexDirection: "column", gap: "16px" }}>

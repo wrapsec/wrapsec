@@ -77,7 +77,7 @@ export default function SettingsPage() {
 
   return (
     <Shell title="Settings">
-      <PageHeader description="Configure detection thresholds, layers, LLM provider, rate limits, and retention." />
+      <PageHeader description="Configure detection policies, providers, rate limits, and retention settings." />
       <div>
 
         {/* Tab bar */}

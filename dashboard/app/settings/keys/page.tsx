@@ -47,7 +47,7 @@ export default function ApiKeysPage() {
   return (
     <Shell title="API Keys">
       <PageHeader
-        description="Manage access credentials for the WrapSec API."
+        description="Create and manage API keys for the WrapSec API."
         actions={
           isJwt ? (
             <Button size="sm" onClick={() => setShowModal(true)}>

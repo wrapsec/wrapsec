@@ -524,7 +524,7 @@ export default function AnalyticsPage() {
   return (
     <Shell title="Analytics">
       <PageHeader
-        description="Security intelligence and attribution report."
+        description="Analyze detection trends across applications, departments, and API keys."
         actions={
           <div style={{ display: "flex", flexDirection: "column", alignItems: "flex-end", gap: "6px" }}>
             <RangeTabs

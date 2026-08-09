@@ -207,7 +207,7 @@ export default function SourcesPage() {
   if (error && !data) {
     return (
       <Shell title="Security by Source">
-        <PageHeader description="Threat picture by trust-boundary provenance." />
+        <PageHeader description="Analyze security activity by content source to identify higher-risk inputs." />
         <Card>
           <ErrorState title="Failed to load source analytics" message={error?.message} />
         </Card>
@@ -221,7 +221,7 @@ export default function SourcesPage() {
   return (
     <Shell title="Security by Source">
       <PageHeader
-        description="Threat picture by trust-boundary provenance -- which knowledge sources deliver attacks."
+        description="Analyze security activity by content source to identify higher-risk inputs."
         actions={<RangeTabs options={timeRangeOptions} value={timeRange} onChange={setTimeRange} />}
       />
       <div style={{ display: "flex", flexDirection: "column", gap: "20px" }}>

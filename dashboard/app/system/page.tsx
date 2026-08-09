@@ -37,7 +37,7 @@ export default function SystemPage() {
 
   return (
     <Shell title="System Status">
-      <PageHeader description="Service health and runtime configuration." />
+      <PageHeader description="Monitor service health and runtime configuration." />
       <div className="max-w-2xl space-y-5">
 
         {/* Service health */}

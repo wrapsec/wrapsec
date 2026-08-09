@@ -146,7 +146,7 @@ function RequestsPageInner() {
   return (
     <Shell title="Requests">
       <PageHeader
-        description="Every scan, with its decision and trust-boundary provenance."
+        description="Review individual AI requests, security assessments, and content sources."
         actions={actions}
       />
 

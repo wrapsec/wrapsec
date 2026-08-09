@@ -109,7 +109,7 @@ function OverviewTab({ detail }: { detail: RequestDetail }) {
   return (
     <div className="space-y-6">
       <div>
-        <SectionLabel>Verdict</SectionLabel>
+        <SectionLabel>Summary</SectionLabel>
         <DetailGrid>
           <DetailRow label="Confidence">
             {detail.confidence !== null
@@ -378,7 +378,7 @@ export function RequestDetailModal({ traceId, onClose }: RequestDetailModalProps
 
       {detail && (
         <>
-          {/* Verdict hero: Decision -> Risk (primary, horizontal bar) -> Severity */}
+          {/* Decision hero: Decision -> Risk (primary, horizontal bar) -> Severity */}
           <div className="px-6 pt-5 pb-5 border-b border-slate-100">
             <div className="flex items-center gap-2">
               <DecisionBadge decision={detail.decision} />

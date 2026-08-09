@@ -58,7 +58,7 @@ export default function DepartmentsPage() {
   return (
     <Shell title="Departments">
       <PageHeader
-        description="Manage organisational departments and their policy overrides."
+        description="Manage departments and their policy overrides."
         actions={
           isJwt ? (
             <Button size="sm" onClick={() => setShowCreate(true)}>

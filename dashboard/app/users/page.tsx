@@ -416,7 +416,7 @@ export default function UsersPage() {
   return (
     <Shell title="Users">
       <PageHeader
-        description="Manage dashboard users and their access."
+        description="Manage dashboard users, roles, and access."
         actions={
           <Button size="sm" onClick={() => setShowCreate(true)} disabled={!isJwt} title={!isJwt ? "Requires admin login" : undefined}>
             <PlusIcon /> Add user
