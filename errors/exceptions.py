@@ -2,116 +2,135 @@
 # Copyright (c) 2026 WrapSec. All rights reserved.
 # WrapSec v1.0 | AI Security Gateway - https://wrapsec.com
 
+"""
+WrapSec exception hierarchy.
+
+Every exception declares a stable `code` (errors/catalog.py::ErrorCode); its
+HTTP status, error severity, and localization key are derived from the catalog.
+
+Text is NOT carried here. Per the error-handling rules
+(docs/internal/wrapsec_error_handling_localization_rules.md, sections 5 and 24):
+
+- The USER-facing message is owned by the Localization Catalog and resolved by
+  the handler from the code's localization key + params. Call sites never
+  hand-write user-facing English.
+- `params`   -- structured ICU arguments for the localized message.
+- `debug_message` -- diagnostic detail, LOGS ONLY, never serialized. A legacy
+  positional `message` is accepted for backward compatibility and treated as
+  debug detail (it is never returned to the client).
+"""
+
+from __future__ import annotations
+
+from typing import Any
+
 from domain.value_objects.trace_id import TraceId
+from errors.catalog import ErrorCode, ErrorSeverity, meta_for
+
+
+def _coerce_code(code: str) -> ErrorCode:
+    """Accept a legacy string code; fall back to INTERNAL_ERROR if unknown."""
+    try:
+        return ErrorCode(code)
+    except ValueError:
+        return ErrorCode.INTERNAL_ERROR
 
 
 class WrapSecError(Exception):
     """Base exception for all WrapSec errors."""
-    code        = "INTERNAL_ERROR"
-    status_code = 500
+    code: ErrorCode = ErrorCode.INTERNAL_ERROR
 
     def __init__(
         self,
-        message:     str,
-        trace_id:    TraceId | None = None,
-        code:        str | None     = None,
-        status_code: int | None     = None,
+        message:       str | None             = None,
+        trace_id:      TraceId | None          = None,
+        code:          ErrorCode | str | None  = None,
+        *,
+        status_code:   int | None              = None,
+        debug_message: str | None              = None,
+        params:        dict[str, Any] | None   = None,
+        invalid_params: list[dict[str, Any]] | None = None,
     ):
-        self.message  = message
-        self.trace_id = trace_id
         if code is not None:
-            self.code = code
-        if status_code is not None:
-            self.status_code = status_code
-        super().__init__(message)
+            self.code = code if isinstance(code, ErrorCode) else _coerce_code(code)
+        meta = meta_for(self.code)
+        # Catalog is the source of truth for status; an explicit override is
+        # honored for backward compatibility with older direct constructions.
+        self.status_code:      int           = status_code if status_code is not None else meta.status_code
+        self.severity:         ErrorSeverity = meta.severity
+        self.localization_key: str           = meta.localization_key
+
+        # Text is presentation: the user message comes from the catalog, never
+        # from here. A caller-supplied `message` is diagnostic detail only.
+        self.debug_message  = debug_message or message
+        self.params         = params or {}
+        self.invalid_params = invalid_params or []
+        self.trace_id       = trace_id
+        super().__init__(self.debug_message or self.code.value)
 
 
-# ── Validation ────────────────────────────────────────────────
+# -- Validation ------------------------------------------------
 class ValidationError(WrapSecError):
-    code = "INVALID_REQUEST"
-    status_code = 400
-    def __init__(self, message: str = "Invalid request", trace_id=None):
-        super().__init__(message, trace_id=trace_id)
+    code = ErrorCode.INVALID_REQUEST
 
 
 class StreamNotSupportedError(WrapSecError):
-    code = "STREAM_NOT_SUPPORTED"
-    status_code = 400
+    code = ErrorCode.STREAM_NOT_SUPPORTED
     def __init__(self, trace_id: TraceId | None = None):
-        super().__init__(
-            "stream is only supported when execution_mode is proxy",
-            trace_id
-        )
+        super().__init__(trace_id=trace_id)
 
 
 class ModelRequiredError(WrapSecError):
-    code = "MODEL_REQUIRED"
-    status_code = 400
+    code = ErrorCode.MODEL_REQUIRED
     def __init__(self, trace_id: TraceId | None = None):
-        super().__init__(
-            "model is required when execution_mode is proxy",
-            trace_id
-        )
+        super().__init__(trace_id=trace_id)
 
 
-# ── Auth ──────────────────────────────────────────────────────
+# -- Auth ------------------------------------------------------
 class UnauthorizedError(WrapSecError):
-    code = "UNAUTHORIZED"
-    status_code = 401
-    def __init__(self, message: str = "Missing or invalid credentials"):
-        super().__init__(message)
+    code = ErrorCode.UNAUTHORIZED
 
 
 class ForbiddenError(WrapSecError):
-    code = "FORBIDDEN"
-    status_code = 403
-    def __init__(self, message: str = "Valid credentials but insufficient scope"):
-        super().__init__(message)
+    code = ErrorCode.FORBIDDEN
 
 
 class DebugForbiddenError(ForbiddenError):
     def __init__(self):
-        super().__init__("debug mode requires admin credentials")
+        super().__init__(debug_message="debug mode requires admin credentials")
 
 
-# ── Auth - JWT/session (new for JWT+RBAC) ─────────────────────
+# -- Auth - JWT/session ----------------------------------------
 class AuthenticationError(WrapSecError):
     """
-    Wrong email or wrong password - identical message for both.
-    Never reveal which was wrong - prevents user enumeration.
+    Wrong email or wrong password - identical response for both.
+    Never reveal which was wrong - prevents user enumeration. Any distinguishing
+    detail belongs in debug_message (logs only), never in the response.
     """
-    code        = "INVALID_CREDENTIALS"
-    status_code = 401
-    def __init__(self, message: str = "Invalid email or password"):
-        super().__init__(message)
+    code = ErrorCode.INVALID_CREDENTIALS
 
 
 class AccountLockedException(WrapSecError):
     """
     Account temporarily locked after too many failed login attempts.
-    retry_after: seconds until lockout expires (from Redis TTL).
+    retry_after: seconds until lockout expires (from Redis TTL). Kept for the
+    Retry-After header; deliberately NOT exposed in the user message or params
+    (do not reveal lock timing/threshold -- rules section 12).
     """
-    code        = "ACCOUNT_LOCKED"
-    status_code = 429
+    code = ErrorCode.ACCOUNT_LOCKED
     def __init__(self, retry_after: int = 0):
         self.retry_after = retry_after
-        super().__init__("Too many failed attempts. Account temporarily locked.")
+        super().__init__(debug_message=f"account locked, retry_after={retry_after}s")
 
 
 class AccountDisabledException(WrapSecError):
     """Account exists but is_active = False."""
-    code        = "ACCOUNT_DISABLED"
-    status_code = 401
-    def __init__(self):
-        super().__init__("Account is disabled. Contact your administrator.")
+    code = ErrorCode.ACCOUNT_DISABLED
 
 
 class InvalidTokenException(WrapSecError):
     """Refresh token not found, already revoked, or expired."""
-    code        = "INVALID_TOKEN"
-    status_code = 401
-    def __init__(self, message: str = "Invalid or expired token"):
-        super().__init__(message)
+    code = ErrorCode.INVALID_TOKEN
 
 
 class SessionInvalidatedException(WrapSecError):
@@ -120,10 +139,7 @@ class SessionInvalidatedException(WrapSecError):
     Triggered by: password change, role change, account deactivation, admin reset.
     Client must re-authenticate - redirect to login.
     """
-    code        = "SESSION_INVALIDATED"
-    status_code = 401
-    def __init__(self):
-        super().__init__("Session has been invalidated. Please log in again.")
+    code = ErrorCode.SESSION_INVALIDATED
 
 
 class PasswordChangedException(WrapSecError):
@@ -132,58 +148,51 @@ class PasswordChangedException(WrapSecError):
     Returned on all endpoints except /v1/auth/change-password, /v1/auth/logout,
     /v1/auth/me when this flag is set.
     """
-    code        = "PASSWORD_CHANGE_REQUIRED"
-    status_code = 403
-    def __init__(self):
-        super().__init__("You must change your password before accessing this resource.")
+    code = ErrorCode.PASSWORD_CHANGE_REQUIRED
 
 
-# ── Not Found ─────────────────────────────────────────────────
+# -- Not Found -------------------------------------------------
 class NotFoundError(WrapSecError):
-    code = "NOT_FOUND"
-    status_code = 404
+    code = ErrorCode.NOT_FOUND
     def __init__(self, resource: str, identifier: str):
-        super().__init__(f"{resource} not found: {identifier}")
+        self.resource   = resource
+        self.identifier = identifier
+        # Only the resource is user-facing; the identifier stays in logs and is
+        # correlated via trace_id (rules section 15).
+        super().__init__(
+            params={"resource": resource},
+            debug_message=f"{resource} not found: {identifier}",
+        )
 
 
-# ── Conflict ──────────────────────────────────────────────────
+# -- Conflict --------------------------------------------------
 class ConflictError(WrapSecError):
     """A resource with the same unique key (e.g. slug) already exists."""
-    code = "CONFLICT"
-    status_code = 409
-    def __init__(self, message: str = "Resource already exists", trace_id=None):
-        super().__init__(message, trace_id=trace_id)
+    code = ErrorCode.CONFLICT
 
 
-# ── Rate Limit ────────────────────────────────────────────────
+# -- Rate Limit ------------------------------------------------
 class RateLimitError(WrapSecError):
-    code = "RATE_LIMIT_EXCEEDED"
-    status_code = 429
+    code = ErrorCode.RATE_LIMIT_EXCEEDED
     def __init__(self, retry_after: int = 60):
         self.retry_after = retry_after
-        super().__init__(f"Too many requests. Retry after {retry_after} seconds.")
+        super().__init__(params={"retry_after": retry_after})
 
 
-# ── Detection ─────────────────────────────────────────────────
+# -- Detection -------------------------------------------------
 class DetectionError(WrapSecError):
-    code = "DETECTION_ERROR"
-    status_code = 500
-    def __init__(self, message: str = "Internal detection pipeline failure"):
-        super().__init__(message)
+    code = ErrorCode.DETECTION_ERROR
 
 
-# ── LLM ───────────────────────────────────────────────────────
+# -- LLM -------------------------------------------------------
 class LLMUnavailableError(WrapSecError):
-    code = "LLM_UNAVAILABLE"
-    status_code = 502
+    code = ErrorCode.LLM_UNAVAILABLE
     def __init__(self, provider: str = ""):
-        msg = f"LLM provider unavailable: {provider}" if provider else "Upstream LLM provider unreachable"
-        super().__init__(msg)
+        self.provider = provider
+        # Provider name is internal detail -> debug only, not the user message.
+        super().__init__(debug_message=f"LLM provider unavailable: {provider}" if provider else None)
 
 
-# ── Internal ──────────────────────────────────────────────────
+# -- Internal --------------------------------------------------
 class InternalError(WrapSecError):
-    code = "INTERNAL_ERROR"
-    status_code = 500
-    def __init__(self, message: str = "Unexpected internal error"):
-        super().__init__(message)
+    code = ErrorCode.INTERNAL_ERROR

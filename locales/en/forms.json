@@ -1,0 +1,14 @@
+{
+  "errors": {
+    "REQUIRED": "{field} is required.",
+    "INVALID_EMAIL": "{field} must be a valid email address.",
+    "TOO_LONG": "{field} must be at most {max_length} characters.",
+    "TOO_SHORT": "{field} must be at least {min_length} characters.",
+    "INVALID_ENUM": "{field} must be one of: {allowed}.",
+    "INVALID_UUID": "{field} must be a valid identifier.",
+    "INVALID_URL": "{field} must be a valid public URL.",
+    "INVALID_TYPE": "{field} has an invalid type.",
+    "OUT_OF_RANGE": "{field} is out of the allowed range.",
+    "INVALID_VALUE": "{field} is invalid."
+  }
+}
