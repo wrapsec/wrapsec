@@ -15,6 +15,16 @@ class Settings(BaseSettings):
     debug:           bool = False
     environment:     str = Field(default="development")  # development | staging | production
 
+    # ── Localization ──────────────────────────────────────────
+    # Locale-preference infrastructure (backend English-only for now; the
+    # dashboard consumes resolved_locale in a later phase). supported_locales is
+    # the allowlist every stored/configured/requested locale is validated
+    # against; a value outside it is never trusted. English must always be
+    # present (the guaranteed catalog and ultimate fallback), and the system
+    # default must itself be supported -- both enforced at startup.
+    supported_locales:      list[str] = Field(default_factory=lambda: ["en"])
+    system_default_locale:  str       = "en"
+
     # ── API ───────────────────────────────────────────────────
     api_host:        str = "0.0.0.0"
     api_port:        int = 8000
@@ -249,6 +259,24 @@ class Settings(BaseSettings):
                 f"must be >= 0; it lowers thresholds for untrusted sources."
             )
 
+    def validate_locale_config(self) -> None:
+        # English is the guaranteed catalog and the ultimate fallback, so it
+        # must always be selectable. The system default must itself be in the
+        # allowlist -- a default outside it is internally inconsistent (the
+        # English floor would silently mask the misconfig), so reject at startup.
+        if not self.supported_locales:
+            raise ValueError("supported_locales must not be empty")
+        lowered = [loc.lower() for loc in self.supported_locales]
+        if "en" not in lowered:
+            raise ValueError(
+                "supported_locales must include 'en' (the fallback locale)"
+            )
+        if self.system_default_locale.lower() not in lowered:
+            raise ValueError(
+                f"system_default_locale ({self.system_default_locale!r}) must be "
+                f"one of supported_locales ({self.supported_locales})"
+            )
+
     def validate_secrets(self) -> None:
         import os
         if os.getenv("TESTING") == "true":
@@ -294,6 +322,7 @@ def get_settings() -> Settings:
     settings = Settings()
     settings.validate_thresholds()
     settings.validate_source_posture()
+    settings.validate_locale_config()
     settings.validate_secrets()
     settings.validate_cookie_security()
     return settings

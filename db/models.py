@@ -40,6 +40,9 @@ class TenantModel(Base):
     contact_email = Column(String(100), nullable=True)
     created_by    = Column(String(100), nullable=True)
     created_at    = Column(DateTime(timezone=True),    nullable=False, default=utc_now)
+    # BCP-47 tag; NULL = inherit the system default. Validated against the
+    # supported-locales allowlist before use (never trusted blindly).
+    locale        = Column(String(35),  nullable=True)
 
 
 class DepartmentModel(Base):
@@ -278,6 +281,9 @@ class UserModel(Base):
     token_version         = Column(Integer,     nullable=False, default=1)
     created_at            = Column(DateTime(timezone=True),    nullable=False, default=utc_now)
     last_login_at         = Column(DateTime(timezone=True),    nullable=True)
+    # BCP-47 tag; NULL = inherit tenant/system default. Validated against the
+    # supported-locales allowlist before use (never trusted blindly).
+    locale                = Column(String(35),  nullable=True)
 
     __table_args__ = (
         Index("ix_users_tenant",      "tenant_id"),

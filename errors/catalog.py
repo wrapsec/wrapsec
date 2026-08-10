@@ -160,6 +160,7 @@ PYDANTIC_TYPE_TO_VALIDATION: dict[str, ValidationCode] = {
     "string_too_short":    ValidationCode.TOO_SHORT,
     "enum":                ValidationCode.INVALID_ENUM,
     "literal_error":       ValidationCode.INVALID_ENUM,
+    "invalid_locale":      ValidationCode.INVALID_ENUM,
     "uuid_parsing":        ValidationCode.INVALID_UUID,
     "uuid_type":           ValidationCode.INVALID_UUID,
     "url_parsing":         ValidationCode.INVALID_URL,
