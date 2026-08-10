@@ -5,12 +5,13 @@
 from fastapi import APIRouter, Depends
 from services.time import to_iso_z
 from fastapi.responses import JSONResponse
-from pydantic import BaseModel, Field, model_validator
+from pydantic import BaseModel, Field, field_validator, model_validator
 from sqlalchemy.ext.asyncio import AsyncSession
 from api.v1.dependencies.auth import get_current_principal, require_admin
 from api.v1.dependencies.db import get_db
 from db.repositories.tenant import TenantRepository
 from domain.entities.principal import Principal
+from services.localization import validate_locale_input
 
 router = APIRouter()
 
@@ -24,6 +25,7 @@ def _format(tenant, is_admin: bool = False) -> dict:
         "contact_email": tenant.contact_email,
         "is_active":     tenant.is_active,
         "created_at":    to_iso_z(tenant.created_at),
+        "locale":        tenant.locale,
     }
     if is_admin:
         result["global_policy"] = tenant.global_policy
@@ -92,6 +94,14 @@ class TenantUpdateSchema(BaseModel):
     description:   str                | None = None
     contact_email: str                | None = None
     global_policy: GlobalPolicySchema | None = None
+    # Tenant default locale (BCP-47). Validated against the supported-locales
+    # allowlist; an unsupported value is rejected 422 INVALID_ENUM.
+    locale:        str                | None = None
+
+    @field_validator("locale")
+    @classmethod
+    def _valid_locale(cls, v: str | None) -> str | None:
+        return validate_locale_input(v)
 
 
 @router.get("")
@@ -130,6 +140,7 @@ async def update_tenant(
     if body.name          is not None: tenant.name          = body.name
     if body.description   is not None: tenant.description   = body.description
     if body.contact_email is not None: tenant.contact_email = body.contact_email
+    if body.locale        is not None: tenant.locale        = body.locale
     if body.global_policy is not None:
         tenant.global_policy = body.global_policy.model_dump(exclude_none=True)
 

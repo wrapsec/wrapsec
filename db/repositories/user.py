@@ -97,6 +97,7 @@ class UserRepository(BaseRepository):
 
         _UPDATABLE = frozenset({
             "role", "dept_id", "is_active", "force_password_change", "password_hash",
+            "locale",
         })
         for key, value in data.items():
             if key not in _UPDATABLE:

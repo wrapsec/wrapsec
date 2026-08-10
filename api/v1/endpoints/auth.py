@@ -8,7 +8,7 @@ from services.time import to_iso_z, utc_now
 
 from fastapi import APIRouter, Depends, Request, Response
 from fastapi.responses import JSONResponse
-from pydantic import BaseModel, EmailStr
+from pydantic import BaseModel, EmailStr, field_validator
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from api.v1.dependencies.auth import require_jwt
@@ -24,6 +24,7 @@ from errors.exceptions import (
     SessionInvalidatedException,
 )
 from errors.response import error_response
+from services.localization import resolve_locale, validate_locale_input
 from services.auth.service import AuthService
 
 logger = logging.getLogger("wrapsec.auth")
@@ -365,8 +366,42 @@ async def _blacklist_current_access_token(request: Request) -> None:
     await blacklist_jti(jti, ttl)
 
 
+async def _me_payload(db: AsyncSession, user) -> dict:
+    """Profile response, including the stored locale preference and the effective
+    (resolved) locale. resolved_locale applies the User -> Tenant -> System ->
+    English precedence, validating each candidate against the allowlist."""
+    from db.repositories.tenant import TenantRepository
+
+    tenant        = await TenantRepository(db).get_by_id(user.tenant_id) if user.tenant_id else None
+    tenant_locale = tenant.locale if tenant else None
+    return {
+        "id":                    str(user.id),
+        "email":                 user.email,
+        "role":                  user.role,
+        "dept_id":               str(user.dept_id)   if user.dept_id   else None,
+        "tenant_id":             str(user.tenant_id) if user.tenant_id else None,
+        "is_active":             user.is_active,
+        "force_password_change": user.force_password_change,
+        "last_login_at":         to_iso_z(user.last_login_at) if user.last_login_at else None,
+        "locale":                user.locale,
+        "resolved_locale":       resolve_locale(user.locale, tenant_locale),
+    }
+
+
+class MePatchSchema(BaseModel):
+    # Optional preference. Explicit null clears it (inherit tenant/system). An
+    # unsupported value is rejected 422 INVALID_ENUM (see services.localization).
+    locale: str | None = None
+
+    @field_validator("locale")
+    @classmethod
+    def _valid_locale(cls, v: str | None) -> str | None:
+        return validate_locale_input(v)
+
+
 @router.get("/me")
 async def me(
+    request:   Request,
     principal: Principal    = Depends(require_jwt),
     db:        AsyncSession = Depends(get_db),
 ) -> JSONResponse:
@@ -393,19 +428,49 @@ async def me(
             params={"resource": "User"},
         )
 
-    return JSONResponse(
-        status_code=200,
-        content={
-            "id":                    str(user.id),
-            "email":                 user.email,
-            "role":                  user.role,
-            "dept_id":               str(user.dept_id)   if user.dept_id   else None,
-            "tenant_id":             str(user.tenant_id) if user.tenant_id else None,
-            "is_active":             user.is_active,
-            "force_password_change": user.force_password_change,
-            "last_login_at":         to_iso_z(user.last_login_at) if user.last_login_at else None,
-        },
-    )
+    return JSONResponse(status_code=200, content=await _me_payload(db, user))
+
+
+@router.patch("/me")
+async def update_me(
+    body:      MePatchSchema,
+    request:   Request,
+    principal: Principal    = Depends(require_jwt),
+    db:        AsyncSession = Depends(get_db),
+) -> JSONResponse:
+    """
+    Self-service profile preferences. Currently updates the locale preference
+    only (validated against the supported-locales allowlist).
+
+    Auth: JWT Bearer required.
+    """
+    from uuid import UUID
+    from db.repositories.user import UserRepository
+
+    raw_id    = principal.id.replace("user:", "", 1)
+    user_uuid = UUID(raw_id)
+
+    repo = UserRepository(db)
+    data = body.model_dump(exclude_unset=True)  # only fields the client sent
+    if data:
+        user = await repo.update(user_uuid, data)
+        if user is None:
+            return error_response(
+                ErrorCode.NOT_FOUND,
+                trace_id=getattr(request.state, "trace_id", ""),
+                params={"resource": "User"},
+            )
+        await db.commit()
+    else:
+        user = await repo.get_by_id(user_uuid)
+        if user is None:
+            return error_response(
+                ErrorCode.NOT_FOUND,
+                trace_id=getattr(request.state, "trace_id", ""),
+                params={"resource": "User"},
+            )
+
+    return JSONResponse(status_code=200, content=await _me_payload(db, user))
 
 
 @router.post("/change-password")
