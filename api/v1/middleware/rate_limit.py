@@ -7,8 +7,10 @@ import json
 import time
 from fastapi import Request
 from starlette.middleware.base import BaseHTTPMiddleware
-from starlette.responses import JSONResponse, Response
+from starlette.responses import Response
 from config.settings import get_settings
+from errors.catalog import ErrorCode
+from errors.response import error_response
 
 PUBLIC_PATHS = {"/health", "/health/ready", "/health/live", "/metrics"}
 
@@ -114,15 +116,10 @@ class RateLimitMiddleware(BaseHTTPMiddleware):
             except Exception:
                 pass
 
-            response = JSONResponse(
-                status_code = 429,
-                content = {
-                    "error": {
-                        "code":     "RATE_LIMITED",
-                        "message":  "Rate limit exceeded. Retry after 60 seconds.",
-                        "trace_id": trace_id,
-                    }
-                },
+            response = error_response(
+                ErrorCode.RATE_LIMIT_EXCEEDED,
+                trace_id=trace_id,
+                params={"retry_after": 60},
             )
         else:
             response = await call_next(request)

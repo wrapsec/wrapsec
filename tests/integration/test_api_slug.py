@@ -111,8 +111,11 @@ async def test_department_rejects_bad_email_and_overlong_name(auth_client, two_t
         headers=_auth(token),
     )
     assert bad_email.status_code == 422
-    # Concise, field-scoped message -- not the raw email-validator sentence.
-    assert bad_email.json()["error"]["message"] == "Contact email must be a valid email address."
+    # Structured per-field validation: generic top-level, INVALID_EMAIL per field.
+    err = bad_email.json()["error"]
+    assert err["code"] == "VALIDATION_ERROR"
+    assert any(p["field"] == "contact_email" and p["code"] == "INVALID_EMAIL"
+               for p in err.get("invalid_params", []))
     long_name = await auth_client.post(
         "/v1/admin/departments",
         json={"slug": "lng", "name": "N" * 200},
@@ -130,7 +133,10 @@ async def test_application_rejects_bad_owner_email(auth_client, two_tenant_setup
         headers=_auth(a["admin_token"]),
     )
     assert r.status_code == 422
-    assert r.json()["error"]["message"] == "Owner email must be a valid email address."
+    err = r.json()["error"]
+    assert err["code"] == "VALIDATION_ERROR"
+    assert any(p["field"] == "owner_email" and p["code"] == "INVALID_EMAIL"
+               for p in err.get("invalid_params", []))
 
 
 @pytest.mark.asyncio

@@ -9,6 +9,9 @@ import logging
 from fastapi import Request
 from starlette.middleware.base import BaseHTTPMiddleware
 from starlette.responses import JSONResponse, Response
+
+from errors.catalog import ErrorCode
+from errors.response import error_response
 from cache.redis_client import get_redis
 from config.settings import get_settings
 
@@ -90,15 +93,9 @@ class IdempotencyMiddleware(BaseHTTPMiddleware):
                         f"body hash mismatch"
                     )
                     trace_id = getattr(request.state, "trace_id", "")
-                    return JSONResponse(
-                        status_code = 409,
-                        content     = {
-                            "error": {
-                                "code":    "IDEMPOTENCY_CONFLICT",
-                                "message": "Idempotency-Key was already used with a different request body.",
-                                "trace_id": trace_id,
-                            }
-                        },
+                    return error_response(
+                        ErrorCode.IDEMPOTENCY_CONFLICT,
+                        trace_id=trace_id,
                     )
 
                 # Same key + same body -> return cached response if available

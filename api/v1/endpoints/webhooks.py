@@ -56,6 +56,7 @@ from datetime import datetime
 from fastapi import APIRouter, Depends, Request
 from fastapi.responses import JSONResponse
 from pydantic import BaseModel, Field, field_validator, model_validator
+from pydantic_core import PydanticCustomError
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from api.v1.dependencies.auth import require_admin
@@ -135,12 +136,16 @@ class WebhookCreateSchema(BaseModel):
         # targets so a compromised admin cannot repurpose the
         # delivery worker as an egress SSRF primitive. SIEM ingest hosts
         # are public HTTPS, so this holds for connector endpoints too.
-        # Remap the validator's "base_url" wording to "Webhook URL" so the
-        # rejection names the field the caller actually set.
+        # The SSRF-safe rules are still enforced (private/internal/metadata
+        # destinations are rejected). Only the user-facing wording is generic:
+        # the client sees INVALID_URL, never the internal reason (no leak).
         try:
             return validate_llm_base_url(v)
         except ValueError as exc:
-            raise ValueError(str(exc).replace("base_url", "Webhook URL")) from None
+            logger.warning("webhook url rejected (ssrf-safe check): %s", exc)
+            raise PydanticCustomError(
+                "invalid_url", "URL is not an allowed public destination"
+            ) from None
 
     @model_validator(mode="after")
     def _validate_connector(self) -> "WebhookCreateSchema":
@@ -188,7 +193,10 @@ class WebhookUpdateSchema(BaseModel):
         try:
             return validate_llm_base_url(v)
         except ValueError as exc:
-            raise ValueError(str(exc).replace("base_url", "Webhook URL")) from None
+            logger.warning("webhook url rejected (ssrf-safe check): %s", exc)
+            raise PydanticCustomError(
+                "invalid_url", "URL is not an allowed public destination"
+            ) from None
 
 
 class WebhookRotateSchema(BaseModel):

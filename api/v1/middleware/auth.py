@@ -19,6 +19,9 @@ from sqlalchemy.pool import NullPool
 from starlette.middleware.base import BaseHTTPMiddleware
 from starlette.responses import JSONResponse, Response
 
+from errors.catalog import ErrorCode
+from errors.response import error_response
+
 from config.settings import get_settings
 
 logger = logging.getLogger("wrapsec.auth")
@@ -105,13 +108,9 @@ def _unauthorized(request: Request, reason: str) -> JSONResponse:
         "auth rejected reason=%s path=%s method=%s",
         reason, request.url.path, request.method,
     )
-    return JSONResponse(
-        status_code=401,
-        content={"error": {
-            "code":     "UNAUTHORIZED",
-            "message":  "Missing or invalid credentials",
-            "trace_id": getattr(request.state, "trace_id", None),
-        }},
+    return error_response(
+        ErrorCode.UNAUTHORIZED,
+        trace_id=getattr(request.state, "trace_id", "") or "",
     )
 
 
@@ -481,13 +480,9 @@ class AuthMiddleware(BaseHTTPMiddleware):
             )
             if not skip_logging:
                 await _log_session_expired(token, "session_invalidated", request.url.path)
-            return JSONResponse(
-                status_code=401,
-                content={"error": {
-                    "code":     "SESSION_INVALIDATED",
-                    "message":  "Session has been invalidated. Please log in again.",
-                    "trace_id": getattr(request.state, "trace_id", None),
-                }},
+            return error_response(
+                ErrorCode.SESSION_INVALIDATED,
+                trace_id=getattr(request.state, "trace_id", "") or "",
             )
 
         # Step 5 - populate request.state from DB values
@@ -504,13 +499,9 @@ class AuthMiddleware(BaseHTTPMiddleware):
 
         # Step 6 - force_password_change enforcement
         if user.force_password_change and request.url.path not in FORCE_CHANGE_ALLOWED:
-            return JSONResponse(
-                status_code=403,
-                content={"error": {
-                    "code":    "PASSWORD_CHANGE_REQUIRED",
-                    "message": "You must change your password before accessing this resource.",
-                    "hint":    "POST /v1/auth/change-password",
-                }},
+            return error_response(
+                ErrorCode.PASSWORD_CHANGE_REQUIRED,
+                trace_id=getattr(request.state, "trace_id", "") or "",
             )
 
         return await call_next(request)

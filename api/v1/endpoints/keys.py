@@ -7,9 +7,9 @@ from services.time import to_iso_z, utc_now
 import secrets
 import hashlib
 from datetime import timedelta
+from enum import Enum
 from fastapi import APIRouter, Depends, Request
 from fastapi.responses import JSONResponse
-from typing import Literal
 from pydantic import BaseModel, Field, field_validator
 from sqlalchemy.ext.asyncio import AsyncSession
 from api.v1.dependencies.auth import get_current_principal, require_admin
@@ -37,11 +37,16 @@ def generate_key_id() -> str:
     return "key_" + secrets.token_hex(6)
 
 
+class KeyType(str, Enum):
+    LIVE  = "live"
+    TRIAL = "trial"
+
+
 class CreateKeySchema(BaseModel):
     name:       str = Field(min_length=1, max_length=100)
     dept_id:    str | None = None  # dept-scoped key (no app required)
     app_id:     str | None = None  # app-scoped key (dept+tenant derived from app)
-    key_type:   Literal["live", "trial"] = "live"
+    key_type:   KeyType = KeyType.LIVE
     expires_at: str | None = None
 
     @field_validator("dept_id", "app_id")
@@ -94,15 +99,8 @@ async def create_key(
             status_code = 403,
         )
 
-    # Validate key_type
-    if body.key_type not in ("live", "trial"):
-        from errors.exceptions import WrapSecError
-        raise WrapSecError(
-            code        = "VALIDATION_ERROR",
-            message     = "key_type must be 'live' or 'trial'",
-            status_code = 422,
-        )
-
+    # key_type is validated by the KeyType enum at parse time (invalid values
+    # produce a structured 422 INVALID_ENUM), so no manual check is needed here.
     api_key = generate_api_key(body.key_type)
     key_id  = generate_key_id()
 
@@ -156,7 +154,7 @@ async def create_key(
         "key_id":    key_id,
         "name":      body.name,
         "key_hash":  _hash_key(api_key),
-        "key_type":  body.key_type,
+        "key_type":  body.key_type.value,
         "is_admin":  False,
         "revoked":   False,
         "app_id":    app_id,
@@ -169,7 +167,7 @@ async def create_key(
         "key_id":     key_id,
         "name":       body.name,
         "api_key":    api_key,
-        "key_type":   body.key_type,
+        "key_type":   body.key_type.value,
         "app_id":     str(app_id)    if app_id    else None,
         "dept_id":    str(dept_id)   if dept_id   else None,
         "tenant_id":  str(tenant_id) if tenant_id else None,

@@ -229,10 +229,10 @@ async def test_last_admin_cannot_be_deactivated(auth_client, auth_setup):
         json={"is_active": False},
         headers={"Authorization": f"Bearer {token}"},
     )
-    assert response.status_code == 400
-    message = response.json()["error"]["message"].lower()
-    # Either self-deactivation guard or last-admin guard fires - both are correct
-    assert "deactivate" in message
+    # State conflict (409): either the self-deactivation guard or the last-admin
+    # guard fires - both are dedicated, stable codes.
+    assert response.status_code == 409
+    assert response.json()["error"]["code"] in ("CANNOT_DEACTIVATE_SELF", "LAST_ADMIN")
 
 
 @pytest.mark.asyncio

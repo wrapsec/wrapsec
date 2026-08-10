@@ -15,6 +15,7 @@ from api.v1.dependencies.auth import require_jwt
 from api.v1.dependencies.db import get_db
 from api.v1.middleware.auth import get_client_ip
 from domain.entities.principal import Principal
+from errors.catalog import ErrorCode
 from errors.exceptions import (
     AccountDisabledException,
     AccountLockedException,
@@ -22,6 +23,7 @@ from errors.exceptions import (
     InvalidTokenException,
     SessionInvalidatedException,
 )
+from errors.response import error_response
 from services.auth.service import AuthService
 
 logger = logging.getLogger("wrapsec.auth")
@@ -188,12 +190,10 @@ async def login(
             _rl_key = keyspace.login_rate_limit(ip_address or "unknown")
             _limited, _, _ = await is_rate_limited(_rl_key, limit=_settings.login_rate_limit_per_minute)
             if _limited:
-                return JSONResponse(
-                    status_code=429,
-                    content={"error": {
-                        "code":    "RATE_LIMITED",
-                        "message": "Too many login attempts. Try again later.",
-                    }},
+                return error_response(
+                    ErrorCode.RATE_LIMIT_EXCEEDED,
+                    trace_id=getattr(request.state, "trace_id", ""),
+                    params={"retry_after": 60},
                 )
         except Exception:
             pass  # Fail open - never block login due to Redis unavailability
@@ -207,12 +207,9 @@ async def login(
     except (AccountLockedException, AuthenticationError, AccountDisabledException):
         # All credential failures return identical 401 - distinguishing locked,
         # wrong password, disabled, or non-existent accounts leaks email existence.
-        return JSONResponse(
-            status_code=401,
-            content={"error": {
-                "code":    "INVALID_CREDENTIALS",
-                "message": "Invalid email or password",
-            }},
+        return error_response(
+            ErrorCode.INVALID_CREDENTIALS,
+            trace_id=getattr(request.state, "trace_id", ""),
         )
 
     response = JSONResponse(
@@ -259,31 +256,22 @@ async def refresh(
 
     raw_token = request.cookies.get(REFRESH_COOKIE_NAME)
     if not raw_token:
-        return JSONResponse(
-            status_code=401,
-            content={"error": {
-                "code":    "INVALID_TOKEN",
-                "message": "Refresh token missing.",
-            }},
+        return error_response(
+            ErrorCode.INVALID_TOKEN,
+            trace_id=getattr(request.state, "trace_id", ""),
         )
 
     try:
         result = await auth_service.refresh(raw_token, db)
-    except SessionInvalidatedException as e:
-        return JSONResponse(
-            status_code=401,
-            content={"error": {
-                "code":    "SESSION_INVALIDATED",
-                "message": e.message,
-            }},
+    except SessionInvalidatedException:
+        return error_response(
+            ErrorCode.SESSION_INVALIDATED,
+            trace_id=getattr(request.state, "trace_id", ""),
         )
-    except InvalidTokenException as e:
-        return JSONResponse(
-            status_code=401,
-            content={"error": {
-                "code":    "INVALID_TOKEN",
-                "message": e.message,
-            }},
+    except InvalidTokenException:
+        return error_response(
+            ErrorCode.INVALID_TOKEN,
+            trace_id=getattr(request.state, "trace_id", ""),
         )
 
     response = JSONResponse(
@@ -399,9 +387,10 @@ async def me(
     user = await repo.get_by_id(user_uuid)
 
     if not user:
-        return JSONResponse(
-            status_code=404,
-            content={"error": {"code": "NOT_FOUND", "message": "User not found."}},
+        return error_response(
+            ErrorCode.NOT_FOUND,
+            trace_id=getattr(request.state, "trace_id", ""),
+            params={"resource": "User"},
         )
 
     return JSONResponse(
@@ -448,16 +437,25 @@ async def change_password(
             new_password     = body.new_password,
             db               = db,
         )
-    except AuthenticationError as e:
-        return JSONResponse(
-            status_code=401,
-            content={"error": {"code": "INVALID_PASSWORD", "message": e.message}},
+    except AuthenticationError:
+        # Current password wrong. The message is normalized to the catalog
+        # ("Current password is incorrect."); no email/password detail is echoed.
+        return error_response(
+            ErrorCode.INVALID_PASSWORD,
+            trace_id=getattr(request.state, "trace_id", ""),
         )
     except ValueError as e:
-        # validate_password_strength raises ValueError
-        return JSONResponse(
-            status_code=400,
-            content={"error": {"code": "INVALID_REQUEST", "message": str(e)}},
+        # validate_password_strength raises ValueError with English rule text.
+        # Per rules section 18, raw validator strings are not exposed as user
+        # messages; the detail goes to logs until dedicated forms/password keys
+        # exist. The client gets the generic INVALID_REQUEST message.
+        logger.info(
+            "weak new password rejected trace_id=%s: %s",
+            getattr(request.state, "trace_id", ""), e,
+        )
+        return error_response(
+            ErrorCode.INVALID_REQUEST,
+            trace_id=getattr(request.state, "trace_id", ""),
         )
 
     response = JSONResponse(

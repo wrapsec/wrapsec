@@ -578,9 +578,14 @@ async def test_create_error_names_webhook_url_not_base_url(client, admin_jwt_hea
         headers=admin_jwt_headers,
     )
     assert r.status_code == 422, r.text
-    msg = r.json()["error"]["message"]
-    assert "Webhook URL" in msg
-    assert "base_url" not in msg
+    err = r.json()["error"]
+    # Structured, field-scoped: the "url" field is flagged INVALID_URL. The
+    # SSRF-safe rules still reject the private address; the response carries no
+    # internal validator detail (no "base_url" leak anywhere).
+    assert err["code"] == "VALIDATION_ERROR"
+    assert any(p["field"] == "url" and p["code"] == "INVALID_URL"
+               for p in err.get("invalid_params", []))
+    assert "base_url" not in r.text
 
 
 # ─── reactivate ─────────────────────────────────────────────────────

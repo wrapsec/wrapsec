@@ -12,12 +12,13 @@ from fastapi import FastAPI, Request
 
 logger = logging.getLogger("wrapsec.metrics")
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import JSONResponse
 from fastapi import Response
 
 from config.settings import get_settings
+from errors.catalog import ErrorCode
 from errors.exceptions import WrapSecError
 from errors.handlers import wrapsec_exception_handler, unhandled_exception_handler, validation_exception_handler
+from errors.response import error_response
 from fastapi.exceptions import RequestValidationError
 from api.v1.router import router as v1_router
 from api.v1.middleware.trace import TraceMiddleware
@@ -256,6 +257,9 @@ async def metrics(request: Request):
             request.client.host if request.client else "unknown",
             bool(token),
         )
-        return JSONResponse(status_code=401, content={"error": "Unauthorized"})
+        return error_response(
+            ErrorCode.UNAUTHORIZED,
+            trace_id=getattr(request.state, "trace_id", "") or "",
+        )
     data, content_type = get_metrics()
     return Response(content=data, media_type=content_type)

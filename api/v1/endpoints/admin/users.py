@@ -18,7 +18,9 @@ from db.repositories.admin_event import AdminEventRepository
 from db.repositories.user import UserRepository
 from domain.entities.principal import Principal
 from domain.enums import AdminEventAction
+from errors.catalog import ErrorCode
 from errors.exceptions import NotFoundError
+from errors.response import error_response
 from services.auth.password import hash_password, normalize_email, validate_password_strength
 from services.auth.service import AuthService
 
@@ -327,12 +329,12 @@ async def update_user(
 
     # Self-deactivation guard
     if data.get("is_active") is False and str(user.id) == str(actor_id):
-        return JSONResponse(
-            status_code=400,
-            content={"error": {
-                "code":    "INVALID_REQUEST",
-                "message": "You cannot deactivate your own account.",
-            }},
+        logger.info(
+            "self-deactivation blocked actor=%s tenant=%s", actor_id, tenant_id,
+        )
+        return error_response(
+            ErrorCode.CANNOT_DEACTIVATE_SELF,
+            trace_id=getattr(request.state, "trace_id", "") or "",
         )
 
     # Compute final state for validation
@@ -371,13 +373,13 @@ async def update_user(
     if is_demoting_admin or is_deactivating_admin:
         active_admins = await repo.count_active_admins_for_update(tenant_id, user_id)
         if active_admins <= 1:
-            return JSONResponse(
-                status_code=400,
-                content={"error": {
-                    "code":    "INVALID_REQUEST",
-                    "message": "Cannot demote or deactivate the last active admin. "
-                               "Create another admin first.",
-                }},
+            logger.info(
+                "last-admin guard blocked actor=%s target=%s tenant=%s",
+                actor_id, user_id, tenant_id,
+            )
+            return error_response(
+                ErrorCode.LAST_ADMIN,
+                trace_id=getattr(request.state, "trace_id", "") or "",
             )
 
     # Convert dept_id to UUID if provided and not None

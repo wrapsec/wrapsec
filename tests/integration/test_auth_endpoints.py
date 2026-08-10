@@ -80,7 +80,7 @@ async def test_login_wrong_email_same_message(auth_client, auth_setup):
     assert response.status_code == 401
     data = response.json()
     assert data["error"]["code"] == "INVALID_CREDENTIALS"
-    assert data["error"]["message"] == "Invalid email or password"
+    assert data["error"]["message"] == "Invalid credentials."
 
 
 @pytest.mark.asyncio
@@ -343,7 +343,7 @@ async def test_login_lockout_does_not_leak_locked_status(auth_client, auth_setup
         json={"email": email, "password": "TestPass1!"},
     )
     assert r.status_code == 401
-    assert r.json()["error"]["message"] == "Invalid email or password"
+    assert r.json()["error"]["message"] == "Invalid credentials."
 
 
 @pytest.mark.asyncio
@@ -428,7 +428,7 @@ async def test_login_inactive_user_401(auth_client, auth_setup):
 
     assert r.status_code == 401
     assert r.json()["error"]["code"] == "INVALID_CREDENTIALS"
-    assert r.json()["error"]["message"] == "Invalid email or password"
+    assert r.json()["error"]["message"] == "Invalid credentials."
 
 
 # ── Email normalisation ────────────────────────────────────────────────────────
