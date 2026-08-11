@@ -4,6 +4,7 @@
 "use client"
 
 import { useState, useEffect } from "react"
+import { useTranslations } from "next-intl"
 import { useRouter } from "next/navigation"
 import { loginWithApiKey, loginWithCredentials, AuthError } from "@/lib/auth"
 import { getSetupStatus } from "@/lib/api"
@@ -36,6 +37,8 @@ function LogoMark({ size = 48 }: { size?: number }) {
 
 export default function LoginPage() {
   const router = useRouter()
+  const t  = useTranslations("pages.login")
+  const tc = useTranslations("common")
 
   useEffect(() => {
     getSetupStatus().then(({ initialized }) => {
@@ -64,12 +67,12 @@ export default function LoginPage() {
     } catch (err) {
       if (err instanceof AuthError) {
         if (err.code === "ACCOUNT_LOCKED") {
-          setError("Account locked after too many failed attempts. Try again later.")
+          setError(t("err_locked"))
         } else {
-          setError("Invalid email or password.")
+          setError(t("err_invalid_creds"))
         }
       } else {
-        setError("Something went wrong. Please try again.")
+        setError(t("err_generic"))
       }
     } finally {
       setLoading(false)
@@ -86,10 +89,10 @@ export default function LoginPage() {
         router.push("/")
         router.refresh()
       } else {
-        setError("Invalid API key.")
+        setError(t("err_invalid_key"))
       }
     } catch {
-      setError("Invalid API key or API unavailable.")
+      setError(t("err_key_unavailable"))
     } finally {
       setLoading(false)
     }
@@ -158,19 +161,19 @@ export default function LoginPage() {
               <LogoMark size={44} />
               <div>
                 <p style={{ fontSize: "22px", fontWeight: 700, color: "#fff", margin: 0, letterSpacing: "-0.02em" }}>
-                  WrapSec
+                  {tc("app_name")}
                 </p>
                 <p style={{ fontSize: "11px", color: "rgba(255,255,255,0.4)", margin: 0, letterSpacing: "0.06em", textTransform: "uppercase" }}>
-                  AI Security Gateway
+                  {tc("tagline")}
                 </p>
               </div>
             </div>
 
             <h2 style={{ fontSize: "26px", fontWeight: 700, color: "#fff", margin: "0 0 12px 0", lineHeight: 1.2, letterSpacing: "-0.02em" }}>
-              Secure every<br />AI interaction.
+              {t.rich("hero_title", { br: () => <br /> })}
             </h2>
             <p style={{ fontSize: "13px", color: "rgba(255,255,255,0.45)", margin: 0, lineHeight: 1.6 }}>
-              Real-time threat detection, PII protection, and policy enforcement between your applications and LLM providers.
+              {t("hero_body")}
             </p>
           </div>
 
@@ -183,7 +186,7 @@ export default function LoginPage() {
               borderRadius: "20px", padding: "3px 10px",
               letterSpacing: "0.03em",
             }}>
-              v1.0.0
+              {tc("version")}
             </span>
           </div>
         </div>
@@ -195,10 +198,10 @@ export default function LoginPage() {
           display: "flex", flexDirection: "column", justifyContent: "center",
         }}>
           <h3 style={{ fontSize: "18px", fontWeight: 700, color: "#fff", margin: "0 0 6px 0" }}>
-            Sign in
+            {t("sign_in")}
           </h3>
           <p style={{ fontSize: "12px", color: "rgba(255,255,255,0.35)", margin: "0 0 28px 0" }}>
-            Access the WrapSec dashboard
+            {t("subtitle")}
           </p>
 
           {error && (
@@ -215,12 +218,12 @@ export default function LoginPage() {
           {tab === "credentials" && (
             <div style={{ display: "flex", flexDirection: "column", gap: "16px" }}>
               <div>
-                <label style={LABEL}>Email</label>
+                <label style={LABEL}>{t("email")}</label>
                 <input
                   type="email" value={email}
                   onChange={e => setEmail(e.target.value)}
                   onKeyDown={e => e.key === "Enter" && handleCredentials()}
-                  placeholder="you@example.com"
+                  placeholder={t("email_ph")}
                   autoFocus autoComplete="off" disabled={loading}
                   style={INPUT}
                   onFocus={e => (e.target as HTMLInputElement).style.borderColor = "#670FEF"}
@@ -228,7 +231,7 @@ export default function LoginPage() {
                 />
               </div>
               <div>
-                <label style={LABEL}>Password</label>
+                <label style={LABEL}>{t("password")}</label>
                 <input
                   type="password" value={password}
                   onChange={e => setPassword(e.target.value)}
@@ -260,7 +263,7 @@ export default function LoginPage() {
                     <path style={{ opacity: 0.75 }} fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" />
                   </svg>
                 )}
-                {loading ? "Signing in" : "Sign in"}
+                {loading ? t("signing_in") : t("sign_in")}
               </button>
             </div>
           )}
@@ -268,19 +271,19 @@ export default function LoginPage() {
           {tab === "apikey" && (
             <div style={{ display: "flex", flexDirection: "column", gap: "16px" }}>
               <div>
-                <label style={LABEL}>API Key</label>
+                <label style={LABEL}>{t("api_key")}</label>
                 <input
                   type="password" value={apiKey}
                   onChange={e => setApiKey(e.target.value)}
                   onKeyDown={e => e.key === "Enter" && handleApiKey()}
-                  placeholder="wrapsec_admin_key or wsk_live_..."
+                  placeholder={t("api_key_ph")}
                   autoFocus disabled={loading}
                   style={INPUT}
                   onFocus={e => (e.target as HTMLInputElement).style.borderColor = "#670FEF"}
                   onBlur={e => (e.target as HTMLInputElement).style.borderColor = "rgba(255,255,255,0.12)"}
                 />
                 <p style={{ fontSize: "11px", color: "rgba(255,255,255,0.25)", marginTop: "6px" }}>
-                  API key sessions have read-only access to settings. Use email/password for full admin access.
+                  {t("api_key_note")}
                 </p>
               </div>
               <button
@@ -303,7 +306,7 @@ export default function LoginPage() {
                     <path style={{ opacity: 0.75 }} fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" />
                   </svg>
                 )}
-                {loading ? "Verifying" : "Sign in"}
+                {loading ? t("verifying") : t("sign_in")}
               </button>
             </div>
           )}
@@ -320,7 +323,7 @@ export default function LoginPage() {
                 onMouseEnter={e => (e.currentTarget.style.color = "rgba(255,255,255,0.65)")}
                 onMouseLeave={e => (e.currentTarget.style.color = "rgba(255,255,255,0.35)")}
               >
-                Sign in with API Key instead
+                {t("switch_to_apikey")}
               </button>
             ) : (
               <button
@@ -333,16 +336,17 @@ export default function LoginPage() {
                 onMouseEnter={e => (e.currentTarget.style.color = "rgba(255,255,255,0.65)")}
                 onMouseLeave={e => (e.currentTarget.style.color = "rgba(255,255,255,0.35)")}
               >
-                Sign in with Email / Password instead
+                {t("switch_to_creds")}
               </button>
             )}
           </div>
           <p style={{ fontSize: "11px", color: "rgba(255,255,255,0.15)", marginTop: "16px", textAlign: "center" }}>
-            WrapSec · AI Security Gateway
+            {tc("app_name")} · {tc("tagline")}
           </p>
         </div>
       </div>
 
+      {/* eslint-disable-next-line react/jsx-no-literals -- inline CSS, not localizable text */}
       <style>{`
         @keyframes spin { from { transform: rotate(0deg) } to { transform: rotate(360deg) } }
         input::placeholder { color: rgba(255,255,255,0.20) !important }

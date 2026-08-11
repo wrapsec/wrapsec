@@ -4,6 +4,7 @@
 "use client"
 
 import { useState, useEffect } from "react"
+import { useTranslations } from "next-intl"
 import { useRouter } from "next/navigation"
 import { getSetupStatus, completeSetup } from "@/lib/api"
 
@@ -32,6 +33,8 @@ function LogoMark({ size = 48 }: { size?: number }) {
 
 export default function SetupPage() {
   const router = useRouter()
+  const t  = useTranslations("pages.setup")
+  const tc = useTranslations("common")
 
   const [email,    setEmail]    = useState("")
   const [password, setPassword] = useState("")
@@ -56,7 +59,7 @@ export default function SetupPage() {
     if (!email.trim() || !password || !confirm) return
 
     if (password !== confirm) {
-      setError("Passwords do not match.")
+      setError(t("err_mismatch"))
       return
     }
 
@@ -65,7 +68,7 @@ export default function SetupPage() {
       await completeSetup(email.trim().toLowerCase(), password)
       router.replace("/login?setup=done")
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Setup failed. Please try again.")
+      setError(err instanceof Error ? err.message : t("err_failed"))
     } finally {
       setLoading(false)
     }
@@ -130,19 +133,19 @@ export default function SetupPage() {
               <LogoMark size={44} />
               <div>
                 <p style={{ fontSize: "22px", fontWeight: 700, color: "#fff", margin: 0, letterSpacing: "-0.02em" }}>
-                  WrapSec
+                  {tc("app_name")}
                 </p>
                 <p style={{ fontSize: "11px", color: "rgba(255,255,255,0.4)", margin: 0, letterSpacing: "0.06em", textTransform: "uppercase" }}>
-                  AI Security Gateway
+                  {tc("tagline")}
                 </p>
               </div>
             </div>
 
             <h2 style={{ fontSize: "26px", fontWeight: 700, color: "#fff", margin: "0 0 12px 0", lineHeight: 1.2, letterSpacing: "-0.02em" }}>
-              Welcome to<br />WrapSec.
+              {t.rich("hero_title", { br: () => <br /> })}
             </h2>
             <p style={{ fontSize: "13px", color: "rgba(255,255,255,0.45)", margin: 0, lineHeight: 1.6 }}>
-              Create your admin account to get started. This setup runs once - the page is disabled after your first login.
+              {t("hero_body")}
             </p>
           </div>
 
@@ -154,7 +157,7 @@ export default function SetupPage() {
               borderRadius: "20px", padding: "3px 10px",
               letterSpacing: "0.03em",
             }}>
-              v1.0.0
+              {tc("version")}
             </span>
           </div>
         </div>
@@ -166,10 +169,10 @@ export default function SetupPage() {
           display: "flex", flexDirection: "column", justifyContent: "center",
         }}>
           <h3 style={{ fontSize: "18px", fontWeight: 700, color: "#fff", margin: "0 0 6px 0" }}>
-            Create admin account
+            {t("title")}
           </h3>
           <p style={{ fontSize: "12px", color: "rgba(255,255,255,0.35)", margin: "0 0 28px 0" }}>
-            This is the only admin account. You can create more users from the dashboard.
+            {t("subtitle")}
           </p>
 
           {error && (
@@ -185,11 +188,11 @@ export default function SetupPage() {
 
           <div style={{ display: "flex", flexDirection: "column", gap: "16px" }}>
             <div>
-              <label style={LABEL}>Email</label>
+              <label style={LABEL}>{t("email")}</label>
               <input
                 type="email" value={email}
                 onChange={e => setEmail(e.target.value)}
-                placeholder="you@example.com"
+                placeholder={t("email_ph")}
                 autoFocus autoComplete="off" disabled={loading}
                 style={INPUT}
                 onFocus={e => (e.target as HTMLInputElement).style.borderColor = "#670FEF"}
@@ -197,7 +200,7 @@ export default function SetupPage() {
               />
             </div>
             <div>
-              <label style={LABEL}>Password</label>
+              <label style={LABEL}>{t("password")}</label>
               <input
                 type="password" value={password}
                 onChange={e => setPassword(e.target.value)}
@@ -209,7 +212,7 @@ export default function SetupPage() {
               />
             </div>
             <div>
-              <label style={LABEL}>Confirm password</label>
+              <label style={LABEL}>{t("confirm")}</label>
               <input
                 type="password" value={confirm}
                 onChange={e => setConfirm(e.target.value)}
@@ -241,16 +244,17 @@ export default function SetupPage() {
                   <path style={{ opacity: 0.75 }} fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" />
                 </svg>
               )}
-              {loading ? "Setting up" : "Create admin account"}
+              {loading ? t("setting_up") : t("submit")}
             </button>
           </div>
 
           <p style={{ fontSize: "11px", color: "rgba(255,255,255,0.20)", marginTop: "32px", textAlign: "center" }}>
-            WrapSec v1.0 · AI Security Gateway
+            {tc("version_footer")} · {tc("tagline")}
           </p>
         </div>
       </div>
 
+      {/* eslint-disable-next-line react/jsx-no-literals -- inline CSS, not localizable text */}
       <style>{`
         @keyframes spin { from { transform: rotate(0deg) } to { transform: rotate(360deg) } }
         input::placeholder { color: rgba(255,255,255,0.20) !important }

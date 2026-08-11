@@ -50,6 +50,9 @@ const eslintConfig = defineConfig([
       "app/departments/*/page.tsx",
       "app/applications/*/page.tsx",
       "app/agent-runs/*/page.tsx",
+      "app/login/page.tsx",
+      "app/setup/page.tsx",
+      "app/change-password/page.tsx",
     ],
     rules: {
       "react/jsx-no-literals": ["error", {
