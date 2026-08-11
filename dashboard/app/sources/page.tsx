@@ -4,6 +4,7 @@
 "use client"
 
 import useSWR from "swr"
+import { useTranslations } from "next-intl"
 import { useTimeRange } from "@/hooks/useTimeRange"
 import { Shell } from "@/components/layout/Shell"
 import { PageHeader } from "@/components/ui/PageHeader"
@@ -15,7 +16,7 @@ import { Card } from "@/components/ui/Card"
 import { PageSpinner } from "@/components/ui/Spinner"
 import { getBySource } from "@/lib/api"
 import { SourceStats, AttackOrigin } from "@/lib/types"
-import { DECISION_COLORS, THREAT_LABELS, contentSourceLabel, contentSourceTier } from "@/lib/constants"
+import { DECISION_COLORS, contentSourceLabel, contentSourceTier } from "@/lib/constants"
 import { useFormat } from "@/hooks/useFormat"
 
 // Content-source labels + trust tiers come from the centralized constants
@@ -54,12 +55,13 @@ const STAT_LABEL: React.CSSProperties = {
 
 function TopAttackOrigins({ origins }: { origins: AttackOrigin[] }) {
   const fmt = useFormat()
+  const t   = useTranslations("pages.sources.origins")
   if (origins.length === 0) {
     return (
       <div style={CARD}>
-        <p style={SECTION_LABEL}>Top Attack Origins</p>
+        <p style={SECTION_LABEL}>{t("title")}</p>
         <p style={{ fontSize: "13px", color: "#9ca3af", margin: 0 }}>
-          No attacks recorded in this window.
+          {t("empty")}
         </p>
       </div>
     )
@@ -67,9 +69,9 @@ function TopAttackOrigins({ origins }: { origins: AttackOrigin[] }) {
   const max = Math.max(...origins.map(o => o.attacks), 1)
   return (
     <div style={CARD}>
-      <p style={SECTION_LABEL}>Top Attack Origins</p>
+      <p style={SECTION_LABEL}>{t("title")}</p>
       <p style={{ fontSize: "12px", color: "#6b7280", margin: "0 0 16px" }}>
-        Where attacks are coming from -- sources ranked by blocked and sanitized volume.
+        {t("subtitle")}
       </p>
       <div style={{ display: "flex", flexDirection: "column", gap: "12px" }}>
         {origins.map((o, i) => (
@@ -103,6 +105,7 @@ function TopAttackOrigins({ origins }: { origins: AttackOrigin[] }) {
 // --- Decision mix bar ---------------------------------------------------------
 
 function DecisionMix({ s }: { s: SourceStats }) {
+  const t     = useTranslations("pages.sources.mix_word")
   const total = s.total || 1
   const seg = [
     { key: "BLOCK",    value: s.blocked,   color: DECISION_COLORS.BLOCK.text },
@@ -121,7 +124,7 @@ function DecisionMix({ s }: { s: SourceStats }) {
           <div key={x.key} style={{ display: "flex", alignItems: "center", gap: "5px" }}>
             <span style={{ width: "8px", height: "8px", borderRadius: "2px", background: x.color }} />
             <span style={{ fontSize: "11px", color: "#6b7280" }}>
-              {x.value} {x.key.toLowerCase()}
+              {x.value} {t(x.key)}
             </span>
           </div>
         ))}
@@ -134,6 +137,9 @@ function DecisionMix({ s }: { s: SourceStats }) {
 
 function SourceCard({ s }: { s: SourceStats }) {
   const fmt    = useFormat()
+  const t      = useTranslations("pages.sources.card")
+  const tt     = useTranslations("common.trust_tier")
+  const tc     = useTranslations("common.threat_category")
   const tier   = contentSourceTier(s.input_source)
   const badge  = TIER_STYLE[tier]
   const threatEntries = Object.entries(s.threats).sort((a, b) => b[1] - a[1])
@@ -148,28 +154,28 @@ function SourceCard({ s }: { s: SourceStats }) {
           padding: "3px 8px", borderRadius: "5px",
           color: badge.text, background: badge.bg, border: `1px solid ${badge.border}`,
         }}>
-          {tier}
+          {tt.has(tier) ? tt(tier) : tier}
         </span>
       </div>
 
       <div style={{ display: "grid", gridTemplateColumns: "repeat(4, 1fr)", gap: "12px", marginBottom: "16px" }}>
-        <StatCard label="Scans" value={fmt.number(s.total)} />
-        <StatCard label="Block Rate" value={`${(s.block_rate * 100).toFixed(1)}%`} />
+        <StatCard label={t("scans")} value={fmt.number(s.total)} />
+        <StatCard label={t("block_rate")} value={`${(s.block_rate * 100).toFixed(1)}%`} />
         <StatCard
-          label="Avg / Peak Risk"
+          label={t("avg_peak_risk")}
           value={<>{s.avg_risk.toFixed(2)} <span className="text-xs text-slate-400 font-semibold">/ {s.max_risk.toFixed(2)}</span></>}
         />
-        <StatCard label="High Risk" value={fmt.number(s.high_risk_count)} />
+        <StatCard label={t("high_risk")} value={fmt.number(s.high_risk_count)} />
       </div>
 
       <div style={{ marginBottom: threatEntries.length ? "16px" : 0 }}>
-        <div style={{ ...STAT_LABEL, marginBottom: "8px" }}>Decisions</div>
+        <div style={{ ...STAT_LABEL, marginBottom: "8px" }}>{t("decisions")}</div>
         <DecisionMix s={s} />
       </div>
 
       {threatEntries.length > 0 && (
         <div>
-          <div style={{ ...STAT_LABEL, marginBottom: "8px" }}>Threats by Source</div>
+          <div style={{ ...STAT_LABEL, marginBottom: "8px" }}>{t("threats_by_source")}</div>
           <div style={{ display: "flex", flexWrap: "wrap", gap: "6px" }}>
             {threatEntries.map(([cat, count]) => (
               <span key={cat} style={{
@@ -177,7 +183,7 @@ function SourceCard({ s }: { s: SourceStats }) {
                 background: "#fff7ed", border: "1px solid #fed7aa",
                 padding: "3px 8px", borderRadius: "5px",
               }}>
-                {THREAT_LABELS[cat] ?? cat} <span style={{ color: "#c2410c" }}>{count}</span>
+                {tc.has(cat) ? tc(cat) : cat} <span style={{ color: "#c2410c" }}>{count}</span>
               </span>
             ))}
           </div>
@@ -190,6 +196,7 @@ function SourceCard({ s }: { s: SourceStats }) {
 // --- Page ---------------------------------------------------------------------
 
 export default function SourcesPage() {
+  const t = useTranslations("pages.sources")
   const {
     range: timeRange, setRange: setTimeRange, options: timeRangeOptions, from, to,
   } = useTimeRange({
@@ -204,14 +211,14 @@ export default function SourcesPage() {
   )
 
   if (isLoading && !data) {
-    return <Shell title="Security by Source"><PageSpinner /></Shell>
+    return <Shell title={t("title")}><PageSpinner /></Shell>
   }
   if (error && !data) {
     return (
-      <Shell title="Security by Source">
-        <PageHeader description="Analyze security activity by content source to identify higher-risk inputs." />
+      <Shell title={t("title")}>
+        <PageHeader description={t("description")} />
         <Card>
-          <ErrorState title="Failed to load source analytics" message={error?.message} />
+          <ErrorState title={t("load_error")} message={error?.message} />
         </Card>
       </Shell>
     )
@@ -221,9 +228,9 @@ export default function SourcesPage() {
   const origins = data?.top_attack_origins ?? []
 
   return (
-    <Shell title="Security by Source">
+    <Shell title={t("title")}>
       <PageHeader
-        description="Analyze security activity by content source to identify higher-risk inputs."
+        description={t("description")}
         actions={<RangeTabs options={timeRangeOptions} value={timeRange} onChange={setTimeRange} />}
       />
       <div style={{ display: "flex", flexDirection: "column", gap: "20px" }}>
@@ -231,8 +238,8 @@ export default function SourcesPage() {
         {sources.length === 0 ? (
           <Card>
             <EmptyState
-              title="No source activity yet"
-              message="No requests recorded in this time window. Try a different range."
+              title={t("empty_title")}
+              message={t("empty_body")}
             />
           </Card>
         ) : (

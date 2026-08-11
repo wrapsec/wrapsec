@@ -29,6 +29,19 @@
     "sanitized": "Sanitized",
     "allowed": "Allowed"
   },
+  "threat_category": {
+    "PROMPT_INJECTION": "Prompt Injection",
+    "JAILBREAK": "Jailbreak",
+    "MALICIOUS_INTENT": "Malicious Intent",
+    "DATA_EXFILTRATION": "Data Exfiltration",
+    "PII": "PII",
+    "TOXICITY": "Toxicity"
+  },
+  "trust_tier": {
+    "trusted": "Trusted",
+    "untrusted": "Untrusted",
+    "unknown": "Unknown"
+  },
   "source_tooltip": {
     "untrusted": "Untrusted origin - indirect prompt-injection surface",
     "user": "End-user prompt"

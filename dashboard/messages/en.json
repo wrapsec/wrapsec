@@ -30,6 +30,19 @@
       "sanitized": "Sanitized",
       "allowed": "Allowed"
     },
+    "threat_category": {
+      "PROMPT_INJECTION": "Prompt Injection",
+      "JAILBREAK": "Jailbreak",
+      "MALICIOUS_INTENT": "Malicious Intent",
+      "DATA_EXFILTRATION": "Data Exfiltration",
+      "PII": "PII",
+      "TOXICITY": "Toxicity"
+    },
+    "trust_tier": {
+      "trusted": "Trusted",
+      "untrusted": "Untrusted",
+      "unknown": "Unknown"
+    },
     "source_tooltip": {
       "untrusted": "Untrusted origin - indirect prompt-injection surface",
       "user": "End-user prompt"
@@ -477,6 +490,31 @@
         "no_application": "No application",
         "key_title": "API key activity",
         "key_empty": "No key data"
+      }
+    },
+    "sources": {
+      "title": "Security by Source",
+      "description": "Analyze security activity by content source to identify higher-risk inputs.",
+      "load_error": "Failed to load source analytics",
+      "empty_title": "No source activity yet",
+      "empty_body": "No requests recorded in this time window. Try a different range.",
+      "origins": {
+        "title": "Top Attack Origins",
+        "empty": "No attacks recorded in this window.",
+        "subtitle": "Where attacks are coming from -- sources ranked by blocked and sanitized volume."
+      },
+      "mix_word": {
+        "BLOCK": "block",
+        "SANITIZE": "sanitize",
+        "ALLOW": "allow"
+      },
+      "card": {
+        "scans": "Scans",
+        "block_rate": "Block Rate",
+        "avg_peak_risk": "Avg / Peak Risk",
+        "high_risk": "High Risk",
+        "decisions": "Decisions",
+        "threats_by_source": "Threats by Source"
       }
     },
     "scanner": {
