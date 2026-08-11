@@ -4,6 +4,7 @@
 "use client"
 
 import { useState } from "react"
+import { useTranslations } from "next-intl"
 import { useAuthMode } from "@/hooks/useAuthMode"
 import useSWR from "swr"
 import { Shell } from "@/components/layout/Shell"
@@ -17,6 +18,8 @@ import { getApiKeys, revokeApiKey, rotateApiKey } from "@/lib/api"
 import { ApiKeyCreated } from "@/lib/types"
 
 export default function ApiKeysPage() {
+  const t  = useTranslations("pages.keys")
+  const tc = useTranslations("common")
   const [showModal, setShowModal] = useState(false)
   const [revoking,  setRevoking]  = useState<string | null>(null)
   const [search,    setSearch]    = useState("")
@@ -45,20 +48,21 @@ export default function ApiKeysPage() {
   }
 
   return (
-    <Shell title="API Keys">
+    <Shell title={t("title")}>
       <PageHeader
-        description="Create and manage API keys for the WrapSec API."
+        description={t("description")}
         actions={
           isJwt ? (
             <Button size="sm" onClick={() => setShowModal(true)}>
-              <PlusIcon /> Create key
+              <PlusIcon /> {t("create")}
             </Button>
           ) : (
             <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
-              <Button size="sm" disabled><PlusIcon /> Create key</Button>
+              <Button size="sm" disabled><PlusIcon /> {t("create")}</Button>
               <span style={{ fontSize: "11px", color: "#9ca3af" }}>
-                Requires admin login -{" "}
-                <a href="/login" style={{ color: "#670FEF", textDecoration: "underline" }}>sign in with email</a>
+                {tc.rich("requires_admin", {
+                  link: (chunks) => <a href="/login" style={{ color: "#670FEF", textDecoration: "underline" }}>{chunks}</a>,
+                })}
               </span>
             </div>
           )
@@ -72,7 +76,7 @@ export default function ApiKeysPage() {
               type="text"
               value={search}
               onChange={(e) => setSearch(e.target.value)}
-              placeholder="Search keys..."
+              placeholder={t("search_placeholder")}
               className="h-8 w-full max-w-xs px-3 text-sm rounded-md border border-slate-200 bg-white text-slate-900 placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-purple-700"
             />
           </div>
@@ -81,8 +85,8 @@ export default function ApiKeysPage() {
               <PageSpinner />
             ) : fetchError && !data ? (
               <div className="py-10 text-center">
-                <p className="text-sm font-semibold text-red-600 mb-1">Failed to load API keys</p>
-                <p className="text-xs text-slate-400">{fetchError?.message ?? "An unexpected error occurred"}</p>
+                <p className="text-sm font-semibold text-red-600 mb-1">{t("load_error")}</p>
+                <p className="text-xs text-slate-400">{fetchError?.message ?? tc("unexpected_error")}</p>
               </div>
             ) : (
               <div style={{ overflowY: "auto", maxHeight: "520px" }}>

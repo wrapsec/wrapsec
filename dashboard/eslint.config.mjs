@@ -30,12 +30,15 @@ const eslintConfig = defineConfig([
       "app/profile/page.tsx",
       "app/system/page.tsx",
       "app/users/page.tsx",
+      "app/settings/keys/page.tsx",
+      "components/settings/ApiKeyTable.tsx",
+      "components/settings/CreateKeyModal.tsx",
     ],
     rules: {
       "react/jsx-no-literals": ["error", {
         noStrings:      true,
         ignoreProps:    true,
-        allowedStrings: ["*", "-", "--", "/", ".", ":", "·", "○", "%", "ms", "s", "req", "->"],
+        allowedStrings: ["*", "-", "--", "...", "/", ".", ":", "·", "○", "%", "ms", "s", "req", "->"],
       }],
     },
   },

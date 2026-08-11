@@ -4,6 +4,7 @@
 "use client"
 
 import { useState, Fragment } from "react"
+import { useTranslations } from "next-intl"
 import { ApiKey } from "@/lib/types"
 import { Table, THead, TBody, Th, Tr } from "@/components/ui/Table"
 import { EmptyState } from "@/components/ui/EmptyState"
@@ -20,16 +21,25 @@ interface ApiKeyTableProps {
 
 export function ApiKeyTable({ keys, onRevoke, onRotate, revoking, canWrite = true }: ApiKeyTableProps) {
   const fmt = useFormat()
+  const t   = useTranslations("pages.keys.table")
   const [rotating,       setRotating]       = useState<string | null>(null)
   const [rotatedKey,     setRotatedKey]     = useState<{ newKey: string } | null>(null)
   const [graceInput,     setGraceInput]     = useState<string | null>(null)
   const [confirmRevoke,  setConfirmRevoke]  = useState<string | null>(null)
 
+  const GRACE_OPTIONS: { value: string; key: string }[] = [
+    { value: "15",   key: "min15" },
+    { value: "30",   key: "min30" },
+    { value: "60",   key: "hour1" },
+    { value: "360",  key: "hour6" },
+    { value: "1440", key: "hour24" },
+  ]
+
   if (keys.length === 0) {
     return (
       <EmptyState
-        title="No API keys yet"
-        message="Create a key to start sending requests to the gateway."
+        title={t("empty_title")}
+        message={t("empty_body")}
       />
     )
   }
@@ -52,7 +62,7 @@ export function ApiKeyTable({ keys, onRevoke, onRotate, revoking, canWrite = tru
       {rotatedKey && (
         <div className="p-3 bg-emerald-50 border border-emerald-200 rounded-lg">
           <p className="text-xs font-semibold text-emerald-800 mb-1">
-            Key rotated - copy the new key now. It will not be shown again.
+            {t("rotated_banner")}
           </p>
           <div className="flex items-center gap-2">
             <code className="flex-1 text-xs font-mono text-emerald-900 bg-emerald-100 px-2 py-1.5 rounded break-all">
@@ -62,17 +72,17 @@ export function ApiKeyTable({ keys, onRevoke, onRotate, revoking, canWrite = tru
               onClick={() => navigator.clipboard.writeText(rotatedKey.newKey)}
               className="text-xs text-emerald-700 hover:text-emerald-900 underline whitespace-nowrap"
             >
-              Copy
+              {t("copy")}
             </button>
             <button
               onClick={() => setRotatedKey(null)}
               className="text-xs text-emerald-500 hover:text-emerald-700 whitespace-nowrap"
             >
-              Dismiss
+              {t("dismiss")}
             </button>
           </div>
           <p className="text-xs text-emerald-600 mt-1.5">
-            Old key will expire after the grace period. Update your integrations before it expires.
+            {t("rotated_hint")}
           </p>
         </div>
       )}
@@ -89,7 +99,7 @@ export function ApiKeyTable({ keys, onRevoke, onRotate, revoking, canWrite = tru
         </colgroup>
         <THead>
           <tr>
-            {["Name", "Key ID", "Department", "Application", "Created", "Last Used", ""].map((h, i) => (
+            {[t("name"), t("key_id"), t("department"), t("application"), t("created"), t("last_used"), ""].map((h, i) => (
               <Th key={h || "actions"} align={i === 6 ? "right" : "left"}>{h}</Th>
             ))}
           </tr>
@@ -112,12 +122,12 @@ export function ApiKeyTable({ keys, onRevoke, onRotate, revoking, canWrite = tru
                       <div className="flex gap-1 flex-wrap">
                         {key.key_type === "trial" && (
                           <span className="text-xs px-1.5 py-0.5 rounded-full bg-amber-50 text-amber-700 border border-amber-200 whitespace-nowrap w-fit">
-                            Trial
+                            {t("trial")}
                           </span>
                         )}
                         {inGrace && (
                           <span className="text-xs px-1.5 py-0.5 rounded-full bg-amber-50 text-amber-700 border border-amber-200 whitespace-nowrap w-fit">
-                            Expiring - grace period active
+                            {t("grace_active")}
                           </span>
                         )}
                       </div>
@@ -138,7 +148,7 @@ export function ApiKeyTable({ keys, onRevoke, onRotate, revoking, canWrite = tru
 
                   <td className="px-4 py-3 text-xs text-slate-500">
                     {key.app_name || (
-                      <span className="text-slate-300">Dept-scoped</span>
+                      <span className="text-slate-300">{t("dept_scoped")}</span>
                     )}
                   </td>
 
@@ -147,7 +157,7 @@ export function ApiKeyTable({ keys, onRevoke, onRotate, revoking, canWrite = tru
                   </td>
 
                   <td className="px-4 py-3 text-xs text-slate-400">
-                    {key.last_used_at ? timeAgo(key.last_used_at) : "Never"}
+                    {key.last_used_at ? timeAgo(key.last_used_at) : t("never")}
                   </td>
 
                   {/* Actions */}
@@ -158,14 +168,14 @@ export function ApiKeyTable({ keys, onRevoke, onRotate, revoking, canWrite = tru
                         onClick={() => { setConfirmRevoke(null); setGraceInput(key.key_id) }}
                         disabled={rotating === key.key_id || !!revoking || inGrace}
                         title={inGrace
-                          ? "This key is already in its grace period. Rotate the new key instead."
-                          : "Rotate this key and generate a new secret"
+                          ? t("rotate_title_grace")
+                          : t("rotate_title")
                         }
                         style={{ fontSize: "12px", color: "#1d4ed8", background: "none", border: "none", cursor: "pointer", padding: 0, opacity: (rotating === key.key_id || !!revoking || inGrace) ? 0.3 : 1 }}
                         onMouseEnter={e => { if (!(rotating === key.key_id || !!revoking || inGrace)) (e.currentTarget as HTMLElement).style.textDecoration = "underline" }}
                         onMouseLeave={e => (e.currentTarget as HTMLElement).style.textDecoration = "none"}
                       >
-                        {rotating === key.key_id ? "Rotating..." : "Rotate"}
+                        {rotating === key.key_id ? t("rotating") : t("rotate")}
                       </button>}
 
                       {/* Revoke - hidden for API key sessions */}
@@ -174,14 +184,14 @@ export function ApiKeyTable({ keys, onRevoke, onRotate, revoking, canWrite = tru
                           disabled={revoking === key.key_id}
                           onClick={() => { setGraceInput(null); setConfirmRevoke(key.key_id) }}
                           title={inGrace
-                            ? "Immediately revokes this key - integrations still using it will stop working now"
-                            : "Revoke this key permanently"
+                            ? t("revoke_title_grace")
+                            : t("revoke_title")
                           }
                           style={{ fontSize: "12px", color: "#dc2626", background: "none", border: "none", cursor: "pointer", padding: 0, opacity: revoking === key.key_id ? 0.3 : 1 }}
                           onMouseEnter={e => { if (revoking !== key.key_id) (e.currentTarget as HTMLElement).style.textDecoration = "underline" }}
                           onMouseLeave={e => (e.currentTarget as HTMLElement).style.textDecoration = "none"}
                         >
-                          {revoking === key.key_id ? "Revoking..." : (inGrace ? "Force revoke" : "Revoke")}
+                          {revoking === key.key_id ? t("revoking") : (inGrace ? t("force_revoke") : t("revoke"))}
                         </button>
                       )}
                     </div>
@@ -195,8 +205,8 @@ export function ApiKeyTable({ keys, onRevoke, onRotate, revoking, canWrite = tru
                       <div className="flex items-center gap-3">
                         <p className="text-xs text-red-700 whitespace-nowrap">
                           {inGrace
-                            ? "This will immediately revoke the key. Integrations still using it will stop working now."
-                            : "This will permanently revoke the key. This cannot be undone."
+                            ? t("confirm_revoke_grace_msg")
+                            : t("confirm_revoke_msg")
                           }
                         </p>
                         <button
@@ -205,7 +215,7 @@ export function ApiKeyTable({ keys, onRevoke, onRotate, revoking, canWrite = tru
                           onMouseEnter={e => (e.currentTarget as HTMLElement).style.background = "#b91c1c"}
                           onMouseLeave={e => (e.currentTarget as HTMLElement).style.background = "#dc2626"}
                         >
-                          {inGrace ? "Force revoke" : "Confirm revoke"}
+                          {inGrace ? t("force_revoke") : t("confirm_revoke")}
                         </button>
                         <button
                           onClick={() => setConfirmRevoke(null)}
@@ -213,7 +223,7 @@ export function ApiKeyTable({ keys, onRevoke, onRotate, revoking, canWrite = tru
                           onMouseEnter={e => (e.currentTarget as HTMLElement).style.color = "#374151"}
                           onMouseLeave={e => (e.currentTarget as HTMLElement).style.color = "#6b7280"}
                         >
-                          Cancel
+                          {t("cancel")}
                         </button>
                       </div>
                     </td>
@@ -226,18 +236,16 @@ export function ApiKeyTable({ keys, onRevoke, onRotate, revoking, canWrite = tru
                     <td colSpan={7} className="px-3 py-3">
                       <div className="flex items-center gap-3 flex-wrap">
                         <p className="text-xs text-slate-600 whitespace-nowrap">
-                          How long should the old key remain valid?
+                          {t("grace_prompt")}
                         </p>
                         <select
                           defaultValue="60"
                           id={`grace-${key.key_id}`}
                           className="text-xs border border-slate-200 rounded px-2 py-1 bg-white text-slate-700"
                         >
-                          <option value="15">15 minutes</option>
-                          <option value="30">30 minutes</option>
-                          <option value="60">1 hour</option>
-                          <option value="360">6 hours</option>
-                          <option value="1440">24 hours</option>
+                          {GRACE_OPTIONS.map(o => (
+                            <option key={o.value} value={o.value}>{t(`grace.${o.key}`)}</option>
+                          ))}
                         </select>
                         <button
                           onClick={() => {
@@ -248,7 +256,7 @@ export function ApiKeyTable({ keys, onRevoke, onRotate, revoking, canWrite = tru
                           onMouseEnter={e => (e.currentTarget as HTMLElement).style.background = "#1e40af"}
                           onMouseLeave={e => (e.currentTarget as HTMLElement).style.background = "#1d4ed8"}
                         >
-                          Confirm rotate
+                          {t("confirm_rotate")}
                         </button>
                         <button
                           onClick={() => setGraceInput(null)}
@@ -256,7 +264,7 @@ export function ApiKeyTable({ keys, onRevoke, onRotate, revoking, canWrite = tru
                           onMouseEnter={e => (e.currentTarget as HTMLElement).style.color = "#374151"}
                           onMouseLeave={e => (e.currentTarget as HTMLElement).style.color = "#6b7280"}
                         >
-                          Cancel
+                          {t("cancel")}
                         </button>
                       </div>
                     </td>
