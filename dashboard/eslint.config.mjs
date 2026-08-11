@@ -24,6 +24,8 @@ const eslintConfig = defineConfig([
       "components/requests/Pagination.tsx",
       "components/requests/RequestDetail.tsx",
       "app/analytics/page.tsx",
+      "app/scanner/page.tsx",
+      "components/scanner/**/*.tsx",
     ],
     rules: {
       "react/jsx-no-literals": ["error", {

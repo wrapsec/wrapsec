@@ -4,6 +4,7 @@
 "use client"
 
 import { useState } from "react"
+import { useTranslations } from "next-intl"
 import { Shell } from "@/components/layout/Shell"
 import { PageHeader } from "@/components/ui/PageHeader"
 import { Card, CardHeader } from "@/components/ui/Card"
@@ -13,6 +14,7 @@ import { GatewayResponse, AIRequest } from "@/lib/types"
 import { scanRequest } from "@/lib/api"
 
 export default function ScannerPage() {
+  const t = useTranslations("pages.scanner")
   const [result,  setResult]  = useState<GatewayResponse | null>(null)
   const [loading, setLoading] = useState(false)
   const [error,   setError]   = useState<string | null>(null)
@@ -24,20 +26,20 @@ export default function ScannerPage() {
       const res = await scanRequest(req)
       setResult(res)
     } catch (e: any) {
-      setError(e.message || "Scan failed")
+      setError(e.message || t("scan_failed"))
     } finally {
       setLoading(false)
     }
   }
 
   return (
-    <Shell title="Scanner">
-      <PageHeader description="Scan prompts through the detection pipeline before they reach your LLM." />
+    <Shell title={t("title")}>
+      <PageHeader description={t("description")} />
       <div className="max-w-3xl space-y-5">
         <Card>
           <CardHeader
-            title="Prompt Scanner"
-            subtitle="Analyse any prompt through the WrapSec detection pipeline"
+            title={t("card_title")}
+            subtitle={t("card_subtitle")}
           />
           <ScannerInput onScan={handleScan} loading={loading} />
         </Card>
@@ -50,7 +52,7 @@ export default function ScannerPage() {
 
         {result && (
           <Card>
-            <CardHeader title="Analysis Result" />
+            <CardHeader title={t("result_title")} />
             <ScanResult result={result} />
           </Card>
         )}

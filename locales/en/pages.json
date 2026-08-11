@@ -319,6 +319,55 @@
       "key_empty": "No key data"
     }
   },
+  "scanner": {
+    "title": "Scanner",
+    "description": "Scan prompts through the detection pipeline before they reach your LLM.",
+    "card_title": "Prompt Scanner",
+    "card_subtitle": "Analyse any prompt through the WrapSec detection pipeline",
+    "scan_failed": "Scan failed",
+    "result_title": "Analysis Result",
+    "input": {
+      "placeholder": "Enter a prompt to analyse for security threats...",
+      "detection_mode": "Detection mode",
+      "mode": {
+        "fast": "Fast",
+        "full": "Full"
+      },
+      "mode_hint": {
+        "fast": "(rule + ML)",
+        "full": "(rule + ML + LLM)"
+      },
+      "analyse": "Analyse"
+    },
+    "result": {
+      "decision": "Decision",
+      "risk_score": "Risk Score",
+      "confidence": "Confidence",
+      "primary_reason": "Primary Reason",
+      "latency": "Latency",
+      "trace_id": "Trace ID",
+      "threats_detected": "Threats Detected",
+      "sanitized_input": "Sanitized Input",
+      "reason": {
+        "RULE_DETECTOR": "Rule Detector",
+        "ML_DETECTOR": "ML Classifier",
+        "LLM_DETECTOR": "LLM Semantic",
+        "PII_GUARDRAIL_BLOCK": "PII Guardrail",
+        "PII_GUARDRAIL_SANITIZE": "PII Guardrail",
+        "TOXICITY_GUARDRAIL_BLOCK": "Toxicity Guardrail",
+        "NO_THREAT_DETECTED": "No Threat",
+        "SYSTEM_ERROR": "System Error"
+      }
+    },
+    "layers": {
+      "detection_title": "Detection Layers",
+      "guardrail_title": "Guardrail Layers",
+      "rule": "Rule-based",
+      "ml": "ML classifier",
+      "llm": "LLM semantic",
+      "pii": "PII guardrail"
+    }
+  },
   "departments": {
     "title": "Departments",
     "description": "Manage departments and their policy overrides.",

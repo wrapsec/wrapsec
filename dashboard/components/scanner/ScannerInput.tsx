@@ -4,6 +4,7 @@
 "use client"
 
 import { useState } from "react"
+import { useTranslations } from "next-intl"
 import { Button } from "@/components/ui/Button"
 import { AIRequest } from "@/lib/types"
 
@@ -13,6 +14,7 @@ interface ScannerInputProps {
 }
 
 export function ScannerInput({ onScan, loading }: ScannerInputProps) {
+  const t = useTranslations("pages.scanner.input")
   const [input,         setInput]         = useState("")
   const [detectionMode, setDetectionMode] = useState<"fast" | "full">("fast")
 
@@ -31,13 +33,13 @@ export function ScannerInput({ onScan, loading }: ScannerInputProps) {
       <textarea
         value={input}
         onChange={(e) => setInput(e.target.value)}
-        placeholder="Enter a prompt to analyse for security threats..."
+        placeholder={t("placeholder")}
         rows={5}
         className="w-full px-4 py-3 text-sm rounded-lg border border-slate-200 bg-white text-slate-900 placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-purple-700 focus:border-purple-700 resize-none"
       />
       <div className="flex items-center justify-between">
         <div className="flex items-center gap-4">
-          <span className="text-xs font-medium text-slate-600">Detection mode</span>
+          <span className="text-xs font-medium text-slate-600">{t("detection_mode")}</span>
           {(["fast", "full"] as const).map((mode) => (
             <label key={mode} className="flex items-center gap-1.5 cursor-pointer">
               <input
@@ -48,9 +50,9 @@ export function ScannerInput({ onScan, loading }: ScannerInputProps) {
                 onChange={() => setDetectionMode(mode)}
                 className="accent-blue-800"
               />
-              <span className="text-sm text-slate-700 capitalize">{mode}</span>
+              <span className="text-sm text-slate-700">{t(`mode.${mode}`)}</span>
               <span className="text-xs text-slate-400">
-                {mode === "fast" ? "(rule + ML)" : "(rule + ML + LLM)"}
+                {t(`mode_hint.${mode}`)}
               </span>
             </label>
           ))}
@@ -60,7 +62,7 @@ export function ScannerInput({ onScan, loading }: ScannerInputProps) {
           loading={loading}
           disabled={!input.trim()}
         >
-          Analyse
+          {t("analyse")}
         </Button>
       </div>
     </div>

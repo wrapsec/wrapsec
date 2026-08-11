@@ -1,6 +1,9 @@
 // SPDX-License-Identifier: MIT
 // Copyright (c) 2026 WrapSec. All rights reserved.
 // WrapSec v1.0 | AI Security Gateway - https://wrapsec.com
+"use client"
+
+import { useTranslations } from "next-intl"
 import { LayerScores, Decision } from "@/lib/types"
 import { formatScore } from "@/lib/format"
 import { DecisionBadge } from "@/components/ui/Badge"
@@ -10,13 +13,13 @@ interface LayerBreakdownProps {
 }
 
 const DETECTION_LAYERS = [
-  { key: "rule" as const, label: "Rule-based",    color: "#3b82f6" },
-  { key: "ml"   as const, label: "ML classifier", color: "#8b5cf6" },
-  { key: "llm"  as const, label: "LLM semantic",  color: "#f59e0b" },
+  { key: "rule" as const, color: "#3b82f6" },
+  { key: "ml"   as const, color: "#8b5cf6" },
+  { key: "llm"  as const, color: "#f59e0b" },
 ]
 
 const GUARDRAIL_LAYERS = [
-  { key: "pii" as const, label: "PII guardrail",  color: "#ec4899" },
+  { key: "pii" as const, color: "#ec4899" },
 ]
 
 function getScore(scores: LayerScores, key: string): number {
@@ -75,18 +78,19 @@ function LayerRow({
 }
 
 export function LayerBreakdown({ scores }: LayerBreakdownProps) {
+  const t = useTranslations("pages.scanner.layers")
   return (
     <div className="space-y-4">
       {/* Detection layers */}
       <div>
         <p className="text-xs font-semibold text-slate-400 uppercase tracking-wider mb-3">
-          Detection Layers
+          {t("detection_title")}
         </p>
         <div className="space-y-3">
-          {DETECTION_LAYERS.map(({ key, label, color }) => (
+          {DETECTION_LAYERS.map(({ key, color }) => (
             <LayerRow
               key={key}
-              label={label}
+              label={t(key)}
               color={color}
               score={getScore(scores, key)}
               decision={
@@ -105,15 +109,15 @@ export function LayerBreakdown({ scores }: LayerBreakdownProps) {
       {/* Guardrail layers */}
       <div>
         <p className="text-xs font-semibold text-slate-400 uppercase tracking-wider mb-3">
-          Guardrail Layers
+          {t("guardrail_title")}
         </p>
         <div className="space-y-3">
-          {GUARDRAIL_LAYERS.map(({ key, label, color }) => {
+          {GUARDRAIL_LAYERS.map(({ key, color }) => {
             const score = getScore(scores, key)
             return (
               <LayerRow
                 key={key}
-                label={label}
+                label={t(key)}
                 color={color}
                 score={score}
                 decision={getDecision(score)}
