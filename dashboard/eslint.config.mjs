@@ -23,6 +23,7 @@ const eslintConfig = defineConfig([
       "components/requests/SecurityOverview.tsx",
       "components/requests/Pagination.tsx",
       "components/requests/RequestDetail.tsx",
+      "app/analytics/page.tsx",
     ],
     rules: {
       "react/jsx-no-literals": ["error", {

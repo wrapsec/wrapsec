@@ -5,13 +5,13 @@
 
 import useSWR from "swr"
 import { useState } from "react"
+import { useTranslations } from "next-intl"
 import { useTimeRange } from "@/hooks/useTimeRange"
 import { Shell } from "@/components/layout/Shell"
 import { PageHeader } from "@/components/ui/PageHeader"
 import { RangeTabs } from "@/components/ui/RangeTabs"
 import { KpiCard } from "@/components/ui/KpiCard"
 import { PageSpinner } from "@/components/ui/Spinner"
-import { POLL_INTERVAL, THREAT_LABELS } from "@/lib/constants"
 import { getAuditStats, getAttribution, getAnalytics, getDepartments, getApplications } from "@/lib/api"
 import { AuditStatsResponse } from "@/lib/types"
 import { useFormat } from "@/hooks/useFormat"
@@ -51,6 +51,7 @@ const TH: React.CSSProperties = {
 
 function SecuritySummary({ stats, attribution }: { stats: AuditStatsResponse; attribution: any }) {
   const fmt        = useFormat()
+  const t          = useTranslations("pages.analytics.kpi")
   const byReason   = attribution?.by_primary_reason ?? []
   const piiCount   = byReason
     .filter((r: any) => r.primary_reason === "PII_GUARDRAIL_BLOCK" || r.primary_reason === "PII_GUARDRAIL_SANITIZE")
@@ -60,13 +61,13 @@ function SecuritySummary({ stats, attribution }: { stats: AuditStatsResponse; at
   const totalThreats = stats.top_threats?.reduce((s, t) => s + t.count, 0) ?? 0
 
   const KPIS = [
-    { label: "PII Exposure Attempts",      value: fmt.number(piiCount),   sub: "Guardrail blocks + sanitizations", accent: "#670FEF",
+    { label: t("pii_attempts"),    value: fmt.number(piiCount),   sub: t("pii_attempts_sub"), accent: "#670FEF",
       icon: "M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z" },
-    { label: "Data Exfiltration Attempts", value: fmt.number(exfilCount), sub: "DATA_EXFILTRATION threat category", accent: "#dc2626",
+    { label: t("exfil_attempts"),  value: fmt.number(exfilCount), sub: t("exfil_attempts_sub", { code: "DATA_EXFILTRATION" }), accent: "#dc2626",
       icon: "M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" },
-    { label: "Toxicity Incidents",         value: fmt.number(toxCount),   sub: "Toxicity guardrail triggers",       accent: "#d97706",
+    { label: t("toxicity_incidents"), value: fmt.number(toxCount),   sub: t("toxicity_incidents_sub"), accent: "#d97706",
       icon: "M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" },
-    { label: "Total Threat Detections",    value: fmt.number(totalThreats), sub: `${stats.top_threats?.length ?? 0} unique threat types`, accent: "#00B1FF",
+    { label: t("total_detections"), value: fmt.number(totalThreats), sub: t("total_detections_sub", { count: stats.top_threats?.length ?? 0 }), accent: "#00B1FF",
       icon: "M9 12l2 2 4-4m5.618-4.016A11.955 11.955 0 0112 2.944a11.955 11.955 0 01-8.618 3.04A12.02 12.02 0 003 9c0 5.591 3.824 10.29 9 11.622 5.176-1.332 9-6.03 9-11.622 0-1.042-.133-2.052-.382-3.016z" },
   ]
 
@@ -86,6 +87,7 @@ function TrendChart({ data, groupBy, onGroupByChange }: {
   groupBy: "hour" | "day" | "week" | "month"
   onGroupByChange: (v: "hour" | "day" | "week" | "month") => void
 }) {
+  const t        = useTranslations("pages.analytics.trend")
   const CHART_H  = 220
   const CHART_PAD_TOP = 16  // padding so tallest bar doesn't touch top edge
   const maxTotal = Math.max(...data.map(d => d.total), 1)
@@ -114,12 +116,18 @@ function TrendChart({ data, groupBy, onGroupByChange }: {
   // Effective chart height for bars (leave padding at top)
   const effectiveH = CHART_H - CHART_PAD_TOP
 
+  const legend: { k: "blocked" | "sanitized" | "allowed"; color: string }[] = [
+    { k: "blocked",   color: "#f87171" },
+    { k: "sanitized", color: "#fbbf24" },
+    { k: "allowed",   color: "#10b981" },
+  ]
+
   return (
     <div style={CARD}>
       <div style={{ display: "flex", alignItems: "flex-start", justifyContent: "space-between", marginBottom: "16px" }}>
         <div>
-          <h3 style={{ fontSize: "13px", fontWeight: 600, color: "#111827", margin: "0 0 2px 0" }}>Request Trend</h3>
-          <p style={{ fontSize: "12px", color: "#9ca3af", margin: 0 }}>Volume and decision distribution over time</p>
+          <h3 style={{ fontSize: "13px", fontWeight: 600, color: "#111827", margin: "0 0 2px 0" }}>{t("title")}</h3>
+          <p style={{ fontSize: "12px", color: "#9ca3af", margin: 0 }}>{t("subtitle")}</p>
         </div>
         <div style={{ display: "flex", gap: "2px", background: "#f3f4f6", borderRadius: "7px", padding: "3px" }}>
           {(["hour", "day", "week", "month"] as const).map(g => (
@@ -129,30 +137,30 @@ function TrendChart({ data, groupBy, onGroupByChange }: {
               background: groupBy === g ? "#fff" : "transparent",
               color: groupBy === g ? "#111827" : "#6b7280",
               boxShadow: groupBy === g ? "0 1px 3px rgba(0,0,0,0.10)" : "none",
-            }}>{g.charAt(0).toUpperCase() + g.slice(1)}</button>
+            }}>{t(`group.${g}`)}</button>
           ))}
         </div>
       </div>
 
       <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: "16px" }}>
         <div style={{ display: "flex", gap: "16px" }}>
-          {[["Blocked", "#f87171"], ["Sanitized", "#fbbf24"], ["Allowed", "#10b981"]].map(([label, color]) => (
-            <div key={label} style={{ display: "flex", alignItems: "center", gap: "5px" }}>
+          {legend.map(({ k, color }) => (
+            <div key={k} style={{ display: "flex", alignItems: "center", gap: "5px" }}>
               <div style={{ width: 10, height: 10, borderRadius: "2px", background: color }} />
-              <span style={{ fontSize: "12px", color: "#6b7280" }}>{label}</span>
+              <span style={{ fontSize: "12px", color: "#6b7280" }}>{t(k)}</span>
             </div>
           ))}
         </div>
         {hoveredData ? (
           <div style={{ display: "flex", gap: "12px", fontSize: "12px" }}>
             <span style={{ color: "#9ca3af", fontWeight: 500 }}>{fmt(hoveredData.period)}</span>
-            <span style={{ color: "#ef4444", fontFamily: "monospace" }}>{hoveredData.blocked} blocked</span>
-            <span style={{ color: "#f59e0b", fontFamily: "monospace" }}>{hoveredData.sanitized} sanitized</span>
-            <span style={{ color: "#10b981", fontFamily: "monospace" }}>{hoveredData.allowed} allowed</span>
-            <span style={{ color: "#9ca3af", fontFamily: "monospace" }}>{hoveredData.total} total</span>
+            <span style={{ color: "#ef4444", fontFamily: "monospace" }}>{t("hover_blocked",   { count: hoveredData.blocked })}</span>
+            <span style={{ color: "#f59e0b", fontFamily: "monospace" }}>{t("hover_sanitized", { count: hoveredData.sanitized })}</span>
+            <span style={{ color: "#10b981", fontFamily: "monospace" }}>{t("hover_allowed",   { count: hoveredData.allowed })}</span>
+            <span style={{ color: "#9ca3af", fontFamily: "monospace" }}>{t("hover_total",     { count: hoveredData.total })}</span>
           </div>
         ) : (
-          <span style={{ fontSize: "12px", color: "#9ca3af" }}>Hover a bar for details</span>
+          <span style={{ fontSize: "12px", color: "#9ca3af" }}>{t("hover_hint")}</span>
         )}
       </div>
 
@@ -235,38 +243,41 @@ function TrendChart({ data, groupBy, onGroupByChange }: {
 
 function ThreatIntelligence({ stats }: { stats: AuditStatsResponse }) {
   const fmt = useFormat()
+  const t   = useTranslations("pages.analytics")
   const total = stats.top_threats.reduce((s, t) => s + t.count, 0) || 1
-  const THREAT_META: Record<string, { color: string; level: string }> = {
-    PROMPT_INJECTION:  { color: "#dc2626", level: "Critical" },
-    JAILBREAK:         { color: "#7c3aed", level: "Critical" },
-    DATA_EXFILTRATION: { color: "#b91c1c", level: "Critical" },
-    MALICIOUS_INTENT:  { color: "#ea580c", level: "High"     },
-    PII:               { color: "#9333ea", level: "High"      },
-    TOXICITY:          { color: "#d97706", level: "Medium"    },
+  const THREAT_META: Record<string, { color: string; level: "critical" | "high" | "medium" | "low" }> = {
+    PROMPT_INJECTION:  { color: "#dc2626", level: "critical" },
+    JAILBREAK:         { color: "#7c3aed", level: "critical" },
+    DATA_EXFILTRATION: { color: "#b91c1c", level: "critical" },
+    MALICIOUS_INTENT:  { color: "#ea580c", level: "high"     },
+    PII:               { color: "#9333ea", level: "high"     },
+    TOXICITY:          { color: "#d97706", level: "medium"   },
   }
+  const threatLabel = (category: string) =>
+    t.has(`threats.category.${category}`) ? t(`threats.category.${category}`) : category
   return (
     <div style={CARD}>
-      <p style={SECTION_LABEL}>Threat intelligence</p>
+      <p style={SECTION_LABEL}>{t("threats.title")}</p>
       {(stats.top_threats?.length ?? 0) === 0 ? (
-        <p style={{ fontSize: "13px", color: "#9ca3af" }}>No threats detected in this period</p>
+        <p style={{ fontSize: "13px", color: "#9ca3af" }}>{t("threats.empty")}</p>
       ) : (
         <table style={{ width: "100%", borderCollapse: "collapse" }}>
-          <thead><tr>{["Threat category", "Severity", "Count", "Share"].map(h => <th key={h} style={TH}>{h}</th>)}</tr></thead>
+          <thead><tr>{[t("threats.col_category"), t("threats.col_severity"), t("threats.col_count"), t("threats.col_share")].map(h => <th key={h} style={TH}>{h}</th>)}</tr></thead>
           <tbody>
-            {(stats.top_threats ?? []).map((t, i) => {
-              const meta  = THREAT_META[t.category] ?? { color: "#6b7280", level: "Low" }
-              const share = t.count / total
+            {(stats.top_threats ?? []).map((th, i) => {
+              const meta  = THREAT_META[th.category] ?? { color: "#6b7280", level: "low" as const }
+              const share = th.count / total
               return (
-                <tr key={t.category} style={{ borderBottom: i < (stats.top_threats?.length ?? 0) - 1 ? "1px solid #f9fafb" : "none" }}>
+                <tr key={th.category} style={{ borderBottom: i < (stats.top_threats?.length ?? 0) - 1 ? "1px solid #f9fafb" : "none" }}>
                   <td style={{ padding: "9px 12px", fontSize: "12px", fontWeight: 500, color: "#374151" }}>
-                    {THREAT_LABELS[t.category] || t.category}
+                    {threatLabel(th.category)}
                   </td>
                   <td style={{ padding: "9px 12px" }}>
                     <span style={{ fontSize: "11px", fontWeight: 600, padding: "2px 7px", borderRadius: "4px", color: meta.color, background: meta.color + "12" }}>
-                      {meta.level}
+                      {t(`severity.${meta.level}`)}
                     </span>
                   </td>
-                  <td style={{ padding: "9px 12px", fontFamily: "monospace", fontSize: "12px", color: "#374151" }}>{fmt.number(t.count)}</td>
+                  <td style={{ padding: "9px 12px", fontFamily: "monospace", fontSize: "12px", color: "#374151" }}>{fmt.number(th.count)}</td>
                   <td style={{ padding: "9px 12px", minWidth: "140px" }}>
                     <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
                       <div style={{ flex: 1, height: "5px", background: "#f3f4f6", borderRadius: "3px", overflow: "hidden" }}>
@@ -291,30 +302,31 @@ function ThreatIntelligence({ stats }: { stats: AuditStatsResponse }) {
 
 function DetectionBreakdown({ byReason }: { byReason: { primary_reason: string; count: number }[] }) {
   const fmt = useFormat()
+  const t   = useTranslations("pages.analytics.detection")
   const total = byReason.reduce((s, r) => s + r.count, 0) || 1
-  const LAYERS = [
-    { key: "RULE_DETECTOR",              label: "Rule detector",        color: "#670FEF", desc: "Regex + heuristics" },
-    { key: "ML_DETECTOR",                label: "ML classifier",        color: "#CD00FF", desc: "TF-IDF + logistic regression" },
-    { key: "LLM_DETECTOR",               label: "LLM semantic",         color: "#00B1FF", desc: "Full mode only" },
-    { key: "PII_GUARDRAIL_BLOCK",        label: "PII block",            color: "#dc2626", desc: "PII guardrail override" },
-    { key: "PII_GUARDRAIL_SANITIZE",     label: "PII sanitize",         color: "#f97316", desc: "PII redaction" },
-    { key: "TOXICITY_GUARDRAIL_BLOCK",   label: "Toxicity block",       color: "#d97706", desc: "Toxicity guardrail" },
+  const LAYERS: { k: string; reason: string; color: string }[] = [
+    { k: "rule",          reason: "RULE_DETECTOR",            color: "#670FEF" },
+    { k: "ml",            reason: "ML_DETECTOR",              color: "#CD00FF" },
+    { k: "llm",           reason: "LLM_DETECTOR",             color: "#00B1FF" },
+    { k: "pii_block",     reason: "PII_GUARDRAIL_BLOCK",      color: "#dc2626" },
+    { k: "pii_sanitize",  reason: "PII_GUARDRAIL_SANITIZE",   color: "#f97316" },
+    { k: "toxicity_block", reason: "TOXICITY_GUARDRAIL_BLOCK", color: "#d97706" },
   ]
   return (
     <div style={CARD}>
-      <p style={SECTION_LABEL}>Detection layer breakdown</p>
-      <p style={{ fontSize: "12px", color: "#9ca3af", marginTop: "-8px", marginBottom: "16px" }}>How threats are being caught</p>
+      <p style={SECTION_LABEL}>{t("title")}</p>
+      <p style={{ fontSize: "12px", color: "#9ca3af", marginTop: "-8px", marginBottom: "16px" }}>{t("subtitle")}</p>
       <div style={{ display: "flex", flexDirection: "column", gap: "11px" }}>
         {LAYERS.map(layer => {
-          const count = byReason.find(r => r.primary_reason === layer.key)?.count ?? 0
+          const count = byReason.find(r => r.primary_reason === layer.reason)?.count ?? 0
           const share = count / total
           return (
-            <div key={layer.key}>
+            <div key={layer.k}>
               <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: "4px" }}>
                 <div style={{ display: "flex", alignItems: "center", gap: "7px" }}>
                   <div style={{ width: 7, height: 7, borderRadius: "50%", background: layer.color, flexShrink: 0 }} />
-                  <span style={{ fontSize: "12px", fontWeight: 500, color: "#374151" }}>{layer.label}</span>
-                  <span style={{ fontSize: "11px", color: "#9ca3af" }}>{layer.desc}</span>
+                  <span style={{ fontSize: "12px", fontWeight: 500, color: "#374151" }}>{t(`layer.${layer.k}`)}</span>
+                  <span style={{ fontSize: "11px", color: "#9ca3af" }}>{t(`desc.${layer.k}`)}</span>
                 </div>
                 <div style={{ display: "flex", gap: "10px", flexShrink: 0 }}>
                   <span style={{ fontSize: "12px", fontFamily: "monospace", color: "#6b7280" }}>{fmt.number(count)}</span>
@@ -338,17 +350,18 @@ function DetectionBreakdown({ byReason }: { byReason: { primary_reason: string; 
 
 function ConfidenceDistribution({ data }: { data: { band: string; count: number }[] }) {
   const fmt = useFormat()
+  const t   = useTranslations("pages.analytics.confidence")
   const total = data.reduce((s, d) => s + d.count, 0) || 1
-  const BANDS = [
-    { band: "HIGH",   label: "High",   color: "#10b981", desc: "Decision is certain - no review needed" },
-    { band: "MEDIUM", label: "Medium", color: "#f59e0b", desc: "Consider spot-checking" },
-    { band: "LOW",    label: "Low",    color: "#f87171", desc: "Human review recommended" },
+  const BANDS: { band: string; k: "high" | "medium" | "low"; color: string }[] = [
+    { band: "HIGH",   k: "high",   color: "#10b981" },
+    { band: "MEDIUM", k: "medium", color: "#f59e0b" },
+    { band: "LOW",    k: "low",    color: "#f87171" },
   ]
   return (
     <div style={CARD}>
-      <p style={SECTION_LABEL}>Decision confidence distribution</p>
+      <p style={SECTION_LABEL}>{t("title")}</p>
       <p style={{ fontSize: "12px", color: "#9ca3af", marginTop: "-8px", marginBottom: "16px" }}>
-        LOW confidence decisions warrant human review
+        {t("subtitle", { band: "LOW" })}
       </p>
       <div style={{ display: "flex", flexDirection: "column", gap: "14px" }}>
         {BANDS.map(b => {
@@ -358,8 +371,8 @@ function ConfidenceDistribution({ data }: { data: { band: string; count: number 
             <div key={b.band}>
               <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: "5px" }}>
                 <div>
-                  <span style={{ fontSize: "12px", fontWeight: 500, color: "#374151" }}>{b.label}</span>
-                  <span style={{ fontSize: "11px", color: "#9ca3af", marginLeft: "6px" }}>{b.desc}</span>
+                  <span style={{ fontSize: "12px", fontWeight: 500, color: "#374151" }}>{t(b.k)}</span>
+                  <span style={{ fontSize: "11px", color: "#9ca3af", marginLeft: "6px" }}>{t(`${b.k}_desc`)}</span>
                 </div>
                 <div style={{ display: "flex", alignItems: "center", gap: "10px", flexShrink: 0 }}>
                   <span style={{ fontSize: "12px", fontFamily: "monospace", color: "#6b7280" }}>{fmt.number(count)}</span>
@@ -383,27 +396,20 @@ function ConfidenceDistribution({ data }: { data: { band: string; count: number 
 
 function PrimaryReasonBreakdown({ byReason }: { byReason: { primary_reason: string; count: number }[] }) {
   const fmt = useFormat()
+  const t   = useTranslations("pages.analytics.reason")
   const total = byReason.reduce((s, r) => s + r.count, 0) || 1
-  const LABELS: Record<string, string> = {
-    RULE_DETECTOR:               "Rule detector",
-    ML_DETECTOR:                 "ML classifier",
-    LLM_DETECTOR:                "LLM semantic",
-    PII_GUARDRAIL_BLOCK:         "PII guardrail - block",
-    PII_GUARDRAIL_SANITIZE:      "PII guardrail - sanitize",
-    TOXICITY_GUARDRAIL_BLOCK:    "Toxicity guardrail - block",
-    NO_THREAT_DETECTED:          "No threat detected",
-    SYSTEM_ERROR:                "System error",
-  }
+  const reasonLabel = (reason: string) =>
+    t.has(`label.${reason}`) ? t(`label.${reason}`) : reason
   return (
     <div style={CARD}>
-      <p style={SECTION_LABEL}>Primary decision reason</p>
+      <p style={SECTION_LABEL}>{t("title")}</p>
       <table style={{ width: "100%", borderCollapse: "collapse" }}>
-        <thead><tr>{["Reason", "Count", "Share"].map(h => <th key={h} style={TH}>{h}</th>)}</tr></thead>
+        <thead><tr>{[t("col_reason"), t("col_count"), t("col_share")].map(h => <th key={h} style={TH}>{h}</th>)}</tr></thead>
         <tbody>
           {[...byReason].sort((a, b) => b.count - a.count).map((r, i, arr) => (
             <tr key={r.primary_reason} style={{ borderBottom: i < arr.length - 1 ? "1px solid #f9fafb" : "none" }}>
               <td style={{ padding: "9px 12px", fontSize: "12px", fontWeight: 500, color: "#374151" }}>
-                {LABELS[r.primary_reason] || r.primary_reason}
+                {reasonLabel(r.primary_reason)}
               </td>
               <td style={{ padding: "9px 12px", fontFamily: "monospace", fontSize: "12px", color: "#6b7280" }}>
                 {fmt.number(r.count)}
@@ -433,6 +439,7 @@ function AttributionTable({ title, rows, emptyText }: {
   rows: { name: string; sub: string; blockRate: number; total: number }[]
 }) {
   const fmt = useFormat()
+  const t   = useTranslations("pages.analytics.attribution")
   const maxTotal = Math.max(...rows.map(r => r.total), 1)
   return (
     <div style={CARD}>
@@ -461,10 +468,10 @@ function AttributionTable({ title, rows, emptyText }: {
                   </div>
                 </div>
                 <span style={{ fontSize: "11px", fontFamily: "monospace", color: "#9ca3af", width: "52px", textAlign: "right", flexShrink: 0 }}>
-                  {fmt.number(row.total)} req
+                  {t("req", { count: fmt.number(row.total) })}
                 </span>
                 <span style={{ fontSize: "11px", fontWeight: 600, fontFamily: "monospace", padding: "2px 6px", borderRadius: "4px", flexShrink: 0, color, background: color + "12" }}>
-                  {bpct}% blocked
+                  {t("pct_blocked", { pct: bpct })}
                 </span>
               </div>
             )
@@ -479,6 +486,7 @@ function AttributionTable({ title, rows, emptyText }: {
 
 export default function AnalyticsPage() {
   const fmt = useFormat()
+  const t   = useTranslations("pages.analytics")
   const [groupBy,   setGroupBy]   = useState<"hour" | "day" | "week" | "month">("day")
 
   const {
@@ -510,16 +518,16 @@ export default function AnalyticsPage() {
   apps?.applications?.forEach((a: any) => { appNames[a.id] = a.name })
 
   if ((statsLoading || attrLoading) && !stats) {
-    return <Shell title="Analytics"><PageSpinner /></Shell>
+    return <Shell title={t("title")}><PageSpinner /></Shell>
   }
 
   if (statsError && !stats) {
     return (
-      <Shell title="Analytics">
+      <Shell title={t("title")}>
         <div className="max-w-2xl">
           <div className="bg-red-50 border border-red-200 rounded-xl p-5">
-            <p className="text-sm font-semibold text-red-700 mb-1">Failed to load analytics</p>
-            <p className="text-xs text-red-500">{statsError?.message ?? "An unexpected error occurred"}</p>
+            <p className="text-sm font-semibold text-red-700 mb-1">{t("load_error")}</p>
+            <p className="text-xs text-red-500">{statsError?.message ?? t("unexpected_error")}</p>
           </div>
         </div>
       </Shell>
@@ -529,16 +537,16 @@ export default function AnalyticsPage() {
   const byReason = attribution?.by_primary_reason ?? []
 
   return (
-    <Shell title="Analytics">
+    <Shell title={t("title")}>
       <PageHeader
-        description="Analyze detection trends across applications, departments, and API keys."
+        description={t("description")}
         actions={
           <div style={{ display: "flex", flexDirection: "column", alignItems: "flex-end", gap: "6px" }}>
             <RangeTabs
               options={timeRangeOptions}
               value={timeRange}
               onChange={setTimeRange}
-              format={r => (r === "custom" ? "Custom" : r)}
+              format={r => (r === "custom" ? t("custom") : r)}
             />
 
             {/* Custom date pickers - shown only when "custom" is active */}
@@ -555,7 +563,7 @@ export default function AnalyticsPage() {
                     outline: "none", cursor: "pointer",
                   }}
                 />
-                <span style={{ fontSize: "12px", color: "#9ca3af" }}>to</span>
+                <span style={{ fontSize: "12px", color: "#9ca3af" }}>{t("date_to")}</span>
                 <input
                   type="date"
                   value={customTo}
@@ -584,9 +592,9 @@ export default function AnalyticsPage() {
           <TrendChart data={analytics!.trend} groupBy={groupBy} onGroupByChange={setGroupBy} />
         ) : analytics !== undefined && (
           <div style={{ ...CARD, padding: "48px 24px", textAlign: "center" }}>
-            <p style={{ fontSize: "13px", fontWeight: 600, color: "#374151", margin: "0 0 4px 0" }}>No trend data</p>
+            <p style={{ fontSize: "13px", fontWeight: 600, color: "#374151", margin: "0 0 4px 0" }}>{t("trend.empty_title")}</p>
             <p style={{ fontSize: "12px", color: "#9ca3af", margin: 0 }}>
-              No requests recorded in this time window. Try a different range.
+              {t("trend.empty_body")}
             </p>
           </div>
         )}
@@ -605,28 +613,28 @@ export default function AnalyticsPage() {
 
         <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "16px" }}>
           <AttributionTable
-            title="Department risk ranking"
-            emptyText="No department data"
+            title={t("attribution.dept_title")}
+            emptyText={t("attribution.dept_empty")}
             rows={(attribution?.by_department ?? [])
               .filter((r: any) => !depts || !!deptNames[r.dept_id])
               .sort((a: any, b: any) => b.block_rate - a.block_rate)
               .slice(0, 8)
               .map((r: any) => ({
-                name: deptNames[r.dept_id] || r.dept_id || "No department",
-                sub: `${fmt.number(r.total)} requests`,
+                name: deptNames[r.dept_id] || r.dept_id || t("attribution.no_department"),
+                sub: t("attribution.requests_sub", { count: fmt.number(r.total) }),
                 blockRate: r.block_rate, total: r.total,
               }))}
           />
           <AttributionTable
-            title="Application risk ranking"
-            emptyText="No application data"
+            title={t("attribution.app_title")}
+            emptyText={t("attribution.app_empty")}
             rows={(attribution?.by_application ?? [])
               .filter((r: any) => !apps || !!appNames[r.app_id])
               .sort((a: any, b: any) => b.block_rate - a.block_rate)
               .slice(0, 8)
               .map((r: any) => ({
-                name: appNames[r.app_id] || r.app_id || "No application",
-                sub: `${fmt.number(r.total)} requests · ${r.avg_latency_ms?.toFixed(0) ?? "-"}ms avg`,
+                name: appNames[r.app_id] || r.app_id || t("attribution.no_application"),
+                sub: t("attribution.requests_latency_sub", { count: fmt.number(r.total), ms: r.avg_latency_ms?.toFixed(0) ?? "-" }),
                 blockRate: r.block_rate, total: r.total,
               }))}
           />
@@ -634,14 +642,14 @@ export default function AnalyticsPage() {
 
         {(attribution?.by_key?.length ?? 0) > 0 && (
           <AttributionTable
-            title="API key activity"
-            emptyText="No key data"
+            title={t("attribution.key_title")}
+            emptyText={t("attribution.key_empty")}
             rows={(attribution!.by_key as any[])
               .sort((a, b) => b.total - a.total)
               .slice(0, 10)
               .map(r => ({
                 name: r.source || r.key_id || "-",
-                sub: `${fmt.number(r.total)} requests · ${r.avg_latency_ms?.toFixed(0) ?? "-"}ms avg`,
+                sub: t("attribution.requests_latency_sub", { count: fmt.number(r.total), ms: r.avg_latency_ms?.toFixed(0) ?? "-" }),
                 blockRate: r.block_rate, total: r.total,
               }))}
           />
@@ -651,5 +659,3 @@ export default function AnalyticsPage() {
     </Shell>
   )
 }
-
-

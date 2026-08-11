@@ -199,6 +199,126 @@
       }
     }
   },
+  "analytics": {
+    "title": "Analytics",
+    "description": "Analyze detection trends across applications, departments, and API keys.",
+    "load_error": "Failed to load analytics",
+    "unexpected_error": "An unexpected error occurred",
+    "custom": "Custom",
+    "date_to": "to",
+    "kpi": {
+      "pii_attempts": "PII Exposure Attempts",
+      "pii_attempts_sub": "Guardrail blocks + sanitizations",
+      "exfil_attempts": "Data Exfiltration Attempts",
+      "exfil_attempts_sub": "{code} threat category",
+      "toxicity_incidents": "Toxicity Incidents",
+      "toxicity_incidents_sub": "Toxicity guardrail triggers",
+      "total_detections": "Total Threat Detections",
+      "total_detections_sub": "{count} unique threat types"
+    },
+    "trend": {
+      "title": "Request Trend",
+      "subtitle": "Volume and decision distribution over time",
+      "group": {
+        "hour": "Hour",
+        "day": "Day",
+        "week": "Week",
+        "month": "Month"
+      },
+      "blocked": "Blocked",
+      "sanitized": "Sanitized",
+      "allowed": "Allowed",
+      "hover_hint": "Hover a bar for details",
+      "hover_blocked": "{count} blocked",
+      "hover_sanitized": "{count} sanitized",
+      "hover_allowed": "{count} allowed",
+      "hover_total": "{count} total",
+      "empty_title": "No trend data",
+      "empty_body": "No requests recorded in this time window. Try a different range."
+    },
+    "threats": {
+      "title": "Threat intelligence",
+      "empty": "No threats detected in this period",
+      "col_category": "Threat category",
+      "col_severity": "Severity",
+      "col_count": "Count",
+      "col_share": "Share",
+      "category": {
+        "PROMPT_INJECTION": "Prompt Injection",
+        "JAILBREAK": "Jailbreak",
+        "DATA_EXFILTRATION": "Data Exfiltration",
+        "MALICIOUS_INTENT": "Malicious Intent",
+        "PII": "PII",
+        "TOXICITY": "Toxicity"
+      }
+    },
+    "severity": {
+      "critical": "Critical",
+      "high": "High",
+      "medium": "Medium",
+      "low": "Low"
+    },
+    "detection": {
+      "title": "Detection layer breakdown",
+      "subtitle": "How threats are being caught",
+      "layer": {
+        "rule": "Rule detector",
+        "ml": "ML classifier",
+        "llm": "LLM semantic",
+        "pii_block": "PII block",
+        "pii_sanitize": "PII sanitize",
+        "toxicity_block": "Toxicity block"
+      },
+      "desc": {
+        "rule": "Regex + heuristics",
+        "ml": "TF-IDF + logistic regression",
+        "llm": "Full mode only",
+        "pii_block": "PII guardrail override",
+        "pii_sanitize": "PII redaction",
+        "toxicity_block": "Toxicity guardrail"
+      }
+    },
+    "confidence": {
+      "title": "Decision confidence distribution",
+      "subtitle": "{band} confidence decisions warrant human review",
+      "high": "High",
+      "medium": "Medium",
+      "low": "Low",
+      "high_desc": "Decision is certain - no review needed",
+      "medium_desc": "Consider spot-checking",
+      "low_desc": "Human review recommended"
+    },
+    "reason": {
+      "title": "Primary decision reason",
+      "col_reason": "Reason",
+      "col_count": "Count",
+      "col_share": "Share",
+      "label": {
+        "RULE_DETECTOR": "Rule detector",
+        "ML_DETECTOR": "ML classifier",
+        "LLM_DETECTOR": "LLM semantic",
+        "PII_GUARDRAIL_BLOCK": "PII guardrail - block",
+        "PII_GUARDRAIL_SANITIZE": "PII guardrail - sanitize",
+        "TOXICITY_GUARDRAIL_BLOCK": "Toxicity guardrail - block",
+        "NO_THREAT_DETECTED": "No threat detected",
+        "SYSTEM_ERROR": "System error"
+      }
+    },
+    "attribution": {
+      "req": "{count} req",
+      "pct_blocked": "{pct}% blocked",
+      "requests_sub": "{count} requests",
+      "requests_latency_sub": "{count} requests · {ms}ms avg",
+      "dept_title": "Department risk ranking",
+      "dept_empty": "No department data",
+      "no_department": "No department",
+      "app_title": "Application risk ranking",
+      "app_empty": "No application data",
+      "no_application": "No application",
+      "key_title": "API key activity",
+      "key_empty": "No key data"
+    }
+  },
   "departments": {
     "title": "Departments",
     "description": "Manage departments and their policy overrides.",
