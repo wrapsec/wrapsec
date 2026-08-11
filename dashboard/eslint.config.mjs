@@ -5,10 +5,12 @@ import nextTs from "eslint-config-next/typescript";
 const eslintConfig = defineConfig([
   ...nextVitals,
   ...nextTs,
-  // No-new-hardcoded-strings guard, SCOPED to the localized (migrated) pilot
-  // pages only (the list pages). As each further page migrates to the catalog,
-  // add it here. Bare JSX text must go through next-intl t(); only punctuation/
-  // markers are allowed. (The [id] detail pages are not migrated yet.)
+  // No-new-hardcoded-strings guard. The full dashboard has been migrated to the
+  // next-intl catalog (v1.8.2 sweep): every route and rendered component below is
+  // covered so bare JSX text must go through t(); only punctuation/markers are
+  // allowed. Keep new files inside this list as they are added. (Excluded:
+  // components/auth/* and app/layout.tsx have no rendered UI strings;
+  // components/analytics/{StatsCards,ThreatChart,LatencyChart} are unused/dead.)
   {
     files: [
       "app/departments/page.tsx",
