@@ -4,6 +4,7 @@
 "use client"
 
 import { useEffect, useState } from "react"
+import { useTranslations } from "next-intl"
 import Link from "next/link"
 import { RequestDetail } from "@/lib/types"
 import { getRequest } from "@/lib/api"
@@ -14,6 +15,7 @@ import { Drawer } from "@/components/ui/Drawer"
 import { Tabs, TabDef } from "@/components/ui/Tabs"
 import { DetailGrid, DetailRow, SectionLabel } from "@/components/ui/DetailRow"
 import { useFormat } from "@/hooks/useFormat"
+import { useErrorMessage } from "@/hooks/useErrorMessage"
 import { formatScore, formatLatency, truncateId, formatRun } from "@/lib/format"
 import { primaryReasonLabel, contentSourceLabel, contentSourceTier } from "@/lib/constants"
 
@@ -22,23 +24,18 @@ interface RequestDetailModalProps {
   onClose: () => void
 }
 
-const TRUST_TIER_LABELS: Record<string, string> = {
-  trusted:   "Trusted origin",
-  untrusted: "Untrusted origin - indirect injection surface",
-  unknown:   "Unknown origin",
-}
-
-// Per-layer presentation for the Security Assessment list. Kept here (not in the
-// shared constants) because the colors are drawer-visual, not domain labels.
+// Per-layer presentation for the Security Assessment list. Colors are
+// drawer-visual; labels resolve from pages.requests.detail.layers/guardrails via
+// t() at render (t is a hook, so it cannot run at module scope).
 const DETECTION_LAYERS = [
-  { key: "rule", label: "Rule detector",         color: "#3b82f6" },
-  { key: "ml",   label: "ML classifier",         color: "#8b5cf6" },
-  { key: "llm",  label: "LLM semantic analysis", color: "#f59e0b" },
+  { key: "rule", color: "#3b82f6" },
+  { key: "ml",   color: "#8b5cf6" },
+  { key: "llm",  color: "#f59e0b" },
 ] as const
 
-const GUARDRAIL_META: Record<string, { label: string; color: string }> = {
-  pii:      { label: "PII guardrail",      color: "#ec4899" },
-  toxicity: { label: "Toxicity guardrail", color: "#f97316" },
+const GUARDRAIL_COLORS: Record<string, string> = {
+  pii:      "#ec4899",
+  toxicity: "#f97316",
 }
 
 function riskColor(score: number): string {
@@ -104,14 +101,15 @@ function RawBlock({ label, value, note, open = false }: {
 // --- Tab bodies --------------------------------------------------------------
 
 function OverviewTab({ detail }: { detail: RequestDetail }) {
+  const t = useTranslations("pages.requests.detail")
   const hasAgent = Boolean(detail.run_id || detail.session_id || detail.turn_index != null)
   const a = detail.attribution
   return (
     <div className="space-y-6">
       <div>
-        <SectionLabel>Summary</SectionLabel>
+        <SectionLabel>{t("summary")}</SectionLabel>
         <DetailGrid>
-          <DetailRow label="Confidence">
+          <DetailRow label={t("confidence")}>
             {detail.confidence !== null
               ? <span className="inline-flex items-center gap-1.5">
                   {Math.round((detail.confidence ?? 0) * 100)}%
@@ -125,47 +123,47 @@ function OverviewTab({ detail }: { detail: RequestDetail }) {
                 </span>
               : "--"}
           </DetailRow>
-          <DetailRow label="Latency">{formatLatency(detail.processing.latency_ms)}</DetailRow>
-          <DetailRow label="Primary reason" span>{primaryReasonLabel(detail.primary_reason)}</DetailRow>
-          <DetailRow label="Detection mode">{detail.processing.detection_mode}</DetailRow>
-          <DetailRow label="Execution mode">{detail.processing.execution_mode}</DetailRow>
-          <DetailRow label="LLM invoked">{detail.processing.llm_invoked ? "Yes" : "No"}</DetailRow>
-          <DetailRow label="Input length">
-            {detail.input_length != null ? `${detail.input_length} chars` : "--"}
+          <DetailRow label={t("latency")}>{formatLatency(detail.processing.latency_ms)}</DetailRow>
+          <DetailRow label={t("primary_reason")} span>{primaryReasonLabel(detail.primary_reason)}</DetailRow>
+          <DetailRow label={t("detection_mode")}>{detail.processing.detection_mode}</DetailRow>
+          <DetailRow label={t("execution_mode")}>{detail.processing.execution_mode}</DetailRow>
+          <DetailRow label={t("llm_invoked")}>{detail.processing.llm_invoked ? t("yes") : t("no")}</DetailRow>
+          <DetailRow label={t("input_length")}>
+            {detail.input_length != null ? t("input_length_chars", { count: detail.input_length }) : "--"}
           </DetailRow>
         </DetailGrid>
       </div>
 
       {hasAgent && (
         <div>
-          <SectionLabel>Agent Context</SectionLabel>
+          <SectionLabel>{t("agent_context")}</SectionLabel>
           <DetailGrid>
-            <DetailRow label="Run" mono>{detail.run_id || "--"}</DetailRow>
-            <DetailRow label="Turn">{detail.turn_index != null ? String(detail.turn_index) : "--"}</DetailRow>
-            <DetailRow label="Session" mono span>{detail.session_id || "--"}</DetailRow>
+            <DetailRow label={t("run")} mono>{detail.run_id || "--"}</DetailRow>
+            <DetailRow label={t("turn")}>{detail.turn_index != null ? String(detail.turn_index) : "--"}</DetailRow>
+            <DetailRow label={t("session")} mono span>{detail.session_id || "--"}</DetailRow>
           </DetailGrid>
         </div>
       )}
 
       <div>
         <div className="flex items-center justify-between mb-3">
-          <SectionLabel>Attribution</SectionLabel>
+          <SectionLabel>{t("attribution")}</SectionLabel>
           <span className={`text-[11px] px-2 py-0.5 rounded-full ${
             a.attribution_verified
               ? "bg-green-50 text-green-700 border border-green-200"
               : "bg-amber-50 text-amber-700 border border-amber-200"
           }`}>
-            {a.attribution_verified ? "Verified" : "Self-reported"}
+            {a.attribution_verified ? t("verified") : t("self_reported")}
           </span>
         </div>
         <DetailGrid>
-          <DetailRow label="Source">{a.source || "--"}</DetailRow>
-          <DetailRow label="Key ID" mono>{a.key_id || "--"}</DetailRow>
-          <DetailRow label="Department">{a.dept_name || a.dept_id || "--"}</DetailRow>
-          <DetailRow label="Application">{a.app_name || a.app_id || "--"}</DetailRow>
-          <DetailRow label="User ID" mono>{a.user_id || "--"}</DetailRow>
-          <DetailRow label="IP address" mono>{a.ip_address || "--"}</DetailRow>
-          <DetailRow label="Input hash" mono span>{detail.input_hash}</DetailRow>
+          <DetailRow label={t("source")}>{a.source || "--"}</DetailRow>
+          <DetailRow label={t("key_id")} mono>{a.key_id || "--"}</DetailRow>
+          <DetailRow label={t("department")}>{a.dept_name || a.dept_id || "--"}</DetailRow>
+          <DetailRow label={t("application")}>{a.app_name || a.app_id || "--"}</DetailRow>
+          <DetailRow label={t("user_id")} mono>{a.user_id || "--"}</DetailRow>
+          <DetailRow label={t("ip_address")} mono>{a.ip_address || "--"}</DetailRow>
+          <DetailRow label={t("input_hash")} mono span>{detail.input_hash}</DetailRow>
         </DetailGrid>
       </div>
     </div>
@@ -173,17 +171,18 @@ function OverviewTab({ detail }: { detail: RequestDetail }) {
 }
 
 function AssessmentTab({ detail }: { detail: RequestDetail }) {
+  const t = useTranslations("pages.requests.detail")
   // One list of scored contributions, highest-first: the "why was this decided?"
   // answer. Detection layers plus any triggered guardrail.
   const contributions = [
     ...DETECTION_LAYERS.map(m => ({
-      label: m.label,
+      label: t(`layers.${m.key}`),
       color: m.color,
       score: detail.detection_scores?.[m.key as keyof typeof detail.detection_scores] ?? 0,
     })),
     ...Object.entries(detail.guardrail_scores || {}).map(([k, v]) => ({
-      label: GUARDRAIL_META[k]?.label ?? k,
-      color: GUARDRAIL_META[k]?.color ?? "#94a3b8",
+      label: t.has(`guardrails.${k}`) ? t(`guardrails.${k}`) : k,
+      color: GUARDRAIL_COLORS[k] ?? "#94a3b8",
       score: (v as number) ?? 0,
     })),
   ].sort((x, y) => y.score - x.score)
@@ -192,8 +191,8 @@ function AssessmentTab({ detail }: { detail: RequestDetail }) {
     <div className="space-y-6">
       <div>
         <div className="flex items-center gap-2 mb-3">
-          <SectionLabel>Layer contributions</SectionLabel>
-          <span className="text-[11px] text-slate-400 mb-3">({detail.processing.detection_mode} mode)</span>
+          <SectionLabel>{t("layer_contributions")}</SectionLabel>
+          <span className="text-[11px] text-slate-400 mb-3">{t("mode_note", { mode: detail.processing.detection_mode })}</span>
         </div>
         <div className="space-y-3">
           {contributions.map(c => (
@@ -213,7 +212,7 @@ function AssessmentTab({ detail }: { detail: RequestDetail }) {
 
       {detail.threats.length > 0 && (
         <div>
-          <SectionLabel>Threats detected</SectionLabel>
+          <SectionLabel>{t("threats_detected")}</SectionLabel>
           <div className="flex flex-wrap gap-2">
             {detail.threats.map(t => <ThreatBadge key={t} threat={t} />)}
           </div>
@@ -224,18 +223,19 @@ function AssessmentTab({ detail }: { detail: RequestDetail }) {
 }
 
 function ContentContextTab({ detail }: { detail: RequestDetail }) {
+  const t = useTranslations("pages.requests.detail")
   const tier = contentSourceTier(detail.input_source)
   return (
     <div className="space-y-6">
       <div>
-        <SectionLabel>Content Context</SectionLabel>
+        <SectionLabel>{t("content_context")}</SectionLabel>
         <div className="flex items-center gap-3 flex-wrap mb-4">
           <SourceBadge source={detail.input_source} />
-          <span className="text-xs text-slate-500">{TRUST_TIER_LABELS[tier]}</span>
+          <span className="text-xs text-slate-500">{t.has(`trust_tier.${tier}`) ? t(`trust_tier.${tier}`) : tier}</span>
         </div>
         <DetailGrid>
-          <DetailRow label="Content source">{contentSourceLabel(detail.input_source)}</DetailRow>
-          <DetailRow label="Trust boundary">{tier}</DetailRow>
+          <DetailRow label={t("content_source")}>{contentSourceLabel(detail.input_source)}</DetailRow>
+          <DetailRow label={t("trust_boundary")}>{tier}</DetailRow>
         </DetailGrid>
       </div>
     </div>
@@ -243,28 +243,29 @@ function ContentContextTab({ detail }: { detail: RequestDetail }) {
 }
 
 function ProxyTab({ detail }: { detail: RequestDetail }) {
+  const t = useTranslations("pages.requests.detail")
   const p = detail.proxy!
   return (
     <div className="space-y-5">
       <div className="grid grid-cols-3 gap-3">
-        <DecisionChip label="Input decision"  decision={detail.decision} />
-        <DecisionChip label="Output decision" decision={p.output_decision} />
+        <DecisionChip label={t("input_decision")}  decision={detail.decision} />
+        <DecisionChip label={t("output_decision")} decision={p.output_decision} />
         <div className="flex flex-col gap-1">
-          <p className="text-[11px] text-slate-400">Execution status</p>
+          <p className="text-[11px] text-slate-400">{t("execution_status")}</p>
           <div className="w-fit"><StatusChip status={p.execution_status} /></div>
         </div>
       </div>
       <DetailGrid>
-        <DetailRow label="Provider">{p.provider || "--"}</DetailRow>
-        <DetailRow label="Model">{p.model || "--"}</DetailRow>
-        <DetailRow label="Provider latency">
-          {p.provider_latency_ms != null ? `${p.provider_latency_ms}ms` : "--"}
+        <DetailRow label={t("provider")}>{p.provider || "--"}</DetailRow>
+        <DetailRow label={t("model")}>{p.model || "--"}</DetailRow>
+        <DetailRow label={t("provider_latency")}>
+          {p.provider_latency_ms != null ? t("provider_latency_ms", { ms: p.provider_latency_ms }) : "--"}
         </DetailRow>
-        <DetailRow label="Attack type">{p.input_attack_type || "--"}</DetailRow>
+        <DetailRow label={t("attack_type")}>{p.input_attack_type || "--"}</DetailRow>
       </DetailGrid>
       {p.output_threats && p.output_threats.length > 0 && (
         <div>
-          <SectionLabel>Output threats detected</SectionLabel>
+          <SectionLabel>{t("output_threats")}</SectionLabel>
           <div className="flex flex-wrap gap-1">
             {p.output_threats.map((t: string) => (
               <span key={t} className="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-pink-50 text-pink-700 border border-pink-200">
@@ -279,18 +280,19 @@ function ProxyTab({ detail }: { detail: RequestDetail }) {
 }
 
 function RawTab({ detail }: { detail: RequestDetail }) {
+  const t = useTranslations("pages.requests.detail")
   const p = detail.proxy!
   const inputRedacted  = Boolean(p.input_sanitized && p.input_sanitized !== p.input_raw)
   const outputRedacted = Boolean(p.output_sanitized && p.output_sanitized !== p.output_raw)
   return (
     <div className="space-y-3">
-      <RawBlock label="Input - what the user sent" value={p.input_raw} open />
+      <RawBlock label={t("raw.input_sent")} value={p.input_raw} open />
       {inputRedacted && (
-        <RawBlock label="Input - what the provider received" value={p.input_sanitized} note="(PII redacted)" />
+        <RawBlock label={t("raw.input_received")} value={p.input_sanitized} note={t("raw.pii_redacted")} />
       )}
-      <RawBlock label="Output - what the provider returned" value={p.output_raw} />
+      <RawBlock label={t("raw.output_returned")} value={p.output_raw} />
       {outputRedacted && (
-        <RawBlock label="Output - what the client received" value={p.output_sanitized} note="(PII redacted)" />
+        <RawBlock label={t("raw.output_received")} value={p.output_sanitized} note={t("raw.pii_redacted")} />
       )}
     </div>
   )
@@ -300,9 +302,11 @@ function RawTab({ detail }: { detail: RequestDetail }) {
 
 export function RequestDetailModal({ traceId, onClose }: RequestDetailModalProps) {
   const fmt = useFormat()
+  const t   = useTranslations("pages.requests.detail")
+  const { resolve } = useErrorMessage()
   const [detail,  setDetail]  = useState<RequestDetail | null>(null)
   const [loading, setLoading] = useState(true)
-  const [error,   setError]   = useState<string | null>(null)
+  const [error,   setError]   = useState<unknown>(null)
   const [tab,     setTab]     = useState("overview")
 
   useEffect(() => {
@@ -311,8 +315,8 @@ export function RequestDetailModal({ traceId, onClose }: RequestDetailModalProps
       try {
         const data = await getRequest(traceId)
         if (!cancelled) setDetail(data)
-      } catch (e: any) {
-        if (!cancelled) setError(e.message)
+      } catch (e) {
+        if (!cancelled) setError(e)
       } finally {
         if (!cancelled) setLoading(false)
       }
@@ -326,10 +330,10 @@ export function RequestDetailModal({ traceId, onClose }: RequestDetailModalProps
   const header = (
     <div className="px-6 py-4 pr-12">
       <div className="flex items-center gap-2">
-        <h2 className="text-sm font-semibold text-slate-900">Request Detail</h2>
+        <h2 className="text-sm font-semibold text-slate-900">{t("title")}</h2>
         {detail?.is_proxy && (
           <span className="inline-flex items-center px-1.5 py-0.5 rounded text-[11px] font-medium border border-violet-200 bg-violet-50 text-violet-700">
-            proxy
+            {t("proxy_badge")}
           </span>
         )}
       </div>
@@ -339,41 +343,41 @@ export function RequestDetailModal({ traceId, onClose }: RequestDetailModalProps
   const footer = detail ? (
     <div className="px-6 py-3 flex items-center gap-2 flex-wrap">
       <span className="text-[11px] font-semibold text-slate-400 uppercase tracking-wide mr-1">
-        Recommended actions
+        {t("recommended_actions")}
       </span>
       {detail.run_id && (
         <ActionButton href={`/agent-runs/${encodeURIComponent(detail.run_id)}`}>
-          Open Agent Run
+          {t("open_agent_run")}
         </ActionButton>
       )}
       {hasRaw && (
-        <ActionButton onClick={() => setTab("raw")}>View Raw Request</ActionButton>
+        <ActionButton onClick={() => setTab("raw")}>{t("view_raw")}</ActionButton>
       )}
       <ActionButton onClick={() => navigator.clipboard?.writeText(traceId)}>
-        Copy Trace ID
+        {t("copy_trace_id")}
       </ActionButton>
     </div>
   ) : undefined
 
   const tabs: TabDef[] = detail ? [
-    { id: "overview",   label: "Overview",            render: () => <OverviewTab detail={detail} /> },
-    { id: "assessment", label: "Security Assessment", render: () => <AssessmentTab detail={detail} /> },
-    { id: "content",    label: "Content Context",     render: () => <ContentContextTab detail={detail} /> },
-    { id: "proxy",      label: "Proxy",  visible: Boolean(detail.is_proxy && detail.proxy), render: () => <ProxyTab detail={detail} /> },
-    { id: "raw",        label: "Raw",    visible: hasRaw,                                    render: () => <RawTab detail={detail} /> },
+    { id: "overview",   label: t("tabs.overview"),   render: () => <OverviewTab detail={detail} /> },
+    { id: "assessment", label: t("tabs.assessment"), render: () => <AssessmentTab detail={detail} /> },
+    { id: "content",    label: t("tabs.content"),    render: () => <ContentContextTab detail={detail} /> },
+    { id: "proxy",      label: t("tabs.proxy"), visible: Boolean(detail.is_proxy && detail.proxy), render: () => <ProxyTab detail={detail} /> },
+    { id: "raw",        label: t("tabs.raw"),   visible: hasRaw,                                    render: () => <RawTab detail={detail} /> },
   ] : []
 
   return (
-    <Drawer onClose={onClose} header={header} footer={footer} label="Request detail">
+    <Drawer onClose={onClose} header={header} footer={footer} label={t("drawer_label")}>
       {loading && (
         <div className="flex items-center justify-center py-16">
           <Spinner className="h-6 w-6" />
         </div>
       )}
 
-      {error && (
+      {error != null && (
         <div className="m-6 px-4 py-3 text-sm text-red-700 bg-red-50 border border-red-200 rounded-lg">
-          {error}
+          {resolve(error).message}
         </div>
       )}
 
@@ -393,7 +397,7 @@ export function RequestDetailModal({ traceId, onClose }: RequestDetailModalProps
 
             <div className="mt-4">
               <div className="flex items-baseline justify-between mb-1.5">
-                <span className="text-[11px] font-medium text-slate-500 uppercase tracking-wide">Risk score</span>
+                <span className="text-[11px] font-medium text-slate-500 uppercase tracking-wide">{t("risk_score")}</span>
                 <div className="flex items-center gap-2">
                   <span className="text-2xl font-bold tabular-nums" style={{ color: riskColor(detail.risk_score) }}>
                     {formatScore(detail.risk_score)}
@@ -406,7 +410,7 @@ export function RequestDetailModal({ traceId, onClose }: RequestDetailModalProps
 
             <div className="mt-4 flex items-center gap-2 flex-wrap text-xs text-slate-500">
               <span className="font-mono text-slate-600">{truncateId(traceId)}</span>
-              <CopyButton value={traceId} title="Copy trace id" />
+              <CopyButton value={traceId} title={t("copy_trace")} />
               <span className="text-slate-300">.</span>
               <span>{fmt.timestamp(detail.timestamp)}</span>
               <SourceBadge source={detail.input_source} />
