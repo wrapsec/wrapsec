@@ -53,6 +53,7 @@
       "detail": "Detail"
     },
     "requires_admin": "Requires admin login - <link>sign in with email</link>",
+    "overridden": "Overridden",
     "inherits_global": "Inherits global",
     "unexpected_error": "An unexpected error occurred",
     "nav": {

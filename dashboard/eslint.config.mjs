@@ -46,6 +46,7 @@ const eslintConfig = defineConfig([
       "components/settings/RetentionSettings.tsx",
       "components/settings/LLMSettings.tsx",
       "components/settings/ProxySettings.tsx",
+      "components/admin/ListCells.tsx",
     ],
     rules: {
       "react/jsx-no-literals": ["error", {

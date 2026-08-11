@@ -1,6 +1,9 @@
 // SPDX-License-Identifier: MIT
 // Copyright (c) 2026 WrapSec. All rights reserved.
 // WrapSec v1.0 | AI Security Gateway - https://wrapsec.com
+"use client"
+
+import { useTranslations } from "next-intl"
 
 // Shared cells for the admin resource listings (departments, applications) so
 // they render identity and policy state identically.
@@ -20,10 +23,11 @@ export function PolicyBadge({ overridden, inheritsLabel }: {
   overridden:    boolean
   inheritsLabel: string
 }) {
+  const t = useTranslations("common")
   if (overridden) {
     return (
       <span className="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium border bg-blue-50 text-blue-700 border-blue-200">
-        Overridden
+        {t("overridden")}
       </span>
     )
   }
