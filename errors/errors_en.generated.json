@@ -12,7 +12,7 @@
     "errors.CONFLICT": "Resource already exists.",
     "errors.DETECTION_ERROR": "Security detection could not be completed.",
     "errors.FORBIDDEN": "You do not have permission to perform this action.",
-    "errors.IDEMPOTENCY_CONFLICT": "This request could not be completed because the request key was already used.",
+    "errors.IDEMPOTENCY_CONFLICT": "This request could not be completed because the same idempotency key was already used.",
     "errors.INTERNAL_ERROR": "An unexpected error occurred.",
     "errors.INVALID_CREDENTIALS": "Invalid credentials.",
     "errors.INVALID_PASSWORD": "Current password is incorrect.",

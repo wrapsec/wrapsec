@@ -10,13 +10,13 @@
     "confirm": "Confirm",
     "back": "Back",
     "deactivate": "Deactivate",
-    "confirm_deactivate": "Confirm deactivate",
+    "confirm_deactivate": "Confirm deactivation",
     "manage": "Manage"
   },
   "copy": "Copy",
   "copied": "Copied",
   "all_time": "All time",
-  "never": "never",
+  "never": "Never",
   "pagination": {
     "showing": "Showing <b>{range}</b> of <b>{total}</b>",
     "first": "First",
@@ -51,10 +51,10 @@
     "close": "Close",
     "detail": "Detail"
   },
-  "requires_admin": "Requires admin login - <link>sign in with email</link>",
+  "requires_admin": "Administrator access required - <link>sign in with your email</link>",
   "overridden": "Overridden",
   "inherits_global": "Inherits global",
-  "unexpected_error": "An unexpected error occurred",
+  "unexpected_error": "An unexpected error occurred.",
   "nav": {
     "overview": "Overview",
     "requests": "Requests",

@@ -17,7 +17,7 @@
   "LAST_ADMIN": "You cannot demote or deactivate the last active administrator. Create another administrator first.",
   "NOT_FOUND": "{resource} not found.",
   "CONFLICT": "Resource already exists.",
-  "IDEMPOTENCY_CONFLICT": "This request could not be completed because the request key was already used.",
+  "IDEMPOTENCY_CONFLICT": "This request could not be completed because the same idempotency key was already used.",
   "RATE_LIMIT_EXCEEDED": "Too many requests. Please retry after {retry_after} seconds.",
   "DETECTION_ERROR": "Security detection could not be completed.",
   "LLM_UNAVAILABLE": "The AI provider is currently unavailable."

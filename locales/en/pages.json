@@ -46,7 +46,7 @@
       "p95_latency": "P95 latency"
     },
     "recent_requests": "Recent requests",
-    "recent_subtitle": "Last 10 . live",
+    "recent_subtitle": "Last 10 - live",
     "top_threats": "Top threats",
     "categories": "{count} categories",
     "no_threats": "No threats detected",
@@ -111,7 +111,7 @@
       "empty_title_compact": "No requests yet",
       "empty_body": "Try adjusting your filters or expanding the time range.",
       "empty_body_compact": "Requests will appear here as they arrive.",
-      "copy_trace": "Copy trace id"
+      "copy_trace": "Copy trace ID"
     },
     "overview": {
       "scoped": "Scoped to current filters",
@@ -127,7 +127,7 @@
       "open_agent_run": "Open Agent Run",
       "view_raw": "View Raw Request",
       "copy_trace_id": "Copy Trace ID",
-      "copy_trace": "Copy trace id",
+      "copy_trace": "Copy trace ID",
       "risk_score": "Risk score",
       "tabs": {
         "overview": "Overview",
@@ -169,7 +169,7 @@
       "trust_boundary": "Trust boundary",
       "trust_tier": {
         "trusted": "Trusted origin",
-        "untrusted": "Untrusted origin - indirect injection surface",
+        "untrusted": "Untrusted origin - indirect prompt injection surface",
         "unknown": "Unknown origin"
       },
       "layers": {
@@ -187,7 +187,7 @@
       "provider": "Provider",
       "model": "Model",
       "provider_latency": "Provider latency",
-      "provider_latency_ms": "{ms}ms",
+      "provider_latency_ms": "{ms} ms",
       "attack_type": "Attack type",
       "output_threats": "Output threats detected",
       "raw": {
@@ -203,7 +203,7 @@
     "title": "Analytics",
     "description": "Analyze detection trends across applications, departments, and API keys.",
     "load_error": "Failed to load analytics",
-    "unexpected_error": "An unexpected error occurred",
+    "unexpected_error": "An unexpected error occurred.",
     "custom": "Custom",
     "date_to": "to",
     "kpi": {
@@ -332,8 +332,8 @@
     "api_key_ph": "wrapsec_admin_key or wsk_live_...",
     "api_key_note": "API key sessions have read-only access to settings. Use email/password for full admin access.",
     "verifying": "Verifying",
-    "switch_to_apikey": "Sign in with API Key instead",
-    "switch_to_creds": "Sign in with Email / Password instead",
+    "switch_to_apikey": "Sign in with an API key instead",
+    "switch_to_creds": "Sign in with email and password instead",
     "err_locked": "Account locked after too many failed attempts. Try again later.",
     "err_invalid_creds": "Invalid email or password.",
     "err_generic": "Something went wrong. Please try again.",
@@ -360,12 +360,12 @@
     "current": "Current password",
     "new": "New password",
     "confirm": "Confirm new password",
-    "mismatch": "Passwords do not match",
+    "mismatch": "Passwords do not match.",
     "sign_out": "Sign out",
     "saving": "Saving",
     "submit": "Change password",
     "success_title": "Password changed",
-    "success_body": "All sessions signed out. Redirecting to login",
+    "success_body": "All sessions have been signed out. Redirecting to login.",
     "err_reqs": "New password does not meet requirements.",
     "err_mismatch": "Passwords do not match.",
     "err_incorrect": "Current password is incorrect.",
@@ -384,7 +384,7 @@
     "load_error": "Failed to load agent run",
     "load_error_body": "Unable to reach the API.",
     "empty_title": "No turns for this run",
-    "empty_body": "Scans tagged with this run_id appear here as an ordered timeline.",
+    "empty_body": "Scans tagged with this run ID appear here as an ordered timeline.",
     "risk": "risk {score}"
   },
   "detail": {
@@ -544,7 +544,7 @@
       "rule_label": "Rule-based detection",
       "rule_desc": "Regex and heuristic patterns - fastest layer, ~0ms",
       "ml_label": "ML classifier",
-      "ml_desc": "TF-IDF + LogisticRegression - probabilistic detection, ~5ms",
+      "ml_desc": "TF-IDF + logistic regression - probabilistic detection, ~5ms",
       "llm_label": "LLM semantic analysis",
       "llm_desc": "LLM-based detection - most accurate, conditional invocation",
       "trigger_label": "LLM trigger threshold",
@@ -558,7 +558,7 @@
       "description": "Description",
       "description_placeholder": "Single on-premise installation",
       "enforced_title": "Enforced runtime settings",
-      "enforced_note": "- Tenant-wide defaults. Departments may have their own overrides.",
+      "enforced_note": "Tenant-wide defaults. Departments may have their own overrides.",
       "block_threshold": "Block threshold",
       "sanitize_threshold": "Sanitize threshold",
       "rate_limit_min": "Rate limit/min",
@@ -581,7 +581,7 @@
       "err_min": "Minimum is 1 request per minute",
       "err_max": "Maximum is 10,000 requests per minute",
       "trial_title": "Trial Key Limits",
-      "trial_note": "- read-only, configured via environment",
+      "trial_note": "Read-only, configured via environment",
       "trial_rate_limit": "Rate limit",
       "trial_rate_value": "{value} req/min",
       "trial_max_input": "Max input",
@@ -595,7 +595,7 @@
     "admin_limits": {
       "write_label": "Admin write operations",
       "write_hint": "Applies to user create, update, and password reset. Min: 5, Max: 200.",
-      "write_err_min": "Minimum is 5 - lower values may lock out legitimate admins",
+      "write_err_min": "Minimum is 5 - lower values may lock out legitimate administrators",
       "write_err_max": "Maximum is 200",
       "export_label": "Audit export",
       "export_hint": "Applies to CSV export (up to 10,000 rows per call). Min: 1, Max: 60.",
@@ -603,7 +603,7 @@
       "export_err_max": "Maximum is 60",
       "security_note": "These are security controls. Setting values too high reduces protection against compromised admin credentials. Changes are recorded in the audit log.",
       "source_label": "Source:",
-      "source_db_note": "- overrides environment default, takes effect within 60 seconds",
+      "source_db_note": "Overrides environment default, takes effect within 60 seconds",
       "save": "Save limits",
       "saved_note": "Saved - takes effect within 60 seconds"
     },
@@ -635,7 +635,7 @@
     },
     "llm": {
       "provider": "Provider",
-      "provider_hint": "openai covers OpenAI, Groq, Together AI, and any OpenAI-compatible endpoint",
+      "provider_hint": "OpenAI covers OpenAI, Groq, Together AI, and any OpenAI-compatible endpoint",
       "model": "Model",
       "model_placeholder": "gpt-4o-mini",
       "model_hint": "Model name for the selected provider",
@@ -656,7 +656,7 @@
     },
     "proxy": {
       "provider": "Provider",
-      "provider_hint": "openai covers OpenAI, Azure, Groq, Together AI, and any OpenAI-compatible endpoint",
+      "provider_hint": "OpenAI covers OpenAI, Azure, Groq, Together AI, and any OpenAI-compatible endpoint",
       "model": "Default model",
       "model_placeholder": "gpt-4o",
       "model_hint": "Model name used when client specifies provider/model format",
@@ -673,8 +673,8 @@
       "usage_title": "How to use proxy mode",
       "usage_body": "Point your OpenAI SDK at WrapSec and use the provider/model format:",
       "usage_code": "base_url=\"http://localhost:8000/v1\"   model=\"{provider}/{model}\"",
-      "health_ok": "Connected -- {provider} responded in {latency}ms",
-      "health_fail": "Unreachable -- {error}",
+      "health_ok": "Connected - {provider} responded in {latency}ms",
+      "health_fail": "Unreachable - {error}",
       "save": "Save",
       "test": "Test connection",
       "remove_confirm": "Remove proxy?",
@@ -759,7 +759,7 @@
       "last_used": "Last Used",
       "trial": "Trial",
       "grace_active": "Expiring - grace period active",
-      "dept_scoped": "Dept-scoped",
+      "dept_scoped": "Department-scoped",
       "never": "Never",
       "copy": "Copy",
       "cancel": "Cancel",
@@ -768,7 +768,7 @@
       "revoking": "Revoking...",
       "force_revoke": "Force revoke",
       "revoke": "Revoke",
-      "confirm_revoke": "Confirm revoke",
+      "confirm_revoke": "Confirm revocation",
       "rotate_title_grace": "This key is already in its grace period. Rotate the new key instead.",
       "rotate_title": "Rotate this key and generate a new secret",
       "revoke_title_grace": "Immediately revokes this key - integrations still using it will stop working now",
@@ -776,7 +776,7 @@
       "confirm_revoke_grace_msg": "This will immediately revoke the key. Integrations still using it will stop working now.",
       "confirm_revoke_msg": "This will permanently revoke the key. This cannot be undone.",
       "grace_prompt": "How long should the old key remain valid?",
-      "confirm_rotate": "Confirm rotate",
+      "confirm_rotate": "Confirm rotation",
       "grace": {
         "min15": "15 minutes",
         "min30": "30 minutes",
@@ -802,7 +802,7 @@
       "trial_hint": "Trial keys: 10 req/min, 500 char input limit, proxy disabled.",
       "application": "Application",
       "optional": "(optional)",
-      "no_app": "No application - dept-scoped only",
+      "no_app": "No application - department-scoped only",
       "app_hint": "Optionally scope to a specific application within the department",
       "cancel": "Cancel",
       "submit": "Create key",
@@ -820,7 +820,7 @@
     "title": "Users",
     "description": "Manage dashboard users, roles, and access.",
     "add": "Add user",
-    "requires_admin": "Requires admin login",
+    "requires_admin": "Administrator access required",
     "search_placeholder": "Search users...",
     "load_error": "Failed to load users",
     "empty_title": "No users yet",
@@ -950,7 +950,7 @@
     "origins": {
       "title": "Top Attack Origins",
       "empty": "No attacks recorded in this window.",
-      "subtitle": "Where attacks are coming from -- sources ranked by blocked and sanitized volume."
+      "subtitle": "Where attacks are coming from - sources ranked by blocked and sanitized volume."
     },
     "mix_word": {
       "BLOCK": "block",
@@ -1023,7 +1023,7 @@
     "search_placeholder": "Search departments...",
     "load_error": "Failed to load departments",
     "empty_title": "No departments yet",
-    "empty_body": "Create a department to organise your API keys and policy overrides",
+    "empty_body": "Create a department to organise your API keys and policy overrides.",
     "deactivate_warning": "This will permanently deactivate the department and all its keys.",
     "inherits": "Inherits global",
     "table": {
@@ -1041,7 +1041,7 @@
     "search_placeholder": "Search applications...",
     "load_error": "Failed to load applications",
     "empty_title": "No applications yet",
-    "empty_body": "Register an application to scope API keys and apply per-app policy overrides",
+    "empty_body": "Register an application to scope API keys and apply per-app policy overrides.",
     "deactivate_warning": "This will permanently deactivate the application.",
     "inherits": "Inherits dept",
     "table": {
