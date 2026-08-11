@@ -1,6 +1,9 @@
 // SPDX-License-Identifier: MIT
 // Copyright (c) 2026 WrapSec. All rights reserved.
 // WrapSec v1.0 | AI Security Gateway - https://wrapsec.com
+"use client"
+
+import { useTranslations } from "next-intl"
 import { DecisionBadge, ThreatBadge, SeverityBadge, SourceBadge } from "@/components/ui/Badge"
 import { Table, THead, TBody, Th, Tr, Td } from "@/components/ui/Table"
 import { EmptyState } from "@/components/ui/EmptyState"
@@ -12,17 +15,18 @@ import { formatLatency, formatScore, truncateId, formatRun } from "@/lib/format"
 // Column set. `compact` columns also appear in the Overview "Recent requests"
 // card (which reuses this table via the compact variant); the rest are full-view
 // only. Keeping one definition means both surfaces stay in sync.
-type Col = { key: string; label: string; compact: boolean; align?: "right" }
+// `key` doubles as the pages.requests.table.<key> localization key for the header.
+type Col = { key: string; compact: boolean; align?: "right" }
 const COLS: Col[] = [
-  { key: "request",  label: "Request",        compact: false },
-  { key: "time",     label: "Time",           compact: true  },
-  { key: "severity", label: "Severity",       compact: true  },
-  { key: "decision", label: "Decision",       compact: true  },
-  { key: "source",   label: "Content Source", compact: false },
-  { key: "threats",  label: "Threats",        compact: true  },
-  { key: "deptapp",  label: "Dept / App",     compact: false },
-  { key: "risk",     label: "Risk",           compact: true,  align: "right" },
-  { key: "latency",  label: "Latency",        compact: false, align: "right" },
+  { key: "request",  compact: false },
+  { key: "time",     compact: true  },
+  { key: "severity", compact: true  },
+  { key: "decision", compact: true  },
+  { key: "source",   compact: false },
+  { key: "threats",  compact: true  },
+  { key: "deptapp",  compact: false },
+  { key: "risk",     compact: true,  align: "right" },
+  { key: "latency",  compact: false, align: "right" },
 ]
 
 export function RequestsTable({ items, onSelect, compact = false }: {
@@ -30,6 +34,7 @@ export function RequestsTable({ items, onSelect, compact = false }: {
   onSelect: (traceId: string) => void
   compact?: boolean
 }) {
+  const t = useTranslations("pages.requests.table")
   const cols = COLS.filter(c => !compact || c.compact)
   const show = (key: string) => cols.some(c => c.key === key)
 
@@ -37,7 +42,7 @@ export function RequestsTable({ items, onSelect, compact = false }: {
     <Table>
       <THead>
         <tr>
-          {cols.map(c => <Th key={c.key} align={c.align ?? "left"}>{c.label}</Th>)}
+          {cols.map(c => <Th key={c.key} align={c.align ?? "left"}>{t(c.key)}</Th>)}
         </tr>
       </THead>
       <TBody>
@@ -45,10 +50,8 @@ export function RequestsTable({ items, onSelect, compact = false }: {
           <tr>
             <Td colSpan={cols.length}>
               <EmptyState
-                title={compact ? "No requests yet" : "No requests found"}
-                message={compact
-                  ? "Requests will appear here as they arrive."
-                  : "Try adjusting your filters or expanding the time range."}
+                title={compact ? t("empty_title_compact") : t("empty_title")}
+                message={compact ? t("empty_body_compact") : t("empty_body")}
               />
             </Td>
           </tr>
@@ -60,7 +63,7 @@ export function RequestsTable({ items, onSelect, compact = false }: {
                   <span className="font-mono text-xs text-slate-600">{truncateId(item.trace_id)}</span>
                   <CopyButton
                     value={item.trace_id}
-                    title="Copy trace id"
+                    title={t("copy_trace")}
                     className="opacity-0 group-hover:opacity-100"
                   />
                 </div>

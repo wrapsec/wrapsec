@@ -3,6 +3,8 @@
 // WrapSec v1.0 | AI Security Gateway - https://wrapsec.com
 "use client"
 
+import { useTranslations } from "next-intl"
+
 function VDivider() {
   return <div style={{ width: 1, height: 20, background: "#e5e7eb", flexShrink: 0 }} />
 }
@@ -65,6 +67,7 @@ export function RequestFilters({
   onTraceId, onDecision, onThreat, onExecutionMode, onDeptId, onFrom, onTo, onSortBy, onSortOrder,
   onClearDates, onClearAll,
 }: RequestFiltersProps) {
+  const t = useTranslations("pages.requests.filters")
   // Active state lives on the controls themselves (a set control tints violet and
   // shows its value), so there is no separate chip row to make the page jump when
   // a filter clears. Reset a single filter via its own control; "Clear all" resets
@@ -93,7 +96,7 @@ export function RequestFilters({
           <input
             type="text" value={traceId}
             onChange={e => onTraceId(e.target.value)}
-            placeholder="Search trace ID"
+            placeholder={t("search_trace")}
             style={{
               height: "32px", paddingLeft: "26px", paddingRight: "8px",
               fontSize: "12px", fontFamily: "inherit",
@@ -107,32 +110,32 @@ export function RequestFilters({
 
         <FilterSelect value={decision} onChange={onDecision} width={128}
             options={[
-              { value: "", label: "Decision" }, { value: "BLOCK", label: "Block" },
-              { value: "SANITIZE", label: "Sanitize" }, { value: "ALLOW", label: "Allow" },
+              { value: "", label: t("decision") }, { value: "BLOCK", label: t("block") },
+              { value: "SANITIZE", label: t("sanitize") }, { value: "ALLOW", label: t("allow") },
             ]}
           />
           <FilterSelect value={threatCategory} onChange={onThreat} width={148}
             options={[
-              { value: "", label: "Threat" },
-              { value: "PROMPT_INJECTION",  label: "Prompt Injection"  },
-              { value: "JAILBREAK",         label: "Jailbreak"         },
-              { value: "MALICIOUS_INTENT",  label: "Malicious Intent"  },
-              { value: "DATA_EXFILTRATION", label: "Data Exfiltration" },
-              { value: "PII",               label: "PII"               },
-              { value: "TOXICITY",          label: "Toxicity"          },
+              { value: "", label: t("threat") },
+              { value: "PROMPT_INJECTION",  label: t("prompt_injection")  },
+              { value: "JAILBREAK",         label: t("jailbreak")         },
+              { value: "MALICIOUS_INTENT",  label: t("malicious_intent")  },
+              { value: "DATA_EXFILTRATION", label: t("data_exfiltration") },
+              { value: "PII",               label: t("pii")               },
+              { value: "TOXICITY",          label: t("toxicity")          },
             ]}
           />
           <FilterSelect value={executionMode} onChange={onExecutionMode} width={110}
             options={[
-              { value: "", label: "Mode" },
-              { value: "scan_only", label: "Scan only" },
-              { value: "proxy",     label: "Proxy"     },
+              { value: "", label: t("mode") },
+              { value: "scan_only", label: t("scan_only") },
+              { value: "proxy",     label: t("proxy")     },
             ]}
           />
           {departments.length > 0 && (
             <FilterSelect value={deptId} onChange={onDeptId} width={148}
               options={[
-                { value: "", label: "Department" },
+                { value: "", label: t("department") },
                 ...departments.map(d => ({ value: d.id, label: d.name })),
               ]}
             />
@@ -143,14 +146,14 @@ export function RequestFilters({
           {/* Sort */}
           <FilterSelect value={sortBy} onChange={onSortBy} width={120}
             options={[
-              { value: "created_at", label: "Sort: Time"    },
-              { value: "risk_score", label: "Sort: Risk"    },
-              { value: "latency_ms", label: "Sort: Latency" },
+              { value: "created_at", label: t("sort_time")    },
+              { value: "risk_score", label: t("sort_risk")    },
+              { value: "latency_ms", label: t("sort_latency") },
             ]}
           />
           <button
             onClick={() => onSortOrder(sortOrder === "desc" ? "asc" : "desc")}
-            title={sortOrder === "desc" ? "Descending - click to switch" : "Ascending - click to switch"}
+            title={sortOrder === "desc" ? t("sort_desc") : t("sort_asc")}
             style={{
               display: "flex", alignItems: "center", justifyContent: "center",
               width: 32, height: 32, borderRadius: "6px", flexShrink: 0,
@@ -200,7 +203,7 @@ export function RequestFilters({
                   border: "none", background: "#f3f4f6",
                   cursor: "pointer", color: "#6b7280", flexShrink: 0,
                 }}
-                title="Clear dates"
+                title={t("clear_dates")}
                 onMouseEnter={e => (e.currentTarget.style.background = "#e5e7eb")}
                 onMouseLeave={e => (e.currentTarget.style.background = "#f3f4f6")}
               >
@@ -225,7 +228,7 @@ export function RequestFilters({
                 onMouseEnter={e => { (e.currentTarget as HTMLElement).style.color = "#374151"; (e.currentTarget as HTMLElement).style.background = "#f3f4f6" }}
                 onMouseLeave={e => { (e.currentTarget as HTMLElement).style.color = "#9ca3af"; (e.currentTarget as HTMLElement).style.background = "none" }}
               >
-                Clear all
+                {t("clear_all")}
               </button>
             </>
           )}
@@ -238,7 +241,7 @@ export function RequestFilters({
           <svg style={{ width: 12, height: 12 }} fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24">
             <path strokeLinecap="round" strokeLinejoin="round" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z"/>
           </svg>
-          End date must be after start date
+          {t("date_error")}
         </span>
       )}
     </div>

@@ -17,6 +17,13 @@
   "copied": "Copied",
   "all_time": "All time",
   "never": "never",
+  "pagination": {
+    "showing": "Showing <b>{range}</b> of <b>{total}</b>",
+    "first": "First",
+    "previous": "Previous",
+    "next": "Next",
+    "last": "Last"
+  },
   "decision": {
     "blocked": "Blocked",
     "sanitized": "Sanitized",

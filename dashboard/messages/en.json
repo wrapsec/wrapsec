@@ -18,6 +18,13 @@
     "copied": "Copied",
     "all_time": "All time",
     "never": "never",
+    "pagination": {
+      "showing": "Showing <b>{range}</b> of <b>{total}</b>",
+      "first": "First",
+      "previous": "Previous",
+      "next": "Next",
+      "last": "Last"
+    },
     "decision": {
       "blocked": "Blocked",
       "sanitized": "Sanitized",
@@ -215,6 +222,62 @@
         "high": "High-risk blocks",
         "medium": "Sanitized",
         "low": "Allowed"
+      }
+    },
+    "requests": {
+      "title": "Requests",
+      "description": "Review individual AI requests, security assessments, and content sources.",
+      "export_csv": "Export CSV",
+      "exporting": "Exporting",
+      "export_error": "Export failed. Please try again.",
+      "load_error": "Failed to load requests",
+      "filters": {
+        "search_trace": "Search trace ID",
+        "decision": "Decision",
+        "block": "Block",
+        "sanitize": "Sanitize",
+        "allow": "Allow",
+        "threat": "Threat",
+        "prompt_injection": "Prompt Injection",
+        "jailbreak": "Jailbreak",
+        "malicious_intent": "Malicious Intent",
+        "data_exfiltration": "Data Exfiltration",
+        "pii": "PII",
+        "toxicity": "Toxicity",
+        "mode": "Mode",
+        "scan_only": "Scan only",
+        "proxy": "Proxy",
+        "department": "Department",
+        "sort_time": "Sort: Time",
+        "sort_risk": "Sort: Risk",
+        "sort_latency": "Sort: Latency",
+        "sort_desc": "Descending - click to switch",
+        "sort_asc": "Ascending - click to switch",
+        "clear_dates": "Clear dates",
+        "clear_all": "Clear all",
+        "date_error": "End date must be after start date"
+      },
+      "table": {
+        "request": "Request",
+        "time": "Time",
+        "severity": "Severity",
+        "decision": "Decision",
+        "source": "Content Source",
+        "threats": "Threats",
+        "deptapp": "Dept / App",
+        "risk": "Risk",
+        "latency": "Latency",
+        "empty_title": "No requests found",
+        "empty_title_compact": "No requests yet",
+        "empty_body": "Try adjusting your filters or expanding the time range.",
+        "empty_body_compact": "Requests will appear here as they arrive.",
+        "copy_trace": "Copy trace id"
+      },
+      "overview": {
+        "scoped": "Scoped to current filters",
+        "requests": "Requests",
+        "block_rate": "Block Rate",
+        "average_risk": "Average Risk"
       }
     },
     "departments": {

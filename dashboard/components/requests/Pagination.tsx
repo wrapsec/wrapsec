@@ -3,6 +3,7 @@
 // WrapSec v1.0 | AI Security Gateway - https://wrapsec.com
 "use client"
 
+import { useTranslations } from "next-intl"
 import { Button } from "@/components/ui/Button"
 import { useFormat } from "@/hooks/useFormat"
 
@@ -15,6 +16,7 @@ interface PaginationProps {
 
 export function Pagination({ total, offset, limit, onChange }: PaginationProps) {
   const fmt        = useFormat()
+  const t          = useTranslations("common.pagination")
   const page       = Math.floor(offset / limit) + 1
   const totalPages = Math.ceil(total / limit)
 
@@ -29,14 +31,11 @@ export function Pagination({ total, offset, limit, onChange }: PaginationProps) 
       borderTop:      "1px solid #f3f4f6",
     }}>
       <p style={{ fontSize: "12px", color: "#9ca3af", margin: 0 }}>
-        Showing{" "}
-        <span style={{ fontWeight: 600, color: "#374151" }}>
-          {fmt.number(offset + 1)}-{fmt.number(Math.min(offset + limit, total))}
-        </span>
-        {" "}of{" "}
-        <span style={{ fontWeight: 600, color: "#374151" }}>
-          {fmt.number(total)}
-        </span>
+        {t.rich("showing", {
+          range: `${fmt.number(offset + 1)}-${fmt.number(Math.min(offset + limit, total))}`,
+          total: fmt.number(total),
+          b: (chunks) => <span style={{ fontWeight: 600, color: "#374151" }}>{chunks}</span>,
+        })}
       </p>
 
       <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
@@ -46,7 +45,7 @@ export function Pagination({ total, offset, limit, onChange }: PaginationProps) 
           disabled={offset === 0}
           onClick={() => onChange(0)}
         >
-          First
+          {t("first")}
         </Button>
         <Button
           variant="secondary"
@@ -54,7 +53,7 @@ export function Pagination({ total, offset, limit, onChange }: PaginationProps) 
           disabled={offset === 0}
           onClick={() => onChange(Math.max(0, offset - limit))}
         >
-          Previous
+          {t("previous")}
         </Button>
         <span style={{ fontSize: "12px", color: "#6b7280", padding: "0 4px" }}>
           {page} / {totalPages}
@@ -65,7 +64,7 @@ export function Pagination({ total, offset, limit, onChange }: PaginationProps) 
           disabled={offset + limit >= total}
           onClick={() => onChange(offset + limit)}
         >
-          Next
+          {t("next")}
         </Button>
         <Button
           variant="secondary"
@@ -73,7 +72,7 @@ export function Pagination({ total, offset, limit, onChange }: PaginationProps) 
           disabled={offset + limit >= total}
           onClick={() => onChange((totalPages - 1) * limit)}
         >
-          Last
+          {t("last")}
         </Button>
       </div>
     </div>

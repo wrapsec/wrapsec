@@ -4,6 +4,8 @@
 "use client"
 
 import { Suspense, useState } from "react"
+import { useTranslations } from "next-intl"
+import { useErrorMessage } from "@/hooks/useErrorMessage"
 import { swrKeys } from "@/lib/swrKeys"
 import useSWR from "swr"
 import { Shell } from "@/components/layout/Shell"
@@ -37,6 +39,8 @@ const LIST_SPEC = {
 } as const
 
 function RequestsPageInner() {
+  const t = useTranslations("pages.requests")
+  const { resolve } = useErrorMessage()
   const { values, setParams, textValue, onTextChange } = useListParams(LIST_SPEC)
   const { openId: selectedId, open, close } = useDrawerParam("peek")
 
@@ -113,7 +117,7 @@ function RequestsPageInner() {
       a.click()
       URL.revokeObjectURL(url)
     } catch (e: any) {
-      setExporting({ loading: false, error: e?.message ?? "Export failed. Please try again." })
+      setExporting({ loading: false, error: e?.message ?? t("export_error") })
       return
     }
     setExporting({ loading: false, error: null })
@@ -138,15 +142,15 @@ function RequestsPageInner() {
         <svg style={{ width: 13, height: 13 }} fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24">
           <path strokeLinecap="round" strokeLinejoin="round" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" />
         </svg>
-        {exporting.loading ? "Exporting" : "Export CSV"}
+        {exporting.loading ? t("exporting") : t("export_csv")}
       </button>
     </>
   )
 
   return (
-    <Shell title="Requests">
+    <Shell title={t("title")}>
       <PageHeader
-        description="Review individual AI requests, security assessments, and content sources."
+        description={t("description")}
         actions={actions}
       />
 
@@ -179,8 +183,9 @@ function RequestsPageInner() {
             <PageSpinner />
           ) : fetchError ? (
             <ErrorState
-              title="Failed to load requests"
-              message={(fetchError as { message?: string })?.message ?? "Unable to reach the API. Check your connection and try again."}
+              title={t("load_error")}
+              message={resolve(fetchError).message}
+              severity={resolve(fetchError).severity}
             />
           ) : (
             <>
