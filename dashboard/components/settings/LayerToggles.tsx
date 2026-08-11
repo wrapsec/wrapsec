@@ -4,6 +4,7 @@
 "use client"
 
 import { useState } from "react"
+import { useTranslations } from "next-intl"
 import { Button } from "@/components/ui/Button"
 import { Layers } from "@/lib/types"
 import { updateLayers, updateLLMSettings } from "@/lib/api"
@@ -16,24 +17,14 @@ interface LayerTogglesProps {
 }
 
 const LAYER_INFO = [
-  {
-    key:   "rule_enabled" as const,
-    label: "Rule-based detection",
-    desc:  "Regex and heuristic patterns - fastest layer, ~0ms",
-  },
-  {
-    key:   "ml_enabled" as const,
-    label: "ML classifier",
-    desc:  "TF-IDF + LogisticRegression - probabilistic detection, ~5ms",
-  },
-  {
-    key:   "llm_enabled" as const,
-    label: "LLM semantic analysis",
-    desc:  "LLM-based detection - most accurate, conditional invocation",
-  },
+  { key: "rule_enabled" as const, tkey: "rule" },
+  { key: "ml_enabled"   as const, tkey: "ml" },
+  { key: "llm_enabled"  as const, tkey: "llm" },
 ]
 
 export function LayerToggles({ layers, llmTrigger, onUpdated }: LayerTogglesProps) {
+  const t  = useTranslations("pages.settings")
+  const tc = useTranslations("common")
   const [state,   setState]   = useState(layers)
   const [trigger, setTrigger] = useState(llmTrigger)
   const [loading, setLoading] = useState(false)
@@ -65,14 +56,14 @@ export function LayerToggles({ layers, llmTrigger, onUpdated }: LayerTogglesProp
 
   return (
     <div className="space-y-4">
-      {LAYER_INFO.map(({ key, label, desc }) => (
+      {LAYER_INFO.map(({ key, tkey }) => (
         <div
           key={key}
           className="flex items-start justify-between py-3 border-b border-slate-100 last:border-0"
         >
           <div>
-            <p className="text-sm font-medium text-slate-900">{label}</p>
-            <p className="text-xs text-slate-500 mt-0.5">{desc}</p>
+            <p className="text-sm font-medium text-slate-900">{t(`layers.${tkey}_label`)}</p>
+            <p className="text-xs text-slate-500 mt-0.5">{t(`layers.${tkey}_desc`)}</p>
           </div>
           <button
             onClick={() => handleToggle(key)}
@@ -93,9 +84,9 @@ export function LayerToggles({ layers, llmTrigger, onUpdated }: LayerTogglesProp
       <div className="pt-2">
         <div className="flex items-start justify-between gap-4">
           <div className="flex-1">
-            <p className="text-sm font-medium text-slate-900">LLM trigger threshold</p>
+            <p className="text-sm font-medium text-slate-900">{t("layers.trigger_label")}</p>
             <p className="text-xs text-slate-500 mt-0.5">
-              Minimum risk score from rule/ML layers before LLM is invoked (full mode only)
+              {t("layers.trigger_desc")}
             </p>
           </div>
           <input
@@ -113,20 +104,19 @@ export function LayerToggles({ layers, llmTrigger, onUpdated }: LayerTogglesProp
       <div className="flex items-center gap-3 pt-1">
         {isJwt ? (
           <Button size="sm" onClick={handleSave} loading={loading}>
-            Save layers
+            {t("layers.save")}
           </Button>
         ) : (
           <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
-            <Button size="sm" disabled>Save layers</Button>
+            <Button size="sm" disabled>{t("layers.save")}</Button>
             <span style={{ fontSize: "11px", color: "#9ca3af" }}>
-              Requires admin login -{" "}
-              <a href="/login" style={{ color: "#670FEF", textDecoration: "underline" }}>
-                sign in with email
-              </a>
+              {tc.rich("requires_admin", {
+                link: (chunks) => <a href="/login" style={{ color: "#670FEF", textDecoration: "underline" }}>{chunks}</a>,
+              })}
             </span>
           </div>
         )}
-        {saved && <span className="text-xs text-green-600">Saved successfully</span>}
+        {saved && <span className="text-xs text-green-600">{t("saved")}</span>}
       </div>
     </div>
   )

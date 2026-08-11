@@ -4,6 +4,7 @@
 "use client"
 
 import { useState } from "react"
+import { useTranslations } from "next-intl"
 import { useAuthMode } from "@/hooks/useAuthMode"
 import { Button } from "@/components/ui/Button"
 import { updateTenant } from "@/lib/api"
@@ -39,6 +40,8 @@ export function TenantSettingsForm({
   rateLimitPerMinute,
   rateLimitSource,
 }: TenantSettingsFormProps) {
+  const t  = useTranslations("pages.settings")
+  const tc = useTranslations("common")
   const [name,        setName]        = useState(tenant.name)
   const [description, setDescription] = useState(tenant.description || "")
   const [contact,     setContact]     = useState(tenant.contact_email || "")
@@ -72,7 +75,7 @@ export function TenantSettingsForm({
       <div className="grid grid-cols-2 gap-4">
         <div className="flex flex-col gap-1">
           <label className="text-xs font-medium text-slate-700">
-            Organisation name
+            {t("tenant.name")}
           </label>
           <input
             type="text"
@@ -83,25 +86,25 @@ export function TenantSettingsForm({
         </div>
         <div className="flex flex-col gap-1">
           <label className="text-xs font-medium text-slate-700">
-            Contact email
+            {t("tenant.contact")}
           </label>
           <input
             type="email"
             value={contact}
             onChange={(e) => setContact(e.target.value)}
-            placeholder="admin@acme.com"
+            placeholder={t("tenant.contact_placeholder")}
             className="h-9 px-3 text-sm rounded-md border border-slate-200 bg-white text-slate-900 placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-purple-700 focus:border-purple-700"
           />
         </div>
         <div className="flex flex-col gap-1 col-span-2">
           <label className="text-xs font-medium text-slate-700">
-            Description
+            {t("tenant.description")}
           </label>
           <input
             type="text"
             value={description}
             onChange={(e) => setDescription(e.target.value)}
-            placeholder="Single on-premise installation"
+            placeholder={t("tenant.description_placeholder")}
             className="h-9 px-3 text-sm rounded-md border border-slate-200 bg-white text-slate-900 placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-purple-700 focus:border-purple-700"
           />
         </div>
@@ -110,19 +113,19 @@ export function TenantSettingsForm({
       {/* Enforced runtime values - from DB settings, not global_policy */}
       <div>
         <p className="text-xs font-medium text-slate-700 mb-3">
-          Enforced runtime settings
+          {t("tenant.enforced_title")}
           <span className="ml-2 text-xs text-slate-400 font-normal">
-            - Tenant-wide defaults. Departments may have their own overrides.
+            {t("tenant.enforced_note")}
           </span>
         </p>
         <div className="grid grid-cols-3 gap-3">
           {[
-            { label: "Block threshold",    value: blockThreshold    ?? "-" },
-            { label: "Sanitize threshold", value: sanitizeThreshold ?? "-" },
-            { label: "Rate limit/min",     value: rateLimitPerMinute != null ? `${rateLimitPerMinute} (${rateLimitSource ?? "env"})` : "-" },
-            { label: "Rule detector",      value: ruleEnabled != null ? (ruleEnabled ? "Enabled" : "Disabled") : "-" },
-            { label: "ML detector",        value: mlEnabled   != null ? (mlEnabled   ? "Enabled" : "Disabled") : "-" },
-            { label: "LLM detector",       value: llmEnabled  != null ? (llmEnabled  ? "Enabled" : "Disabled") : "-" },
+            { label: t("tenant.block_threshold"),    value: blockThreshold    ?? "-" },
+            { label: t("tenant.sanitize_threshold"), value: sanitizeThreshold ?? "-" },
+            { label: t("tenant.rate_limit_min"),     value: rateLimitPerMinute != null ? t("tenant.rate_limit_value", { value: rateLimitPerMinute, source: rateLimitSource ?? "env" }) : "-" },
+            { label: t("tenant.rule_detector"),      value: ruleEnabled != null ? (ruleEnabled ? t("tenant.enabled") : t("tenant.disabled")) : "-" },
+            { label: t("tenant.ml_detector"),        value: mlEnabled   != null ? (mlEnabled   ? t("tenant.enabled") : t("tenant.disabled")) : "-" },
+            { label: t("tenant.llm_detector"),       value: llmEnabled  != null ? (llmEnabled  ? t("tenant.enabled") : t("tenant.disabled")) : "-" },
           ].map(({ label, value }) => (
             <div key={label} className="bg-slate-50 rounded-lg px-3 py-2.5">
               <p className="text-xs text-slate-400 mb-0.5">{label}</p>
@@ -131,7 +134,7 @@ export function TenantSettingsForm({
           ))}
         </div>
         <p className="text-xs text-slate-400 mt-2">
-          Manage these values in the cards below. Changes take effect immediately (rate limit within 5 minutes).
+          {t("tenant.manage_note")}
         </p>
       </div>
 
@@ -140,19 +143,20 @@ export function TenantSettingsForm({
       <div className="flex items-center gap-3">
         {isJwt ? (
           <Button size="sm" onClick={handleSave} loading={saving}>
-            Save organisation settings
+            {t("tenant.save")}
           </Button>
         ) : (
           <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
-            <Button size="sm" disabled>Save organisation settings</Button>
+            <Button size="sm" disabled>{t("tenant.save")}</Button>
             <span style={{ fontSize: "11px", color: "#9ca3af" }}>
-              Requires admin login -{" "}
-              <a href="/login" style={{ color: "#670FEF", textDecoration: "underline" }}>sign in with email</a>
+              {tc.rich("requires_admin", {
+                link: (chunks) => <a href="/login" style={{ color: "#670FEF", textDecoration: "underline" }}>{chunks}</a>,
+              })}
             </span>
           </div>
         )}
         {saved && (
-          <span className="text-xs text-green-600">Saved successfully</span>
+          <span className="text-xs text-green-600">{t("saved")}</span>
         )}
       </div>
     </div>

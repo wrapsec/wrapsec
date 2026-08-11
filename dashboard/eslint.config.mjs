@@ -37,6 +37,15 @@ const eslintConfig = defineConfig([
       "components/settings/IntegrationsTable.tsx",
       "components/settings/CreateIntegrationModal.tsx",
       "components/settings/TestResultModal.tsx",
+      "app/settings/page.tsx",
+      "components/settings/ThresholdForm.tsx",
+      "components/settings/LayerToggles.tsx",
+      "components/settings/TenantSettings.tsx",
+      "components/settings/RateLimitSettings.tsx",
+      "components/settings/AdminLimitsForm.tsx",
+      "components/settings/RetentionSettings.tsx",
+      "components/settings/LLMSettings.tsx",
+      "components/settings/ProxySettings.tsx",
     ],
     rules: {
       "react/jsx-no-literals": ["error", {

@@ -4,6 +4,7 @@
 "use client"
 
 import { useState } from "react"
+import { useTranslations } from "next-intl"
 import { useAuthMode } from "@/hooks/useAuthMode"
 import { Button } from "@/components/ui/Button"
 import { updateRetentionSettings } from "@/lib/api"
@@ -16,22 +17,10 @@ interface RetentionSettingsFormProps {
   onUpdated:          (days: number) => void
 }
 
-const STORAGE_MODE_LABELS: Record<string, { label: string; description: string; color: string }> = {
-  full: {
-    label:       "Full",
-    description: "Raw input and output stored as-is. Use for development and debugging.",
-    color:       "bg-amber-50 text-amber-700 border-amber-200",
-  },
-  masked: {
-    label:       "Masked",
-    description: "PII is redacted before storing (e.g. emails, phone numbers). Recommended for production.",
-    color:       "bg-green-50 text-green-700 border-green-200",
-  },
-  none: {
-    label:       "None",
-    description: "Input and output text is never stored. Only metadata is retained. For strict compliance.",
-    color:       "bg-slate-50 text-slate-600 border-slate-200",
-  },
+const STORAGE_MODE_COLORS: Record<string, string> = {
+  full:   "bg-amber-50 text-amber-700 border-amber-200",
+  masked: "bg-green-50 text-green-700 border-green-200",
+  none:   "bg-slate-50 text-slate-600 border-slate-200",
 }
 
 export function RetentionSettingsForm({
@@ -41,6 +30,9 @@ export function RetentionSettingsForm({
   storageMode,
   onUpdated,
 }: RetentionSettingsFormProps) {
+  const t  = useTranslations("pages.settings")
+  const tc = useTranslations("common")
+  const code = (chunks: React.ReactNode) => <code className="font-mono bg-slate-100 px-1 rounded">{chunks}</code>
   const [days,   setDays]   = useState(retentionDays)
   const [saving, setSaving] = useState(false)
   const [saved,  setSaved]  = useState(false)
@@ -65,7 +57,8 @@ export function RetentionSettingsForm({
     }
   }
 
-  const modeInfo = STORAGE_MODE_LABELS[storageMode] ?? STORAGE_MODE_LABELS["masked"]
+  const modeKey   = STORAGE_MODE_COLORS[storageMode] ? storageMode : "masked"
+  const modeColor = STORAGE_MODE_COLORS[modeKey]
 
   return (
     <div className="space-y-6">
@@ -73,17 +66,16 @@ export function RetentionSettingsForm({
       {/* Storage mode -- read only, set via .env */}
       <div>
         <p className="text-xs font-semibold text-slate-500 uppercase tracking-wide mb-3">
-          Storage Mode
+          {t("retention.storage_mode_title")}
         </p>
         <div className="flex items-start gap-3">
-          <span className={`inline-flex items-center px-2.5 py-1 rounded-md text-xs font-semibold border ${modeInfo.color}`}>
-            {modeInfo.label}
+          <span className={`inline-flex items-center px-2.5 py-1 rounded-md text-xs font-semibold border ${modeColor}`}>
+            {t(`retention.mode_${modeKey}_label`)}
           </span>
-          <p className="text-xs text-slate-500 mt-0.5">{modeInfo.description}</p>
+          <p className="text-xs text-slate-500 mt-0.5">{t(`retention.mode_${modeKey}_desc`)}</p>
         </div>
         <p className="text-xs text-slate-400 mt-2">
-          Configured via <code className="font-mono bg-slate-100 px-1 rounded">DATA_STORAGE_MODE</code> in your environment.
-          Options: <code className="font-mono bg-slate-100 px-1 rounded">full</code> · <code className="font-mono bg-slate-100 px-1 rounded">masked</code> · <code className="font-mono bg-slate-100 px-1 rounded">none</code>
+          {t.rich("retention.storage_config_note", { code })}
         </p>
       </div>
 
@@ -92,12 +84,12 @@ export function RetentionSettingsForm({
       {/* Audit logs retention -- editable */}
       <div>
         <p className="text-xs font-semibold text-slate-500 uppercase tracking-wide mb-3">
-          Audit Log Retention
+          {t("retention.audit_title")}
         </p>
         <div className="grid grid-cols-2 gap-5">
           <div className="flex flex-col gap-1">
             <label className="text-xs font-medium text-slate-700">
-              Retention period (days)
+              {t("retention.period_label")}
             </label>
             <input
               type="number"
@@ -111,26 +103,26 @@ export function RetentionSettingsForm({
               className="h-9 px-3 text-sm rounded-md border border-slate-200 bg-white text-slate-900 focus:outline-none focus:ring-2 focus:ring-purple-700 focus:border-purple-700"
             />
             <p className="text-xs text-slate-400">
-              Audit logs older than {days} days will be deleted. Min: 7, Max: 3650.
+              {t("retention.period_hint", { days })}
             </p>
           </div>
 
           <div className="flex flex-col gap-1">
             <label className="text-xs font-medium text-slate-700">
-              Setting source
+              {t("retention.setting_source")}
             </label>
             <div className="h-9 px-3 text-sm rounded-md border border-slate-100 bg-slate-50 flex items-center text-slate-600">
               {source}
             </div>
             <p className="text-xs text-slate-400">
-              Where the current value was read from
+              {t("retention.source_hint")}
             </p>
           </div>
         </div>
 
         {!isValid && (
           <p className="text-xs text-red-600 mt-2">
-            {days < 7 ? "Minimum retention is 7 days" : "Maximum retention is 3650 days"}
+            {days < 7 ? t("retention.err_min") : t("retention.err_max")}
           </p>
         )}
       </div>
@@ -138,37 +130,35 @@ export function RetentionSettingsForm({
       {/* Proxy interactions retention -- read only, set via .env */}
       <div>
         <p className="text-xs font-semibold text-slate-500 uppercase tracking-wide mb-3">
-          Proxy Interaction Text Retention
+          {t("retention.proxy_title")}
         </p>
         <div className="grid grid-cols-2 gap-5">
           <div className="flex flex-col gap-1">
             <label className="text-xs font-medium text-slate-700">
-              Text retention period (days)
+              {t("retention.text_period_label")}
             </label>
             <div className="h-9 px-3 text-sm rounded-md border border-slate-100 bg-slate-50 flex items-center text-slate-600 font-mono">
-              {proxyRetentionDays} days
+              {t("retention.proxy_days_value", { days: proxyRetentionDays })}
             </div>
             <p className="text-xs text-slate-400">
-              Input and output text is nulled after {proxyRetentionDays} days. Metadata is kept permanently.
+              {t("retention.proxy_text_hint", { days: proxyRetentionDays })}
             </p>
           </div>
 
           <div className="flex flex-col gap-1">
             <label className="text-xs font-medium text-slate-700">
-              What is retained permanently
+              {t("retention.permanent_label")}
             </label>
             <div className="h-9 px-3 text-sm rounded-md border border-slate-100 bg-slate-50 flex items-center text-slate-500 text-xs">
-              decisions · threats · scores · latency · status
+              {t("retention.permanent_value")}
             </div>
             <p className="text-xs text-slate-400">
-              Security audit trail is never deleted.
+              {t("retention.permanent_hint")}
             </p>
           </div>
         </div>
         <p className="text-xs text-slate-400 mt-2">
-          Configured via <code className="font-mono bg-slate-100 px-1 rounded">DATA_RETENTION_DAYS_PROXY</code> in your environment.
-          Retention is enforced automatically by the background worker (runs daily at 2 AM UTC).
-          To run manually: <code className="font-mono bg-slate-100 px-1 rounded">python scripts/cleanup_audit_logs.py</code>
+          {t.rich("retention.proxy_config_note", { code })}
         </p>
       </div>
 
@@ -177,19 +167,20 @@ export function RetentionSettingsForm({
       <div className="flex items-center gap-3">
         {isJwt ? (
           <Button size="sm" onClick={handleSave} loading={saving} disabled={!isValid}>
-            Save audit retention
+            {t("retention.save")}
           </Button>
         ) : (
           <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
-            <Button size="sm" disabled>Save audit retention</Button>
+            <Button size="sm" disabled>{t("retention.save")}</Button>
             <span style={{ fontSize: "11px", color: "#9ca3af" }}>
-              Requires admin login -{" "}
-              <a href="/login" style={{ color: "#670FEF", textDecoration: "underline" }}>sign in with email</a>
+              {tc.rich("requires_admin", {
+                link: (chunks) => <a href="/login" style={{ color: "#670FEF", textDecoration: "underline" }}>{chunks}</a>,
+              })}
             </span>
           </div>
         )}
         {saved && (
-          <span className="text-xs text-green-600">Saved successfully</span>
+          <span className="text-xs text-green-600">{t("saved")}</span>
         )}
       </div>
 

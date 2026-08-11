@@ -4,6 +4,7 @@
 "use client"
 
 import { useState } from "react"
+import { useTranslations } from "next-intl"
 import useSWR from "swr"
 import { Shell } from "@/components/layout/Shell"
 import { PageHeader } from "@/components/ui/PageHeader"
@@ -29,19 +30,14 @@ import {
   getStorageSettings,
 } from "@/lib/api"
 
-const TABS = [
-  { id: "organisation", label: "Organisation" },
-  { id: "thresholds",   label: "Thresholds" },
-  { id: "detection",    label: "Detection" },
-  { id: "rate-limits",  label: "Rate Limits" },
-  { id: "llm",          label: "LLM" },
-  { id: "proxy",        label: "Proxy" },
-  { id: "retention",    label: "Retention" },
+const TAB_IDS = [
+  "organisation", "thresholds", "detection", "rate-limits", "llm", "proxy", "retention",
 ] as const
 
-type TabId = typeof TABS[number]["id"]
+type TabId = typeof TAB_IDS[number]
 
 export default function SettingsPage() {
+  const t = useTranslations("pages.settings")
   const [activeTab, setActiveTab] = useState<TabId>("organisation")
 
   const { data: tenant,     isLoading: tenantLoading,     mutate: mutateN } =
@@ -72,12 +68,12 @@ export default function SettingsPage() {
   )
 
   if (tenantLoading || tLoading || lLoading || llmLoading || retentionLoading) {
-    return <Shell title="Settings"><PageSpinner /></Shell>
+    return <Shell title={t("title")}><PageSpinner /></Shell>
   }
 
   return (
-    <Shell title="Settings">
-      <PageHeader description="Configure detection policies, providers, rate limits, and retention settings." />
+    <Shell title={t("title")}>
+      <PageHeader description={t("description")} />
       <div>
 
         {/* Tab bar */}
@@ -85,25 +81,25 @@ export default function SettingsPage() {
           display: "flex", flexWrap: "wrap", gap: "0",
           borderBottom: "1px solid #e5e7eb", marginBottom: "20px",
         }}>
-          {TABS.map(tab => (
+          {TAB_IDS.map(tabId => (
             <button
-              key={tab.id}
-              onClick={() => setActiveTab(tab.id)}
+              key={tabId}
+              onClick={() => setActiveTab(tabId)}
               style={{
                 padding: "8px 14px",
                 fontSize: "13px",
-                fontWeight: activeTab === tab.id ? 600 : 400,
-                color: activeTab === tab.id ? "#670FEF" : "#6b7280",
+                fontWeight: activeTab === tabId ? 600 : 400,
+                color: activeTab === tabId ? "#670FEF" : "#6b7280",
                 background: "none",
                 border: "none",
-                borderBottom: activeTab === tab.id ? "2px solid #670FEF" : "2px solid transparent",
+                borderBottom: activeTab === tabId ? "2px solid #670FEF" : "2px solid transparent",
                 marginBottom: "-1px",
                 cursor: "pointer",
                 whiteSpace: "nowrap",
                 transition: "color 0.15s",
               }}
             >
-              {tab.label}
+              {t(`tabs.${tabId}`)}
             </button>
           ))}
         </div>
@@ -112,8 +108,8 @@ export default function SettingsPage() {
         {activeTab === "organisation" && (
           <Card>
             <CardHeader
-              title="Organisation"
-              subtitle="Global settings for this WrapSec installation"
+              title={t("cards.organisation_title")}
+              subtitle={t("cards.organisation_subtitle")}
             />
             {tenant && (
               <TenantSettingsForm
@@ -134,8 +130,8 @@ export default function SettingsPage() {
         {activeTab === "thresholds" && (
           <Card>
             <CardHeader
-              title="Policy Thresholds"
-              subtitle="Configure risk score thresholds for BLOCK and SANITIZE decisions"
+              title={t("cards.thresholds_title")}
+              subtitle={t("cards.thresholds_subtitle")}
             />
             {thresholds && (
               <ThresholdForm
@@ -149,8 +145,8 @@ export default function SettingsPage() {
         {activeTab === "detection" && (
           <Card>
             <CardHeader
-              title="Detection Layers"
-              subtitle="Enable or disable individual detection layers"
+              title={t("cards.detection_title")}
+              subtitle={t("cards.detection_subtitle")}
             />
             {layers && (
               <LayerToggles
@@ -166,8 +162,8 @@ export default function SettingsPage() {
           <div className="space-y-5">
             <Card>
               <CardHeader
-                title="Rate Limits"
-                subtitle="Configure request rate limits for live and trial keys"
+                title={t("cards.rate_limits_title")}
+                subtitle={t("cards.rate_limits_subtitle")}
               />
               <RateLimitSettingsForm
                 perMinute={rateLimit?.per_minute ?? 60}
@@ -179,8 +175,8 @@ export default function SettingsPage() {
 
             <Card>
               <CardHeader
-                title="Admin Operation Limits"
-                subtitle="Security controls - rate limits for admin write operations and audit export"
+                title={t("cards.admin_limits_title")}
+                subtitle={t("cards.admin_limits_subtitle")}
               />
               <AdminLimitsForm
                 adminWrite={adminLimits?.admin_write_rate_limit ?? 20}
@@ -200,8 +196,8 @@ export default function SettingsPage() {
         {activeTab === "llm" && (
           <Card>
             <CardHeader
-              title="LLM Configuration"
-              subtitle="Configure the LLM provider for semantic detection (Layer 3)"
+              title={t("cards.llm_title")}
+              subtitle={t("cards.llm_subtitle")}
             />
             {llm && (
               <LLMSettingsForm
@@ -215,8 +211,8 @@ export default function SettingsPage() {
         {activeTab === "proxy" && (
           <Card>
             <CardHeader
-              title="Proxy Provider"
-              subtitle="Configure the LLM provider for proxy mode (POST /v1/chat/completions)"
+              title={t("cards.proxy_title")}
+              subtitle={t("cards.proxy_subtitle")}
             />
             <ProxySettingsForm
               config={proxy ?? null}
@@ -228,8 +224,8 @@ export default function SettingsPage() {
         {activeTab === "retention" && (
           <Card>
             <CardHeader
-              title="Audit Log Retention"
-              subtitle="Configure how long audit logs are kept in the database"
+              title={t("cards.retention_title")}
+              subtitle={t("cards.retention_subtitle")}
             />
             {retention && (
               <RetentionSettingsForm

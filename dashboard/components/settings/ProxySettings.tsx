@@ -4,6 +4,7 @@
 "use client"
 
 import { useState } from "react"
+import { useTranslations } from "next-intl"
 import { useAuthMode } from "@/hooks/useAuthMode"
 import { Button } from "@/components/ui/Button"
 import {
@@ -19,13 +20,11 @@ interface ProxySettingsFormProps {
   onUpdated:  (c: ProxyProviderConfig | null) => void
 }
 
-const PROVIDERS = [
-  { value: "openai", label: "OpenAI / OpenAI-compatible" },
-  { value: "ollama", label: "Ollama (Local)" },
-  { value: "custom", label: "Custom (OpenAI-compatible)" },
-]
+const PROVIDERS = ["openai", "ollama", "custom"] as const
 
 export function ProxySettingsForm({ config, onUpdated }: ProxySettingsFormProps) {
+  const t  = useTranslations("pages.settings")
+  const tc = useTranslations("common")
   const [provider,  setProvider]  = useState(config?.provider      ?? "openai")
   const [baseUrl,   setBaseUrl]   = useState(config?.base_url       ?? "https://api.openai.com/v1")
   const [apiKey,    setApiKey]    = useState("")
@@ -106,48 +105,48 @@ export function ProxySettingsForm({ config, onUpdated }: ProxySettingsFormProps)
 
         {/* Provider */}
         <div className="flex flex-col gap-1">
-          <label className="text-xs font-medium text-slate-700">Provider</label>
+          <label className="text-xs font-medium text-slate-700">{t("proxy.provider")}</label>
           <select
             value={provider}
             onChange={(e) => handleProviderChange(e.target.value)}
             className="h-9 px-3 text-sm rounded-md border border-slate-200 bg-white text-slate-900 focus:outline-none focus:ring-2 focus:ring-purple-700 focus:border-purple-700"
           >
             {PROVIDERS.map((p) => (
-              <option key={p.value} value={p.value}>{p.label}</option>
+              <option key={p} value={p}>{t(`providers.${p}`)}</option>
             ))}
           </select>
           <p className="text-xs text-slate-400">
-            openai covers OpenAI, Azure, Groq, Together AI, and any OpenAI-compatible endpoint
+            {t("proxy.provider_hint")}
           </p>
         </div>
 
         {/* Default model */}
         <div className="flex flex-col gap-1">
-          <label className="text-xs font-medium text-slate-700">Default model</label>
+          <label className="text-xs font-medium text-slate-700">{t("proxy.model")}</label>
           <input
             type="text"
             value={model}
             onChange={(e) => setModel(e.target.value)}
-            placeholder="gpt-4o"
+            placeholder={t("proxy.model_placeholder")}
             className="h-9 px-3 text-sm rounded-md border border-slate-200 bg-white text-slate-900 placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-purple-700 focus:border-purple-700"
           />
           <p className="text-xs text-slate-400">
-            Model name used when client specifies provider/model format
+            {t("proxy.model_hint")}
           </p>
         </div>
 
         {/* Base URL */}
         <div className="flex flex-col gap-1 col-span-2">
-          <label className="text-xs font-medium text-slate-700">Base URL</label>
+          <label className="text-xs font-medium text-slate-700">{t("proxy.base_url")}</label>
           <input
             type="text"
             value={baseUrl}
             onChange={(e) => setBaseUrl(e.target.value)}
-            placeholder="https://api.openai.com/v1"
+            placeholder={t("proxy.base_url_placeholder")}
             className="h-9 px-3 text-sm rounded-md border border-slate-200 bg-white text-slate-900 placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-purple-700 focus:border-purple-700"
           />
           <p className="text-xs text-slate-400">
-            Provider endpoint URL. For Groq: https://api.groq.com/openai/v1
+            {t("proxy.base_url_hint")}
           </p>
         </div>
 
@@ -155,10 +154,10 @@ export function ProxySettingsForm({ config, onUpdated }: ProxySettingsFormProps)
         {provider !== "ollama" && (
           <div className="flex flex-col gap-1 col-span-2">
             <label className="text-xs font-medium text-slate-700">
-              API key
+              {t("proxy.api_key")}
               {config?.api_key_masked && (
                 <span className="ml-2 font-normal text-slate-400">
-                  current: {config.api_key_masked}
+                  {t("proxy.api_key_current", { masked: config.api_key_masked })}
                 </span>
               )}
             </label>
@@ -166,18 +165,18 @@ export function ProxySettingsForm({ config, onUpdated }: ProxySettingsFormProps)
               type="password"
               value={apiKey}
               onChange={(e) => setApiKey(e.target.value)}
-              placeholder={config?.api_key_masked ? "Leave blank to keep current key" : "sk-..."}
+              placeholder={config?.api_key_masked ? t("proxy.api_key_placeholder_keep") : t("proxy.api_key_placeholder_new")}
               className="h-9 px-3 text-sm rounded-md border border-slate-200 bg-white text-slate-900 placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-purple-700 focus:border-purple-700"
             />
             <p className="text-xs text-slate-400">
-              Stored encrypted. Never returned in API responses. Masked after save.
+              {t("proxy.api_key_hint")}
             </p>
           </div>
         )}
 
         {/* Timeout */}
         <div className="flex flex-col gap-1">
-          <label className="text-xs font-medium text-slate-700">Timeout (seconds)</label>
+          <label className="text-xs font-medium text-slate-700">{t("proxy.timeout")}</label>
           <input
             type="number"
             min={10}
@@ -186,16 +185,16 @@ export function ProxySettingsForm({ config, onUpdated }: ProxySettingsFormProps)
             onChange={(e) => { const v = parseInt(e.target.value); if (!isNaN(v)) setTimeout_(v) }}
             className="h-9 px-3 text-sm rounded-md border border-slate-200 bg-white text-slate-900 focus:outline-none focus:ring-2 focus:ring-purple-700 focus:border-purple-700"
           />
-          <p className="text-xs text-slate-400">10 - 300 seconds</p>
+          <p className="text-xs text-slate-400">{t("proxy.timeout_hint")}</p>
         </div>
       </div>
 
       {/* Usage note */}
       <div className="px-4 py-3 text-xs text-blue-700 bg-blue-50 border border-blue-200 rounded-lg">
-        <p className="font-medium mb-1">How to use proxy mode</p>
-        <p>Point your OpenAI SDK at WrapSec and use the provider/model format:</p>
+        <p className="font-medium mb-1">{t("proxy.usage_title")}</p>
+        <p>{t("proxy.usage_body")}</p>
         <code className="mt-1 block font-mono text-blue-800">
-          base_url=&quot;http://localhost:8000/v1&quot; &nbsp; model=&quot;{provider}/{model}&quot;
+          {t("proxy.usage_code", { provider, model })}
         </code>
       </div>
 
@@ -207,8 +206,8 @@ export function ProxySettingsForm({ config, onUpdated }: ProxySettingsFormProps)
             : "text-red-700 bg-red-50 border-red-200"
         }`}>
           {health.reachable
-            ? `Connected -- ${health.provider} responded in ${health.latency_ms}ms`
-            : `Unreachable -- ${health.error}`
+            ? t("proxy.health_ok", { provider: health.provider, latency: health.latency_ms ?? 0 })
+            : t("proxy.health_fail", { error: health.error ?? "" })
           }
         </div>
       )}
@@ -218,44 +217,45 @@ export function ProxySettingsForm({ config, onUpdated }: ProxySettingsFormProps)
       <div className="flex items-center gap-3 flex-wrap">
         {isJwt ? (
           <Button size="sm" onClick={handleSave} loading={saving}>
-            Save
+            {t("proxy.save")}
           </Button>
         ) : (
           <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
-            <Button size="sm" disabled>Save</Button>
+            <Button size="sm" disabled>{t("proxy.save")}</Button>
             <span style={{ fontSize: "11px", color: "#9ca3af" }}>
-              Requires admin login -{" "}
-              <a href="/login" style={{ color: "#670FEF", textDecoration: "underline" }}>sign in with email</a>
+              {tc.rich("requires_admin", {
+                link: (chunks) => <a href="/login" style={{ color: "#670FEF", textDecoration: "underline" }}>{chunks}</a>,
+              })}
             </span>
           </div>
         )}
         <Button size="sm" variant="secondary" onClick={handleTest} loading={testing} disabled={!config}>
-          Test connection
+          {t("proxy.test")}
         </Button>
         {config && (
           confirmDelete ? (
             <div className="flex items-center gap-2">
-              <span className="text-xs text-red-600 whitespace-nowrap">Remove proxy?</span>
+              <span className="text-xs text-red-600 whitespace-nowrap">{t("proxy.remove_confirm")}</span>
               <button
                 onClick={handleDelete}
                 className="text-xs font-medium text-red-600 hover:text-red-800 whitespace-nowrap"
               >
-                Confirm
+                {tc("buttons.confirm")}
               </button>
               <button
                 onClick={() => setConfirmDelete(false)}
                 className="text-xs text-slate-500 hover:text-slate-700"
               >
-                Cancel
+                {tc("buttons.cancel")}
               </button>
             </div>
           ) : (
             <Button size="sm" variant="danger" onClick={() => setConfirmDelete(true)} loading={deleting}>
-              Remove
+              {t("proxy.remove")}
             </Button>
           )
         )}
-        {saved && <span className="text-xs text-green-600">Saved successfully</span>}
+        {saved && <span className="text-xs text-green-600">{t("saved")}</span>}
       </div>
     </div>
   )
