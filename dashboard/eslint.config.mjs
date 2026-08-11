@@ -9,8 +9,7 @@ const eslintConfig = defineConfig([
   // next-intl catalog (v1.8.2 sweep): every route and rendered component below is
   // covered so bare JSX text must go through t(); only punctuation/markers are
   // allowed. Keep new files inside this list as they are added. (Excluded:
-  // components/auth/* and app/layout.tsx have no rendered UI strings;
-  // components/analytics/{StatsCards,ThreatChart,LatencyChart} are unused/dead.)
+  // components/auth/* and app/layout.tsx have no rendered UI strings.)
   {
     files: [
       "app/departments/page.tsx",
