@@ -4,6 +4,7 @@
 "use client"
 
 import { useState } from "react"
+import { useTranslations } from "next-intl"
 import Link from "next/link"
 import { usePathname } from "next/navigation"
 import { useSidebar } from "@/contexts/SidebarContext"
@@ -56,38 +57,42 @@ const I = {
 
 // ── Nav data ──────────────────────────────────────────────────────────────
 
+// `key` resolves to a common.nav.* label via t() (labels cannot be built here
+// at module scope -- t is a hook, so NavLink/NavSection resolve them at render).
 const NAV_MAIN = [
-  { label: "Overview",  href: "/",          icon: I.overview,  exact: true  },
-  { label: "Requests",  href: "/requests",  icon: I.requests,  exact: false },
-  { label: "Analytics", href: "/analytics", icon: I.analytics, exact: false },
-  { label: "Sources",   href: "/sources",   icon: I.sources,   exact: false },
-  { label: "Scanner",   href: "/scanner",   icon: I.scanner,   exact: false },
+  { key: "overview",  href: "/",          icon: I.overview,  exact: true  },
+  { key: "requests",  href: "/requests",  icon: I.requests,  exact: false },
+  { key: "analytics", href: "/analytics", icon: I.analytics, exact: false },
+  { key: "sources",   href: "/sources",   icon: I.sources,   exact: false },
+  { key: "scanner",   href: "/scanner",   icon: I.scanner,   exact: false },
 ]
 
 const NAV_CONFIG = [
-  { label: "Settings",     href: "/settings",              icon: I.settings, exact: true  },
-  { label: "API Keys",     href: "/settings/keys",         icon: I.keys,     exact: true  },
-  { label: "Integrations", href: "/settings/integrations", icon: I.integr,   exact: true  },
+  { key: "settings",     href: "/settings",              icon: I.settings, exact: true  },
+  { key: "api_keys",     href: "/settings/keys",         icon: I.keys,     exact: true  },
+  { key: "integrations", href: "/settings/integrations", icon: I.integr,   exact: true  },
 ]
 
 const NAV_ADMIN = [
-  { label: "Users",        href: "/users",        icon: I.users,  exact: false },
-  { label: "Departments",  href: "/departments",  icon: I.depts,  exact: false },
-  { label: "Applications", href: "/applications", icon: I.apps,   exact: false },
-  { label: "System",       href: "/system",       icon: I.system, exact: false },
+  { key: "users",        href: "/users",        icon: I.users,  exact: false },
+  { key: "departments",  href: "/departments",  icon: I.depts,  exact: false },
+  { key: "applications", href: "/applications", icon: I.apps,   exact: false },
+  { key: "system",       href: "/system",       icon: I.system, exact: false },
 ]
 
 // ── NavLink ───────────────────────────────────────────────────────────────
 
 function NavLink({ item, collapsed, active }: {
-  item:      { label: string; href: string; icon: React.ReactNode }
+  item:      { key: string; href: string; icon: React.ReactNode }
   collapsed: boolean
   active:    boolean
 }) {
+  const t = useTranslations("common.nav")
+  const label = t(item.key)
   return (
     <Link
       href={item.href}
-      title={collapsed ? item.label : undefined}
+      title={collapsed ? label : undefined}
       style={{
         display:         "flex",
         alignItems:      "center",
@@ -115,21 +120,22 @@ function NavLink({ item, collapsed, active }: {
       <span style={{ color: active ? "#a78bfa" : "var(--sidebar-text)", flexShrink: 0 }}>
         {item.icon}
       </span>
-      {!collapsed && <span style={{ overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{item.label}</span>}
+      {!collapsed && <span style={{ overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{label}</span>}
     </Link>
   )
 }
 
 // ── Section ───────────────────────────────────────────────────────────────
 
-function NavSection({ label, sectionKey, items, collapsed, pathname }: {
-  label:      string
+function NavSection({ labelKey, sectionKey, items, collapsed, pathname }: {
+  labelKey:   string
   sectionKey: string
-  items:      { label: string; href: string; icon: React.ReactNode; exact: boolean }[]
+  items:      { key: string; href: string; icon: React.ReactNode; exact: boolean }[]
   collapsed:  boolean
   pathname:   string
 }) {
   const { sectionOpen, toggleSection } = useSidebar()
+  const ts = useTranslations("common.nav_section")
   const open = sectionOpen[sectionKey] ?? true
 
   return (
@@ -151,7 +157,7 @@ function NavSection({ label, sectionKey, items, collapsed, pathname }: {
           }}
         >
           <span style={{ fontSize: "10px", fontWeight: 600, letterSpacing: "0.08em", textTransform: "uppercase" }}>
-            {label}
+            {ts(labelKey)}
           </span>
           <span style={{ transform: open ? "rotate(180deg)" : "rotate(0deg)", transition: "transform 0.2s" }}>
             {I.chevD}
@@ -178,6 +184,7 @@ function NavSection({ label, sectionKey, items, collapsed, pathname }: {
 // ── Sidebar ───────────────────────────────────────────────────────────────
 
 export function Sidebar() {
+  const t = useTranslations("common")
   const pathname = usePathname()
   const { collapsed, toggleCollapsed } = useSidebar()
   const [aboutOpen, setAboutOpen] = useState(false)
@@ -224,17 +231,17 @@ export function Sidebar() {
             transition: "opacity 200ms, max-width 280ms cubic-bezier(0.4,0,0.2,1)",
           }}>
             <p style={{ fontSize: "14px", fontWeight: 600, color: "#ffffff", whiteSpace: "nowrap", lineHeight: 1 }}>
-              WrapSec
+              {t("app_name")}
             </p>
             <p style={{ fontSize: "11px", color: "rgba(255,255,255,0.40)", whiteSpace: "nowrap", marginTop: "2px", lineHeight: 1 }}>
-              AI Security Gateway
+              {t("tagline")}
             </p>
           </div>
 
           {!collapsed && (
             <button
               onClick={() => toggleCollapsed(true)}
-              title="Collapse"
+              title={t("sidebar.collapse")}
               style={{
                 flexShrink: 0,
                 background: "none",
@@ -258,7 +265,7 @@ export function Sidebar() {
           <div style={{ display: "flex", justifyContent: "center", padding: "8px 0" }}>
             <button
               onClick={() => toggleCollapsed(false)}
-              title="Expand"
+              title={t("sidebar.expand")}
               style={{
                 background: "none", border: "none", cursor: "pointer",
                 color: "rgba(255,255,255,0.30)", padding: "4px", borderRadius: "4px",
@@ -283,8 +290,8 @@ export function Sidebar() {
             return <NavLink key={item.href} item={item} collapsed={collapsed} active={active} />
           })}
 
-          <NavSection label="Configuration" sectionKey="configuration" items={NAV_CONFIG} collapsed={collapsed} pathname={pathname} />
-          <NavSection label="Administration" sectionKey="administration" items={NAV_ADMIN} collapsed={collapsed} pathname={pathname} />
+          <NavSection labelKey="configuration" sectionKey="configuration" items={NAV_CONFIG} collapsed={collapsed} pathname={pathname} />
+          <NavSection labelKey="administration" sectionKey="administration" items={NAV_ADMIN} collapsed={collapsed} pathname={pathname} />
         </nav>
 
         {/* Footer */}
@@ -297,7 +304,7 @@ export function Sidebar() {
         }}>
           <button
             onClick={() => setAboutOpen(true)}
-            title="About WrapSec"
+            title={t("sidebar.about")}
             style={{
               background:   "none",
               border:       "none",
@@ -316,7 +323,7 @@ export function Sidebar() {
               <path strokeLinecap="round" strokeLinejoin="round" d="M12 16v-4M12 8h.01"/>
             </svg>
             {!collapsed && (
-              <span style={{ fontSize: "11px", color: "rgba(255,255,255,0.25)" }}>WrapSec v1.0</span>
+              <span style={{ fontSize: "11px", color: "rgba(255,255,255,0.25)" }}>{t("version_footer")}</span>
             )}
           </button>
         </div>

@@ -1,5 +1,9 @@
 {
   "app_name": "WrapSec",
+  "tagline": "AI Security Gateway",
+  "version": "v1.0.0",
+  "version_footer": "WrapSec v1.0",
+  "website": "wrapsec.com",
   "buttons": {
     "create": "Create",
     "cancel": "Cancel",
@@ -9,5 +13,48 @@
   },
   "requires_admin": "Requires admin login - <link>sign in with email</link>",
   "inherits_global": "Inherits global",
-  "unexpected_error": "An unexpected error occurred"
+  "unexpected_error": "An unexpected error occurred",
+  "nav": {
+    "overview": "Overview",
+    "requests": "Requests",
+    "analytics": "Analytics",
+    "sources": "Sources",
+    "scanner": "Scanner",
+    "settings": "Settings",
+    "api_keys": "API Keys",
+    "integrations": "Integrations",
+    "users": "Users",
+    "departments": "Departments",
+    "applications": "Applications",
+    "system": "System"
+  },
+  "nav_section": {
+    "configuration": "Configuration",
+    "administration": "Administration"
+  },
+  "sidebar": {
+    "collapse": "Collapse",
+    "expand": "Expand",
+    "about": "About WrapSec"
+  },
+  "menu": {
+    "profile": "Profile",
+    "sign_out": "Sign out"
+  },
+  "status": {
+    "operational": "All systems operational",
+    "degraded": "Degraded",
+    "degraded_services": "Degraded: {services}",
+    "down": "API unavailable"
+  },
+  "session": {
+    "expiring_title": "Session expiring soon",
+    "expiring_body": "You will be logged out due to inactivity in",
+    "log_out_now": "Log out now",
+    "stay_logged_in": "Stay logged in"
+  },
+  "about": {
+    "mission": "Built to protect every AI interaction.",
+    "copyright": "Copyright 2026 WrapSec"
+  }
 }

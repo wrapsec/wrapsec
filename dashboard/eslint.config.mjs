@@ -10,7 +10,11 @@ const eslintConfig = defineConfig([
   // add it here. Bare JSX text must go through next-intl t(); only punctuation/
   // markers are allowed. (The [id] detail pages are not migrated yet.)
   {
-    files: ["app/departments/page.tsx", "app/applications/page.tsx"],
+    files: [
+      "app/departments/page.tsx",
+      "app/applications/page.tsx",
+      "components/layout/**/*.tsx",
+    ],
     rules: {
       "react/jsx-no-literals": ["error", {
         noStrings:      true,

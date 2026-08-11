@@ -4,6 +4,7 @@
 "use client"
 
 import { useEffect, useState } from "react"
+import { useTranslations } from "next-intl"
 import { useRouter } from "next/navigation"
 import Link from "next/link"
 import { getHealth } from "@/lib/api"
@@ -16,6 +17,7 @@ export function TopBar({ title }: { title: string }) {
   const [userRole,  setUserRole]  = useState<string | null>(null)
   const [menuOpen,  setMenuOpen]  = useState(false)
   const router = useRouter()
+  const t = useTranslations("common")
 
   useEffect(() => {
     fetch("/api/proxy/v1/auth/me").then(async res => {
@@ -63,10 +65,10 @@ export function TopBar({ title }: { title: string }) {
   const statusColor = status === "ok" ? "#00E1FF" : status === "degraded" ? "#d97706" : "#dc2626"
   const failed      = Object.entries(checks).filter(([, v]) => v !== "ok" && v !== "healthy").map(([k]) => k)
   const statusLabel = status === "ok"
-    ? "All systems operational"
+    ? t("status.operational")
     : status === "degraded"
-    ? `Degraded${failed.length ? `: ${failed.join(", ")}` : ""}`
-    : "API unavailable"
+    ? (failed.length ? t("status.degraded_services", { services: failed.join(", ") }) : t("status.degraded"))
+    : t("status.down")
 
   return (
     <header style={{
@@ -178,7 +180,7 @@ export function TopBar({ title }: { title: string }) {
                   <svg style={{ width: "14px", height: "14px", color: "var(--text-tertiary)" }} fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24">
                     <path strokeLinecap="round" strokeLinejoin="round" d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z"/>
                   </svg>
-                  Profile
+                  {t("menu.profile")}
                 </Link>
                 <div style={{ height: "1px", background: "var(--card-border)", margin: "4px 0" }} />
                 <button
@@ -195,7 +197,7 @@ export function TopBar({ title }: { title: string }) {
                   <svg style={{ width: "14px", height: "14px" }} fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24">
                     <path strokeLinecap="round" strokeLinejoin="round" d="M17 16l4-4m0 0l-4-4m4 4H7m6 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h4a3 3 0 013 3v1"/>
                   </svg>
-                  Sign out
+                  {t("menu.sign_out")}
                 </button>
               </div>
             </>

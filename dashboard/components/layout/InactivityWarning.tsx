@@ -16,6 +16,7 @@
 "use client"
 
 import React from "react"
+import { useTranslations } from "next-intl"
 
 interface InactivityWarningProps {
   secondsRemaining: number
@@ -34,6 +35,7 @@ export function InactivityWarning({
   onStay,
   onLogout,
 }: InactivityWarningProps) {
+  const t = useTranslations("common")
   return (
     // Backdrop - blocks all interaction, cannot dismiss by clicking
     <div style={{
@@ -75,12 +77,12 @@ export function InactivityWarning({
 
         {/* Heading */}
         <p style={{ fontSize: "16px", fontWeight: 700, color: "#111827", margin: "0 0 8px 0" }}>
-          Session expiring soon
+          {t("session.expiring_title")}
         </p>
 
         {/* Countdown */}
         <p style={{ fontSize: "13px", color: "#6b7280", margin: "0 0 6px 0" }}>
-          You will be logged out due to inactivity in
+          {t("session.expiring_body")}
         </p>
         <p style={{
           fontSize:   "32px",
@@ -118,7 +120,7 @@ export function InactivityWarning({
               ;(e.target as HTMLElement).style.color = "#6b7280"
             }}
           >
-            Log out now
+            {t("session.log_out_now")}
           </button>
           <button
             onClick={onStay}
@@ -138,7 +140,7 @@ export function InactivityWarning({
             onMouseEnter={e => (e.target as HTMLElement).style.opacity = "0.88"}
             onMouseLeave={e => (e.target as HTMLElement).style.opacity = "1"}
           >
-            Stay logged in
+            {t("session.stay_logged_in")}
           </button>
         </div>
       </div>

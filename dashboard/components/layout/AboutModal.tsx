@@ -4,6 +4,7 @@
 "use client"
 
 import { useEffect } from "react"
+import { useTranslations } from "next-intl"
 
 function LogoMark({ size = 40 }: { size?: number }) {
   return (
@@ -33,6 +34,7 @@ interface Props {
 }
 
 export function AboutModal({ onClose }: Props) {
+  const t = useTranslations("common")
   useEffect(() => {
     const handler = (e: KeyboardEvent) => { if (e.key === "Escape") onClose() }
     document.addEventListener("keydown", handler)
@@ -98,8 +100,8 @@ export function AboutModal({ onClose }: Props) {
           <div style={{ display: "flex", justifyContent: "center", marginBottom: "14px" }}>
             <LogoMark size={44} />
           </div>
-          <p style={{ fontSize: "18px", fontWeight: 700, color: "#ffffff", margin: "0 0 4px" }}>WrapSec</p>
-          <p style={{ fontSize: "12px", color: "rgba(255,255,255,0.45)", margin: "0 0 12px" }}>AI Security Gateway</p>
+          <p style={{ fontSize: "18px", fontWeight: 700, color: "#ffffff", margin: "0 0 4px" }}>{t("app_name")}</p>
+          <p style={{ fontSize: "12px", color: "rgba(255,255,255,0.45)", margin: "0 0 12px" }}>{t("tagline")}</p>
           <span style={{
             display:      "inline-block",
             fontSize:     "11px",
@@ -111,14 +113,14 @@ export function AboutModal({ onClose }: Props) {
             padding:      "3px 12px",
             letterSpacing:"0.03em",
           }}>
-            v1.0.0
+            {t("version")}
           </span>
         </div>
 
         {/* Body */}
         <div style={{ padding: "20px 28px 8px" }}>
           <p style={{ fontSize: "12px", color: "rgba(255,255,255,0.5)", lineHeight: 1.65, margin: "0 0 20px", textAlign: "center" }}>
-            Built to protect every AI interaction.
+            {t("about.mission")}
           </p>
 
           <a
@@ -148,14 +150,14 @@ export function AboutModal({ onClose }: Props) {
             <svg width="13" height="13" fill="none" stroke="currentColor" strokeWidth={1.75} viewBox="0 0 24 24">
               <path strokeLinecap="round" strokeLinejoin="round" d="M21 12a9 9 0 01-9 9m9-9a9 9 0 00-9-9m9 9H3m9 9a9 9 0 01-9-9m9 9c1.657 0 3-4.03 3-9s-1.343-9-3-9m0 18c-1.657 0-3-4.03-3-9s1.343-9 3-9m-9 9a9 9 0 019-9"/>
             </svg>
-            <span style={{ fontSize: "12px" }}>wrapsec.com</span>
+            <span style={{ fontSize: "12px" }}>{t("website")}</span>
           </a>
         </div>
 
         {/* Footer */}
         <div style={{ padding: "12px 28px 18px", textAlign: "center" }}>
           <p style={{ fontSize: "11px", color: "rgba(255,255,255,0.18)", margin: 0 }}>
-            Copyright 2026 WrapSec
+            {t("about.copyright")}
           </p>
         </div>
       </div>
