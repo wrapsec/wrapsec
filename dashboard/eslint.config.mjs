@@ -14,6 +14,7 @@ const eslintConfig = defineConfig([
       "app/departments/page.tsx",
       "app/applications/page.tsx",
       "components/layout/**/*.tsx",
+      "components/ui/**/*.tsx",
     ],
     rules: {
       "react/jsx-no-literals": ["error", {

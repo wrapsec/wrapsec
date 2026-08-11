@@ -4,17 +4,20 @@
 "use client"
 
 import { useState } from "react"
+import { useTranslations } from "next-intl"
 
 /**
  * Copy-to-clipboard affordance used next to opaque ids (trace id, run id, ...).
  * stopPropagation keeps a click from also triggering an enclosing row/link.
  */
-export function CopyButton({ value, title = "Copy", className = "" }: {
+export function CopyButton({ value, title, className = "" }: {
   value:      string
   title?:     string
   className?: string
 }) {
+  const t = useTranslations("common")
   const [copied, setCopied] = useState(false)
+  const label = copied ? t("copied") : (title ?? t("copy"))
 
   function copy(e: React.MouseEvent) {
     e.stopPropagation()
@@ -29,8 +32,8 @@ export function CopyButton({ value, title = "Copy", className = "" }: {
     <button
       type="button"
       onClick={copy}
-      title={copied ? "Copied" : title}
-      aria-label={copied ? "Copied" : title}
+      title={label}
+      aria-label={label}
       className={`inline-flex items-center justify-center text-slate-400 hover:text-slate-700 transition-colors ${className}`}
     >
       {copied ? <CheckIcon /> : <CopyIcon />}

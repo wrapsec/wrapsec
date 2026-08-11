@@ -1,7 +1,10 @@
 // SPDX-License-Identifier: MIT
 // Copyright (c) 2026 WrapSec. All rights reserved.
 // WrapSec v1.0 | AI Security Gateway - https://wrapsec.com
+"use client"
+
 import Link from "next/link"
+import { useTranslations } from "next-intl"
 
 interface BreadcrumbItem {
   label: string
@@ -9,8 +12,9 @@ interface BreadcrumbItem {
 }
 
 export function Breadcrumb({ items }: { items: BreadcrumbItem[] }) {
+  const t = useTranslations("common")
   return (
-    <nav aria-label="Breadcrumb">
+    <nav aria-label={t("aria.breadcrumb")}>
       <ol style={{ display: "flex", alignItems: "center", gap: "4px", listStyle: "none", padding: 0, margin: 0 }}>
         {items.map((item, i) => (
           <li key={i} style={{ display: "flex", alignItems: "center", gap: "4px" }}>

@@ -4,6 +4,7 @@
 "use client"
 
 import Link from "next/link"
+import { useTranslations } from "next-intl"
 import { Breadcrumb } from "@/components/ui/Breadcrumb"
 
 interface Crumb {
@@ -33,8 +34,9 @@ interface PageHeaderProps {
  * back + description + actions row.
  */
 export function PageHeader({
-  breadcrumb, description, actions, onBack, backHref, backLabel = "Back",
+  breadcrumb, description, actions, onBack, backHref, backLabel,
 }: PageHeaderProps) {
+  const t = useTranslations("common")
   const showBack = Boolean(onBack || backHref)
   const showRow  = showBack || Boolean(description) || Boolean(actions)
 
@@ -45,7 +47,7 @@ export function PageHeader({
       {showRow && (
         <div className="flex items-center justify-between gap-3">
           <div className="flex items-center gap-3 min-w-0">
-            {showBack && <BackButton onBack={onBack} backHref={backHref} label={backLabel} />}
+            {showBack && <BackButton onBack={onBack} backHref={backHref} label={backLabel ?? t("buttons.back")} />}
             {description && (
               <div className="text-sm text-slate-500 min-w-0">{description}</div>
             )}

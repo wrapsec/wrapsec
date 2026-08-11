@@ -4,6 +4,7 @@
 "use client"
 
 import { useEffect } from "react"
+import { useTranslations } from "next-intl"
 import { Button } from "@/components/ui/Button"
 
 interface Props {
@@ -24,9 +25,10 @@ interface Props {
  * backdrop click (never while an action is in flight).
  */
 export function ConfirmModal({
-  title, message, confirmLabel = "Confirm", danger = false,
+  title, message, confirmLabel, danger = false,
   loading = false, error = null, onConfirm, onClose,
 }: Props) {
+  const t = useTranslations("common")
   useEffect(() => {
     const h = (e: KeyboardEvent) => { if (e.key === "Escape" && !loading) onClose() }
     document.addEventListener("keydown", h)
@@ -47,7 +49,7 @@ export function ConfirmModal({
         {error && <p className="text-xs text-red-600 mb-4">{error}</p>}
         <div className="flex justify-end gap-2">
           <Button size="sm" variant="secondary" onClick={onClose} disabled={loading}>
-            Cancel
+            {t("buttons.cancel")}
           </Button>
           <Button
             size="sm"
@@ -55,7 +57,7 @@ export function ConfirmModal({
             loading={loading}
             onClick={onConfirm}
           >
-            {confirmLabel}
+            {confirmLabel ?? t("buttons.confirm")}
           </Button>
         </div>
       </div>

@@ -8,9 +8,22 @@
     "buttons": {
       "create": "Create",
       "cancel": "Cancel",
+      "confirm": "Confirm",
+      "back": "Back",
       "deactivate": "Deactivate",
       "confirm_deactivate": "Confirm deactivate",
       "manage": "Manage"
+    },
+    "copy": "Copy",
+    "copied": "Copied",
+    "source_tooltip": {
+      "untrusted": "Untrusted origin - indirect prompt-injection surface",
+      "user": "End-user prompt"
+    },
+    "aria": {
+      "breadcrumb": "Breadcrumb",
+      "close": "Close",
+      "detail": "Detail"
     },
     "requires_admin": "Requires admin login - <link>sign in with email</link>",
     "inherits_global": "Inherits global",

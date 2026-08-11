@@ -4,6 +4,7 @@
 "use client"
 
 import { useEffect, useState, useCallback } from "react"
+import { useTranslations } from "next-intl"
 
 /**
  * Right-side slide-in drawer: the dashboard's standard "peek" surface for a
@@ -13,7 +14,7 @@ import { useEffect, useState, useCallback } from "react"
  *
  * header and footer are pinned (flex-shrink-0); children scroll between them.
  */
-export function Drawer({ onClose, header, footer, children, width = 720, label = "Detail" }: {
+export function Drawer({ onClose, header, footer, children, width = 720, label }: {
   onClose:   () => void
   header?:   React.ReactNode
   footer?:   React.ReactNode
@@ -21,6 +22,7 @@ export function Drawer({ onClose, header, footer, children, width = 720, label =
   width?:    number
   label?:    string
 }) {
+  const t = useTranslations("common")
   const [shown, setShown] = useState(false)
 
   // Animate in on mount; animate out before the parent unmounts us.
@@ -49,7 +51,7 @@ export function Drawer({ onClose, header, footer, children, width = 720, label =
       <div
         role="dialog"
         aria-modal="true"
-        aria-label={label}
+        aria-label={label ?? t("aria.detail")}
         className={`absolute top-0 right-0 h-full bg-white shadow-xl border-l border-slate-200 flex flex-col transition-transform duration-200 ${shown ? "translate-x-0" : "translate-x-full"}`}
         style={{ width: `min(${width}px, 100vw)` }}
       >
@@ -57,7 +59,7 @@ export function Drawer({ onClose, header, footer, children, width = 720, label =
           {header}
           <button
             onClick={requestClose}
-            aria-label="Close"
+            aria-label={t("aria.close")}
             className="absolute top-4 right-4 text-slate-400 hover:text-slate-600 transition-colors"
           >
             <svg className="h-5 w-5" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24">

@@ -1,6 +1,9 @@
 // SPDX-License-Identifier: MIT
 // Copyright (c) 2026 WrapSec. All rights reserved.
 // WrapSec v1.0 | AI Security Gateway - https://wrapsec.com
+"use client"
+
+import { useTranslations } from "next-intl"
 import { Decision, ThreatCategory } from "@/lib/types"
 import { THREAT_LABELS, contentSourceLabel, isUntrustedSource } from "@/lib/constants"
 
@@ -97,11 +100,12 @@ const SOURCE_STYLES = {
 }
 
 export function SourceBadge({ source }: { source: string | null }) {
+  const t = useTranslations("common")
   const untrusted = isUntrustedSource(source)
   return (
     <span
       style={{ ...BADGE_BASE, ...(untrusted ? SOURCE_STYLES.untrusted : SOURCE_STYLES.trusted) }}
-      title={untrusted ? "Untrusted origin - indirect prompt-injection surface" : "End-user prompt"}
+      title={untrusted ? t("source_tooltip.untrusted") : t("source_tooltip.user")}
     >
       {contentSourceLabel(source)}
     </span>
