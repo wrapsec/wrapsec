@@ -4,16 +4,17 @@
 "use client"
 
 import { useState, useEffect, FormEvent } from "react"
+import { useTranslations } from "next-intl"
 import { Shell } from "@/components/layout/Shell"
 import { Card, CardHeader } from "@/components/ui/Card"
 import { Button } from "@/components/ui/Button"
 import { useFormat } from "@/hooks/useFormat"
 
 const REQUIREMENTS = [
-  { label: "At least 8 characters", test: (p: string) => p.length >= 8 },
-  { label: "One uppercase letter",  test: (p: string) => /[A-Z]/.test(p) },
-  { label: "One lowercase letter",  test: (p: string) => /[a-z]/.test(p) },
-  { label: "One digit",             test: (p: string) => /\d/.test(p) },
+  { key: "min_length", test: (p: string) => p.length >= 8 },
+  { key: "uppercase",  test: (p: string) => /[A-Z]/.test(p) },
+  { key: "lowercase",  test: (p: string) => /[a-z]/.test(p) },
+  { key: "digit",      test: (p: string) => /\d/.test(p) },
 ]
 
 interface UserProfile {
@@ -28,6 +29,8 @@ interface UserProfile {
 // ── Change password modal ──────────────────────────────────────────────────────
 
 function ChangePasswordModal({ onClose }: { onClose: () => void }) {
+  const t  = useTranslations("pages.profile.modal")
+  const tr = useTranslations("pages.profile.password_req")
   useEffect(() => {
     const handler = (e: KeyboardEvent) => { if (e.key === "Escape") onClose() }
     document.addEventListener("keydown", handler)
@@ -59,14 +62,14 @@ function ChangePasswordModal({ onClose }: { onClose: () => void }) {
         const data = await res.json().catch(() => ({}))
         setError(
           data?.error?.code === "INVALID_PASSWORD"
-            ? "Current password is incorrect."
-            : data?.error?.message || "Password change failed."
+            ? t("err_incorrect")
+            : data?.error?.message || t("err_failed")
         )
         return
       }
       setSuccess(true)
     } catch {
-      setError("Something went wrong. Please try again.")
+      setError(t("err_generic"))
     } finally {
       setSaving(false)
     }
@@ -84,15 +87,15 @@ function ChangePasswordModal({ onClose }: { onClose: () => void }) {
                 </svg>
               </div>
             </div>
-            <p className="text-sm font-semibold text-slate-900 mb-1">Password changed</p>
-            <p className="text-xs text-slate-500 mb-4">All other sessions have been signed out.</p>
-            <Button onClick={onClose}>Done</Button>
+            <p className="text-sm font-semibold text-slate-900 mb-1">{t("success_title")}</p>
+            <p className="text-xs text-slate-500 mb-4">{t("success_body")}</p>
+            <Button onClick={onClose}>{t("done")}</Button>
           </div>
         ) : (
           <>
-            <p className="text-sm font-semibold text-slate-900 mb-4">Change password</p>
+            <p className="text-sm font-semibold text-slate-900 mb-4">{t("title")}</p>
             <form onSubmit={handleSubmit} className="space-y-3">
-              <Field label="Current password">
+              <Field label={t("current")}>
                 <input
                   type="password" value={current}
                   onChange={e => setCurrent(e.target.value)}
@@ -101,7 +104,7 @@ function ChangePasswordModal({ onClose }: { onClose: () => void }) {
                   className={inputCls}
                 />
               </Field>
-              <Field label="New password">
+              <Field label={t("new")}>
                 <input
                   type="password" value={next}
                   onChange={e => setNext(e.target.value)}
@@ -112,14 +115,14 @@ function ChangePasswordModal({ onClose }: { onClose: () => void }) {
                 {next.length > 0 && (
                   <ul className="mt-1.5 space-y-1">
                     {REQUIREMENTS.map(r => (
-                      <li key={r.label} className={`flex items-center gap-1.5 text-xs ${r.test(next) ? "text-green-600" : "text-slate-400"}`}>
-                        <span>{r.test(next) ? "" : "○"}</span>{r.label}
+                      <li key={r.key} className={`flex items-center gap-1.5 text-xs ${r.test(next) ? "text-green-600" : "text-slate-400"}`}>
+                        <span>{r.test(next) ? "" : "○"}</span>{tr(r.key)}
                       </li>
                     ))}
                   </ul>
                 )}
               </Field>
-              <Field label="Confirm new password">
+              <Field label={t("confirm")}>
                 <input
                   type="password" value={confirm}
                   onChange={e => setConfirm(e.target.value)}
@@ -128,16 +131,16 @@ function ChangePasswordModal({ onClose }: { onClose: () => void }) {
                   className={`${inputCls} ${confirm.length > 0 && !passwordsMatch ? "border-red-400" : ""}`}
                 />
                 {confirm.length > 0 && !passwordsMatch && (
-                  <p className="mt-1 text-xs text-red-500">Passwords do not match</p>
+                  <p className="mt-1 text-xs text-red-500">{t("mismatch")}</p>
                 )}
               </Field>
               {error && <p className="text-xs text-red-600">{error}</p>}
               <div className="flex gap-3 pt-1">
                 <Button type="submit" loading={saving} disabled={!reqsMet || !passwordsMatch || !current}>
-                  Change password
+                  {t("submit")}
                 </Button>
                 <button type="button" onClick={onClose} className="text-sm text-slate-500 hover:text-slate-700">
-                  Cancel
+                  {t("cancel")}
                 </button>
               </div>
             </form>
@@ -152,6 +155,7 @@ function ChangePasswordModal({ onClose }: { onClose: () => void }) {
 
 export default function ProfilePage() {
   const fmt = useFormat()
+  const t   = useTranslations("pages.profile")
   const [profile,       setProfile]       = useState<UserProfile | null>(null)
   const [loading,       setLoading]       = useState(true)
   const [isApiKey,      setIsApiKey]      = useState(false)
@@ -173,47 +177,46 @@ export default function ProfilePage() {
   }, [])
 
   const formatDate = (iso: string | null) =>
-    iso ? fmt.timestamp(iso) : "Never"
+    iso ? fmt.timestamp(iso) : t("never")
 
   return (
-    <Shell title="Profile">
+    <Shell title={t("title")}>
       <div className="max-w-md space-y-5">
         <Card>
           <CardHeader
-            title="Account"
+            title={t("account")}
             action={
               !isApiKey && !loading && profile ? (
                 <button
                   onClick={() => setShowChangePass(true)}
                   className="text-xs text-blue-700 hover:underline"
                 >
-                  Change password
+                  {t("change_password")}
                 </button>
               ) : undefined
             }
           />
 
           {loading ? (
-            <p className="text-sm text-slate-400">Loading</p>
+            <p className="text-sm text-slate-400">{t("loading")}</p>
           ) : isApiKey ? (
             <p className="text-sm text-slate-400">
-              You are signed in with an API key. Profile details are available
-              for dashboard users only.
+              {t("api_key_notice")}
             </p>
           ) : profile ? (
             <div className="space-y-1">
-              <Row label="Email"      value={profile.email} />
-              <Row label="Role"       value={profile.role} />
-              <Row label="Tenant"     value={profile.tenant_id} mono />
-              <Row label="Last login" value={formatDate(profile.last_login_at)} />
+              <Row label={t("row.email")}      value={profile.email} />
+              <Row label={t("row.role")}       value={profile.role} />
+              <Row label={t("row.tenant")}     value={profile.tenant_id} mono />
+              <Row label={t("row.last_login")} value={formatDate(profile.last_login_at)} />
               {profile.force_password_change && (
                 <p className="text-xs text-amber-600 font-medium pt-2">
-                  Password change required.
+                  {t("password_required")}
                 </p>
               )}
             </div>
           ) : (
-            <p className="text-sm text-slate-400">Unable to load profile.</p>
+            <p className="text-sm text-slate-400">{t("unable_to_load")}</p>
           )}
         </Card>
       </div>

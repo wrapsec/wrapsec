@@ -319,6 +319,43 @@
       "key_empty": "No key data"
     }
   },
+  "profile": {
+    "title": "Profile",
+    "account": "Account",
+    "change_password": "Change password",
+    "loading": "Loading",
+    "api_key_notice": "You are signed in with an API key. Profile details are available for dashboard users only.",
+    "unable_to_load": "Unable to load profile.",
+    "password_required": "Password change required.",
+    "never": "Never",
+    "row": {
+      "email": "Email",
+      "role": "Role",
+      "tenant": "Tenant",
+      "last_login": "Last login"
+    },
+    "password_req": {
+      "min_length": "At least 8 characters",
+      "uppercase": "One uppercase letter",
+      "lowercase": "One lowercase letter",
+      "digit": "One digit"
+    },
+    "modal": {
+      "success_title": "Password changed",
+      "success_body": "All other sessions have been signed out.",
+      "done": "Done",
+      "title": "Change password",
+      "current": "Current password",
+      "new": "New password",
+      "confirm": "Confirm new password",
+      "mismatch": "Passwords do not match",
+      "submit": "Change password",
+      "cancel": "Cancel",
+      "err_incorrect": "Current password is incorrect.",
+      "err_failed": "Password change failed.",
+      "err_generic": "Something went wrong. Please try again."
+    }
+  },
   "sources": {
     "title": "Security by Source",
     "description": "Analyze security activity by content source to identify higher-risk inputs.",
