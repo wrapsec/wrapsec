@@ -7,7 +7,8 @@ Locale resolution + validation (Phase 2/3).
 
 Covers the User -> Tenant -> System -> English precedence, allowlist matching,
 explicit-setter rejection, and the canonical _meta.json config invariant
-(supported non-empty, includes en, default is supported, catalog_version set).
+(locales map non-empty, includes en, each entry declares a valid direction,
+default is one of the locales, catalog_version set).
 """
 
 import pytest
@@ -16,6 +17,7 @@ from pydantic_core import PydanticCustomError
 from services.localization import (
     _validate_meta,
     canonical_locale,
+    locale_direction,
     resolve_locale,
     validate_locale_input,
 )
@@ -72,19 +74,59 @@ def test_validate_rejects_unsupported_as_invalid_locale():
 
 # -- canonical _meta.json config invariant --------------------------
 def test_meta_valid_config_passes():
-    _validate_meta({"supported_locales": ["en"], "default_locale": "en", "catalog_version": "1.0.0"})
-    _validate_meta({"supported_locales": ["en", "de"], "default_locale": "de", "catalog_version": "1.0.0"})
+    _validate_meta({
+        "locales": {"en": {"direction": "ltr"}},
+        "default_locale": "en",
+        "catalog_version": "1.0.0",
+    })
+    _validate_meta({
+        "locales": {"en": {"direction": "ltr"}, "ar": {"direction": "rtl"}},
+        "default_locale": "ar",
+        "catalog_version": "1.0.0",
+    })
 
 
 def test_meta_rejects_default_outside_allowlist():
     with pytest.raises(ValueError, match="default_locale"):
-        _validate_meta({"supported_locales": ["en"], "default_locale": "de", "catalog_version": "1.0.0"})
+        _validate_meta({
+            "locales": {"en": {"direction": "ltr"}},
+            "default_locale": "de",
+            "catalog_version": "1.0.0",
+        })
 
 
 def test_meta_requires_english_nonempty_and_version():
     with pytest.raises(ValueError, match="must include 'en'"):
-        _validate_meta({"supported_locales": ["de"], "default_locale": "de", "catalog_version": "1.0.0"})
-    with pytest.raises(ValueError, match="must not be empty"):
-        _validate_meta({"supported_locales": [], "default_locale": "en", "catalog_version": "1.0.0"})
+        _validate_meta({
+            "locales": {"de": {"direction": "ltr"}},
+            "default_locale": "de",
+            "catalog_version": "1.0.0",
+        })
+    with pytest.raises(ValueError, match="non-empty object"):
+        _validate_meta({"locales": {}, "default_locale": "en", "catalog_version": "1.0.0"})
     with pytest.raises(ValueError, match="catalog_version"):
-        _validate_meta({"supported_locales": ["en"], "default_locale": "en"})
+        _validate_meta({"locales": {"en": {"direction": "ltr"}}, "default_locale": "en"})
+
+
+def test_meta_rejects_invalid_or_missing_direction():
+    with pytest.raises(ValueError, match="direction"):
+        _validate_meta({
+            "locales": {"en": {"direction": "sideways"}},
+            "default_locale": "en",
+            "catalog_version": "1.0.0",
+        })
+    with pytest.raises(ValueError, match="direction"):
+        _validate_meta({
+            "locales": {"en": {}},
+            "default_locale": "en",
+            "catalog_version": "1.0.0",
+        })
+
+
+# -- locale_direction (render-surface lookup) -----------------------
+def test_locale_direction_uses_meta_and_ltr_floor():
+    # Real _meta.json ships en=ltr; an unsupported/empty value falls to the floor.
+    assert locale_direction("en") == "ltr"
+    assert locale_direction("EN") == "ltr"
+    assert locale_direction(None) == "ltr"
+    assert locale_direction("xx") == "ltr"

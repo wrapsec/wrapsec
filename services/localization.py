@@ -6,10 +6,14 @@
 Locale resolution and validation.
 
 The canonical, framework-independent source of truth for locale SUPPORT is
-locales/_meta.json (supported_locales, default_locale, catalog_version). This
-module is the backend's reader of that config -- no consumer maintains its own
-copy (the frontend reads a generated locale-config.json derived from the same
-_meta.json). See docs/internal/wrapsec_error_handling_localization_rules.md.
+locales/_meta.json. Its `locales` object maps each supported locale to its
+per-locale metadata (currently just text `direction`), so `supported_locales`
+is the set of keys -- one place lists locales AND their attributes, extensible
+without a schema change. `default_locale` and `catalog_version` sit at the top
+level. This module is the backend's reader of that config -- no consumer
+maintains its own copy (the frontend reads a generated locale-config.json
+derived from the same _meta.json).
+See docs/internal/wrapsec_error_handling_localization_rules.md.
 
 Resolution precedence (sec 10) lives here, NOT in any UI framework:
 
@@ -32,22 +36,37 @@ _META_PATH = Path(__file__).resolve().parent.parent / "locales" / "_meta.json"
 # English is the guaranteed catalog and the ultimate fallback.
 FLOOR = "en"
 
+# Text direction is a closed set; every locale entry declares one. LTR is the
+# floor default for the English fallback and any unknown lookup.
+VALID_DIRECTIONS = ("ltr", "rtl")
+DEFAULT_DIRECTION = "ltr"
+
 
 def _validate_meta(data: dict) -> None:
     """The canonical config invariant, enforced on load (and by the build gate):
-    supported_locales is non-empty, includes English, and the default is one of
-    the supported locales."""
-    supported = data.get("supported_locales") or []
-    default   = data.get("default_locale")
-    if not supported:
-        raise ValueError("_meta.json: supported_locales must not be empty")
-    lowered = [loc.lower() for loc in supported]
+    `locales` is a non-empty map whose keys are the supported locales, it
+    includes English, every entry declares a valid text direction, and
+    default_locale is one of those keys."""
+    locales = data.get("locales")
+    if not isinstance(locales, dict) or not locales:
+        raise ValueError("_meta.json: locales must be a non-empty object")
+    lowered = {loc.lower() for loc in locales}
     if FLOOR not in lowered:
-        raise ValueError("_meta.json: supported_locales must include 'en'")
+        raise ValueError("_meta.json: locales must include 'en'")
+    for loc, entry in locales.items():
+        if not isinstance(entry, dict):
+            raise ValueError(f"_meta.json: locale {loc!r} entry must be an object")
+        direction = entry.get("direction")
+        if direction not in VALID_DIRECTIONS:
+            raise ValueError(
+                f"_meta.json: locale {loc!r} direction ({direction!r}) must be "
+                f"one of {VALID_DIRECTIONS}"
+            )
+    default = data.get("default_locale")
     if not default or default.lower() not in lowered:
         raise ValueError(
-            f"_meta.json: default_locale ({default!r}) must be one of "
-            f"supported_locales ({supported})"
+            f"_meta.json: default_locale ({default!r}) must be one of the "
+            f"declared locales ({sorted(locales)})"
         )
     if not data.get("catalog_version"):
         raise ValueError("_meta.json: catalog_version is required")
@@ -62,7 +81,7 @@ def _meta() -> dict:
 
 
 def supported_locales() -> list[str]:
-    return list(_meta()["supported_locales"])
+    return list(_meta()["locales"].keys())
 
 
 def default_locale() -> str:
@@ -71,6 +90,21 @@ def default_locale() -> str:
 
 def catalog_version() -> str:
     return _meta()["catalog_version"]
+
+
+def locale_directions() -> dict[str, str]:
+    """Map of every supported locale to its text direction ('ltr' | 'rtl')."""
+    return {loc: entry["direction"] for loc, entry in _meta()["locales"].items()}
+
+
+def locale_direction(locale: str | None) -> str:
+    """Text direction for `locale` (allowlist-canonicalized), or the LTR floor
+    when it is empty/unsupported. The render surface (html dir) uses this; it
+    never trusts a raw value that is not in the allowlist."""
+    canonical = canonical_locale(locale, supported_locales())
+    if canonical is None:
+        return DEFAULT_DIRECTION
+    return locale_directions().get(canonical, DEFAULT_DIRECTION)
 
 
 def canonical_locale(value: str | None, supported: list[str]) -> str | None:

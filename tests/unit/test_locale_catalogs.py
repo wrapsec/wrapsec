@@ -98,10 +98,20 @@ def test_no_orphan_validation_keys():
 # -- Guard 4: required namespaces exist for every supported locale --
 def test_every_supported_locale_has_required_namespaces():
     meta = load_meta()
-    for locale in meta["supported_locales"]:
+    for locale in meta["locales"]:
         namespaces = build_dashboard_messages()[locale]
         for ns in REQUIRED_NAMESPACES:
             assert ns in namespaces, f"locale {locale} missing namespace {ns}"
+
+
+# -- Guard 7: text direction is emitted for every supported locale --
+def test_locale_config_directions_cover_every_locale():
+    config    = build_locale_config()
+    supported = set(config["supported_locales"])
+    dirs      = config["directions"]
+    assert set(dirs) == supported, "directions must cover exactly the supported locales"
+    assert all(d in ("ltr", "rtl") for d in dirs.values()), "direction must be ltr|rtl"
+    assert dirs["en"] == "ltr", "English is left-to-right"
 
 
 # -- Guard 5: catalog_version consistency (build contract) ----------

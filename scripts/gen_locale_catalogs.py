@@ -7,7 +7,8 @@
 Locale catalog validator + generator (the one pipeline).
 
 Canonical source of truth (framework-independent):
-    locales/_meta.json   -- supported_locales / default_locale / catalog_version
+    locales/_meta.json   -- locales map (per-locale metadata incl. text
+                            direction) + default_locale + catalog_version
     locales/<loc>/*.json -- localized text (ICU), domain-split by namespace
 
 This tool VALIDATES the canonical catalog, then GENERATES every consumer
@@ -17,7 +18,8 @@ artifact. No consumer maintains its own copy of the config or the text:
                                                 merged, namespace-keyed file per
                                                 locale, for next-intl)
     dashboard/messages/locale-config.json    -- frontend locale config (supported
-                                                locales + default + catalog_version)
+                                                locales + default + directions +
+                                                catalog_version)
 
 Run whenever locales/ changes:
 
@@ -157,13 +159,15 @@ def build_dashboard_messages() -> dict[str, dict[str, Any]]:
     Verbatim canonical content (no injected marker) so next-intl reads clean
     namespaces; freshness is enforced by the guard, not a marker."""
     meta = load_meta()
-    return {loc: load_namespaces(loc) for loc in meta["supported_locales"]}
+    return {loc: load_namespaces(loc) for loc in meta["locales"]}
 
 
 def build_locale_config() -> dict[str, Any]:
     """The frontend's locale config -- the ONLY place the dashboard learns which
-    locales are supported. Derived from _meta.json; never hand-edited."""
+    locales are supported and each one's text direction. Derived from
+    _meta.json; never hand-edited."""
     meta = load_meta()
+    locales = meta["locales"]
     return {
         "__generated__": {
             "warning":   GENERATED_WARNING,
@@ -172,7 +176,8 @@ def build_locale_config() -> dict[str, Any]:
         },
         "catalog_version":   meta["catalog_version"],
         "default_locale":    meta["default_locale"],
-        "supported_locales": list(meta["supported_locales"]),
+        "supported_locales": list(locales.keys()),
+        "directions":        {loc: entry["direction"] for loc, entry in locales.items()},
     }
 
 
