@@ -213,6 +213,13 @@ async def login(
             trace_id=getattr(request.state, "trace_id", ""),
         )
 
+    # Effective locale for the session (User -> Tenant -> System -> English), so
+    # the BFF can set the wrapsec_locale cookie next-intl reads. Resolution stays
+    # here in WrapSec, not on the frontend.
+    from db.repositories.tenant import TenantRepository
+    _tenant = await TenantRepository(db).get_by_id(result.user.tenant_id) if result.user.tenant_id else None
+    _resolved_locale = resolve_locale(result.user.locale, _tenant.locale if _tenant else None)
+
     response = JSONResponse(
         status_code=200,
         content={
@@ -220,6 +227,7 @@ async def login(
             "token_type":            "bearer",
             "expires_in":            result.expires_in,
             "force_password_change": result.force_password_change,
+            "resolved_locale":       _resolved_locale,
             "user": {
                 "id":        str(result.user.id),
                 "email":     result.user.email,
@@ -275,12 +283,20 @@ async def refresh(
             trace_id=getattr(request.state, "trace_id", ""),
         )
 
+    # Re-resolve the locale on every refresh so a tenant/user preference change
+    # propagates to a live session without re-login (User -> Tenant -> System ->
+    # English). The BFF updates wrapsec_locale from this.
+    from db.repositories.tenant import TenantRepository
+    _tenant = await TenantRepository(db).get_by_id(result.user.tenant_id) if result.user.tenant_id else None
+    _resolved_locale = resolve_locale(result.user.locale, _tenant.locale if _tenant else None)
+
     response = JSONResponse(
         status_code=200,
         content={
-            "access_token": result.access_token,
-            "token_type":   "bearer",
-            "expires_in":   result.expires_in,
+            "access_token":    result.access_token,
+            "token_type":      "bearer",
+            "expires_in":      result.expires_in,
+            "resolved_locale": _resolved_locale,
         },
     )
     _set_refresh_cookie(

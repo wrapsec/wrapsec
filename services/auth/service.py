@@ -90,6 +90,7 @@ class RefreshResult:
     access_token:  str
     refresh_token: str
     expires_in:    int
+    user:          object
 
 
 class AuthService:
@@ -329,6 +330,7 @@ class AuthService:
             access_token  = new_access,
             refresh_token = new_raw,
             expires_in    = _settings.jwt_access_token_expire_minutes * 60,
+            user          = user,
         )
 
     async def logout(

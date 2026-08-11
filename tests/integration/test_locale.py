@@ -17,6 +17,28 @@ def _auth(token):
 
 
 @pytest.mark.asyncio
+async def test_login_returns_resolved_locale(auth_client, auth_setup):
+    email = auth_setup["admin_user"].email
+    r = await auth_client.post("/v1/auth/login", json={"email": email, "password": "TestPass1!"})
+    assert r.status_code == 200
+    assert r.json()["resolved_locale"] == "en"   # BFF sets the wrapsec_locale cookie from this
+
+
+@pytest.mark.asyncio
+async def test_refresh_returns_resolved_locale(auth_client, auth_setup):
+    email   = auth_setup["admin_user"].email
+    login_r = await auth_client.post("/v1/auth/login", json={"email": email, "password": "TestPass1!"})
+    assert login_r.status_code == 200
+    raw_cookie = login_r.cookies.get("refresh_token")
+    assert raw_cookie
+
+    r = await auth_client.post("/v1/auth/refresh", cookies={"refresh_token": raw_cookie})
+    assert r.status_code == 200
+    # Locale is re-resolved on every refresh (User -> Tenant -> System -> English).
+    assert r.json()["resolved_locale"] == "en"
+
+
+@pytest.mark.asyncio
 async def test_me_exposes_locale_and_resolved(auth_client, auth_setup):
     token = auth_setup["admin_token"]
     r = await auth_client.get("/v1/auth/me", headers=_auth(token))
