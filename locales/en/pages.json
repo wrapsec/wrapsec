@@ -319,6 +319,45 @@
       "key_empty": "No key data"
     }
   },
+  "system": {
+    "title": "System Status",
+    "description": "Monitor service health and runtime configuration.",
+    "health_error_title": "Unable to reach health endpoint",
+    "health_error_body": "The WrapSec API is not responding. Check that the service is running.",
+    "service_health": "Service Health",
+    "service_health_subtitle": "Real-time status of WrapSec subsystems",
+    "operational": "All systems operational",
+    "degraded": "System degraded",
+    "config_title": "Active Configuration",
+    "config_subtitle": "Algorithm version {version} · Settings from {source}",
+    "source_default": "database",
+    "block_threshold": "Block threshold",
+    "sanitize_threshold": "Sanitize threshold",
+    "rate_limit": "Rate limit",
+    "rate_limit_value": "{count} req/min",
+    "rate_limit_scope": "Rate limit scope",
+    "layers_title": "Detection Layers",
+    "source_subtitle": "Source: {source}",
+    "layer": {
+      "rule": "Rule detector",
+      "ml": "ML classifier",
+      "llm": "LLM detector"
+    },
+    "enabled": "Enabled",
+    "disabled": "Disabled",
+    "llm_title": "LLM Configuration",
+    "provider": "Provider",
+    "model": "Model",
+    "timeout": "Timeout",
+    "timeout_value": "{count}s",
+    "llm_trigger": "LLM trigger",
+    "service": {
+      "tfidf_detector": "ML Tier 1 Detector",
+      "transformer_detector": "ML Tier 2 Detector"
+    },
+    "svc_operational": "Operational",
+    "svc_error": "Error"
+  },
   "profile": {
     "title": "Profile",
     "account": "Account",
