@@ -17,6 +17,7 @@ Enforces the pipeline contract structurally so it cannot drift:
 from __future__ import annotations
 
 import json
+import re
 
 import pytest
 
@@ -112,6 +113,80 @@ def test_locale_config_directions_cover_every_locale():
     assert set(dirs) == supported, "directions must cover exactly the supported locales"
     assert all(d in ("ltr", "rtl") for d in dirs.values()), "direction must be ltr|rtl"
     assert dirs["en"] == "ltr", "English is left-to-right"
+
+
+# -- Guard 8: translation lockstep (non-default locales vs the fallback base) ---
+# The fallback base is default_locale: a key missing from another locale resolves
+# to it (i18n/request.ts deepMerge), so a NON-default locale is a valid override
+# layer only if it introduces no keys the base lacks and, for every shared key,
+# uses the SAME ICU arguments and rich-text tags. next build validates ICU syntax
+# but NOT these -- an extra {arg} throws MISSING_VALUE and a dropped <tag> breaks
+# t.rich, both only when that locale actually renders. Missing keys are allowed
+# (the fallback covers them), so this never requires a full translation.
+def _icu_arg_names(text: str) -> set[str]:
+    """Top-level ICU argument names ({name} or {name, type, ...}). Nested args in
+    plural/select branches are intentionally ignored -- top-level parity is the
+    call-site contract."""
+    names: set[str] = set()
+    depth = 0
+    buf = ""
+    for ch in text:
+        if ch == "{":
+            if depth == 0:
+                buf = ""
+            depth += 1
+        elif ch == "}":
+            depth -= 1
+            if depth == 0:
+                m = re.match(r"\s*([A-Za-z0-9_]+)", buf)
+                if m:
+                    names.add(m.group(1))
+        elif depth == 1:
+            buf += ch
+    return names
+
+
+def _tag_names(text: str) -> list[str]:
+    """Rich-text tag tokens (<link>, <b>, <code>, <br>, and their closers) as a
+    sorted multiset; t.rich needs a matching set across locales."""
+    return sorted(re.findall(r"</?([A-Za-z0-9]+)\s*>", text))
+
+
+def test_non_default_locales_are_valid_override_layers():
+    meta    = load_meta()
+    default = meta["default_locale"]
+    base    = _flatten_locale(default)
+    others  = [loc for loc in meta["locales"] if loc != default]
+
+    for loc in others:
+        flat = _flatten_locale(loc)
+
+        orphans = sorted(set(flat) - set(base))
+        assert not orphans, (
+            f"[{loc}] has keys absent from the '{default}' base (typo/dead, never "
+            f"rendered): {orphans}"
+        )
+
+        arg_diffs = {
+            key: (sorted(_icu_arg_names(base[key])), sorted(_icu_arg_names(flat[key])))
+            for key in set(flat) & set(base)
+            if _icu_arg_names(flat[key]) != _icu_arg_names(base[key])
+        }
+        assert not arg_diffs, (
+            f"[{loc}] ICU argument sets differ from '{default}' (extra arg -> "
+            f"runtime MISSING_VALUE, dropped arg -> missing content) "
+            f"{{key: (base, {loc})}}: {arg_diffs}"
+        )
+
+        tag_diffs = {
+            key: (_tag_names(base[key]), _tag_names(flat[key]))
+            for key in set(flat) & set(base)
+            if _tag_names(flat[key]) != _tag_names(base[key])
+        }
+        assert not tag_diffs, (
+            f"[{loc}] rich-text tags differ from '{default}' (t.rich needs a "
+            f"matching tag set) {{key: (base, {loc})}}: {tag_diffs}"
+        )
 
 
 # -- Guard 5: catalog_version consistency (build contract) ----------
