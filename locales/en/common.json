@@ -1,3 +1,13 @@
 {
-  "app_name": "WrapSec"
+  "app_name": "WrapSec",
+  "buttons": {
+    "create": "Create",
+    "cancel": "Cancel",
+    "deactivate": "Deactivate",
+    "confirm_deactivate": "Confirm deactivate",
+    "manage": "Manage"
+  },
+  "requires_admin": "Requires admin login - <link>sign in with email</link>",
+  "inherits_global": "Inherits global",
+  "unexpected_error": "An unexpected error occurred"
 }

@@ -4,8 +4,10 @@
 "use client"
 
 import { useState, Fragment } from "react"
+import { useTranslations } from "next-intl"
 import { swrKeys } from "@/lib/swrKeys"
 import { useAuthMode } from "@/hooks/useAuthMode"
+import { useErrorMessage } from "@/hooks/useErrorMessage"
 import useSWR from "swr"
 import { Shell } from "@/components/layout/Shell"
 import { PageHeader } from "@/components/ui/PageHeader"
@@ -19,6 +21,11 @@ import { Table, THead, TBody, Th, Tr, Td } from "@/components/ui/Table"
 import { NameSlug, PolicyBadge } from "@/components/admin/ListCells"
 
 export default function ApplicationsPage() {
+  const t  = useTranslations("pages.applications")
+  const tf = useTranslations("forms.application")
+  const tc = useTranslations("common")
+  const { resolve, fieldErrors } = useErrorMessage()
+
   const [showCreate,        setShowCreate]        = useState(false)
   const [name,              setName]              = useState("")
   const [slug,              setSlug]              = useState("")
@@ -37,9 +44,15 @@ export default function ApplicationsPage() {
   const { data,      isLoading, mutate, error: fetchError } = useSWR(swrKeys.applications,  getApplications)
   const { data: deptData }               = useSWR(swrKeys.departments,   getDepartments)
 
+  const labelFor = (field: string) => (tf.has(field) ? tf(field) : field)
+  const toMessage = (e: unknown): string => {
+    const fe = Object.values(fieldErrors(e, labelFor))
+    return fe.length ? fe.join(" ") : resolve(e).message
+  }
+
   const handleCreate = async () => {
     if (!name || !slug || !deptId) {
-      setError(!name ? "Name is required." : !slug ? "Slug is required." : "Please select a department.")
+      setError(!name ? tf("name_required") : !slug ? tf("slug_required") : tf("department_required"))
       return
     }
     setSaving(true)
@@ -58,8 +71,8 @@ export default function ApplicationsPage() {
       setName(""); setSlug(""); setSlugEdited(false); setDeptId("")
       setDescription(""); setOwnerName(""); setOwnerEmail("")
       mutate()
-    } catch (e: any) {
-      setError(e.message)
+    } catch (e) {
+      setError(toMessage(e))
     } finally {
       setSaving(false)
     }
@@ -70,29 +83,35 @@ export default function ApplicationsPage() {
     try {
       await deleteApplication(id)
       mutate()
-    } catch (e: any) {
-      setError(e.message)
+    } catch (e) {
+      setError(toMessage(e))
     }
   }
 
   const deptName = (deptId: string) =>
     deptData?.departments.find((d) => d.id === deptId)?.name || deptId
 
+  const cols = [
+    t("table.name"), t("table.department"), t("table.environment"),
+    t("table.owner"), t("table.policy"), "",
+  ]
+
   return (
-    <Shell title="Applications">
+    <Shell title={t("title")}>
       <PageHeader
-        description="Manage applications and their API key assignments."
+        description={t("description")}
         actions={
           isJwt ? (
             <Button size="sm" onClick={() => setShowCreate(true)}>
-              <PlusIcon /> Add application
+              <PlusIcon /> {t("add")}
             </Button>
           ) : (
             <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
-              <Button size="sm" disabled><PlusIcon /> Add application</Button>
+              <Button size="sm" disabled><PlusIcon /> {t("add")}</Button>
               <span style={{ fontSize: "11px", color: "#9ca3af" }}>
-                Requires admin login -{" "}
-                <a href="/login" style={{ color: "#670FEF", textDecoration: "underline" }}>sign in with email</a>
+                {tc.rich("requires_admin", {
+                  link: (chunks) => <a href="/login" style={{ color: "#670FEF", textDecoration: "underline" }}>{chunks}</a>,
+                })}
               </span>
             </div>
           )
@@ -103,68 +122,68 @@ export default function ApplicationsPage() {
         {/* Create form */}
         {showCreate && (
           <Card>
-            <p className="text-sm font-semibold text-slate-900 mb-4">New Application</p>
+            <p className="text-sm font-semibold text-slate-900 mb-4">{t("new_title")}</p>
             <div className="grid grid-cols-2 gap-4">
               <div className="flex flex-col gap-1">
-                <label className="text-xs font-medium text-slate-700">Name *</label>
+                <label className="text-xs font-medium text-slate-700">{tf("name")} *</label>
                 <input type="text" value={name}
                   onChange={(e) => { setName(e.target.value); if (!slugEdited) setSlug(slugify(e.target.value)) }}
-                  placeholder="Finance Bot"
+                  placeholder={tf("name_placeholder")}
                   className="h-9 px-3 text-sm rounded-md border border-slate-200 bg-white text-slate-900 placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-purple-700" />
               </div>
               <div className="flex flex-col gap-1">
-                <label className="text-xs font-medium text-slate-700">Slug *</label>
+                <label className="text-xs font-medium text-slate-700">{tf("slug")} *</label>
                 <input type="text" value={slug}
                   onChange={(e) => { setSlugEdited(true); setSlug(e.target.value.toLowerCase().replace(/\s+/g, "-")) }}
-                  placeholder="finance-bot"
+                  placeholder={tf("slug_placeholder")}
                   className="h-9 px-3 text-sm rounded-md border border-slate-200 bg-white text-slate-900 placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-purple-700" />
-                <span className="text-[11px] text-slate-400">Auto-generated from the name; edit to override.</span>
+                <span className="text-[11px] text-slate-400">{tf("slug_hint")}</span>
               </div>
               <div className="flex flex-col gap-1">
-                <label className="text-xs font-medium text-slate-700">Department *</label>
+                <label className="text-xs font-medium text-slate-700">{tf("dept_id")} *</label>
                 <select value={deptId} onChange={(e) => setDeptId(e.target.value)}
                   className="h-9 px-3 text-sm rounded-md border border-slate-200 bg-white text-slate-900 focus:outline-none focus:ring-2 focus:ring-purple-700">
-                  <option value="">Select department</option>
+                  <option value="">{tf("select_department")}</option>
                   {(deptData?.departments ?? []).map((d) => (
                     <option key={d.id} value={d.id}>{d.name}</option>
                   ))}
                 </select>
               </div>
               <div className="flex flex-col gap-1">
-                <label className="text-xs font-medium text-slate-700">Environment</label>
+                <label className="text-xs font-medium text-slate-700">{tf("environment")}</label>
                 <select value={environment} onChange={(e) => setEnvironment(e.target.value)}
                   className="h-9 px-3 text-sm rounded-md border border-slate-200 bg-white text-slate-900 focus:outline-none focus:ring-2 focus:ring-purple-700">
-                  <option value="production">Production</option>
-                  <option value="staging">Staging</option>
-                  <option value="development">Development</option>
+                  <option value="production">{tf("env_production")}</option>
+                  <option value="staging">{tf("env_staging")}</option>
+                  <option value="development">{tf("env_development")}</option>
                 </select>
               </div>
               <div className="flex flex-col gap-1">
-                <label className="text-xs font-medium text-slate-700">Owner name</label>
+                <label className="text-xs font-medium text-slate-700">{tf("owner_name")}</label>
                 <input type="text" value={ownerName} onChange={(e) => setOwnerName(e.target.value)}
-                  placeholder="John Smith"
+                  placeholder={tf("owner_name_placeholder")}
                   className="h-9 px-3 text-sm rounded-md border border-slate-200 bg-white text-slate-900 placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-purple-700" />
               </div>
               <div className="flex flex-col gap-1">
-                <label className="text-xs font-medium text-slate-700">Owner email</label>
+                <label className="text-xs font-medium text-slate-700">{tf("owner_email")}</label>
                 <input type="email" value={ownerEmail} onChange={(e) => setOwnerEmail(e.target.value)}
-                  placeholder="john@acme.com"
+                  placeholder={tf("owner_email_placeholder")}
                   className="h-9 px-3 text-sm rounded-md border border-slate-200 bg-white text-slate-900 placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-purple-700" />
               </div>
               <div className="flex flex-col gap-1 col-span-2">
-                <label className="text-xs font-medium text-slate-700">Description</label>
+                <label className="text-xs font-medium text-slate-700">{tf("description")}</label>
                 <input type="text" value={description} onChange={(e) => setDescription(e.target.value)}
-                  placeholder="Finance automation system"
+                  placeholder={tf("description_placeholder")}
                   className="h-9 px-3 text-sm rounded-md border border-slate-200 bg-white text-slate-900 placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-purple-700" />
               </div>
             </div>
             {error && <p className="text-xs text-red-600 mt-3">{error}</p>}
             <div className="flex gap-3 mt-4">
               {isJwt
-                ? <Button size="sm" onClick={handleCreate} loading={saving}>Create</Button>
-                : <Button size="sm" disabled>Create</Button>
+                ? <Button size="sm" onClick={handleCreate} loading={saving}>{tc("buttons.create")}</Button>
+                : <Button size="sm" disabled>{tc("buttons.create")}</Button>
               }
-              <Button size="sm" variant="secondary" onClick={() => { setShowCreate(false); setError(null) }}>Cancel</Button>
+              <Button size="sm" variant="secondary" onClick={() => { setShowCreate(false); setError(null) }}>{tc("buttons.cancel")}</Button>
             </div>
           </Card>
         )}
@@ -177,7 +196,7 @@ export default function ApplicationsPage() {
               type="text"
               value={search}
               onChange={(e) => setSearch(e.target.value)}
-              placeholder="Search applications..."
+              placeholder={t("search_placeholder")}
               className="h-8 w-full max-w-xs px-3 text-sm rounded-md border border-slate-200 bg-white text-slate-900 placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-purple-700"
             />
           </div>
@@ -186,16 +205,16 @@ export default function ApplicationsPage() {
             <PageSpinner />
           ) : fetchError && !data ? (
             <div className="px-5 py-10 text-center">
-              <p className="text-sm font-semibold text-red-600 mb-1">Failed to load applications</p>
-              <p className="text-xs text-slate-400">{fetchError?.message ?? "An unexpected error occurred"}</p>
+              <p className="text-sm font-semibold text-red-600 mb-1">{t("load_error")}</p>
+              <p className="text-xs text-slate-400">{resolve(fetchError).message}</p>
             </div>
           ) : (
             <div style={{ overflowY: "auto", maxHeight: "520px" }}>
               <Table>
                 <THead>
                   <tr>
-                    {["Name", "Department", "Environment", "Owner", "Policy", ""].map((h) => (
-                      <Th key={h}>{h}</Th>
+                    {cols.map((h, i) => (
+                      <Th key={i}>{h}</Th>
                     ))}
                   </tr>
                 </THead>
@@ -204,8 +223,8 @@ export default function ApplicationsPage() {
                     <tr>
                       <Td colSpan={6}>
                         <div className="px-5 py-14 text-center">
-                          <div className="text-sm font-semibold text-slate-700 mb-1">No applications yet</div>
-                          <div className="text-xs text-slate-400">Register an application to scope API keys and apply per-app policy overrides</div>
+                          <div className="text-sm font-semibold text-slate-700 mb-1">{t("empty_title")}</div>
+                          <div className="text-xs text-slate-400">{t("empty_body")}</div>
                         </div>
                       </Td>
                     </tr>
@@ -238,16 +257,16 @@ export default function ApplicationsPage() {
                             </span>
                           </Td>
                           <Td className="text-xs text-slate-500">{app.owner_name || "-"}</Td>
-                          <Td><PolicyBadge overridden={!!app.policy_override} inheritsLabel="Inherits dept" /></Td>
+                          <Td><PolicyBadge overridden={!!app.policy_override} inheritsLabel={t("inherits")} /></Td>
                           <Td align="right">
                             <div className="flex items-center justify-end gap-3">
-                              <Link href={`/applications/${app.id}`} className="text-xs text-blue-700 hover:underline">Manage</Link>
+                              <Link href={`/applications/${app.id}`} className="text-xs text-blue-700 hover:underline">{tc("buttons.manage")}</Link>
                               {isJwt && (
                                 <button
                                   onClick={() => setConfirmDeactivate(confirmDeactivate === app.id ? null : app.id)}
                                   className="text-xs text-red-600 hover:underline cursor-pointer"
                                 >
-                                  Deactivate
+                                  {tc("buttons.deactivate")}
                                 </button>
                               )}
                             </div>
@@ -258,19 +277,19 @@ export default function ApplicationsPage() {
                             <Td colSpan={6}>
                               <div className="flex items-center gap-3">
                                 <p className="text-xs text-red-700 whitespace-nowrap">
-                                  This will permanently deactivate the application.
+                                  {t("deactivate_warning")}
                                 </p>
                                 <button
                                   onClick={() => handleDeactivate(app.id)}
                                   className="text-xs font-medium text-white bg-red-600 hover:bg-red-700 px-3 py-1 rounded whitespace-nowrap cursor-pointer"
                                 >
-                                  Confirm deactivate
+                                  {tc("buttons.confirm_deactivate")}
                                 </button>
                                 <button
                                   onClick={() => setConfirmDeactivate(null)}
                                   className="text-xs text-slate-500 hover:text-slate-700 cursor-pointer"
                                 >
-                                  Cancel
+                                  {tc("buttons.cancel")}
                                 </button>
                               </div>
                             </Td>

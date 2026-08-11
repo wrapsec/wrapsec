@@ -10,5 +10,38 @@
     "INVALID_TYPE": "{field} has an invalid type.",
     "OUT_OF_RANGE": "{field} is out of the allowed range.",
     "INVALID_VALUE": "{field} is invalid."
+  },
+  "department": {
+    "name": "Name",
+    "slug": "Slug",
+    "description": "Description",
+    "contact_email": "Contact email",
+    "name_placeholder": "Finance Department",
+    "slug_placeholder": "finance",
+    "slug_hint": "Auto-generated from the name; edit to override.",
+    "description_placeholder": "Finance division",
+    "contact_placeholder": "finance@acme.com"
+  },
+  "application": {
+    "name": "Name",
+    "slug": "Slug",
+    "dept_id": "Department",
+    "environment": "Environment",
+    "owner_name": "Owner name",
+    "owner_email": "Owner email",
+    "description": "Description",
+    "name_placeholder": "Finance Bot",
+    "slug_placeholder": "finance-bot",
+    "slug_hint": "Auto-generated from the name; edit to override.",
+    "select_department": "Select department",
+    "owner_name_placeholder": "John Smith",
+    "owner_email_placeholder": "john@acme.com",
+    "description_placeholder": "Finance automation system",
+    "env_production": "Production",
+    "env_staging": "Staging",
+    "env_development": "Development",
+    "name_required": "Name is required.",
+    "slug_required": "Slug is required.",
+    "department_required": "Please select a department."
   }
 }

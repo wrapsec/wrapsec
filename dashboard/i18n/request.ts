@@ -27,9 +27,30 @@ function pickLocale(cookieValue?: string): string {
   return DEFAULT_LOCALE
 }
 
+type Messages = Record<string, unknown>
+
+function deepMerge(base: Messages, override: Messages): Messages {
+  const out: Messages = { ...base }
+  for (const [k, v] of Object.entries(override)) {
+    const b = out[k]
+    out[k] = b && typeof b === "object" && v && typeof v === "object" && !Array.isArray(v)
+      ? deepMerge(b as Messages, v as Messages)
+      : v
+  }
+  return out
+}
+
+async function loadMessages(locale: string): Promise<Messages> {
+  const en = (await import(`../messages/${DEFAULT_LOCALE}.json`)).default as Messages
+  if (locale === DEFAULT_LOCALE) return en
+  // English is the base; the active locale overrides it. A key the active locale
+  // is missing resolves to English -- never to a backend string.
+  const active = (await import(`../messages/${locale}.json`)).default as Messages
+  return deepMerge(en, active)
+}
+
 export default getRequestConfig(async () => {
   const store = await cookies()
   const locale = pickLocale(store.get(LOCALE_COOKIE)?.value)
-  const messages = (await import(`../messages/${locale}.json`)).default
-  return { locale, messages }
+  return { locale, messages: await loadMessages(locale) }
 })

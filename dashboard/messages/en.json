@@ -1,6 +1,16 @@
 {
   "common": {
-    "app_name": "WrapSec"
+    "app_name": "WrapSec",
+    "buttons": {
+      "create": "Create",
+      "cancel": "Cancel",
+      "deactivate": "Deactivate",
+      "confirm_deactivate": "Confirm deactivate",
+      "manage": "Manage"
+    },
+    "requires_admin": "Requires admin login - <link>sign in with email</link>",
+    "inherits_global": "Inherits global",
+    "unexpected_error": "An unexpected error occurred"
   },
   "errors": {
     "INTERNAL_ERROR": "An unexpected error occurred.",
@@ -38,8 +48,79 @@
       "INVALID_TYPE": "{field} has an invalid type.",
       "OUT_OF_RANGE": "{field} is out of the allowed range.",
       "INVALID_VALUE": "{field} is invalid."
+    },
+    "department": {
+      "name": "Name",
+      "slug": "Slug",
+      "description": "Description",
+      "contact_email": "Contact email",
+      "name_placeholder": "Finance Department",
+      "slug_placeholder": "finance",
+      "slug_hint": "Auto-generated from the name; edit to override.",
+      "description_placeholder": "Finance division",
+      "contact_placeholder": "finance@acme.com"
+    },
+    "application": {
+      "name": "Name",
+      "slug": "Slug",
+      "dept_id": "Department",
+      "environment": "Environment",
+      "owner_name": "Owner name",
+      "owner_email": "Owner email",
+      "description": "Description",
+      "name_placeholder": "Finance Bot",
+      "slug_placeholder": "finance-bot",
+      "slug_hint": "Auto-generated from the name; edit to override.",
+      "select_department": "Select department",
+      "owner_name_placeholder": "John Smith",
+      "owner_email_placeholder": "john@acme.com",
+      "description_placeholder": "Finance automation system",
+      "env_production": "Production",
+      "env_staging": "Staging",
+      "env_development": "Development",
+      "name_required": "Name is required.",
+      "slug_required": "Slug is required.",
+      "department_required": "Please select a department."
     }
   },
   "notifications": {},
-  "pages": {}
+  "pages": {
+    "departments": {
+      "title": "Departments",
+      "description": "Manage departments and their policy overrides.",
+      "add": "Add department",
+      "new_title": "New Department",
+      "search_placeholder": "Search departments...",
+      "load_error": "Failed to load departments",
+      "empty_title": "No departments yet",
+      "empty_body": "Create a department to organise your API keys and policy overrides",
+      "deactivate_warning": "This will permanently deactivate the department and all its keys.",
+      "inherits": "Inherits global",
+      "table": {
+        "name": "Name",
+        "apps": "Apps",
+        "contact": "Contact",
+        "policy": "Policy"
+      }
+    },
+    "applications": {
+      "title": "Applications",
+      "description": "Manage applications and their API key assignments.",
+      "add": "Add application",
+      "new_title": "New Application",
+      "search_placeholder": "Search applications...",
+      "load_error": "Failed to load applications",
+      "empty_title": "No applications yet",
+      "empty_body": "Register an application to scope API keys and apply per-app policy overrides",
+      "deactivate_warning": "This will permanently deactivate the application.",
+      "inherits": "Inherits dept",
+      "table": {
+        "name": "Name",
+        "department": "Department",
+        "environment": "Environment",
+        "owner": "Owner",
+        "policy": "Policy"
+      }
+    }
+  }
 }

@@ -1,1 +1,39 @@
-{}
+{
+  "departments": {
+    "title": "Departments",
+    "description": "Manage departments and their policy overrides.",
+    "add": "Add department",
+    "new_title": "New Department",
+    "search_placeholder": "Search departments...",
+    "load_error": "Failed to load departments",
+    "empty_title": "No departments yet",
+    "empty_body": "Create a department to organise your API keys and policy overrides",
+    "deactivate_warning": "This will permanently deactivate the department and all its keys.",
+    "inherits": "Inherits global",
+    "table": {
+      "name": "Name",
+      "apps": "Apps",
+      "contact": "Contact",
+      "policy": "Policy"
+    }
+  },
+  "applications": {
+    "title": "Applications",
+    "description": "Manage applications and their API key assignments.",
+    "add": "Add application",
+    "new_title": "New Application",
+    "search_placeholder": "Search applications...",
+    "load_error": "Failed to load applications",
+    "empty_title": "No applications yet",
+    "empty_body": "Register an application to scope API keys and apply per-app policy overrides",
+    "deactivate_warning": "This will permanently deactivate the application.",
+    "inherits": "Inherits dept",
+    "table": {
+      "name": "Name",
+      "department": "Department",
+      "environment": "Environment",
+      "owner": "Owner",
+      "policy": "Policy"
+    }
+  }
+}

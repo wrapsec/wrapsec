@@ -2,6 +2,7 @@
 // Copyright (c) 2026 WrapSec. All rights reserved.
 // WrapSec v1.0 | AI Security Gateway - https://wrapsec.com
 import { logout, isLoggingOut, refreshSession } from "@/lib/auth"
+import { parseApiError } from "@/lib/apiError"
 import {
   AIRequest,
   GatewayResponse,
@@ -89,18 +90,15 @@ async function request<T>(
     }
 
     // ── Non-401 errors - parse safely, show error (do NOT redirect) ───────
-    let errMessage = `HTTP ${response.status}`
+    // Preserve the full error envelope (code/key/params/severity/invalid_params)
+    // so the UI resolves a LOCALIZED message from the key, not the backend string.
+    let body: unknown = null
     const contentType = response.headers.get("content-type") || ""
     if (contentType.includes("application/json")) {
-      try {
-        const error = await response.json()
-        errMessage = error?.error?.message || errMessage
-      } catch {
-        // not valid JSON - use status code message
-      }
+      try { body = await response.json() } catch { /* not valid JSON */ }
     }
     // 500/502/503 are server errors - user sees error, not login redirect
-    throw new Error(errMessage)
+    throw parseApiError(response.status, body)
   }
 
   return response.json()
