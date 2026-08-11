@@ -4,6 +4,7 @@
 "use client"
 
 import { useParams } from "next/navigation"
+import { useTranslations } from "next-intl"
 import useSWR from "swr"
 import { Shell } from "@/components/layout/Shell"
 import { PageHeader } from "@/components/ui/PageHeader"
@@ -20,6 +21,7 @@ function AgentRunInner() {
   const { runId } = useParams<{ runId: string }>()
   const goBack = useBackNav("/requests")
   const fmt = useFormat()
+  const tt = useTranslations("pages.agent_run")
 
   const { data, isLoading, error } = useSWR(
     ["agent-run", runId],
@@ -33,9 +35,9 @@ function AgentRunInner() {
   const sources   = Array.from(new Set(turns.map(t => t.input_source ?? "user_prompt")))
 
   return (
-    <Shell title="Agent Run">
+    <Shell title={tt("title")}>
       <PageHeader
-        breadcrumb={[{ label: "Requests", href: "/requests" }, { label: `Run ${runId.slice(-6)}` }]}
+        breadcrumb={[{ label: tt("breadcrumb"), href: "/requests" }, { label: tt("run_label", { id: runId.slice(-6) }) }]}
         onBack={goBack}
       />
       <div className="flex flex-col gap-4">
@@ -44,18 +46,18 @@ function AgentRunInner() {
         <div className="bg-white border border-slate-200 rounded-lg p-4">
           <div className="flex items-center justify-between flex-wrap gap-2">
             <div>
-              <div className="text-xs text-slate-400 mb-1">Run</div>
+              <div className="text-xs text-slate-400 mb-1">{tt("run")}</div>
               <div className="font-mono text-sm text-slate-800 break-all">{runId}</div>
             </div>
             <div className="flex items-center gap-4 text-sm">
-              <div><span className="font-semibold">{data?.count ?? 0}</span> <span className="text-slate-400">turns</span></div>
-              {blocked > 0   && <div className="text-red-600"><span className="font-semibold">{blocked}</span> blocked</div>}
-              {sanitized > 0 && <div className="text-amber-600"><span className="font-semibold">{sanitized}</span> sanitized</div>}
+              <div><span className="font-semibold">{data?.count ?? 0}</span> <span className="text-slate-400">{tt("turns")}</span></div>
+              {blocked > 0   && <div className="text-red-600"><span className="font-semibold">{blocked}</span> {tt("blocked")}</div>}
+              {sanitized > 0 && <div className="text-amber-600"><span className="font-semibold">{sanitized}</span> {tt("sanitized")}</div>}
             </div>
           </div>
           {sources.length > 0 && (
             <div className="flex items-center gap-2 mt-3 flex-wrap">
-              <span className="text-xs text-slate-400">sources:</span>
+              <span className="text-xs text-slate-400">{tt("sources")}</span>
               {sources.map(s => <SourceBadge key={s} source={s} />)}
             </div>
           )}
@@ -67,13 +69,13 @@ function AgentRunInner() {
             <PageSpinner />
           ) : error ? (
             <ErrorState
-              title="Failed to load agent run"
-              message={(error as { message?: string })?.message ?? "Unable to reach the API."}
+              title={tt("load_error")}
+              message={(error as { message?: string })?.message ?? tt("load_error_body")}
             />
           ) : turns.length === 0 ? (
             <EmptyState
-              title="No turns for this run"
-              message="Scans tagged with this run_id appear here as an ordered timeline."
+              title={tt("empty_title")}
+              message={tt("empty_body")}
             />
           ) : (
             <ol className="relative border-l border-slate-200 ml-3">
@@ -89,7 +91,7 @@ function AgentRunInner() {
                       <span className="text-xs text-slate-500">{t.primary_reason}</span>
                     )}
                     <span className="text-xs text-slate-400 ml-auto tabular-nums">
-                      risk {t.risk_score.toFixed(2)}
+                      {tt("risk", { score: t.risk_score.toFixed(2) })}
                     </span>
                   </div>
                   <div className="mt-1 text-xs text-slate-400 flex items-center gap-3 flex-wrap">

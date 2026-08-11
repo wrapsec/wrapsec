@@ -493,6 +493,21 @@
         "key_empty": "No key data"
       }
     },
+    "agent_run": {
+      "title": "Agent Run",
+      "breadcrumb": "Requests",
+      "run_label": "Run {id}",
+      "run": "Run",
+      "turns": "turns",
+      "blocked": "blocked",
+      "sanitized": "sanitized",
+      "sources": "sources:",
+      "load_error": "Failed to load agent run",
+      "load_error_body": "Unable to reach the API.",
+      "empty_title": "No turns for this run",
+      "empty_body": "Scans tagged with this run_id appear here as an ordered timeline.",
+      "risk": "risk {score}"
+    },
     "detail": {
       "edit": "Edit",
       "cancel": "Cancel",

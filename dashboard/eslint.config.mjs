@@ -49,6 +49,7 @@ const eslintConfig = defineConfig([
       "components/admin/ListCells.tsx",
       "app/departments/*/page.tsx",
       "app/applications/*/page.tsx",
+      "app/agent-runs/*/page.tsx",
     ],
     rules: {
       "react/jsx-no-literals": ["error", {
