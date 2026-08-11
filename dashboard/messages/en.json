@@ -492,6 +492,67 @@
         "key_empty": "No key data"
       }
     },
+    "integrations": {
+      "title": "Integrations",
+      "description": "Connect WrapSec to external security platforms and webhooks.",
+      "add": "Add integration",
+      "dismiss": "Dismiss",
+      "pause_error": "Could not pause the integration: {error}",
+      "resume_error": "Could not resume the integration: {error}",
+      "remove_title": "Remove integration",
+      "remove_message": "Events will stop being forwarded to {url}. This cannot be undone.",
+      "remove_confirm": "Remove",
+      "table": {
+        "empty_title": "No integrations yet",
+        "empty_body": "Add one to forward BLOCK and SANITIZE events to your SIEM.",
+        "destination": "Destination",
+        "status": "Status",
+        "events": "Events",
+        "actions": "Actions",
+        "generic_webhook": "Generic webhook",
+        "all_events": "All events",
+        "testing": "Testing...",
+        "send_test": "Send test",
+        "resuming": "Resuming...",
+        "resume": "Resume",
+        "pausing": "Pausing...",
+        "pause": "Pause",
+        "removing": "Removing...",
+        "remove": "Remove",
+        "status_label": {
+          "active": "Active",
+          "failing": "Failing",
+          "paused": "Paused",
+          "auto_disabled": "Disabled"
+        }
+      },
+      "create_modal": {
+        "created_title": "Integration created",
+        "created_body": "Copy the signing secret now. It is shown once and cannot be retrieved later.",
+        "copy": "Copy",
+        "done": "Done",
+        "catalog_title": "Add integration",
+        "catalog_body": "Choose a destination for BLOCK and SANITIZE events.",
+        "cancel": "Cancel",
+        "back": "Back",
+        "url_placeholder": "https://...",
+        "secret_placeholder": "Paste the ingest token / key",
+        "secret_generated_note": "A signing secret is generated automatically and shown once after creation.",
+        "description": "Description",
+        "description_placeholder": "Optional",
+        "create": "Create"
+      },
+      "test_modal": {
+        "title": "Test delivery",
+        "sending": "Sending test event...",
+        "delivered": "Delivered",
+        "failed": "Failed",
+        "http_status": "HTTP {code}",
+        "error": "Error",
+        "receiver_response": "Receiver response",
+        "close": "Close"
+      }
+    },
     "keys": {
       "title": "API Keys",
       "description": "Create and manage API keys for the WrapSec API.",

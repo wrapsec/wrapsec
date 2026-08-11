@@ -4,6 +4,7 @@
 "use client"
 
 import { useState } from "react"
+import { useTranslations } from "next-intl"
 import useSWR from "swr"
 import { useAuthMode } from "@/hooks/useAuthMode"
 import { Shell } from "@/components/layout/Shell"
@@ -21,6 +22,8 @@ import {
 import { WebhookEndpoint, WebhookTestResult } from "@/lib/types"
 
 export default function IntegrationsPage() {
+  const t  = useTranslations("pages.integrations")
+  const tc = useTranslations("common")
   const { isJwt } = useAuthMode()
   const { data, isLoading, mutate } = useSWR("webhooks", getWebhooks)
   const endpoints = data?.endpoints ?? []
@@ -60,7 +63,7 @@ export default function IntegrationsPage() {
       await (ep.disabled ? resumeWebhook(ep.id) : pauseWebhook(ep.id))
       await mutate()
     } catch (e) {
-      setActionError(`Could not ${ep.disabled ? "resume" : "pause"} the integration: ${errMessage(e)}`)
+      setActionError(t(ep.disabled ? "resume_error" : "pause_error", { error: errMessage(e) }))
     } finally {
       setPausingId(null)
     }
@@ -81,20 +84,21 @@ export default function IntegrationsPage() {
   }
 
   return (
-    <Shell title="Integrations">
+    <Shell title={t("title")}>
       <PageHeader
-        description="Connect WrapSec to external security platforms and webhooks."
+        description={t("description")}
         actions={
           isJwt ? (
             <Button size="sm" onClick={() => setShowCreate(true)}>
-              <PlusIcon /> Add integration
+              <PlusIcon /> {t("add")}
             </Button>
           ) : (
             <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
-              <Button size="sm" disabled><PlusIcon /> Add integration</Button>
+              <Button size="sm" disabled><PlusIcon /> {t("add")}</Button>
               <span style={{ fontSize: "11px", color: "#9ca3af" }}>
-                Requires admin login -{" "}
-                <a href="/login" style={{ color: "#670FEF", textDecoration: "underline" }}>sign in with email</a>
+                {tc.rich("requires_admin", {
+                  link: (chunks) => <a href="/login" style={{ color: "#670FEF", textDecoration: "underline" }}>{chunks}</a>,
+                })}
               </span>
             </div>
           )
@@ -105,7 +109,7 @@ export default function IntegrationsPage() {
         {actionError && (
           <div className="bg-red-50 border border-red-200 rounded-md px-4 py-2.5 flex items-center justify-between">
             <p className="text-xs text-red-700">{actionError}</p>
-            <button onClick={() => setActionError(null)} className="text-xs text-red-400 hover:text-red-600">Dismiss</button>
+            <button onClick={() => setActionError(null)} className="text-xs text-red-400 hover:text-red-600">{t("dismiss")}</button>
           </div>
         )}
 
@@ -137,9 +141,9 @@ export default function IntegrationsPage() {
 
       {deleteTarget && (
         <ConfirmModal
-          title="Remove integration"
-          message={`Events will stop being forwarded to ${deleteTarget.url}. This cannot be undone.`}
-          confirmLabel="Remove"
+          title={t("remove_title")}
+          message={t("remove_message", { url: deleteTarget.url })}
+          confirmLabel={t("remove_confirm")}
           danger
           loading={deleting}
           error={deleteError}

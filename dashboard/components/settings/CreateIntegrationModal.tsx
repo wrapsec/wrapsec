@@ -4,6 +4,7 @@
 "use client"
 
 import { useState, useEffect } from "react"
+import { useTranslations } from "next-intl"
 import useSWR from "swr"
 import { Button } from "@/components/ui/Button"
 import { Input } from "@/components/ui/Input"
@@ -16,6 +17,7 @@ interface Props {
 }
 
 export function CreateIntegrationModal({ onCreated, onClose }: Props) {
+  const t = useTranslations("pages.integrations.create_modal")
   useEffect(() => {
     const h = (e: KeyboardEvent) => { if (e.key === "Escape") onClose() }
     document.addEventListener("keydown", h)
@@ -65,9 +67,9 @@ export function CreateIntegrationModal({ onCreated, onClose }: Props) {
   if (created?.secret) {
     return (
       <Overlay>
-        <h2 className="text-base font-semibold text-slate-900 mb-1">Integration created</h2>
+        <h2 className="text-base font-semibold text-slate-900 mb-1">{t("created_title")}</h2>
         <p className="text-sm text-slate-500 mb-4">
-          Copy the signing secret now. It is shown once and cannot be retrieved later.
+          {t("created_body")}
         </p>
         <div className="bg-slate-50 border border-slate-200 rounded-md p-3 mb-4">
           <code className="text-xs text-slate-800 break-all">{created.secret}</code>
@@ -75,9 +77,9 @@ export function CreateIntegrationModal({ onCreated, onClose }: Props) {
         <div className="flex justify-end gap-2">
           <Button size="sm" variant="secondary"
             onClick={() => navigator.clipboard?.writeText(created.secret!)}>
-            Copy
+            {t("copy")}
           </Button>
-          <Button size="sm" onClick={onClose}>Done</Button>
+          <Button size="sm" onClick={onClose}>{t("done")}</Button>
         </div>
       </Overlay>
     )
@@ -87,22 +89,22 @@ export function CreateIntegrationModal({ onCreated, onClose }: Props) {
   if (!selected) {
     return (
       <Overlay>
-        <h2 className="text-base font-semibold text-slate-900 mb-1">Add integration</h2>
-        <p className="text-sm text-slate-500 mb-4">Choose a destination for BLOCK and SANITIZE events.</p>
+        <h2 className="text-base font-semibold text-slate-900 mb-1">{t("catalog_title")}</h2>
+        <p className="text-sm text-slate-500 mb-4">{t("catalog_body")}</p>
         <div className="grid grid-cols-1 gap-2">
-          {types.map(t => (
+          {types.map(ct => (
             <button
-              key={t.type ?? "generic"}
-              onClick={() => setSelected(t)}
+              key={ct.type ?? "generic"}
+              onClick={() => setSelected(ct)}
               className="flex items-center justify-between text-left px-4 py-3 rounded-lg border border-slate-200 hover:border-[#670FEF] hover:bg-[rgba(103,15,239,0.04)] transition-colors"
             >
-              <span className="text-sm font-medium text-slate-800">{t.label}</span>
+              <span className="text-sm font-medium text-slate-800">{ct.label}</span>
               <span className="text-slate-300">&rsaquo;</span>
             </button>
           ))}
         </div>
         <div className="flex justify-end mt-5">
-          <Button size="sm" variant="secondary" onClick={onClose}>Cancel</Button>
+          <Button size="sm" variant="secondary" onClick={onClose}>{t("cancel")}</Button>
         </div>
       </Overlay>
     )
@@ -112,7 +114,7 @@ export function CreateIntegrationModal({ onCreated, onClose }: Props) {
   return (
     <Overlay>
       <div className="flex items-center gap-2 mb-4">
-        <button onClick={() => setSelected(null)} className="text-slate-400 hover:text-slate-700 text-sm">&lsaquo; Back</button>
+        <button onClick={() => setSelected(null)} className="text-slate-400 hover:text-slate-700 text-sm">&lsaquo; {t("back")}</button>
         <h2 className="text-base font-semibold text-slate-900">{selected.label}</h2>
       </div>
 
@@ -120,7 +122,7 @@ export function CreateIntegrationModal({ onCreated, onClose }: Props) {
         <Input
           label={selected.url.label}
           hint={selected.url.help}
-          placeholder="https://..."
+          placeholder={t("url_placeholder")}
           value={url}
           onChange={e => setUrl(e.target.value)}
         />
@@ -130,14 +132,14 @@ export function CreateIntegrationModal({ onCreated, onClose }: Props) {
             label={selected.secret.label}
             type="password"
             autoComplete="new-password"
-            placeholder="Paste the ingest token / key"
+            placeholder={t("secret_placeholder")}
             value={secret}
             onChange={e => setSecret(e.target.value)}
           />
         )}
         {selected.secret.generated && (
           <p className="text-xs text-slate-400">
-            A signing secret is generated automatically and shown once after creation.
+            {t("secret_generated_note")}
           </p>
         )}
 
@@ -152,8 +154,8 @@ export function CreateIntegrationModal({ onCreated, onClose }: Props) {
         ))}
 
         <Input
-          label="Description"
-          placeholder="Optional"
+          label={t("description")}
+          placeholder={t("description_placeholder")}
           value={desc}
           onChange={e => setDesc(e.target.value)}
         />
@@ -162,9 +164,9 @@ export function CreateIntegrationModal({ onCreated, onClose }: Props) {
       </div>
 
       <div className="flex justify-end gap-2 mt-5">
-        <Button size="sm" variant="secondary" onClick={onClose}>Cancel</Button>
+        <Button size="sm" variant="secondary" onClick={onClose}>{t("cancel")}</Button>
         <Button size="sm" loading={loading} disabled={!url.trim()} onClick={handleCreate}>
-          Create
+          {t("create")}
         </Button>
       </div>
     </Overlay>
