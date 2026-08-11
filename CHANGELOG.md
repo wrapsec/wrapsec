@@ -5,9 +5,11 @@ All notable changes to WrapSec are documented here.
 ## [1.8.1] - 2026-08-11
 
 Error-handling and localization foundation. Reworks every error response onto a
-stable, localization-ready contract and adds a locale preference for users and
-tenants. Backend responses stay English; the structure is now ready for
-translated dashboards (the frontend rendering lands in a follow-up).
+stable, localization-ready contract, adds a locale preference for users and
+tenants, and stands up the end-to-end localization pipeline (canonical catalog
+-> generated consumer catalogs -> dashboard). Backend responses and the UI stay
+English; the machinery is now in place for translated dashboards (the actual UI
+string translation lands in a follow-up).
 
 ### Added
 - **Stable, localization-ready error contract.** Every error response now carries
@@ -23,12 +25,23 @@ translated dashboards (the frontend rendering lands in a follow-up).
   error to the right input.
 - **Locale preference (users and tenants).** A preferred locale (BCP-47) can be
   stored per user and per tenant. `GET /v1/auth/me` returns `locale` (the stored
-  preference) and `resolved_locale` (User -> Tenant -> System default -> English).
-  A new `PATCH /v1/auth/me` lets a user set their own locale; `GET`/`PUT
-  /v1/admin/tenant` expose and set the tenant default. Unsupported locales are
-  rejected `422 INVALID_ENUM`. Configured via `SUPPORTED_LOCALES` (default `en`)
-  and `SYSTEM_DEFAULT_LOCALE`, with a startup guard that the system default is a
-  supported locale.
+  preference) and `resolved_locale` (User -> Tenant -> System default -> English);
+  the login and refresh responses also return `resolved_locale`, so the effective
+  locale is re-resolved continuously (a tenant/user change reaches a live session
+  without re-login). A new `PATCH /v1/auth/me`
+  lets a user set their own locale; `GET`/`PUT /v1/admin/tenant` expose and set
+  the tenant default. Unsupported locales are rejected `422 INVALID_ENUM`.
+- **Localization pipeline (single source of truth).** Supported locales, the
+  default, and the catalog version are configured in one place -- `locales/_meta.json`
+  -- and all localized text lives in `locales/<locale>/*.json` (ICU). A generator
+  validates the canonical catalog and emits every consumer artifact (the backend
+  English map and the dashboard message catalog + locale config), so no consumer
+  keeps a second, drift-prone copy. Operators enable a new language by adding its
+  catalog there.
+- **Dashboard localization foundation.** The dashboard now renders through a
+  localization framework (cookie-based), consuming the generated catalog. The
+  active locale comes from the backend's resolved value (the frontend never
+  re-derives precedence); the UI remains English until strings are translated.
 - **New error codes.** `CANNOT_DEACTIVATE_SELF` and `LAST_ADMIN` (both `409`) make
   the admin user-management guards explicit and client-actionable;
   `INVALID_PASSWORD` and `IDEMPOTENCY_CONFLICT` are now first-class catalog codes.
