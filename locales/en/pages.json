@@ -1,4 +1,69 @@
 {
+  "overview": {
+    "title": "Overview",
+    "description": "Monitor the security posture of AI requests across your organization.",
+    "load_error": "Failed to load overview",
+    "total_requests": "Total Requests",
+    "pct_of_requests": "{pct}% of requests",
+    "requests": "requests",
+    "latency": "Latency",
+    "avg": "Avg",
+    "p95": "P95",
+    "detection_breakdown": "Detection breakdown",
+    "breakdown": {
+      "rule_ml": "Rule + ML",
+      "llm": "LLM",
+      "pii": "PII guardrail",
+      "toxicity": "Toxicity"
+    },
+    "infrastructure": "Infrastructure",
+    "infra": {
+      "departments": "Departments",
+      "applications": "Applications",
+      "live_keys": "Live keys",
+      "trial_keys": "Trial keys",
+      "active_24h": "Active (24h)",
+      "never_used": "Never used"
+    },
+    "detection_layers": "Detection layers",
+    "how_threats_caught": "How threats are caught",
+    "layers": {
+      "rule_detector": "Rule detector",
+      "ml_classifier": "ML classifier",
+      "llm_semantic": "LLM semantic",
+      "pii_block": "PII block",
+      "pii_sanitize": "PII sanitize",
+      "toxicity_block": "Toxicity block",
+      "no_threat": "No threat"
+    },
+    "decision_distribution": "Decision Distribution",
+    "operational_metrics": "Operational metrics",
+    "metrics": {
+      "block_rate": "Block rate",
+      "sanitize_rate": "Sanitize rate",
+      "allow_rate": "Allow rate",
+      "avg_latency": "Avg latency",
+      "p95_latency": "P95 latency"
+    },
+    "recent_requests": "Recent requests",
+    "recent_subtitle": "Last 10 . live",
+    "top_threats": "Top threats",
+    "categories": "{count} categories",
+    "no_threats": "No threats detected",
+    "api_key_activity": "API key activity",
+    "keys_total": "{count} keys total",
+    "active_today": "{count} active today",
+    "active_7d": "{count} active 7d",
+    "never_used_count": "{count} never used",
+    "severity_breakdown": "Severity breakdown",
+    "siem_note": "SIEM · audit use only",
+    "severity_desc": {
+      "critical": "Guardrail overrides",
+      "high": "High-risk blocks",
+      "medium": "Sanitized",
+      "low": "Allowed"
+    }
+  },
   "departments": {
     "title": "Departments",
     "description": "Manage departments and their policy overrides.",

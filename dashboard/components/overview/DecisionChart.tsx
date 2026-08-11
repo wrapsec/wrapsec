@@ -3,6 +3,7 @@
 // WrapSec v1.0 | AI Security Gateway - https://wrapsec.com
 "use client"
 
+import { useTranslations } from "next-intl"
 import { PieChart, Pie, Cell, Tooltip, ResponsiveContainer } from "recharts"
 import { Card, CardHeader } from "@/components/ui/Card"
 import { CHART_COLORS } from "@/lib/constants"
@@ -21,6 +22,7 @@ export function DecisionChart({
   allowRate,
   total,
 }: DecisionChartProps) {
+  const t = useTranslations("pages.overview")
   const data = [
     { name: "BLOCK",    value: Math.round(blockRate * total),    color: CHART_COLORS.BLOCK },
     { name: "SANITIZE", value: Math.round(sanitizeRate * total), color: CHART_COLORS.SANITIZE },
@@ -29,7 +31,7 @@ export function DecisionChart({
 
   return (
     <Card>
-      <CardHeader title="Decision Distribution" />
+      <CardHeader title={t("decision_distribution")} />
       <div className="flex items-center gap-6">
         <div className="h-36 w-36 flex-shrink-0">
           <ResponsiveContainer width="100%" height="100%">

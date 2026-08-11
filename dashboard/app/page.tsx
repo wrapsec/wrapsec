@@ -4,7 +4,9 @@
 "use client"
 
 import useSWR from "swr"
+import { useTranslations } from "next-intl"
 import { useFormat } from "@/hooks/useFormat"
+import { useErrorMessage } from "@/hooks/useErrorMessage"
 import { useState } from "react"
 import { Shell } from "@/components/layout/Shell"
 import { PageHeader } from "@/components/ui/PageHeader"
@@ -36,6 +38,8 @@ const LABEL: React.CSSProperties = {
 
 function RequestCards({ stats, from, to }: { stats: AuditStatsResponse; from: string; to: string }) {
   const fmt       = useFormat()
+  const t         = useTranslations("pages.overview")
+  const tc        = useTranslations("common")
   const total     = stats.total_requests
   // Read the authoritative counts. Reconstructing via round(rate * total)
   // loses precision after the API rounds rate to 4 decimals and drifts
@@ -44,11 +48,12 @@ function RequestCards({ stats, from, to }: { stats: AuditStatsResponse; from: st
   const sanitized = stats.sanitize_count
   const allowed   = stats.allow_count
 
+  const pctSub = (rate: number) => t("pct_of_requests", { pct: (rate * 100).toFixed(1) })
   const CARDS = [
-    { label: "Total Requests", value: total,     sub: "All time",                                             color: "#111827", accent: "#670FEF", href: `/requests?from=${from}&to=${to}` },
-    { label: "Blocked",        value: blocked,   sub: `${(stats.block_rate    * 100).toFixed(1)}% of requests`, color: "#dc2626", accent: "#dc2626", href: `/requests?decision=BLOCK&from=${from}&to=${to}` },
-    { label: "Sanitized",      value: sanitized, sub: `${(stats.sanitize_rate * 100).toFixed(1)}% of requests`, color: "#d97706", accent: "#f59e0b", href: `/requests?decision=SANITIZE&from=${from}&to=${to}` },
-    { label: "Allowed",        value: allowed,   sub: `${(stats.allow_rate    * 100).toFixed(1)}% of requests`, color: "#16a34a", accent: "#10b981", href: `/requests?decision=ALLOW&from=${from}&to=${to}` },
+    { label: t("total_requests"),   value: total,     sub: tc("all_time"),               color: "#111827", accent: "#670FEF", href: `/requests?from=${from}&to=${to}` },
+    { label: tc("decision.blocked"),   value: blocked,   sub: pctSub(stats.block_rate),     color: "#dc2626", accent: "#dc2626", href: `/requests?decision=BLOCK&from=${from}&to=${to}` },
+    { label: tc("decision.sanitized"), value: sanitized, sub: pctSub(stats.sanitize_rate),  color: "#d97706", accent: "#f59e0b", href: `/requests?decision=SANITIZE&from=${from}&to=${to}` },
+    { label: tc("decision.allowed"),   value: allowed,   sub: pctSub(stats.allow_rate),     color: "#16a34a", accent: "#10b981", href: `/requests?decision=ALLOW&from=${from}&to=${to}` },
   ]
 
   return (
@@ -72,15 +77,17 @@ function RequestCards({ stats, from, to }: { stats: AuditStatsResponse; from: st
 
 function DonutChart({ stats }: { stats: AuditStatsResponse }) {
   const fmt       = useFormat()
+  const t         = useTranslations("pages.overview")
+  const tc        = useTranslations("common")
   const total     = stats.total_requests
   const blocked   = stats.block_count
   const sanitized = stats.sanitize_count
   const allowed   = stats.allow_count
 
   const SEGMENTS = [
-    { value: blocked,   color: "#dc2626", label: "Blocked",   pct: stats.block_rate    },
-    { value: sanitized, color: "#f59e0b", label: "Sanitized", pct: stats.sanitize_rate },
-    { value: allowed,   color: "#10b981", label: "Allowed",   pct: stats.allow_rate    },
+    { value: blocked,   color: "#dc2626", label: tc("decision.blocked"),   pct: stats.block_rate    },
+    { value: sanitized, color: "#f59e0b", label: tc("decision.sanitized"), pct: stats.sanitize_rate },
+    { value: allowed,   color: "#10b981", label: tc("decision.allowed"),   pct: stats.allow_rate    },
   ]
 
   const SIZE = 160, STROKE = 24
@@ -113,7 +120,7 @@ function DonutChart({ stats }: { stats: AuditStatsResponse }) {
             {fmt.number(total)}
           </p>
           <p style={{ fontSize: "9px", color: "#9ca3af", margin: "3px 0 0 0", fontWeight: 600,
-            textTransform: "uppercase", letterSpacing: "0.06em" }}>requests</p>
+            textTransform: "uppercase", letterSpacing: "0.06em" }}>{t("requests")}</p>
         </div>
       </div>
       <div style={{ display: "flex", flexDirection: "column", gap: "14px", flex: 1 }}>
@@ -142,6 +149,8 @@ function DonutChart({ stats }: { stats: AuditStatsResponse }) {
 
 function LatencyCard({ stats, byReason }: { stats: AuditStatsResponse; byReason: { primary_reason: string; count: number }[] }) {
   const fmt      = useFormat()
+  const t        = useTranslations("pages.overview")
+  const tc       = useTranslations("common")
   const total    = stats.total_requests || 1
   const maxMs    = stats.p95_latency_ms || 1
   const avgPct   = Math.min((stats.avg_latency_ms / maxMs) * 100, 100)
@@ -164,15 +173,15 @@ function LatencyCard({ stats, byReason }: { stats: AuditStatsResponse; byReason:
   return (
     <div style={{ ...CARD, padding: "20px", display: "flex", flexDirection: "column", gap: "16px" }}>
       <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
-        <p style={{ fontSize: "13px", fontWeight: 600, color: "#111827", margin: 0 }}>Latency</p>
-        <span style={{ fontSize: "11px", color: "#9ca3af" }}>All time</span>
+        <p style={{ fontSize: "13px", fontWeight: 600, color: "#111827", margin: 0 }}>{t("latency")}</p>
+        <span style={{ fontSize: "11px", color: "#9ca3af" }}>{tc("all_time")}</span>
       </div>
 
       {/* Avg vs P95 visual */}
       <div>
         <div style={{ display: "flex", justifyContent: "space-between", marginBottom: "6px" }}>
-          <span style={{ fontSize: "11px", color: "#9ca3af" }}>Avg</span>
-          <span style={{ fontSize: "11px", color: "#9ca3af" }}>P95</span>
+          <span style={{ fontSize: "11px", color: "#9ca3af" }}>{t("avg")}</span>
+          <span style={{ fontSize: "11px", color: "#9ca3af" }}>{t("p95")}</span>
         </div>
         <div style={{ position: "relative", height: "8px", background: "#f3f4f6", borderRadius: "4px", overflow: "hidden" }}>
           <div style={{ height: "100%", width: "100%", background: "#e5e7eb", borderRadius: "4px" }} />
@@ -191,12 +200,12 @@ function LatencyCard({ stats, byReason }: { stats: AuditStatsResponse; byReason:
 
       {/* Detection mode breakdown */}
       <div style={{ borderTop: "1px solid #f3f4f6", paddingTop: "14px" }}>
-        <p style={{ ...LABEL, marginBottom: "10px" }}>Detection breakdown</p>
+        <p style={{ ...LABEL, marginBottom: "10px" }}>{t("detection_breakdown")}</p>
         {[
-          { label: "Rule + ML",  count: ruleML, color: "#670FEF" },
-          { label: "LLM",        count: llm,    color: "#CD00FF" },
-          { label: "PII guardrail", count: pii, color: "#dc2626" },
-          { label: "Toxicity",   count: tox,    color: "#d97706" },
+          { label: t("breakdown.rule_ml"),  count: ruleML, color: "#670FEF" },
+          { label: t("breakdown.llm"),      count: llm,    color: "#CD00FF" },
+          { label: t("breakdown.pii"),      count: pii,    color: "#dc2626" },
+          { label: t("breakdown.toxicity"), count: tox,    color: "#d97706" },
         ].map(d => (
           <div key={d.label} style={{ display: "flex", alignItems: "center",
             justifyContent: "space-between", marginBottom: "5px" }}>
@@ -217,6 +226,7 @@ function LatencyCard({ stats, byReason }: { stats: AuditStatsResponse; byReason:
 // ── Row 3: Infrastructure ─────────────────────────────────────────────────────
 
 function InfrastructureCard({ depts, apps, keys }: { depts: any; apps: any; keys: any }) {
+  const t            = useTranslations("pages.overview")
   const deptCount    = depts?.departments?.length ?? 0
   const appCount     = apps?.applications?.length ?? 0
   const allKeys      = keys?.keys ?? []
@@ -229,18 +239,18 @@ function InfrastructureCard({ depts, apps, keys }: { depts: any; apps: any; keys
   }).length
 
   const ROWS = [
-    { label: "Departments",    value: deptCount,    color: "#670FEF" },
-    { label: "Applications",   value: appCount,     color: "#CD00FF" },
-    { label: "Live keys",      value: liveKeys,     color: "#00B1FF" },
-    { label: "Trial keys",     value: trialKeys,    color: "#9ca3af" },
-    { label: "Active (24h)",   value: recentlyUsed, color: "#16a34a" },
-    { label: "Never used",     value: neverUsed,    color: "#f87171" },
+    { label: t("infra.departments"), value: deptCount,    color: "#670FEF" },
+    { label: t("infra.applications"),value: appCount,     color: "#CD00FF" },
+    { label: t("infra.live_keys"),   value: liveKeys,     color: "#00B1FF" },
+    { label: t("infra.trial_keys"),  value: trialKeys,    color: "#9ca3af" },
+    { label: t("infra.active_24h"),  value: recentlyUsed, color: "#16a34a" },
+    { label: t("infra.never_used"),  value: neverUsed,    color: "#f87171" },
   ]
 
   return (
     <div style={{ ...CARD, padding: "20px" }}>
       <p style={{ fontSize: "13px", fontWeight: 600, color: "#111827", margin: "0 0 14px 0" }}>
-        Infrastructure
+        {t("infrastructure")}
       </p>
       <div style={{ display: "flex", flexDirection: "column", gap: "8px" }}>
         {ROWS.map(row => (
@@ -263,23 +273,24 @@ function InfrastructureCard({ depts, apps, keys }: { depts: any; apps: any; keys
 
 function DetectionLayersCard({ byReason }: { byReason: { primary_reason: string; count: number }[] }) {
   const fmt = useFormat()
+  const t   = useTranslations("pages.overview")
   const total = byReason.reduce((s, r) => s + r.count, 0) || 1
 
   const LAYERS = [
-    { key: "RULE_DETECTOR",              label: "Rule detector",     color: "#670FEF" },
-    { key: "ML_DETECTOR",                label: "ML classifier",     color: "#CD00FF" },
-    { key: "LLM_DETECTOR",               label: "LLM semantic",      color: "#00B1FF" },
-    { key: "PII_GUARDRAIL_BLOCK",        label: "PII block",         color: "#dc2626" },
-    { key: "PII_GUARDRAIL_SANITIZE",     label: "PII sanitize",      color: "#f97316" },
-    { key: "TOXICITY_GUARDRAIL_BLOCK",   label: "Toxicity block",    color: "#d97706" },
-    { key: "NO_THREAT_DETECTED",         label: "No threat",         color: "#10b981" },
+    { key: "RULE_DETECTOR",              label: t("layers.rule_detector"), color: "#670FEF" },
+    { key: "ML_DETECTOR",                label: t("layers.ml_classifier"), color: "#CD00FF" },
+    { key: "LLM_DETECTOR",               label: t("layers.llm_semantic"),  color: "#00B1FF" },
+    { key: "PII_GUARDRAIL_BLOCK",        label: t("layers.pii_block"),     color: "#dc2626" },
+    { key: "PII_GUARDRAIL_SANITIZE",     label: t("layers.pii_sanitize"),  color: "#f97316" },
+    { key: "TOXICITY_GUARDRAIL_BLOCK",   label: t("layers.toxicity_block"),color: "#d97706" },
+    { key: "NO_THREAT_DETECTED",         label: t("layers.no_threat"),     color: "#10b981" },
   ]
 
   return (
     <div style={{ ...CARD, padding: "20px" }}>
       <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: "14px" }}>
-        <p style={{ fontSize: "13px", fontWeight: 600, color: "#111827", margin: 0 }}>Detection layers</p>
-        <span style={{ fontSize: "11px", color: "#9ca3af" }}>How threats are caught</span>
+        <p style={{ fontSize: "13px", fontWeight: 600, color: "#111827", margin: 0 }}>{t("detection_layers")}</p>
+        <span style={{ fontSize: "11px", color: "#9ca3af" }}>{t("how_threats_caught")}</span>
       </div>
       <div style={{ display: "flex", flexDirection: "column", gap: "9px" }}>
         {LAYERS.map(layer => {
@@ -311,6 +322,8 @@ function DetectionLayersCard({ byReason }: { byReason: { primary_reason: string;
 // ── Row 3: API key activity ───────────────────────────────────────────────────
 
 function ApiKeyActivityCard({ keys }: { keys: any }) {
+  const t       = useTranslations("pages.overview")
+  const tc      = useTranslations("common")
   const allKeys = keys?.keys ?? []
 
   const now = Date.now()
@@ -323,16 +336,16 @@ function ApiKeyActivityCard({ keys }: { keys: any }) {
   return (
     <div style={{ ...CARD, padding: "20px" }}>
       <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: "14px" }}>
-        <p style={{ fontSize: "13px", fontWeight: 600, color: "#111827", margin: 0 }}>API key activity</p>
-        <span style={{ fontSize: "11px", color: "#9ca3af" }}>{allKeys.length} keys total</span>
+        <p style={{ fontSize: "13px", fontWeight: 600, color: "#111827", margin: 0 }}>{t("api_key_activity")}</p>
+        <span style={{ fontSize: "11px", color: "#9ca3af" }}>{t("keys_total", { count: allKeys.length })}</span>
       </div>
 
       {/* Summary pills */}
       <div style={{ display: "flex", gap: "8px", marginBottom: "14px", flexWrap: "wrap" as const }}>
         {[
-          { label: `${active24h.length} active today`,  color: "#16a34a", bg: "#f0fdf4", border: "#bbf7d0" },
-          { label: `${active7d.length} active 7d`,      color: "#0369a1", bg: "#eff6ff", border: "#bfdbfe" },
-          { label: `${neverUsed.length} never used`,    color: neverUsed.length > 0 ? "#d97706" : "#9ca3af",
+          { label: t("active_today", { count: active24h.length }),   color: "#16a34a", bg: "#f0fdf4", border: "#bbf7d0" },
+          { label: t("active_7d", { count: active7d.length }),       color: "#0369a1", bg: "#eff6ff", border: "#bfdbfe" },
+          { label: t("never_used_count", { count: neverUsed.length }), color: neverUsed.length > 0 ? "#d97706" : "#9ca3af",
             bg: neverUsed.length > 0 ? "#fffbeb" : "#f9fafb",
             border: neverUsed.length > 0 ? "#fde68a" : "#e5e7eb" },
         ].map(pill => (
@@ -370,7 +383,7 @@ function ApiKeyActivityCard({ keys }: { keys: any }) {
                 {k.key_type}
               </span>
               <span style={{ fontSize: "10px", color: k.last_used_at ? "#6b7280" : "#f87171" }}>
-                {k.last_used_at ? timeAgo(k.last_used_at) : "never"}
+                {k.last_used_at ? timeAgo(k.last_used_at) : tc("never")}
               </span>
             </div>
           </div>
@@ -384,18 +397,19 @@ function ApiKeyActivityCard({ keys }: { keys: any }) {
 
 function SeveritySummary({ counts }: { counts: { CRITICAL: number; HIGH: number; MEDIUM: number; LOW: number } }) {
   const fmt = useFormat()
-  const LEVELS = [
-    { level: "CRITICAL", color: "#dc2626", bg: "#fef2f2", border: "#fecaca", desc: "Guardrail overrides" },
-    { level: "HIGH",     color: "#d97706", bg: "#fffbeb", border: "#fde68a", desc: "High-risk blocks"    },
-    { level: "MEDIUM",   color: "#0369a1", bg: "#eff6ff", border: "#bfdbfe", desc: "Sanitized"           },
-    { level: "LOW",      color: "#059669", bg: "#f0fdf4", border: "#bbf7d0", desc: "Allowed"             },
-  ] as const
+  const t   = useTranslations("pages.overview")
+  const LEVELS: { level: keyof typeof counts; color: string; bg: string; border: string; desc: string }[] = [
+    { level: "CRITICAL", color: "#dc2626", bg: "#fef2f2", border: "#fecaca", desc: t("severity_desc.critical") },
+    { level: "HIGH",     color: "#d97706", bg: "#fffbeb", border: "#fde68a", desc: t("severity_desc.high")     },
+    { level: "MEDIUM",   color: "#0369a1", bg: "#eff6ff", border: "#bfdbfe", desc: t("severity_desc.medium")   },
+    { level: "LOW",      color: "#059669", bg: "#f0fdf4", border: "#bbf7d0", desc: t("severity_desc.low")      },
+  ]
 
   return (
     <div style={{ ...CARD, padding: "16px 20px" }}>
       <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: "14px" }}>
-        <p style={{ fontSize: "13px", fontWeight: 600, color: "#111827", margin: 0 }}>Severity breakdown</p>
-        <span style={{ fontSize: "11px", color: "#9ca3af" }}>SIEM · audit use only</span>
+        <p style={{ fontSize: "13px", fontWeight: 600, color: "#111827", margin: 0 }}>{t("severity_breakdown")}</p>
+        <span style={{ fontSize: "11px", color: "#9ca3af" }}>{t("siem_note")}</span>
       </div>
       <div style={{ display: "grid", gridTemplateColumns: "repeat(4, 1fr)", gap: "10px" }}>
         {LEVELS.map(l => (
@@ -420,6 +434,8 @@ function SeveritySummary({ counts }: { counts: { CRITICAL: number; HIGH: number;
 // ── Page ──────────────────────────────────────────────────────────────────────
 
 export default function OverviewPage() {
+  const t = useTranslations("pages.overview")
+  const { resolve } = useErrorMessage()
   const [selectedId, setSelectedId] = useState<string | null>(null)
 
   // Time range controls request cards, donut, threats, severity
@@ -440,16 +456,16 @@ export default function OverviewPage() {
   const byReason = attribution?.by_primary_reason ?? []
 
   if (statsLoading && !stats) {
-    return <Shell title="Overview"><PageSpinner /></Shell>
+    return <Shell title={t("title")}><PageSpinner /></Shell>
   }
 
   if (statsError && !stats) {
     return (
-      <Shell title="Overview">
+      <Shell title={t("title")}>
         <div className="max-w-2xl">
           <div className="bg-red-50 border border-red-200 rounded-xl p-5">
-            <p className="text-sm font-semibold text-red-700 mb-1">Failed to load overview</p>
-            <p className="text-xs text-red-500">{statsError?.message ?? "An unexpected error occurred"}</p>
+            <p className="text-sm font-semibold text-red-700 mb-1">{t("load_error")}</p>
+            <p className="text-xs text-red-500">{resolve(statsError).message}</p>
           </div>
         </div>
       </Shell>
@@ -457,9 +473,9 @@ export default function OverviewPage() {
   }
 
   return (
-    <Shell title="Overview">
+    <Shell title={t("title")}>
       <PageHeader
-        description="Monitor the security posture of AI requests across your organization."
+        description={t("description")}
         actions={<RangeTabs options={options} value={range} onChange={setRange} />}
       />
       <div style={{ display: "flex", flexDirection: "column", gap: "16px" }}>
@@ -476,6 +492,7 @@ export default function OverviewPage() {
                   animation: "shimmer 1.5s infinite",
                 }} />
               ))}
+              {/* eslint-disable-next-line react/jsx-no-literals -- CSS keyframes, not localizable text */}
               <style>{`@keyframes shimmer{0%{background-position:200% 0}100%{background-position:-200% 0}}`}</style>
             </div>
         }

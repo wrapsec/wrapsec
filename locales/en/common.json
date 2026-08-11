@@ -15,6 +15,13 @@
   },
   "copy": "Copy",
   "copied": "Copied",
+  "all_time": "All time",
+  "never": "never",
+  "decision": {
+    "blocked": "Blocked",
+    "sanitized": "Sanitized",
+    "allowed": "Allowed"
+  },
   "source_tooltip": {
     "untrusted": "Untrusted origin - indirect prompt-injection surface",
     "user": "End-user prompt"

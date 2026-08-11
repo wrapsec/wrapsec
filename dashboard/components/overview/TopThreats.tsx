@@ -4,6 +4,7 @@
 "use client"
 
 import Link from "next/link"
+import { useTranslations } from "next-intl"
 import { useFormat } from "@/hooks/useFormat"
 import { ThreatCount } from "@/lib/types"
 import { formatThreat } from "@/lib/utils"
@@ -19,6 +20,7 @@ const THREAT_COLORS: Record<string, string> = {
 
 export function TopThreats({ threats, from, to }: { threats: ThreatCount[]; from?: string; to?: string }) {
   const fmt = useFormat()
+  const t   = useTranslations("pages.overview")
   const max = threats[0]?.count || 1
 
   return (
@@ -28,12 +30,12 @@ export function TopThreats({ threats, from, to }: { threats: ThreatCount[]; from
       display: "flex", flexDirection: "column",
     }}>
       <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: "16px", flexShrink: 0 }}>
-        <h3 style={{ fontSize: "13px", fontWeight: 600, color: "#111827", margin: 0 }}>Top threats</h3>
-        <span style={{ fontSize: "11px", color: "#9ca3af" }}>{threats.length} categories</span>
+        <h3 style={{ fontSize: "13px", fontWeight: 600, color: "#111827", margin: 0 }}>{t("top_threats")}</h3>
+        <span style={{ fontSize: "11px", color: "#9ca3af" }}>{t("categories", { count: threats.length })}</span>
       </div>
 
       {threats.length === 0 ? (
-        <p style={{ fontSize: "13px", color: "#9ca3af" }}>No threats detected</p>
+        <p style={{ fontSize: "13px", color: "#9ca3af" }}>{t("no_threats")}</p>
       ) : (
         <div style={{ overflowY: "auto", overflowX: "hidden", flex: 1, maxHeight: "220px", paddingRight: "8px" }}>
           <div style={{ display: "flex", flexDirection: "column", gap: "12px" }}>

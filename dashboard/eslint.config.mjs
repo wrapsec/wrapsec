@@ -15,12 +15,14 @@ const eslintConfig = defineConfig([
       "app/applications/page.tsx",
       "components/layout/**/*.tsx",
       "components/ui/**/*.tsx",
+      "app/page.tsx",
+      "components/overview/**/*.tsx",
     ],
     rules: {
       "react/jsx-no-literals": ["error", {
         noStrings:      true,
         ignoreProps:    true,
-        allowedStrings: ["*", "-", "/", ".", ":", "·"],
+        allowedStrings: ["*", "-", "/", ".", ":", "·", "%", "ms", "s", "req"],
       }],
     },
   },
