@@ -17,7 +17,7 @@ import {
 } from "@/lib/api"
 import { PageHeader } from "@/components/ui/PageHeader"
 import { useBackNav } from "@/hooks/useBackNav"
-import { formatNumber } from "@/lib/format"
+import { useFormat } from "@/hooks/useFormat"
 
 const PROVIDERS = [
   { value: "openai", label: "OpenAI / OpenAI-compatible" },
@@ -27,6 +27,7 @@ const PROVIDERS = [
 
 export default function DepartmentDetailPage() {
   const { id } = useParams<{ id: string }>()
+  const fmt = useFormat()
 
   const { data: dept, isLoading, mutate } = useSWR(
     `department-${id}`, () => getDepartment(id)
@@ -221,7 +222,7 @@ export default function DepartmentDetailPage() {
         {stats && (
           <div className="grid grid-cols-4 gap-3">
             {[
-              { label: "Total requests", value: formatNumber(stats.total) },
+              { label: "Total requests", value: fmt.number(stats.total) },
               {
                 label: "Block rate",
                 value: `${Math.round(stats.block_rate * 100)}%`,
@@ -250,7 +251,7 @@ export default function DepartmentDetailPage() {
                 return (
                   <div key={decision} className="flex-1 bg-slate-50 rounded-lg px-3 py-2.5">
                     <p className="text-xs text-slate-400 mb-1">{decision}</p>
-                    <p className="text-sm font-semibold text-slate-900">{formatNumber(count)}</p>
+                    <p className="text-sm font-semibold text-slate-900">{fmt.number(count)}</p>
                     <div className="mt-1.5 h-1.5 bg-slate-200 rounded-full overflow-hidden">
                       <div className="h-full rounded-full" style={{ width: `${pct}%`, backgroundColor: color }} />
                     </div>

@@ -3,38 +3,19 @@
 // WrapSec v1.0 | AI Security Gateway - https://wrapsec.com
 
 /**
- * Single source for number formatting. Centralizing these means a change to how
- * the dashboard renders counts, percentages, or latencies (locale, precision)
- * happens in one place rather than at every call site.
+ * Locale-INDEPENDENT display helpers (percentages, latency, id/label rendering).
  *
  * FORMATTING POLICY (localization):
- * - LOCALE-SENSITIVE, formatted per the active locale: numbers, percentages,
- *   dates, times, relative time, currency. These migrate to next-intl's
- *   useFormatter (via NextIntlClientProvider) as part of the Phase 4 call-site
- *   migration; the mechanism is already wired.
+ * - LOCALE-SENSITIVE formatting (numbers, dates, times) lives in the useFormat
+ *   hook, which follows the active locale. There is no hardcoded Intl locale in
+ *   the codebase anymore.
+ * - The helpers here are deliberately locale-independent: percentages and latency
+ *   use a fixed representation, and truncateId/formatRun operate on machine ids.
  * - NEVER LOCALIZED (rendered verbatim -- machine/security contract): trace ids,
  *   error `code`, threat/severity codes (CRITICAL/HIGH/...), decision enums
  *   (BLOCK/ALLOW/SANITIZE), input_source, ValidationCode, and API identifiers
- *   (key_id, run_id, ids). truncateId/formatRun below operate on such ids and
- *   must stay locale-independent.
- *
- * The hardcoded Intl locales here (en-US) are unchanged in Phase 3: only "en" is
- * supported today, so output is identical; they become locale-driven in Phase 4.
+ *   (key_id, run_id, ids).
  */
-
-/** Integer/count with locale grouping (e.g. "12,340"). */
-export function formatNumber(n: number): string {
-  return n.toLocaleString()
-}
-
-/**
- * Compact count for fixed-width KPI cards (e.g. "1.2K", "3.4M", "1.2B"). Keeps
- * large values from overflowing a narrow card; pair with the full formatNumber
- * in a hover title. Values under 1,000 render as-is.
- */
-export function formatCompact(n: number): string {
-  return new Intl.NumberFormat("en-US", { notation: "compact", maximumFractionDigits: 1 }).format(n)
-}
 
 /** Risk score (0..1) as a whole-number percentage (e.g. "92%"). */
 export function formatScore(score: number): string {

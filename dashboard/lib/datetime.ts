@@ -24,25 +24,9 @@ export function ensureUtc(ts: string): Date {
   return new Date(hasZone ? ts : ts + "Z")
 }
 
-/** Display an instant in the viewer's local timezone (date + time). */
-export function formatTimestamp(ts: string): string {
-  return ensureUtc(ts).toLocaleString("en-GB", {
-    day:    "2-digit",
-    month:  "short",
-    hour:   "2-digit",
-    minute: "2-digit",
-    second: "2-digit",
-  })
-}
-
-/** Display an instant as a local date only (no time). */
-export function formatDate(ts: string): string {
-  return ensureUtc(ts).toLocaleDateString("en-GB", {
-    day:   "2-digit",
-    month: "short",
-    year:  "numeric",
-  })
-}
+// Locale-aware date/time DISPLAY (formatTimestamp / formatDate) lives in the
+// useFormat hook, which follows the active locale (no hardcoded Intl locale).
+// ensureUtc + the range helpers below are locale-independent and stay here.
 
 /** Compact relative-time label ("5m ago"). */
 export function timeAgo(ts: string): string {

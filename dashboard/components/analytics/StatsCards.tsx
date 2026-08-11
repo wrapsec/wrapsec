@@ -1,13 +1,17 @@
 // SPDX-License-Identifier: MIT
 // Copyright (c) 2026 WrapSec. All rights reserved.
 // WrapSec v1.0 | AI Security Gateway - https://wrapsec.com
+"use client"
+
 import { Card } from "@/components/ui/Card"
 import { AuditStatsResponse } from "@/lib/types"
-import { formatRate, formatLatency, formatNumber } from "@/lib/format"
+import { formatRate, formatLatency } from "@/lib/format"
+import { useFormat } from "@/hooks/useFormat"
 
 export function StatsCards({ stats }: { stats: AuditStatsResponse }) {
+  const fmt = useFormat()
   const cards = [
-    { label: "Total Requests",  value: formatNumber(stats.total_requests) },
+    { label: "Total Requests",  value: fmt.number(stats.total_requests) },
     { label: "Block Rate",      value: formatRate(stats.block_rate) },
     { label: "Sanitize Rate",   value: formatRate(stats.sanitize_rate) },
     { label: "Allow Rate",      value: formatRate(stats.allow_rate) },

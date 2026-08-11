@@ -12,13 +12,14 @@ import { EmptyState } from "@/components/ui/EmptyState"
 import { ErrorState } from "@/components/ui/ErrorState"
 import { DecisionBadge, SourceBadge } from "@/components/ui/Badge"
 import { useBackNav } from "@/hooks/useBackNav"
-import { formatTimestamp } from "@/lib/datetime"
+import { useFormat } from "@/hooks/useFormat"
 import { getAgentRun } from "@/lib/api"
 import type { AuditLogItem } from "@/lib/types"
 
 function AgentRunInner() {
   const { runId } = useParams<{ runId: string }>()
   const goBack = useBackNav("/requests")
+  const fmt = useFormat()
 
   const { data, isLoading, error } = useSWR(
     ["agent-run", runId],
@@ -92,7 +93,7 @@ function AgentRunInner() {
                     </span>
                   </div>
                   <div className="mt-1 text-xs text-slate-400 flex items-center gap-3 flex-wrap">
-                    <span>{formatTimestamp(t.timestamp)}</span>
+                    <span>{fmt.timestamp(t.timestamp)}</span>
                     <span className="font-mono">{t.trace_id}</span>
                   </div>
                 </li>

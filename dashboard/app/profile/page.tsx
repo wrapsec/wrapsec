@@ -7,7 +7,7 @@ import { useState, useEffect, FormEvent } from "react"
 import { Shell } from "@/components/layout/Shell"
 import { Card, CardHeader } from "@/components/ui/Card"
 import { Button } from "@/components/ui/Button"
-import { formatTimestamp } from "@/lib/datetime"
+import { useFormat } from "@/hooks/useFormat"
 
 const REQUIREMENTS = [
   { label: "At least 8 characters", test: (p: string) => p.length >= 8 },
@@ -151,6 +151,7 @@ function ChangePasswordModal({ onClose }: { onClose: () => void }) {
 // ── Page ───────────────────────────────────────────────────────────────────────
 
 export default function ProfilePage() {
+  const fmt = useFormat()
   const [profile,       setProfile]       = useState<UserProfile | null>(null)
   const [loading,       setLoading]       = useState(true)
   const [isApiKey,      setIsApiKey]      = useState(false)
@@ -172,7 +173,7 @@ export default function ProfilePage() {
   }, [])
 
   const formatDate = (iso: string | null) =>
-    iso ? formatTimestamp(iso) : "Never"
+    iso ? fmt.timestamp(iso) : "Never"
 
   return (
     <Shell title="Profile">

@@ -14,7 +14,7 @@ import { PageSpinner } from "@/components/ui/Spinner"
 import { POLL_INTERVAL, THREAT_LABELS } from "@/lib/constants"
 import { getAuditStats, getAttribution, getAnalytics, getDepartments, getApplications } from "@/lib/api"
 import { AuditStatsResponse } from "@/lib/types"
-import { formatNumber } from "@/lib/format"
+import { useFormat } from "@/hooks/useFormat"
 
 
 const CARD: React.CSSProperties = {
@@ -50,6 +50,7 @@ const TH: React.CSSProperties = {
 // ── Security KPIs ─────────────────────────────────────────────────────────
 
 function SecuritySummary({ stats, attribution }: { stats: AuditStatsResponse; attribution: any }) {
+  const fmt        = useFormat()
   const byReason   = attribution?.by_primary_reason ?? []
   const piiCount   = byReason
     .filter((r: any) => r.primary_reason === "PII_GUARDRAIL_BLOCK" || r.primary_reason === "PII_GUARDRAIL_SANITIZE")
@@ -59,13 +60,13 @@ function SecuritySummary({ stats, attribution }: { stats: AuditStatsResponse; at
   const totalThreats = stats.top_threats?.reduce((s, t) => s + t.count, 0) ?? 0
 
   const KPIS = [
-    { label: "PII Exposure Attempts",      value: formatNumber(piiCount),   sub: "Guardrail blocks + sanitizations", accent: "#670FEF",
+    { label: "PII Exposure Attempts",      value: fmt.number(piiCount),   sub: "Guardrail blocks + sanitizations", accent: "#670FEF",
       icon: "M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z" },
-    { label: "Data Exfiltration Attempts", value: formatNumber(exfilCount), sub: "DATA_EXFILTRATION threat category", accent: "#dc2626",
+    { label: "Data Exfiltration Attempts", value: fmt.number(exfilCount), sub: "DATA_EXFILTRATION threat category", accent: "#dc2626",
       icon: "M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" },
-    { label: "Toxicity Incidents",         value: formatNumber(toxCount),   sub: "Toxicity guardrail triggers",       accent: "#d97706",
+    { label: "Toxicity Incidents",         value: fmt.number(toxCount),   sub: "Toxicity guardrail triggers",       accent: "#d97706",
       icon: "M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" },
-    { label: "Total Threat Detections",    value: formatNumber(totalThreats), sub: `${stats.top_threats?.length ?? 0} unique threat types`, accent: "#00B1FF",
+    { label: "Total Threat Detections",    value: fmt.number(totalThreats), sub: `${stats.top_threats?.length ?? 0} unique threat types`, accent: "#00B1FF",
       icon: "M9 12l2 2 4-4m5.618-4.016A11.955 11.955 0 0112 2.944a11.955 11.955 0 01-8.618 3.04A12.02 12.02 0 003 9c0 5.591 3.824 10.29 9 11.622 5.176-1.332 9-6.03 9-11.622 0-1.042-.133-2.052-.382-3.016z" },
   ]
 
@@ -233,6 +234,7 @@ function TrendChart({ data, groupBy, onGroupByChange }: {
 // ── Threat Intelligence ───────────────────────────────────────────────────
 
 function ThreatIntelligence({ stats }: { stats: AuditStatsResponse }) {
+  const fmt = useFormat()
   const total = stats.top_threats.reduce((s, t) => s + t.count, 0) || 1
   const THREAT_META: Record<string, { color: string; level: string }> = {
     PROMPT_INJECTION:  { color: "#dc2626", level: "Critical" },
@@ -264,7 +266,7 @@ function ThreatIntelligence({ stats }: { stats: AuditStatsResponse }) {
                       {meta.level}
                     </span>
                   </td>
-                  <td style={{ padding: "9px 12px", fontFamily: "monospace", fontSize: "12px", color: "#374151" }}>{formatNumber(t.count)}</td>
+                  <td style={{ padding: "9px 12px", fontFamily: "monospace", fontSize: "12px", color: "#374151" }}>{fmt.number(t.count)}</td>
                   <td style={{ padding: "9px 12px", minWidth: "140px" }}>
                     <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
                       <div style={{ flex: 1, height: "5px", background: "#f3f4f6", borderRadius: "3px", overflow: "hidden" }}>
@@ -288,6 +290,7 @@ function ThreatIntelligence({ stats }: { stats: AuditStatsResponse }) {
 // ── Detection Layer Breakdown ─────────────────────────────────────────────
 
 function DetectionBreakdown({ byReason }: { byReason: { primary_reason: string; count: number }[] }) {
+  const fmt = useFormat()
   const total = byReason.reduce((s, r) => s + r.count, 0) || 1
   const LAYERS = [
     { key: "RULE_DETECTOR",              label: "Rule detector",        color: "#670FEF", desc: "Regex + heuristics" },
@@ -314,7 +317,7 @@ function DetectionBreakdown({ byReason }: { byReason: { primary_reason: string; 
                   <span style={{ fontSize: "11px", color: "#9ca3af" }}>{layer.desc}</span>
                 </div>
                 <div style={{ display: "flex", gap: "10px", flexShrink: 0 }}>
-                  <span style={{ fontSize: "12px", fontFamily: "monospace", color: "#6b7280" }}>{formatNumber(count)}</span>
+                  <span style={{ fontSize: "12px", fontFamily: "monospace", color: "#6b7280" }}>{fmt.number(count)}</span>
                   <span style={{ fontSize: "11px", fontFamily: "monospace", color: "#9ca3af", width: "38px", textAlign: "right" }}>
                     {(share * 100).toFixed(1)}%
                   </span>
@@ -334,6 +337,7 @@ function DetectionBreakdown({ byReason }: { byReason: { primary_reason: string; 
 // ── Confidence Distribution ───────────────────────────────────────────────
 
 function ConfidenceDistribution({ data }: { data: { band: string; count: number }[] }) {
+  const fmt = useFormat()
   const total = data.reduce((s, d) => s + d.count, 0) || 1
   const BANDS = [
     { band: "HIGH",   label: "High",   color: "#10b981", desc: "Decision is certain - no review needed" },
@@ -358,7 +362,7 @@ function ConfidenceDistribution({ data }: { data: { band: string; count: number 
                   <span style={{ fontSize: "11px", color: "#9ca3af", marginLeft: "6px" }}>{b.desc}</span>
                 </div>
                 <div style={{ display: "flex", alignItems: "center", gap: "10px", flexShrink: 0 }}>
-                  <span style={{ fontSize: "12px", fontFamily: "monospace", color: "#6b7280" }}>{formatNumber(count)}</span>
+                  <span style={{ fontSize: "12px", fontFamily: "monospace", color: "#6b7280" }}>{fmt.number(count)}</span>
                   <span style={{ fontSize: "11px", fontWeight: 600, padding: "1px 6px", borderRadius: "4px", color: b.color, background: b.color + "15" }}>
                     {(share * 100).toFixed(1)}%
                   </span>
@@ -378,6 +382,7 @@ function ConfidenceDistribution({ data }: { data: { band: string; count: number 
 // ── Primary Reason Breakdown ──────────────────────────────────────────────
 
 function PrimaryReasonBreakdown({ byReason }: { byReason: { primary_reason: string; count: number }[] }) {
+  const fmt = useFormat()
   const total = byReason.reduce((s, r) => s + r.count, 0) || 1
   const LABELS: Record<string, string> = {
     RULE_DETECTOR:               "Rule detector",
@@ -401,7 +406,7 @@ function PrimaryReasonBreakdown({ byReason }: { byReason: { primary_reason: stri
                 {LABELS[r.primary_reason] || r.primary_reason}
               </td>
               <td style={{ padding: "9px 12px", fontFamily: "monospace", fontSize: "12px", color: "#6b7280" }}>
-                {formatNumber(r.count)}
+                {fmt.number(r.count)}
               </td>
               <td style={{ padding: "9px 12px", minWidth: "140px" }}>
                 <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
@@ -427,6 +432,7 @@ function AttributionTable({ title, rows, emptyText }: {
   title: string; emptyText: string
   rows: { name: string; sub: string; blockRate: number; total: number }[]
 }) {
+  const fmt = useFormat()
   const maxTotal = Math.max(...rows.map(r => r.total), 1)
   return (
     <div style={CARD}>
@@ -455,7 +461,7 @@ function AttributionTable({ title, rows, emptyText }: {
                   </div>
                 </div>
                 <span style={{ fontSize: "11px", fontFamily: "monospace", color: "#9ca3af", width: "52px", textAlign: "right", flexShrink: 0 }}>
-                  {formatNumber(row.total)} req
+                  {fmt.number(row.total)} req
                 </span>
                 <span style={{ fontSize: "11px", fontWeight: 600, fontFamily: "monospace", padding: "2px 6px", borderRadius: "4px", flexShrink: 0, color, background: color + "12" }}>
                   {bpct}% blocked
@@ -472,6 +478,7 @@ function AttributionTable({ title, rows, emptyText }: {
 // ── Page ──────────────────────────────────────────────────────────────────
 
 export default function AnalyticsPage() {
+  const fmt = useFormat()
   const [groupBy,   setGroupBy]   = useState<"hour" | "day" | "week" | "month">("day")
 
   const {
@@ -606,7 +613,7 @@ export default function AnalyticsPage() {
               .slice(0, 8)
               .map((r: any) => ({
                 name: deptNames[r.dept_id] || r.dept_id || "No department",
-                sub: `${formatNumber(r.total)} requests`,
+                sub: `${fmt.number(r.total)} requests`,
                 blockRate: r.block_rate, total: r.total,
               }))}
           />
@@ -619,7 +626,7 @@ export default function AnalyticsPage() {
               .slice(0, 8)
               .map((r: any) => ({
                 name: appNames[r.app_id] || r.app_id || "No application",
-                sub: `${formatNumber(r.total)} requests · ${r.avg_latency_ms?.toFixed(0) ?? "-"}ms avg`,
+                sub: `${fmt.number(r.total)} requests · ${r.avg_latency_ms?.toFixed(0) ?? "-"}ms avg`,
                 blockRate: r.block_rate, total: r.total,
               }))}
           />
@@ -634,7 +641,7 @@ export default function AnalyticsPage() {
               .slice(0, 10)
               .map(r => ({
                 name: r.source || r.key_id || "-",
-                sub: `${formatNumber(r.total)} requests · ${r.avg_latency_ms?.toFixed(0) ?? "-"}ms avg`,
+                sub: `${fmt.number(r.total)} requests · ${r.avg_latency_ms?.toFixed(0) ?? "-"}ms avg`,
                 blockRate: r.block_rate, total: r.total,
               }))}
           />

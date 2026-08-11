@@ -16,7 +16,7 @@ import { PageSpinner } from "@/components/ui/Spinner"
 import { getBySource } from "@/lib/api"
 import { SourceStats, AttackOrigin } from "@/lib/types"
 import { DECISION_COLORS, THREAT_LABELS, contentSourceLabel, contentSourceTier } from "@/lib/constants"
-import { formatNumber } from "@/lib/format"
+import { useFormat } from "@/hooks/useFormat"
 
 // Content-source labels + trust tiers come from the centralized constants
 // (lib/constants.ts) so the table, drawer, and this page stay in sync. TIER_STYLE
@@ -53,6 +53,7 @@ const STAT_LABEL: React.CSSProperties = {
 // --- Top Attack Origins -------------------------------------------------------
 
 function TopAttackOrigins({ origins }: { origins: AttackOrigin[] }) {
+  const fmt = useFormat()
   if (origins.length === 0) {
     return (
       <div style={CARD}>
@@ -90,7 +91,7 @@ function TopAttackOrigins({ origins }: { origins: AttackOrigin[] }) {
               }} />
             </div>
             <div style={{ width: "60px", textAlign: "right", fontSize: "13px", fontWeight: 700, color: "#111827" }}>
-              {formatNumber(o.attacks)}
+              {fmt.number(o.attacks)}
             </div>
           </div>
         ))}
@@ -132,6 +133,7 @@ function DecisionMix({ s }: { s: SourceStats }) {
 // --- Per-source card ----------------------------------------------------------
 
 function SourceCard({ s }: { s: SourceStats }) {
+  const fmt    = useFormat()
   const tier   = contentSourceTier(s.input_source)
   const badge  = TIER_STYLE[tier]
   const threatEntries = Object.entries(s.threats).sort((a, b) => b[1] - a[1])
@@ -151,13 +153,13 @@ function SourceCard({ s }: { s: SourceStats }) {
       </div>
 
       <div style={{ display: "grid", gridTemplateColumns: "repeat(4, 1fr)", gap: "12px", marginBottom: "16px" }}>
-        <StatCard label="Scans" value={formatNumber(s.total)} />
+        <StatCard label="Scans" value={fmt.number(s.total)} />
         <StatCard label="Block Rate" value={`${(s.block_rate * 100).toFixed(1)}%`} />
         <StatCard
           label="Avg / Peak Risk"
           value={<>{s.avg_risk.toFixed(2)} <span className="text-xs text-slate-400 font-semibold">/ {s.max_risk.toFixed(2)}</span></>}
         />
-        <StatCard label="High Risk" value={formatNumber(s.high_risk_count)} />
+        <StatCard label="High Risk" value={fmt.number(s.high_risk_count)} />
       </div>
 
       <div style={{ marginBottom: threatEntries.length ? "16px" : 0 }}>

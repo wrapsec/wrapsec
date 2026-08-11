@@ -4,7 +4,7 @@
 "use client"
 
 import useSWR from "swr"
-import { formatNumber } from "@/lib/format"
+import { useFormat } from "@/hooks/useFormat"
 import { useState } from "react"
 import { Shell } from "@/components/layout/Shell"
 import { PageHeader } from "@/components/ui/PageHeader"
@@ -35,6 +35,7 @@ const LABEL: React.CSSProperties = {
 // ── Row 1: Request summary cards ─────────────────────────────────────────────
 
 function RequestCards({ stats, from, to }: { stats: AuditStatsResponse; from: string; to: string }) {
+  const fmt       = useFormat()
   const total     = stats.total_requests
   // Read the authoritative counts. Reconstructing via round(rate * total)
   // loses precision after the API rounds rate to 4 decimals and drifts
@@ -56,7 +57,7 @@ function RequestCards({ stats, from, to }: { stats: AuditStatsResponse; from: st
         <KpiCard
           key={card.label}
           label={card.label}
-          value={formatNumber(card.value)}
+          value={fmt.number(card.value)}
           sub={card.sub}
           accent={card.accent}
           valueColor={card.color}
@@ -70,6 +71,7 @@ function RequestCards({ stats, from, to }: { stats: AuditStatsResponse; from: st
 // ── Row 2: Donut ──────────────────────────────────────────────────────────────
 
 function DonutChart({ stats }: { stats: AuditStatsResponse }) {
+  const fmt       = useFormat()
   const total     = stats.total_requests
   const blocked   = stats.block_count
   const sanitized = stats.sanitize_count
@@ -108,7 +110,7 @@ function DonutChart({ stats }: { stats: AuditStatsResponse }) {
         <div style={{ position: "absolute", top: "50%", left: "50%",
           transform: "translate(-50%, -50%)", textAlign: "center" }}>
           <p style={{ fontSize: "20px", fontWeight: 700, color: "#111827", margin: 0, lineHeight: 1 }}>
-            {formatNumber(total)}
+            {fmt.number(total)}
           </p>
           <p style={{ fontSize: "9px", color: "#9ca3af", margin: "3px 0 0 0", fontWeight: 600,
             textTransform: "uppercase", letterSpacing: "0.06em" }}>requests</p>
@@ -139,6 +141,7 @@ function DonutChart({ stats }: { stats: AuditStatsResponse }) {
 // ── Row 2: Latency card ───────────────────────────────────────────────────────
 
 function LatencyCard({ stats, byReason }: { stats: AuditStatsResponse; byReason: { primary_reason: string; count: number }[] }) {
+  const fmt      = useFormat()
   const total    = stats.total_requests || 1
   const maxMs    = stats.p95_latency_ms || 1
   const avgPct   = Math.min((stats.avg_latency_ms / maxMs) * 100, 100)
@@ -202,7 +205,7 @@ function LatencyCard({ stats, byReason }: { stats: AuditStatsResponse; byReason:
               <span style={{ fontSize: "11px", color: "#6b7280" }}>{d.label}</span>
             </div>
             <span style={{ fontSize: "11px", fontFamily: "monospace", color: "#374151", fontWeight: 600 }}>
-              {formatNumber(d.count)}
+              {fmt.number(d.count)}
             </span>
           </div>
         ))}
@@ -259,6 +262,7 @@ function InfrastructureCard({ depts, apps, keys }: { depts: any; apps: any; keys
 // ── Row 3: Detection layers ───────────────────────────────────────────────────
 
 function DetectionLayersCard({ byReason }: { byReason: { primary_reason: string; count: number }[] }) {
+  const fmt = useFormat()
   const total = byReason.reduce((s, r) => s + r.count, 0) || 1
 
   const LAYERS = [
@@ -289,7 +293,7 @@ function DetectionLayersCard({ byReason }: { byReason: { primary_reason: string;
                   <span style={{ fontSize: "11px", color: "#6b7280" }}>{layer.label}</span>
                 </div>
                 <span style={{ fontSize: "11px", fontFamily: "monospace", color: "#374151", fontWeight: 600 }}>
-                  {formatNumber(count)}
+                  {fmt.number(count)}
                 </span>
               </div>
               <div style={{ height: "3px", background: "#f3f4f6", borderRadius: "2px", overflow: "hidden" }}>
@@ -379,6 +383,7 @@ function ApiKeyActivityCard({ keys }: { keys: any }) {
 // ── Severity ──────────────────────────────────────────────────────────────────
 
 function SeveritySummary({ counts }: { counts: { CRITICAL: number; HIGH: number; MEDIUM: number; LOW: number } }) {
+  const fmt = useFormat()
   const LEVELS = [
     { level: "CRITICAL", color: "#dc2626", bg: "#fef2f2", border: "#fecaca", desc: "Guardrail overrides" },
     { level: "HIGH",     color: "#d97706", bg: "#fffbeb", border: "#fde68a", desc: "High-risk blocks"    },
@@ -402,7 +407,7 @@ function SeveritySummary({ counts }: { counts: { CRITICAL: number; HIGH: number;
             </p>
             <p style={{ fontSize: "22px", fontWeight: 700, color: l.color,
               margin: "0 0 2px 0", lineHeight: 1 }}>
-              {formatNumber(counts[l.level])}
+              {fmt.number(counts[l.level])}
             </p>
             <p style={{ fontSize: "11px", color: l.color, opacity: 0.7, margin: 0 }}>{l.desc}</p>
           </div>

@@ -5,7 +5,8 @@
 
 import { KpiCard } from "@/components/ui/KpiCard"
 import { AuditStatsResponse } from "@/lib/types"
-import { formatNumber, formatCompact, formatRate, formatScore } from "@/lib/format"
+import { formatRate, formatScore } from "@/lib/format"
+import { useFormat } from "@/hooks/useFormat"
 
 // Posture-at-a-glance strip above the filtered event list. Unlike the global
 // Overview page, this is scoped to the SAME filters as the table so its counts
@@ -22,7 +23,8 @@ function riskColor(score: number): string {
 // Compact count so large values never overflow the fixed-width card; the exact
 // comma-grouped value is available on hover.
 function Count({ n }: { n: number }) {
-  return <span title={formatNumber(n)}>{formatCompact(n)}</span>
+  const fmt = useFormat()
+  return <span title={fmt.number(n)}>{fmt.compact(n)}</span>
 }
 
 export function SecurityOverview({ stats, loading }: {

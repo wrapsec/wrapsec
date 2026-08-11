@@ -1,8 +1,10 @@
 // SPDX-License-Identifier: MIT
 // Copyright (c) 2026 WrapSec. All rights reserved.
 // WrapSec v1.0 | AI Security Gateway - https://wrapsec.com
+"use client"
+
 import { Button } from "@/components/ui/Button"
-import { formatNumber } from "@/lib/format"
+import { useFormat } from "@/hooks/useFormat"
 
 interface PaginationProps {
   total:    number
@@ -12,6 +14,7 @@ interface PaginationProps {
 }
 
 export function Pagination({ total, offset, limit, onChange }: PaginationProps) {
+  const fmt        = useFormat()
   const page       = Math.floor(offset / limit) + 1
   const totalPages = Math.ceil(total / limit)
 
@@ -28,11 +31,11 @@ export function Pagination({ total, offset, limit, onChange }: PaginationProps) 
       <p style={{ fontSize: "12px", color: "#9ca3af", margin: 0 }}>
         Showing{" "}
         <span style={{ fontWeight: 600, color: "#374151" }}>
-          {formatNumber(offset + 1)}-{formatNumber(Math.min(offset + limit, total))}
+          {fmt.number(offset + 1)}-{fmt.number(Math.min(offset + limit, total))}
         </span>
         {" "}of{" "}
         <span style={{ fontWeight: 600, color: "#374151" }}>
-          {formatNumber(total)}
+          {fmt.number(total)}
         </span>
       </p>
 

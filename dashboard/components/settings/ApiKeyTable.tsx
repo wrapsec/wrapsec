@@ -1,11 +1,14 @@
 // SPDX-License-Identifier: MIT
 // Copyright (c) 2026 WrapSec. All rights reserved.
 // WrapSec v1.0 | AI Security Gateway - https://wrapsec.com
+"use client"
+
 import { useState, Fragment } from "react"
 import { ApiKey } from "@/lib/types"
 import { Table, THead, TBody, Th, Tr } from "@/components/ui/Table"
 import { EmptyState } from "@/components/ui/EmptyState"
-import { formatTimestamp, timeAgo, ensureUtc } from "@/lib/datetime"
+import { timeAgo, ensureUtc } from "@/lib/datetime"
+import { useFormat } from "@/hooks/useFormat"
 
 interface ApiKeyTableProps {
   keys:      ApiKey[]
@@ -16,6 +19,7 @@ interface ApiKeyTableProps {
 }
 
 export function ApiKeyTable({ keys, onRevoke, onRotate, revoking, canWrite = true }: ApiKeyTableProps) {
+  const fmt = useFormat()
   const [rotating,       setRotating]       = useState<string | null>(null)
   const [rotatedKey,     setRotatedKey]     = useState<{ newKey: string } | null>(null)
   const [graceInput,     setGraceInput]     = useState<string | null>(null)
@@ -139,7 +143,7 @@ export function ApiKeyTable({ keys, onRevoke, onRotate, revoking, canWrite = tru
                   </td>
 
                   <td className="px-4 py-3 text-xs text-slate-500">
-                    {formatTimestamp(key.created_at)}
+                    {fmt.timestamp(key.created_at)}
                   </td>
 
                   <td className="px-4 py-3 text-xs text-slate-400">

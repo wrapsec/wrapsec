@@ -1,8 +1,10 @@
 // SPDX-License-Identifier: MIT
 // Copyright (c) 2026 WrapSec. All rights reserved.
 // WrapSec v1.0 | AI Security Gateway - https://wrapsec.com
+"use client"
+
 import Link from "next/link"
-import { formatNumber } from "@/lib/format"
+import { useFormat } from "@/hooks/useFormat"
 import { ThreatCount } from "@/lib/types"
 import { formatThreat } from "@/lib/utils"
 
@@ -16,6 +18,7 @@ const THREAT_COLORS: Record<string, string> = {
 }
 
 export function TopThreats({ threats, from, to }: { threats: ThreatCount[]; from?: string; to?: string }) {
+  const fmt = useFormat()
   const max = threats[0]?.count || 1
 
   return (
@@ -56,7 +59,7 @@ export function TopThreats({ threats, from, to }: { threats: ThreatCount[]; from
                       </span>
                     </div>
                     <span style={{ fontSize: "12px", fontFamily: "monospace", color: "#6b7280", flexShrink: 0, marginLeft: "12px" }}>
-                      {formatNumber(t.count)}
+                      {fmt.number(t.count)}
                     </span>
                   </div>
                   <div style={{ height: "5px", background: "#f3f4f6", borderRadius: "3px", overflow: "hidden" }}>

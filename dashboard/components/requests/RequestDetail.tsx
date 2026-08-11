@@ -13,7 +13,7 @@ import { Spinner } from "@/components/ui/Spinner"
 import { Drawer } from "@/components/ui/Drawer"
 import { Tabs, TabDef } from "@/components/ui/Tabs"
 import { DetailGrid, DetailRow, SectionLabel } from "@/components/ui/DetailRow"
-import { formatTimestamp } from "@/lib/datetime"
+import { useFormat } from "@/hooks/useFormat"
 import { formatScore, formatLatency, truncateId, formatRun } from "@/lib/format"
 import { primaryReasonLabel, contentSourceLabel, contentSourceTier } from "@/lib/constants"
 
@@ -299,6 +299,7 @@ function RawTab({ detail }: { detail: RequestDetail }) {
 // --- Drawer ------------------------------------------------------------------
 
 export function RequestDetailModal({ traceId, onClose }: RequestDetailModalProps) {
+  const fmt = useFormat()
   const [detail,  setDetail]  = useState<RequestDetail | null>(null)
   const [loading, setLoading] = useState(true)
   const [error,   setError]   = useState<string | null>(null)
@@ -407,7 +408,7 @@ export function RequestDetailModal({ traceId, onClose }: RequestDetailModalProps
               <span className="font-mono text-slate-600">{truncateId(traceId)}</span>
               <CopyButton value={traceId} title="Copy trace id" />
               <span className="text-slate-300">.</span>
-              <span>{formatTimestamp(detail.timestamp)}</span>
+              <span>{fmt.timestamp(detail.timestamp)}</span>
               <SourceBadge source={detail.input_source} />
               {detail.run_id && (
                 <>
