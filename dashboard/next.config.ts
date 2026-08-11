@@ -2,6 +2,11 @@
 // Copyright (c) 2026 WrapSec. All rights reserved.
 // WrapSec v1.0 | AI Security Gateway - https://wrapsec.com
 import type { NextConfig } from "next";
+import createNextIntlPlugin from "next-intl/plugin";
+
+// next-intl (cookie mode): resolution stays in WrapSec; this plugin only wires
+// the message pipeline. Config lives in ./i18n/request.ts.
+const withNextIntl = createNextIntlPlugin("./i18n/request.ts");
 
 // M4: fail the production build if NEXT_PUBLIC_API_URL is unset. Every BFF
 // route falls back to http://localhost:8000, which is only safe in dev.
@@ -82,4 +87,4 @@ const nextConfig: NextConfig = {
   },
 };
 
-export default nextConfig;
+export default withNextIntl(nextConfig);

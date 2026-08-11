@@ -86,6 +86,20 @@ export async function POST(request: NextRequest) {
     path:     "/",
   })
 
+  // Re-resolve locale on every refresh: the backend re-runs User -> Tenant ->
+  // System -> English, so a tenant/user preference change reaches a live session
+  // without re-login. Set from the backend's resolved value, never a client
+  // guess. (Older backends may omit resolved_locale; leave the cookie untouched.)
+  if (data.resolved_locale) {
+    res.cookies.set("wrapsec_locale", data.resolved_locale, {
+      httpOnly: false,
+      secure:   COOKIE_SECURE,
+      sameSite: "strict",
+      maxAge:   SESSION_MAX_AGE_S,
+      path:     "/",
+    })
+  }
+
   // Forward backend's Set-Cookie headers (rotated refresh_token with the
   // negotiated Path) unchanged. See login/route.ts for the deploy-time
   // contract that keeps DASHBOARD_ORIGIN and backend cors_allowed_origins

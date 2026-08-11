@@ -166,6 +166,18 @@ export async function POST(request: NextRequest) {
       path:     "/",
     })
 
+    // Locale cookie for next-intl. The backend already RESOLVED and validated
+    // this (User -> Tenant -> System -> English); the frontend never re-derives
+    // precedence. Non-httpOnly + non-sensitive nav state, so a future locale
+    // switcher can update it client-side.
+    res.cookies.set("wrapsec_locale", data.resolved_locale || "en", {
+      httpOnly: false,
+      secure:   COOKIE_SECURE,
+      sameSite: "strict",
+      maxAge:   SESSION_MAX_AGE_S,
+      path:     "/",
+    })
+
     // Forward backend's Set-Cookie headers (refresh_token with the negotiated
     // Path) unchanged. The BFF supplied X-Refresh-Cookie-Path=/api/auth so
     // the backend emitted Path=/api/auth if it recognised our Origin; if

@@ -6,6 +6,20 @@
  * Single source for number formatting. Centralizing these means a change to how
  * the dashboard renders counts, percentages, or latencies (locale, precision)
  * happens in one place rather than at every call site.
+ *
+ * FORMATTING POLICY (localization):
+ * - LOCALE-SENSITIVE, formatted per the active locale: numbers, percentages,
+ *   dates, times, relative time, currency. These migrate to next-intl's
+ *   useFormatter (via NextIntlClientProvider) as part of the Phase 4 call-site
+ *   migration; the mechanism is already wired.
+ * - NEVER LOCALIZED (rendered verbatim -- machine/security contract): trace ids,
+ *   error `code`, threat/severity codes (CRITICAL/HIGH/...), decision enums
+ *   (BLOCK/ALLOW/SANITIZE), input_source, ValidationCode, and API identifiers
+ *   (key_id, run_id, ids). truncateId/formatRun below operate on such ids and
+ *   must stay locale-independent.
+ *
+ * The hardcoded Intl locales here (en-US) are unchanged in Phase 3: only "en" is
+ * supported today, so output is identical; they become locale-driven in Phase 4.
  */
 
 /** Integer/count with locale grouping (e.g. "12,340"). */
