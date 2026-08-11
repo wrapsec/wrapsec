@@ -4,6 +4,7 @@
 "use client"
 
 import { useState, useEffect } from "react"
+import { useTranslations } from "next-intl"
 import { swrKeys } from "@/lib/swrKeys"
 import useSWR from "swr"
 import { Shell } from "@/components/layout/Shell"
@@ -17,6 +18,9 @@ import {
   getDepartments,
 } from "@/lib/api"
 import type { DashboardUser } from "@/lib/types"
+
+// Role identifiers are stable machine codes (never localized); rendered verbatim.
+const ROLES = ["ADMIN", "DEVELOPER", "AUDITOR", "VIEWER"] as const
 
 // ── Role badge ─────────────────────────────────────────────────────────────────
 
@@ -37,13 +41,14 @@ function RoleBadge({ role }: { role: string }) {
 // ── Status badge ───────────────────────────────────────────────────────────────
 
 function StatusBadge({ active }: { active: boolean }) {
+  const t = useTranslations("pages.users.status")
   return active ? (
     <span className="text-xs px-2 py-0.5 rounded-full bg-green-50 text-green-700 border border-green-200">
-      Active
+      {t("active")}
     </span>
   ) : (
     <span className="text-xs px-2 py-0.5 rounded-full bg-red-50 text-red-600 border border-red-200">
-      Inactive
+      {t("inactive")}
     </span>
   )
 }
@@ -81,6 +86,9 @@ function CreateUserModal({
     return () => document.removeEventListener("keydown", handler)
   }, [onClose])
 
+  const t  = useTranslations("pages.users.create")
+  const tu = useTranslations("pages.users")
+  const tb = useTranslations("common.buttons")
   const [email,    setEmail]    = useState("")
   const [password, setPassword] = useState("")
   const [role,     setRole]     = useState("DEVELOPER")
@@ -117,7 +125,7 @@ function CreateUserModal({
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40">
       <div className="w-full max-w-md bg-white rounded-xl border border-slate-200 shadow-xl p-6">
         <div className="flex items-center justify-between mb-4">
-          <p className="text-sm font-semibold text-slate-900">New User</p>
+          <p className="text-sm font-semibold text-slate-900">{t("title")}</p>
           <button
             onClick={onClose}
             className="p-1 rounded-md text-slate-400 hover:text-slate-600 hover:bg-slate-100 transition-colors"
@@ -128,37 +136,34 @@ function CreateUserModal({
           </button>
         </div>
         <div className="space-y-3">
-          <Field label="Email *">
+          <Field label={t("email")}>
             <input
               type="email"
               value={email}
               onChange={e => setEmail(e.target.value)}
-              placeholder="user@example.com"
+              placeholder={t("email_placeholder")}
               className={inputCls}
             />
           </Field>
-          <Field label="Temporary password *">
+          <Field label={t("password")}>
             <input
               type="password"
               value={password}
               onChange={e => setPassword(e.target.value)}
-              placeholder="Min 8 chars, 1 upper, 1 lower, 1 digit"
+              placeholder={tu("password_hint")}
               className={inputCls}
             />
           </Field>
-          <Field label="Role *">
+          <Field label={t("role")}>
             <select value={role} onChange={e => setRole(e.target.value)} className={selectCls}>
-              <option value="ADMIN">ADMIN</option>
-              <option value="DEVELOPER">DEVELOPER</option>
-              <option value="AUDITOR">AUDITOR</option>
-              <option value="VIEWER">VIEWER</option>
+              {ROLES.map(r => <option key={r} value={r}>{r}</option>)}
             </select>
           </Field>
           {role !== "ADMIN" && (
-            <Field label={role === "AUDITOR" ? "Department (optional)" : "Department *"}>
+            <Field label={role === "AUDITOR" ? tu("dept_optional") : tu("dept_required")}>
               <select value={deptId} onChange={e => setDeptId(e.target.value)} className={selectCls}>
                 {role === "AUDITOR" && (
-                  <option value="">Tenant-wide (all departments)</option>
+                  <option value="">{tu("dept_tenant_wide")}</option>
                 )}
                 {depts.map(d => (
                   <option key={d.id} value={d.id}>{d.name}</option>
@@ -169,18 +174,18 @@ function CreateUserModal({
         </div>
         {error && <p className="text-xs text-red-600 mt-3">{error}</p>}
         <p className="text-xs text-slate-400 mt-3">
-          User will be required to change password on first login.
+          {t("first_login_note")}
         </p>
         <div className="flex gap-3 mt-4">
           {isJwt
-            ? <Button size="sm" onClick={handleCreate} loading={saving}>Create user</Button>
-            : <Button size="sm" disabled>Create user</Button>
+            ? <Button size="sm" onClick={handleCreate} loading={saving}>{t("submit")}</Button>
+            : <Button size="sm" disabled>{t("submit")}</Button>
           }
           <button
             onClick={onClose}
             className="text-sm text-slate-500 hover:text-slate-700"
           >
-            Cancel
+            {tb("cancel")}
           </button>
         </div>
       </div>
@@ -207,6 +212,9 @@ function EditUserModal({
     return () => document.removeEventListener("keydown", handler)
   }, [onClose])
 
+  const t  = useTranslations("pages.users.edit")
+  const tu = useTranslations("pages.users")
+  const tb = useTranslations("common.buttons")
   const [role,     setRole]     = useState(user.role)
   // AUDITOR with null dept_id is tenant-wide: seed deptId="" so the
   // "Tenant-wide" option renders as selected rather than silently
@@ -300,19 +308,16 @@ function EditUserModal({
         </div>
 
         <div className="space-y-3">
-          <Field label="Role">
+          <Field label={t("role")}>
             <select value={role} onChange={e => setRole(e.target.value as any)} className={selectCls}>
-              <option value="ADMIN">ADMIN</option>
-              <option value="DEVELOPER">DEVELOPER</option>
-              <option value="AUDITOR">AUDITOR</option>
-              <option value="VIEWER">VIEWER</option>
+              {ROLES.map(r => <option key={r} value={r}>{r}</option>)}
             </select>
           </Field>
           {role !== "ADMIN" && (
-            <Field label={role === "AUDITOR" ? "Department (optional)" : "Department"}>
+            <Field label={role === "AUDITOR" ? tu("dept_optional") : tu("dept")}>
               <select value={deptId} onChange={e => setDeptId(e.target.value)} className={selectCls}>
                 {role === "AUDITOR" && (
-                  <option value="">Tenant-wide (all departments)</option>
+                  <option value="">{tu("dept_tenant_wide")}</option>
                 )}
                 {depts.map(d => (
                   <option key={d.id} value={d.id}>{d.name}</option>
@@ -326,40 +331,40 @@ function EditUserModal({
 
         <div className="flex gap-2 mt-4">
           {isJwt
-            ? <Button size="sm" onClick={handleSave} loading={saving}>Save</Button>
-            : <Button size="sm" disabled>Save</Button>
+            ? <Button size="sm" onClick={handleSave} loading={saving}>{t("save")}</Button>
+            : <Button size="sm" disabled>{t("save")}</Button>
           }
-          <Button size="sm" variant="secondary" onClick={onClose}>Cancel</Button>
+          <Button size="sm" variant="secondary" onClick={onClose}>{tb("cancel")}</Button>
         </div>
 
         {/* Reset password section */}
         <div className="mt-3 pt-3 border-t border-slate-100">
           {!showReset && !resetDone && (
             <Button size="sm" variant="secondary" onClick={() => { setShowReset(true); setConfirmToggle(false) }}>
-              Reset password
+              {t("reset_password")}
             </Button>
           )}
           {resetDone && (
-            <p className="text-xs text-green-600">Password reset. User will be prompted to change it.</p>
+            <p className="text-xs text-green-600">{t("reset_done")}</p>
           )}
         </div>
 
         {/* Reset password form */}
         {showReset && !resetDone && (
           <div className="mt-3 space-y-2">
-            <Field label="New temporary password">
+            <Field label={t("new_password")}>
               <input
                 type="password"
                 value={newPassword}
                 onChange={e => setNewPassword(e.target.value)}
-                placeholder="Min 8 chars, 1 upper, 1 lower, 1 digit"
+                placeholder={tu("password_hint")}
                 className={inputCls}
               />
             </Field>
             {resetError && <p className="text-xs text-red-600">{resetError}</p>}
             <div className="flex gap-2">
-              <Button size="sm" onClick={handleResetPassword} loading={resetting}>Reset</Button>
-              <Button size="sm" variant="secondary" onClick={() => { setShowReset(false); setResetError(null) }}>Cancel</Button>
+              <Button size="sm" onClick={handleResetPassword} loading={resetting}>{t("reset_submit")}</Button>
+              <Button size="sm" variant="secondary" onClick={() => { setShowReset(false); setResetError(null) }}>{tb("cancel")}</Button>
             </div>
           </div>
         )}
@@ -372,15 +377,15 @@ function EditUserModal({
               variant={user.is_active ? "danger" : "secondary"}
               onClick={() => { setConfirmToggle(true); setShowReset(false); setResetError(null) }}
             >
-              {user.is_active ? "Deactivate user" : "Reactivate user"}
+              {user.is_active ? t("deactivate") : t("reactivate")}
             </Button>
           ) : (
             <div className="flex items-center gap-2">
               <span className="text-xs text-slate-600">
-                {user.is_active ? "Deactivate" : "Reactivate"} this user?
+                {user.is_active ? t("confirm_deactivate") : t("confirm_reactivate")}
               </span>
-              <Button size="sm" variant="danger" onClick={handleToggleActive} loading={toggling}>Confirm</Button>
-              <Button size="sm" variant="secondary" onClick={() => setConfirmToggle(false)}>Cancel</Button>
+              <Button size="sm" variant="danger" onClick={handleToggleActive} loading={toggling}>{tb("confirm")}</Button>
+              <Button size="sm" variant="secondary" onClick={() => setConfirmToggle(false)}>{tb("cancel")}</Button>
             </div>
           )}
         </div>
@@ -396,6 +401,9 @@ function EditUserModal({
 // ── Page ───────────────────────────────────────────────────────────────────────
 
 export default function UsersPage() {
+  const t  = useTranslations("pages.users")
+  const tt = useTranslations("pages.users.table")
+  const tc = useTranslations("common")
   const [showCreate, setShowCreate] = useState(false)
   const [editing,    setEditing]    = useState<DashboardUser | null>(null)
   const [search,     setSearch]     = useState("")
@@ -407,19 +415,28 @@ export default function UsersPage() {
   const depts = (deptsData?.departments ?? []).map(d => ({ id: d.id, name: d.name }))
 
   const formatDate = (iso: string | null) => {
-    if (!iso) return "Never"
+    if (!iso) return t("never")
     return new Date(iso).toLocaleDateString("en-GB", {
       day: "2-digit", month: "short", year: "numeric",
     })
   }
 
+  const columns = [
+    { key: "email",      label: tt("email") },
+    { key: "role",       label: tt("role") },
+    { key: "department", label: tt("department") },
+    { key: "status",     label: tt("status") },
+    { key: "last_login", label: tt("last_login") },
+    { key: "actions",    label: "" },
+  ]
+
   return (
-    <Shell title="Users">
+    <Shell title={t("title")}>
       <PageHeader
-        description="Manage dashboard users, roles, and access."
+        description={t("description")}
         actions={
-          <Button size="sm" onClick={() => setShowCreate(true)} disabled={!isJwt} title={!isJwt ? "Requires admin login" : undefined}>
-            <PlusIcon /> Add user
+          <Button size="sm" onClick={() => setShowCreate(true)} disabled={!isJwt} title={!isJwt ? t("requires_admin") : undefined}>
+            <PlusIcon /> {t("add")}
           </Button>
         }
       />
@@ -432,7 +449,7 @@ export default function UsersPage() {
               type="text"
               value={search}
               onChange={(e) => setSearch(e.target.value)}
-              placeholder="Search users..."
+              placeholder={t("search_placeholder")}
               className="h-8 w-full max-w-xs px-3 text-sm rounded-md border border-slate-200 bg-white text-slate-900 placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-purple-700"
             />
           </div>
@@ -440,17 +457,17 @@ export default function UsersPage() {
             <PageSpinner />
           ) : fetchError && !usersData ? (
             <div className="px-5 py-10 text-center">
-              <p className="text-sm font-semibold text-red-600 mb-1">Failed to load users</p>
-              <p className="text-xs text-slate-400">{fetchError?.message ?? "An unexpected error occurred"}</p>
+              <p className="text-sm font-semibold text-red-600 mb-1">{t("load_error")}</p>
+              <p className="text-xs text-slate-400">{fetchError?.message ?? tc("unexpected_error")}</p>
             </div>
           ) : (
             <div style={{ overflowY: "auto", maxHeight: "520px" }}>
             <table className="w-full text-sm">
               <thead>
                 <tr className="border-b border-slate-100 bg-slate-50">
-                  {["Email", "Role", "Department", "Status", "Last Login", ""].map(h => (
-                    <th key={h} className="text-left px-5 py-2.5 text-xs font-medium text-slate-500 uppercase tracking-wide">
-                      {h}
+                  {columns.map(col => (
+                    <th key={col.key} className="text-left px-5 py-2.5 text-xs font-medium text-slate-500 uppercase tracking-wide">
+                      {col.label}
                     </th>
                   ))}
                 </tr>
@@ -460,8 +477,8 @@ export default function UsersPage() {
                   <tr>
                     <td colSpan={6} className="px-5 py-14 text-center">
                       <div style={{ fontSize: "20px", marginBottom: "8px" }}></div>
-                      <div className="text-sm font-semibold text-slate-700 mb-1">No users yet</div>
-                      <div className="text-xs text-slate-400">Invite team members to give them dashboard access</div>
+                      <div className="text-sm font-semibold text-slate-700 mb-1">{t("empty_title")}</div>
+                      <div className="text-xs text-slate-400">{t("empty_body")}</div>
                     </td>
                   </tr>
                 ) : (
@@ -484,7 +501,7 @@ export default function UsersPage() {
                       <td className="px-5 py-3 font-medium text-slate-900">
                         {user.email}
                         {user.force_password_change && (
-                          <span className="ml-2 text-xs text-amber-600">(change required)</span>
+                          <span className="ml-2 text-xs text-amber-600">{t("change_required")}</span>
                         )}
                       </td>
                       <td className="px-5 py-3">
@@ -506,7 +523,7 @@ export default function UsersPage() {
                           onMouseEnter={e => (e.currentTarget as HTMLElement).style.textDecoration = "underline"}
                           onMouseLeave={e => (e.currentTarget as HTMLElement).style.textDecoration = "none"}
                         >
-                          Manage
+                          {tc("buttons.manage")}
                         </button>
                       </td>
                     </tr>

@@ -492,6 +492,55 @@
         "key_empty": "No key data"
       }
     },
+    "users": {
+      "title": "Users",
+      "description": "Manage dashboard users, roles, and access.",
+      "add": "Add user",
+      "requires_admin": "Requires admin login",
+      "search_placeholder": "Search users...",
+      "load_error": "Failed to load users",
+      "empty_title": "No users yet",
+      "empty_body": "Invite team members to give them dashboard access",
+      "change_required": "(change required)",
+      "never": "Never",
+      "password_hint": "Min 8 chars, 1 upper, 1 lower, 1 digit",
+      "dept_tenant_wide": "Tenant-wide (all departments)",
+      "dept_optional": "Department (optional)",
+      "dept_required": "Department *",
+      "dept": "Department",
+      "status": {
+        "active": "Active",
+        "inactive": "Inactive"
+      },
+      "table": {
+        "email": "Email",
+        "role": "Role",
+        "department": "Department",
+        "status": "Status",
+        "last_login": "Last Login"
+      },
+      "create": {
+        "title": "New User",
+        "email": "Email *",
+        "email_placeholder": "user@example.com",
+        "password": "Temporary password *",
+        "role": "Role *",
+        "first_login_note": "User will be required to change password on first login.",
+        "submit": "Create user"
+      },
+      "edit": {
+        "role": "Role",
+        "save": "Save",
+        "reset_password": "Reset password",
+        "reset_done": "Password reset. User will be prompted to change it.",
+        "new_password": "New temporary password",
+        "reset_submit": "Reset",
+        "deactivate": "Deactivate user",
+        "reactivate": "Reactivate user",
+        "confirm_deactivate": "Deactivate this user?",
+        "confirm_reactivate": "Reactivate this user?"
+      }
+    },
     "system": {
       "title": "System Status",
       "description": "Monitor service health and runtime configuration.",
