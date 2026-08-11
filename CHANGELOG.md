@@ -2,7 +2,73 @@
 
 All notable changes to WrapSec are documented here.
 
-## [1.8.0] - 2026-08-05
+## [1.8.1] - 2026-08-11
+
+Error-handling and localization foundation. Reworks every error response onto a
+stable, localization-ready contract and adds a locale preference for users and
+tenants. Backend responses stay English; the structure is now ready for
+translated dashboards (the frontend rendering lands in a follow-up).
+
+### Added
+- **Stable, localization-ready error contract.** Every error response now carries
+  `code` (a stable, add-only machine-readable identifier), `severity`
+  (`ERROR` / `WARNING` / `INFO`), a localization `key`, and structured `params`,
+  alongside the existing `message` and `trace_id`. `code` is a documented public
+  contract that SDKs and SIEM rules can branch on; `message` is an English
+  convenience and may change without changing the code.
+- **Structured field validation (422).** Validation errors now include an
+  `invalid_params` array -- one entry per field with the field name, a stable
+  `ValidationCode` (`REQUIRED`, `INVALID_EMAIL`, `TOO_LONG`, `INVALID_ENUM`,
+  `INVALID_URL`, ...), a localization key, and params -- so a form can attach each
+  error to the right input.
+- **Locale preference (users and tenants).** A preferred locale (BCP-47) can be
+  stored per user and per tenant. `GET /v1/auth/me` returns `locale` (the stored
+  preference) and `resolved_locale` (User -> Tenant -> System default -> English).
+  A new `PATCH /v1/auth/me` lets a user set their own locale; `GET`/`PUT
+  /v1/admin/tenant` expose and set the tenant default. Unsupported locales are
+  rejected `422 INVALID_ENUM`. Configured via `SUPPORTED_LOCALES` (default `en`)
+  and `SYSTEM_DEFAULT_LOCALE`, with a startup guard that the system default is a
+  supported locale.
+- **New error codes.** `CANNOT_DEACTIVATE_SELF` and `LAST_ADMIN` (both `409`) make
+  the admin user-management guards explicit and client-actionable;
+  `INVALID_PASSWORD` and `IDEMPOTENCY_CONFLICT` are now first-class catalog codes.
+
+### Changed
+- **Error messages refined for a security console** (for example
+  `INVALID_CREDENTIALS` -> "Invalid credentials."). Wording is presentation and
+  localization-driven; the stable codes are unchanged.
+- **Rate-limit code unified.** The login and middleware rate-limit responses now
+  use `RATE_LIMIT_EXCEEDED` (previously `RATE_LIMITED` in two paths) -- one
+  canonical code for the condition.
+- **Admin self-deactivation / last-admin guards** return `409` with the dedicated
+  codes above instead of a generic `400 INVALID_REQUEST`.
+- **Responses no longer echo internal identifiers or raw validator text.**
+  Not-found responses name the resource but not the id; validator detail (SSRF
+  URL reason, password-strength rules) is logged and correlated via `trace_id`,
+  never returned. The top-level `422` message is generic; the specifics live in
+  `invalid_params`.
+- `key_type` on API-key creation is validated as an enum, producing a structured
+  `422 INVALID_ENUM` instead of an ad-hoc message.
+
+### Database
+- Nullable `locale` column added to `users` and `tenants` (migration `0013`,
+  additive and non-locking; a no-op on a fresh install).
+
+### Migration notes
+- Additive on the wire: the new envelope fields are added, not removed, so
+  clients that read `error.message` keep working. Clients that branch on the
+  error CODE should note the `RATE_LIMITED` -> `RATE_LIMIT_EXCEEDED` unification
+  and the new `409` admin-guard codes.
+
+## [1.8.0] - 2026-08-10
+
+RAG-security and dashboard release. Adds source-aware policy posture, a batch
+scan endpoint with RAG-security SDK helpers, a Security-by-Source dashboard,
+and a RAG evaluation corpus; a ground-up overhaul of the Requests experience
+with a unified visual system across every dashboard page; uniform
+department/application listings; two authenticated-session fixes; and a pass
+of server-side input validation. No public scan/chat/admin API changes; the
+scan, proxy, and audit contracts are wire-compatible with 1.7.x clients.
 
 ### Added
 - **Source-aware policy posture (opt-in).** Trust-boundary provenance can now
@@ -44,12 +110,76 @@ All notable changes to WrapSec are documented here.
   shows no change on this corpus -- the calibrated recommendation is to keep the
   default `0` until graded/mid-band scoring (Tier-2 transformer) lands. The
   eval harness now carries `input_source` per case.
+- **Requests triage table with a detail drawer.** The Requests page is now a
+  triage surface: a compact table of scans opens a right-side detail drawer
+  with a verdict hero (decision, risk, primary reason), config-driven tabs,
+  and recommended actions. Agent, provenance, and content-source fields are
+  projected into the drawer, and a single "Open Agent Run" link is the one
+  navigation into an agent run's timeline.
+- **Filter-scoped Security Overview strip.** The Requests view carries a
+  Security Overview strip that recomputes against the active filters, showing
+  average risk and the severity distribution for exactly the rows in view.
+- **Webhook pause/resume.** A destination can be paused and resumed from the
+  Integrations page, guarded by a confirmation modal, with hardened error
+  handling on the toggle.
+
+### Changed
+- **Unified dashboard visual system.** Every page now shares one component
+  set -- `PageHeader`, `Table`, `StatCard`, `KpiCard`, `RangeTabs`, and a
+  single badge geometry across decision / threat / severity / mode / source.
+  Overview and Analytics KPI cards are one `KpiCard`; page headers are
+  vertically aligned with range controls folded into the header; the
+  collapsed sidebar rail hides its scrollbar. Header and section copy was
+  rewritten for a consistent professional tone (the request drawer's
+  "Verdict" section is now "Summary").
+- **URL is the source of truth for list and drawer state.** List filters,
+  pagination, and the open detail drawer are driven from the URL
+  (drawer-peek + resource-route navigation), so views are shareable and
+  back/forward behaves correctly. List-param writes read the live URL.
+- **Requests filter toolbar and labels.** A single-row filter toolbar with a
+  flexible search replaces the two-row layout that wrapped unevenly; the
+  primary count is renamed from "Total" to "Requests" with compact counts and
+  uniform KPI accents; the redundant chip row and the static trust-boundary
+  blurb were removed. A run renders as plain text in both the row and the
+  drawer.
+- **Uniform department and application listings.** Departments and
+  applications share one listing table with a consistent name + slug identity
+  and a policy badge, and the department row shows its application count.
+  Slugs auto-derive from the name (still editable).
 
 ### Fixed
 - **Webhook deletion 500.** Removing a webhook endpoint that had delivery
   history failed with a foreign-key violation (the `webhook_delivery_attempts`
   FK has no `ON DELETE CASCADE`). Deletion now clears the endpoint's delivery
   history first, in the same transaction.
+- **Silent logout mid-session.** The session-indicator cookie was scoped to
+  the access-token lifetime, so it expired while the refresh token was still
+  valid and dropped the user mid-session. It now lives as long as the refresh
+  token.
+- **Spurious logouts under concurrent token refresh.** Refreshes are now
+  single-flight (all in-flight refreshes share one request), and the proxy no
+  longer clears the session on a recoverable 401, preventing the rotating
+  refresh token from racing itself into a false logout.
+- **Requests filter clear behavior.** "Clear all" and clearing a date now
+  compose their URL updates in a single tick, fixing a regression where the
+  pending-ref path left filters in an inconsistent state.
+- **Duplicate error message on create.** Opening a department/application
+  create form no longer shows the same validation error twice; the 422 email
+  message is a concise, field-scoped line instead of the raw email-validator
+  sentence.
+
+### Security
+- **Server-side input validation hardening.** Contact and owner emails are
+  validated as email addresses (`EmailStr`); names and descriptions carry
+  length caps; API `key_type` is an enum; UUID and ISO fields are format-
+  checked; the application `environment` is validated against a
+  `production` / `staging` / `development` enum; and webhook subscriptions
+  accept only allowlisted event types. These are enforced at the API
+  boundary, so malformed or oversized input is rejected before it reaches the
+  data layer.
+- **Slug integrity for departments and applications.** Slugs are canonicalized
+  server-side and are unique per tenant among active records; a colliding slug
+  is rejected with 409 instead of silently creating a duplicate identity.
 
 ## [1.7.0] - 2026-08-04
 
