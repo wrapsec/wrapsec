@@ -1,0 +1,47 @@
+{
+  "errors": {
+    "REQUIRED": "{field} ist erforderlich.",
+    "INVALID_EMAIL": "{field} muss eine gültige E-Mail-Adresse sein.",
+    "TOO_LONG": "{field} darf höchstens {max_length} Zeichen enthalten.",
+    "TOO_SHORT": "{field} muss mindestens {min_length} Zeichen enthalten.",
+    "INVALID_ENUM": "{field} muss einen der folgenden Werte haben: {allowed}.",
+    "INVALID_UUID": "{field} muss eine gültige Kennung sein.",
+    "INVALID_URL": "{field} muss eine gültige öffentliche URL sein.",
+    "INVALID_TYPE": "{field} hat einen ungültigen Typ.",
+    "OUT_OF_RANGE": "{field} liegt außerhalb des zulässigen Bereichs.",
+    "INVALID_VALUE": "{field} ist ungültig."
+  },
+  "department": {
+    "name": "Name",
+    "slug": "Slug",
+    "description": "Beschreibung",
+    "contact_email": "Kontakt-E-Mail",
+    "name_placeholder": "Finanzabteilung",
+    "slug_placeholder": "finanzabteilung",
+    "slug_hint": "Wird automatisch aus dem Namen generiert. Zum Überschreiben bearbeiten.",
+    "description_placeholder": "Finanzbereich",
+    "contact_placeholder": "finanzen@beispiel.de"
+  },
+  "application": {
+    "name": "Name",
+    "slug": "Slug",
+    "dept_id": "Abteilung",
+    "environment": "Umgebung",
+    "owner_name": "Name des Verantwortlichen",
+    "owner_email": "E-Mail des Verantwortlichen",
+    "description": "Beschreibung",
+    "name_placeholder": "Finanz-Bot",
+    "slug_placeholder": "finanz-bot",
+    "slug_hint": "Wird automatisch aus dem Namen generiert. Zum Überschreiben bearbeiten.",
+    "select_department": "Abteilung auswählen",
+    "owner_name_placeholder": "Max Mustermann",
+    "owner_email_placeholder": "max@beispiel.de",
+    "description_placeholder": "System zur Finanzautomatisierung",
+    "env_production": "Produktion",
+    "env_staging": "Staging",
+    "env_development": "Entwicklung",
+    "name_required": "Name ist erforderlich.",
+    "slug_required": "Slug ist erforderlich.",
+    "department_required": "Abteilung ist erforderlich."
+  }
+}

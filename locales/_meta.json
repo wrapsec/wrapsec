@@ -2,6 +2,7 @@
   "catalog_version": "1.0.0",
   "default_locale": "en",
   "locales": {
-    "en": { "direction": "ltr" }
+    "en": { "direction": "ltr" },
+    "de": { "direction": "ltr" }
   }
 }

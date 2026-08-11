@@ -1,0 +1,101 @@
+{
+  "app_name": "WrapSec",
+  "tagline": "KI-Sicherheitsgateway",
+  "version": "v1.0.0",
+  "version_footer": "WrapSec v1.0",
+  "website": "wrapsec.com",
+  "buttons": {
+    "create": "Erstellen",
+    "cancel": "Abbrechen",
+    "confirm": "Bestätigen",
+    "back": "Zurück",
+    "deactivate": "Deaktivieren",
+    "confirm_deactivate": "Deaktivierung bestätigen",
+    "manage": "Verwalten"
+  },
+  "copy": "Kopieren",
+  "copied": "Kopiert",
+  "all_time": "Gesamter Zeitraum",
+  "never": "Nie",
+  "pagination": {
+    "showing": "<b>{range}</b> von <b>{total}</b> werden angezeigt",
+    "first": "Erste",
+    "previous": "Zurück",
+    "next": "Weiter",
+    "last": "Letzte"
+  },
+  "decision": {
+    "blocked": "Blockiert",
+    "sanitized": "Bereinigt",
+    "allowed": "Zugelassen"
+  },
+  "threat_category": {
+    "PROMPT_INJECTION": "Prompt-Injection",
+    "JAILBREAK": "Jailbreak",
+    "MALICIOUS_INTENT": "Bösartige Absicht",
+    "DATA_EXFILTRATION": "Datenexfiltration",
+    "PII": "PII",
+    "TOXICITY": "Toxizität"
+  },
+  "trust_tier": {
+    "trusted": "Vertrauenswürdig",
+    "untrusted": "Nicht vertrauenswürdig",
+    "unknown": "Unbekannt"
+  },
+  "source_tooltip": {
+    "untrusted": "Nicht vertrauenswürdige Quelle - indirekte Prompt-Injection-Angriffsfläche",
+    "user": "Endbenutzer-Prompt"
+  },
+  "aria": {
+    "breadcrumb": "Brotkrümelnavigation",
+    "close": "Schließen",
+    "detail": "Details"
+  },
+  "requires_admin": "Administratorzugriff erforderlich - <link>mit Ihrer E-Mail-Adresse anmelden</link>",
+  "overridden": "Überschrieben",
+  "inherits_global": "Erbt globale Einstellungen",
+  "unexpected_error": "Ein unerwarteter Fehler ist aufgetreten.",
+  "nav": {
+    "overview": "Übersicht",
+    "requests": "Anfragen",
+    "analytics": "Analysen",
+    "sources": "Quellen",
+    "scanner": "Scanner",
+    "settings": "Einstellungen",
+    "api_keys": "API-Schlüssel",
+    "integrations": "Integrationen",
+    "users": "Benutzer",
+    "departments": "Abteilungen",
+    "applications": "Anwendungen",
+    "system": "System"
+  },
+  "nav_section": {
+    "configuration": "Konfiguration",
+    "administration": "Administration"
+  },
+  "sidebar": {
+    "collapse": "Einklappen",
+    "expand": "Ausklappen",
+    "about": "Über WrapSec"
+  },
+  "menu": {
+    "profile": "Profil",
+    "sign_out": "Abmelden"
+  },
+  "status": {
+    "operational": "Alle Systeme betriebsbereit",
+    "degraded": "Eingeschränkt",
+    "degraded_services": "Eingeschränkt: {services}",
+    "down": "API nicht verfügbar"
+  },
+  "session": {
+    "expiring_title": "Sitzung läuft bald ab",
+    "expiring_body": "Sie werden wegen Inaktivität in",
+    "log_out_now": "Jetzt abmelden",
+    "stay_logged_in": "Angemeldet bleiben"
+  },
+  "about": {
+    "mission": "Entwickelt, um jede KI-Interaktion zu schützen.",
+    "copyright": "Copyright 2026 WrapSec"
+  }
+}
