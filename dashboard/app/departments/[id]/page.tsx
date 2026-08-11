@@ -4,6 +4,7 @@
 "use client"
 
 import { useState } from "react"
+import { useTranslations } from "next-intl"
 import { useAuthMode } from "@/hooks/useAuthMode"
 import { useParams } from "next/navigation"
 import useSWR from "swr"
@@ -19,15 +20,15 @@ import { PageHeader } from "@/components/ui/PageHeader"
 import { useBackNav } from "@/hooks/useBackNav"
 import { useFormat } from "@/hooks/useFormat"
 
-const PROVIDERS = [
-  { value: "openai", label: "OpenAI / OpenAI-compatible" },
-  { value: "ollama", label: "Ollama (Local)" },
-  { value: "custom", label: "Custom (OpenAI-compatible)" },
-]
+const PROVIDERS = ["openai", "ollama", "custom"] as const
 
 export default function DepartmentDetailPage() {
   const { id } = useParams<{ id: string }>()
   const fmt = useFormat()
+  const t  = useTranslations("pages.detail")
+  const td = useTranslations("pages.dept_detail")
+  const tp = useTranslations("pages.settings.providers")
+  const tb = useTranslations("common.buttons")
 
   const { data: dept, isLoading, mutate } = useSWR(
     `department-${id}`, () => getDepartment(id)
@@ -204,15 +205,15 @@ export default function DepartmentDetailPage() {
 
   const goBack = useBackNav("/departments")
 
-  if (isLoading) return <Shell title="Department"><PageSpinner /></Shell>
-  if (!dept)     return <Shell title="Department"><p className="text-sm text-slate-500">Department not found.</p></Shell>
+  if (isLoading) return <Shell title={td("title")}><PageSpinner /></Shell>
+  if (!dept)     return <Shell title={td("title")}><p className="text-sm text-slate-500">{td("not_found")}</p></Shell>
 
   return (
     <Shell title={dept.name}>
       <div className="max-w-2xl space-y-5">
         <PageHeader
           breadcrumb={[
-            { label: "Departments", href: "/departments" },
+            { label: td("breadcrumb"), href: "/departments" },
             { label: dept.name },
           ]}
           onBack={goBack}
@@ -222,14 +223,14 @@ export default function DepartmentDetailPage() {
         {stats && (
           <div className="grid grid-cols-4 gap-3">
             {[
-              { label: "Total requests", value: fmt.number(stats.total) },
+              { label: td("stat_total"), value: fmt.number(stats.total) },
               {
-                label: "Block rate",
+                label: td("stat_block_rate"),
                 value: `${Math.round(stats.block_rate * 100)}%`,
                 color: stats.block_rate > 0.3 ? "text-red-600" : "text-slate-900",
               },
-              { label: "Avg latency", value: `${stats.avg_latency_ms.toFixed(1)}ms` },
-              { label: "Top threat",  value: stats.top_threats[0]?.category ?? "None" },
+              { label: td("stat_avg_latency"), value: `${stats.avg_latency_ms.toFixed(1)}ms` },
+              { label: td("stat_top_threat"),  value: stats.top_threats[0]?.category ?? td("none") },
             ].map(({ label, value, color }) => (
               <div key={label} className="bg-white rounded-xl border border-slate-200 px-4 py-3">
                 <p className="text-xs text-slate-400 mb-1">{label}</p>
@@ -242,7 +243,7 @@ export default function DepartmentDetailPage() {
         {/* Decision breakdown */}
         {stats && stats.total > 0 && (
           <div className="bg-white rounded-xl border border-slate-200 p-4">
-            <p className="text-xs font-semibold text-slate-500 uppercase tracking-wider mb-3">Decision breakdown</p>
+            <p className="text-xs font-semibold text-slate-500 uppercase tracking-wider mb-3">{td("decision_breakdown")}</p>
             <div className="flex gap-3">
               {Object.entries(stats.decisions).map(([decision, count]) => {
                 const pct   = Math.round((count / stats.total) * 100)
@@ -265,15 +266,15 @@ export default function DepartmentDetailPage() {
 
         {/* Department info */}
         <Card>
-          <CardHeader title="Department Info" />
+          <CardHeader title={td("info_title")} />
           <div className="grid grid-cols-2 gap-3">
             {[
-              { label: "Name",          value: dept.name },
-              { label: "Slug",          value: dept.slug },
-              { label: "Description",   value: dept.description   || "-" },
-              { label: "Contact email", value: dept.contact_email || "-" },
-              { label: "Status",        value: dept.is_active ? "Active" : "Inactive" },
-              { label: "Created",       value: new Date(dept.created_at).toLocaleDateString() },
+              { label: td("info_name"),        value: dept.name },
+              { label: td("info_slug"),        value: dept.slug },
+              { label: td("info_description"), value: dept.description   || "-" },
+              { label: td("info_contact"),     value: dept.contact_email || "-" },
+              { label: td("info_status"),      value: dept.is_active ? t("active") : t("inactive") },
+              { label: td("info_created"),     value: new Date(dept.created_at).toLocaleDateString() },
             ].map(({ label, value }) => (
               <div key={label} className="bg-slate-50 rounded-lg px-3 py-2.5">
                 <p className="text-xs text-slate-400 mb-0.5">{label}</p>
@@ -287,12 +288,12 @@ export default function DepartmentDetailPage() {
         <Card>
           <div className="flex items-center justify-between mb-4">
             <CardHeader
-              title="Policy Override"
-              subtitle="Override global thresholds for this department. Leave blank to inherit."
+              title={td("policy_title")}
+              subtitle={td("policy_subtitle")}
             />
             {!editing && isJwt && (
               <Button onClick={handleEditStart} variant="secondary">
-                Edit
+                {t("edit")}
               </Button>
             )}
           </div>
@@ -300,24 +301,24 @@ export default function DepartmentDetailPage() {
           {!editing ? (
             <div className="space-y-3">
               <div className="flex items-center justify-between py-2 border-b border-slate-50">
-                <span className="text-sm text-slate-600">Block threshold</span>
+                <span className="text-sm text-slate-600">{t("block_threshold")}</span>
                 <span className="text-sm font-mono text-slate-900">
                   {dept.policy_override?.thresholds?.block ?? (
-                    <span className="text-slate-400">Inherits global (0.7)</span>
+                    <span className="text-slate-400">{td("inherits_block")}</span>
                   )}
                 </span>
               </div>
               <div className="flex items-center justify-between py-2">
-                <span className="text-sm text-slate-600">Sanitize threshold</span>
+                <span className="text-sm text-slate-600">{t("sanitize_threshold")}</span>
                 <span className="text-sm font-mono text-slate-900">
                   {dept.policy_override?.thresholds?.sanitize ?? (
-                    <span className="text-slate-400">Inherits global (0.4)</span>
+                    <span className="text-slate-400">{td("inherits_sanitize")}</span>
                   )}
                 </span>
               </div>
               {dept.policy_override === null && (
                 <p className="text-xs text-slate-400 pt-1">
-                  No overrides set - this department uses the global policy.
+                  {td("no_overrides")}
                 </p>
               )}
             </div>
@@ -325,43 +326,43 @@ export default function DepartmentDetailPage() {
             <div className="space-y-4">
               <div className="grid grid-cols-2 gap-4">
                 <div className="flex flex-col gap-1">
-                  <label className="text-xs font-medium text-slate-700">Block threshold</label>
+                  <label className="text-xs font-medium text-slate-700">{t("block_threshold")}</label>
                   <input
                     type="number"
                     min={0.01} max={1.0} step={0.05}
                     value={blockVal}
                     onChange={(e) => setBlockVal(e.target.value)}
-                    placeholder="e.g. 0.5 (global: 0.7)"
+                    placeholder={td("block_ph")}
                     className="h-9 px-3 text-sm rounded-md border border-slate-200 bg-white text-slate-900 placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-purple-700"
                   />
-                  <p className="text-xs text-slate-400">Leave blank to inherit global</p>
+                  <p className="text-xs text-slate-400">{td("leave_blank")}</p>
                 </div>
                 <div className="flex flex-col gap-1">
-                  <label className="text-xs font-medium text-slate-700">Sanitize threshold</label>
+                  <label className="text-xs font-medium text-slate-700">{t("sanitize_threshold")}</label>
                   <input
                     type="number"
                     min={0.0} max={0.99} step={0.05}
                     value={sanitizeVal}
                     onChange={(e) => setSanitizeVal(e.target.value)}
-                    placeholder="e.g. 0.3 (global: 0.4)"
+                    placeholder={td("sanitize_ph")}
                     className="h-9 px-3 text-sm rounded-md border border-slate-200 bg-white text-slate-900 placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-purple-700"
                   />
-                  <p className="text-xs text-slate-400">Leave blank to inherit global</p>
+                  <p className="text-xs text-slate-400">{td("leave_blank")}</p>
                 </div>
               </div>
               {error && <p className="text-xs text-red-600">{error}</p>}
               <div className="flex items-center gap-3">
                 {isJwt
-                  ? <Button onClick={handleSave} loading={saving}>Save overrides</Button>
-                  : <Button disabled>Save overrides</Button>
+                  ? <Button onClick={handleSave} loading={saving}>{t("save_overrides")}</Button>
+                  : <Button disabled>{t("save_overrides")}</Button>
                 }
                 <button
                   onClick={() => { setEditing(false); setError(null) }}
                   className="text-sm text-slate-500 hover:text-slate-700"
                 >
-                  Cancel
+                  {t("cancel")}
                 </button>
-                {saved && <span className="text-xs text-green-600">Saved</span>}
+                {saved && <span className="text-xs text-green-600">{t("saved")}</span>}
               </div>
             </div>
           )}
@@ -371,11 +372,11 @@ export default function DepartmentDetailPage() {
         <Card>
           <div className="flex items-center justify-between mb-4">
             <CardHeader
-              title="LLM Detection Override"
-              subtitle="Use a department-specific LLM provider for threat detection. Inherits global config if not set."
+              title={t("llm_title")}
+              subtitle={td("llm_subtitle")}
             />
             {!llmEditing && isJwt && (
-              <Button onClick={handleLlmEditStart} variant="secondary">Edit</Button>
+              <Button onClick={handleLlmEditStart} variant="secondary">{t("edit")}</Button>
             )}
           </div>
 
@@ -384,11 +385,11 @@ export default function DepartmentDetailPage() {
               {dept.policy_override?.llm ? (
                 <>
                   {[
-                    ["Provider",    dept.policy_override.llm.provider],
-                    ["Model",       dept.policy_override.llm.model],
-                    ["Base URL",    dept.policy_override.llm.base_url],
-                    ["Timeout",     dept.policy_override.llm.timeout ? `${dept.policy_override.llm.timeout}s` : undefined],
-                    ["API key",     dept.policy_override.llm.api_key_masked ?? "Using env var"],
+                    [t("provider"), dept.policy_override.llm.provider],
+                    [t("model"),    dept.policy_override.llm.model],
+                    [t("base_url"), dept.policy_override.llm.base_url],
+                    [t("timeout"),  dept.policy_override.llm.timeout ? `${dept.policy_override.llm.timeout}s` : undefined],
+                    [t("api_key"),  dept.policy_override.llm.api_key_masked ?? t("using_env")],
                   ].filter(([, v]) => v).map(([label, value]) => (
                     <div key={label as string} className="flex items-center justify-between py-1.5 border-b border-slate-50 last:border-0">
                       <span className="text-sm text-slate-600">{label}</span>
@@ -397,77 +398,77 @@ export default function DepartmentDetailPage() {
                   ))}
                 </>
               ) : (
-                <p className="text-xs text-slate-400">Inherits global LLM configuration.</p>
+                <p className="text-xs text-slate-400">{td("llm_inherits")}</p>
               )}
             </div>
           ) : (
             <div className="space-y-4">
               <div className="grid grid-cols-2 gap-4">
                 <div className="flex flex-col gap-1">
-                  <label className="text-xs font-medium text-slate-700">Provider</label>
+                  <label className="text-xs font-medium text-slate-700">{t("provider")}</label>
                   <select
                     value={llmProvider}
                     onChange={(e) => setLlmProvider(e.target.value)}
                     className="h-9 px-3 text-sm rounded-md border border-slate-200 bg-white text-slate-900 focus:outline-none focus:ring-2 focus:ring-purple-700"
                   >
                     {PROVIDERS.map((p) => (
-                      <option key={p.value} value={p.value}>{p.label}</option>
+                      <option key={p} value={p}>{tp(p)}</option>
                     ))}
                   </select>
                 </div>
                 <div className="flex flex-col gap-1">
-                  <label className="text-xs font-medium text-slate-700">Model</label>
+                  <label className="text-xs font-medium text-slate-700">{t("model")}</label>
                   <input type="text" value={llmModel} onChange={(e) => setLlmModel(e.target.value)}
-                    placeholder="gpt-4o-mini"
+                    placeholder={t("model_ph")}
                     className="h-9 px-3 text-sm rounded-md border border-slate-200 bg-white text-slate-900 placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-purple-700" />
                 </div>
                 <div className="flex flex-col gap-1 col-span-2">
-                  <label className="text-xs font-medium text-slate-700">Base URL</label>
+                  <label className="text-xs font-medium text-slate-700">{t("base_url")}</label>
                   <input type="text" value={llmBaseUrl} onChange={(e) => setLlmBaseUrl(e.target.value)}
-                    placeholder="https://api.openai.com/v1"
+                    placeholder={t("base_url_ph")}
                     className="h-9 px-3 text-sm rounded-md border border-slate-200 bg-white text-slate-900 placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-purple-700" />
                 </div>
                 {llmProvider !== "ollama" && (
                   <div className="flex flex-col gap-1 col-span-2">
                     <label className="text-xs font-medium text-slate-700">
-                      API key
+                      {t("api_key")}
                       {dept.policy_override?.llm?.api_key_masked && (
-                        <span className="ml-2 font-normal text-slate-400">current: {dept.policy_override.llm.api_key_masked}</span>
+                        <span className="ml-2 font-normal text-slate-400">{t("api_key_current", { masked: dept.policy_override.llm.api_key_masked })}</span>
                       )}
                     </label>
                     <input type="password" value={llmApiKey} onChange={(e) => setLlmApiKey(e.target.value)}
-                      placeholder={dept.policy_override?.llm?.api_key_masked ? "Leave blank to keep current key" : "sk-..."}
+                      placeholder={dept.policy_override?.llm?.api_key_masked ? t("api_key_keep") : t("api_key_new")}
                       className="h-9 px-3 text-sm rounded-md border border-slate-200 bg-white text-slate-900 placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-purple-700" />
-                    <p className="text-xs text-slate-400">Stored encrypted. Falls back to global key if blank.</p>
+                    <p className="text-xs text-slate-400">{td("llm_encrypted")}</p>
                   </div>
                 )}
                 <div className="flex flex-col gap-1">
-                  <label className="text-xs font-medium text-slate-700">Timeout (seconds)</label>
+                  <label className="text-xs font-medium text-slate-700">{t("timeout")}</label>
                   <input type="number" min={5} max={120} value={llmTimeout} onChange={(e) => setLlmTimeout(e.target.value)}
-                    placeholder="30"
+                    placeholder={t("timeout_ph")}
                     className="h-9 px-3 text-sm rounded-md border border-slate-200 bg-white text-slate-900 focus:outline-none focus:ring-2 focus:ring-purple-700" />
                 </div>
               </div>
               {llmError && <p className="text-xs text-red-600">{llmError}</p>}
               <div className="flex items-center gap-3 flex-wrap">
-                <Button onClick={handleLlmSave} loading={llmSaving}>Save override</Button>
+                <Button onClick={handleLlmSave} loading={llmSaving}>{t("save_override")}</Button>
                 {dept.policy_override?.llm && (
                   confirmLlmClear ? (
                     <div className="flex items-center gap-2">
-                      <span className="text-xs text-red-600">Remove override?</span>
-                      <Button variant="danger" size="sm" onClick={handleLlmClear} loading={llmSaving}>Confirm</Button>
+                      <span className="text-xs text-red-600">{t("remove_override_q")}</span>
+                      <Button variant="danger" size="sm" onClick={handleLlmClear} loading={llmSaving}>{t("confirm")}</Button>
                       <button onClick={() => setConfirmLlmClear(false)}
-                        className="text-sm text-slate-500 hover:text-slate-700">Cancel</button>
+                        className="text-sm text-slate-500 hover:text-slate-700">{t("cancel")}</button>
                     </div>
                   ) : (
-                    <Button variant="danger" onClick={() => setConfirmLlmClear(true)}>Clear override</Button>
+                    <Button variant="danger" onClick={() => setConfirmLlmClear(true)}>{t("clear_override")}</Button>
                   )
                 )}
                 {!confirmLlmClear && (
                   <button onClick={() => { setLlmEditing(false); setLlmError(null); setConfirmLlmClear(false) }}
-                    className="text-sm text-slate-500 hover:text-slate-700">Cancel</button>
+                    className="text-sm text-slate-500 hover:text-slate-700">{t("cancel")}</button>
                 )}
-                {llmSaved && <span className="text-xs text-green-600">Saved</span>}
+                {llmSaved && <span className="text-xs text-green-600">{t("saved")}</span>}
               </div>
             </div>
           )}
@@ -477,11 +478,11 @@ export default function DepartmentDetailPage() {
         <Card>
           <div className="flex items-center justify-between mb-4">
             <CardHeader
-              title="Proxy Provider Override"
-              subtitle="Department-level fallback provider for proxy mode when no per-key config exists."
+              title={t("proxy_title")}
+              subtitle={td("proxy_subtitle")}
             />
             {!proxyEditing && isJwt && (
-              <Button onClick={handleProxyEditStart} variant="secondary">Edit</Button>
+              <Button onClick={handleProxyEditStart} variant="secondary">{t("edit")}</Button>
             )}
           </div>
 
@@ -490,11 +491,11 @@ export default function DepartmentDetailPage() {
               {dept.policy_override?.proxy_provider ? (
                 <>
                   {[
-                    ["Provider",      dept.policy_override.proxy_provider.provider],
-                    ["Default model", dept.policy_override.proxy_provider.default_model],
-                    ["Base URL",      dept.policy_override.proxy_provider.base_url],
-                    ["Timeout",       dept.policy_override.proxy_provider.timeout_seconds ? `${dept.policy_override.proxy_provider.timeout_seconds}s` : undefined],
-                    ["API key",       dept.policy_override.proxy_provider.api_key_masked ?? "Using env var"],
+                    [t("provider"),      dept.policy_override.proxy_provider.provider],
+                    [t("default_model"), dept.policy_override.proxy_provider.default_model],
+                    [t("base_url"),      dept.policy_override.proxy_provider.base_url],
+                    [t("timeout"),       dept.policy_override.proxy_provider.timeout_seconds ? `${dept.policy_override.proxy_provider.timeout_seconds}s` : undefined],
+                    [t("api_key"),       dept.policy_override.proxy_provider.api_key_masked ?? t("using_env")],
                   ].filter(([, v]) => v).map(([label, value]) => (
                     <div key={label as string} className="flex items-center justify-between py-1.5 border-b border-slate-50 last:border-0">
                       <span className="text-sm text-slate-600">{label}</span>
@@ -503,77 +504,77 @@ export default function DepartmentDetailPage() {
                   ))}
                 </>
               ) : (
-                <p className="text-xs text-slate-400">No override - API keys must have their own proxy configuration.</p>
+                <p className="text-xs text-slate-400">{td("proxy_no_override")}</p>
               )}
             </div>
           ) : (
             <div className="space-y-4">
               <div className="grid grid-cols-2 gap-4">
                 <div className="flex flex-col gap-1">
-                  <label className="text-xs font-medium text-slate-700">Provider</label>
+                  <label className="text-xs font-medium text-slate-700">{t("provider")}</label>
                   <select
                     value={proxyProvider}
                     onChange={(e) => setProxyProvider(e.target.value)}
                     className="h-9 px-3 text-sm rounded-md border border-slate-200 bg-white text-slate-900 focus:outline-none focus:ring-2 focus:ring-purple-700"
                   >
                     {PROVIDERS.map((p) => (
-                      <option key={p.value} value={p.value}>{p.label}</option>
+                      <option key={p} value={p}>{tp(p)}</option>
                     ))}
                   </select>
                 </div>
                 <div className="flex flex-col gap-1">
-                  <label className="text-xs font-medium text-slate-700">Default model</label>
+                  <label className="text-xs font-medium text-slate-700">{t("default_model")}</label>
                   <input type="text" value={proxyModel} onChange={(e) => setProxyModel(e.target.value)}
-                    placeholder="gpt-4o"
+                    placeholder={t("model_ph_proxy")}
                     className="h-9 px-3 text-sm rounded-md border border-slate-200 bg-white text-slate-900 placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-purple-700" />
                 </div>
                 <div className="flex flex-col gap-1 col-span-2">
-                  <label className="text-xs font-medium text-slate-700">Base URL</label>
+                  <label className="text-xs font-medium text-slate-700">{t("base_url")}</label>
                   <input type="text" value={proxyBaseUrl} onChange={(e) => setProxyBaseUrl(e.target.value)}
-                    placeholder="https://api.openai.com/v1"
+                    placeholder={t("base_url_ph")}
                     className="h-9 px-3 text-sm rounded-md border border-slate-200 bg-white text-slate-900 placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-purple-700" />
                 </div>
                 {proxyProvider !== "ollama" && (
                   <div className="flex flex-col gap-1 col-span-2">
                     <label className="text-xs font-medium text-slate-700">
-                      API key
+                      {t("api_key")}
                       {dept.policy_override?.proxy_provider?.api_key_masked && (
-                        <span className="ml-2 font-normal text-slate-400">current: {dept.policy_override.proxy_provider.api_key_masked}</span>
+                        <span className="ml-2 font-normal text-slate-400">{t("api_key_current", { masked: dept.policy_override.proxy_provider.api_key_masked })}</span>
                       )}
                     </label>
                     <input type="password" value={proxyApiKey} onChange={(e) => setProxyApiKey(e.target.value)}
-                      placeholder={dept.policy_override?.proxy_provider?.api_key_masked ? "Leave blank to keep current key" : "sk-..."}
+                      placeholder={dept.policy_override?.proxy_provider?.api_key_masked ? t("api_key_keep") : t("api_key_new")}
                       className="h-9 px-3 text-sm rounded-md border border-slate-200 bg-white text-slate-900 placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-purple-700" />
-                    <p className="text-xs text-slate-400">Stored encrypted. Masked after save.</p>
+                    <p className="text-xs text-slate-400">{t("proxy_encrypted")}</p>
                   </div>
                 )}
                 <div className="flex flex-col gap-1">
-                  <label className="text-xs font-medium text-slate-700">Timeout (seconds)</label>
+                  <label className="text-xs font-medium text-slate-700">{t("timeout")}</label>
                   <input type="number" min={1} max={300} value={proxyTimeout} onChange={(e) => setProxyTimeout(e.target.value)}
-                    placeholder="60"
+                    placeholder={t("timeout_ph_proxy")}
                     className="h-9 px-3 text-sm rounded-md border border-slate-200 bg-white text-slate-900 focus:outline-none focus:ring-2 focus:ring-purple-700" />
                 </div>
               </div>
               {proxyError && <p className="text-xs text-red-600">{proxyError}</p>}
               <div className="flex items-center gap-3 flex-wrap">
-                <Button onClick={handleProxySave} loading={proxySaving}>Save override</Button>
+                <Button onClick={handleProxySave} loading={proxySaving}>{t("save_override")}</Button>
                 {dept.policy_override?.proxy_provider && (
                   confirmProxyClear ? (
                     <div className="flex items-center gap-2">
-                      <span className="text-xs text-red-600">Remove override?</span>
-                      <Button variant="danger" size="sm" onClick={handleProxyClear} loading={proxySaving}>Confirm</Button>
+                      <span className="text-xs text-red-600">{t("remove_override_q")}</span>
+                      <Button variant="danger" size="sm" onClick={handleProxyClear} loading={proxySaving}>{t("confirm")}</Button>
                       <button onClick={() => setConfirmProxyClear(false)}
-                        className="text-sm text-slate-500 hover:text-slate-700">Cancel</button>
+                        className="text-sm text-slate-500 hover:text-slate-700">{t("cancel")}</button>
                     </div>
                   ) : (
-                    <Button variant="danger" onClick={() => setConfirmProxyClear(true)}>Clear override</Button>
+                    <Button variant="danger" onClick={() => setConfirmProxyClear(true)}>{t("clear_override")}</Button>
                   )
                 )}
                 {!confirmProxyClear && (
                   <button onClick={() => { setProxyEditing(false); setProxyError(null); setConfirmProxyClear(false) }}
-                    className="text-sm text-slate-500 hover:text-slate-700">Cancel</button>
+                    className="text-sm text-slate-500 hover:text-slate-700">{t("cancel")}</button>
                 )}
-                {proxySaved && <span className="text-xs text-green-600">Saved</span>}
+                {proxySaved && <span className="text-xs text-green-600">{t("saved")}</span>}
               </div>
             </div>
           )}
@@ -582,11 +583,11 @@ export default function DepartmentDetailPage() {
         {/* Applications */}
         <Card>
           <CardHeader
-            title="Applications"
-            subtitle="Systems registered under this department"
+            title={td("apps_title")}
+            subtitle={td("apps_subtitle")}
           />
           {(appsData?.applications ?? []).length === 0 ? (
-            <p className="text-sm text-slate-400">No applications registered.</p>
+            <p className="text-sm text-slate-400">{td("no_apps")}</p>
           ) : (
             <div className="space-y-2">
               {(appsData?.applications ?? []).map((app) => (
@@ -602,7 +603,7 @@ export default function DepartmentDetailPage() {
                     href={`/applications/${app.id}`}
                     className="text-xs text-blue-700 hover:underline"
                   >
-                    Manage
+                    {tb("manage")}
                   </a>
                 </div>
               ))}
