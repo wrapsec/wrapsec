@@ -2,6 +2,31 @@
 
 All notable changes to WrapSec are documented here.
 
+## [1.8.2] - 2026-08-12
+
+Full dashboard localization. Completes the string migration begun in 1.8.1: the
+entire dashboard renders from the localization catalog, ships a German
+translation with an in-app language switcher, and adds text-direction support.
+Backend responses remain English; no public scan/chat/admin API changes.
+
+### Added
+- **Complete dashboard translation.** Every dashboard page and component renders
+  from the localization catalog; no hardcoded UI text remains. Enabling a
+  language is a data change -- add its catalog under `locales/<locale>/` and
+  register it in `locales/_meta.json`.
+- **German (de).** A full German dashboard translation, the first non-English
+  locale.
+- **Language switcher.** A header control lets a signed-in user switch language;
+  the choice is saved to their profile and applied immediately. A locale changed
+  out of band (via the API/SDK, or a tenant default change) is reflected on the
+  next load.
+- **Text direction (LTR/RTL).** Each locale declares its text direction and the
+  dashboard sets the document direction from it (LTR today; RTL-ready).
+
+### Changed
+- The user and tenant locale is now length-bounded at the request layer to match
+  its database column -- a tighter contract with no change for valid locales.
+
 ## [1.8.1] - 2026-08-11
 
 Error-handling and localization foundation. Reworks every error response onto a
