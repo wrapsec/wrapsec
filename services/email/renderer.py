@@ -43,7 +43,7 @@ from functools import lru_cache
 from pathlib import Path
 from typing import Any
 
-from domain.enums import NotificationType
+from domain.enums import NotificationType, is_implemented
 from services.localization import FLOOR, canonical_locale, supported_locales
 
 _REPO_ROOT     = Path(__file__).resolve().parent.parent.parent
@@ -55,13 +55,15 @@ _TEMPLATES_DIR = Path(__file__).resolve().parent / "templates"
 # untrusted values once they are escaped for the target format.
 _TOKEN = re.compile(r"\{([a-zA-Z_][a-zA-Z0-9_]*)\}")
 
-# Context keys each notification type's templates and subject require. The caller
-# (the trigger site) must supply exactly these; extra keys are ignored. Keeping
-# this explicit lets queue() validate context before it renders.
+# Context keys each IMPLEMENTED notification type's templates and subject
+# require. The caller (the trigger site) must supply exactly these; extra keys
+# are ignored. Only implemented types appear here -- a reserved type has no
+# contract and render() rejects it. Guards keep this in lockstep with
+# IMPLEMENTED_NOTIFICATIONS.
 REQUIRED_CONTEXT: dict[NotificationType, tuple[str, ...]] = {
-    NotificationType.PASSWORD_CHANGED:     ("display_name", "event_time"),
-    NotificationType.ADMIN_PASSWORD_RESET: ("display_name", "event_time"),
-    NotificationType.ACCOUNT_LOCKED:       ("display_name", "event_time", "lockout_minutes"),
+    NotificationType.PASSWORD_CHANGED:        ("display_name", "event_time"),
+    NotificationType.PASSWORD_RESET_BY_ADMIN: ("display_name", "event_time"),
+    NotificationType.ACCOUNT_LOCKED:          ("display_name", "event_time", "lockout_minutes"),
 }
 
 
@@ -145,9 +147,12 @@ def render(
     error). Callers that must not fail their business transaction wrap this and
     degrade gracefully.
     """
-    required = REQUIRED_CONTEXT.get(notification_type)
-    if required is None:
-        raise TemplateError(f"no context contract for notification type '{notification_type.value}'")
+    if not is_implemented(notification_type):
+        raise TemplateError(
+            f"notification type '{notification_type.value}' is reserved "
+            f"(registered but not implemented); no template or context contract"
+        )
+    required = REQUIRED_CONTEXT[notification_type]
     missing = [k for k in required if k not in context]
     if missing:
         raise TemplateError(

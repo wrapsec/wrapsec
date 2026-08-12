@@ -153,19 +153,72 @@ class LogoutReason(str, Enum):
     EXPIRED    = "expired"
 
 
+class NotificationCategory(str, Enum):
+    """Grouping for notification event identifiers."""
+    ACCOUNT      = "account"
+    API_SECURITY = "api_security"
+    SECURITY     = "security"   # reserved for V2 (critical.security_event)
+
+
 class NotificationType(str, Enum):
     """
-    Transactional email notification types (v1.8.3).
+    Canonical `<namespace>.<event>` transactional notification identifiers
+    (v1.8.3), grouped by category. Three distinct states -- do NOT conflate them
+    (see IMPLEMENTED_NOTIFICATIONS and services.email):
 
-    V1 ships only minimal, informational security notifications, all triggered
-    by an authenticated or internal action. Each value maps 1:1 to a subject
-    key under the `notifications` locale namespace and a pair of per-locale
-    body templates (HTML + text). Self-service password reset is intentionally
-    absent: it is deferred to a later release as its own security mini-project.
+        Registered  -- a known event: any member of this enum.
+        Implemented -- registered AND has a subject, per-locale templates, and a
+                       context contract, so it can be rendered
+                       (IMPLEMENTED_NOTIFICATIONS). A registered-but-not-
+                       implemented member is *reserved*.
+        Sendable    -- implemented AND runtime-enabled (the notifications master
+                       switch is on); decided at enqueue time in EmailService.
+
+    Reserved members exist so the event contract is stable and future events
+    slot in without renaming. To promote a reserved event: add it to
+    IMPLEMENTED_NOTIFICATIONS, give it a subject (notifications catalog), HTML +
+    text templates per locale, a REQUIRED_CONTEXT entry, and a trigger.
     """
-    PASSWORD_CHANGED     = "password_changed"       # user changed their own password
-    ADMIN_PASSWORD_RESET = "admin_password_reset"   # an admin reset the user's password
-    ACCOUNT_LOCKED       = "account_locked"         # lockout after repeated failed logins
+    # ACCOUNT
+    USER_INVITED            = "user.invited"             # reserved
+    PASSWORD_CHANGED        = "password.changed"         # implemented
+    PASSWORD_RESET_BY_ADMIN = "password.reset_by_admin"  # implemented
+    ACCOUNT_LOCKED          = "account.locked"           # implemented
+    ACCOUNT_DEACTIVATED     = "account.deactivated"      # reserved
+    ROLE_CHANGED            = "role.changed"             # reserved
+    # API SECURITY
+    API_KEY_CREATED         = "api_key.created"          # reserved
+    API_KEY_REVOKED         = "api_key.revoked"          # reserved
+    # SECURITY
+    #   critical.security_event -- reserved for V2, intentionally NOT defined
+    #   until it ships.
+
+
+# Every registered notification type maps to exactly one category (guarded).
+NOTIFICATION_CATEGORY: dict[NotificationType, NotificationCategory] = {
+    NotificationType.USER_INVITED:            NotificationCategory.ACCOUNT,
+    NotificationType.PASSWORD_CHANGED:        NotificationCategory.ACCOUNT,
+    NotificationType.PASSWORD_RESET_BY_ADMIN: NotificationCategory.ACCOUNT,
+    NotificationType.ACCOUNT_LOCKED:          NotificationCategory.ACCOUNT,
+    NotificationType.ACCOUNT_DEACTIVATED:     NotificationCategory.ACCOUNT,
+    NotificationType.ROLE_CHANGED:            NotificationCategory.ACCOUNT,
+    NotificationType.API_KEY_CREATED:         NotificationCategory.API_SECURITY,
+    NotificationType.API_KEY_REVOKED:         NotificationCategory.API_SECURITY,
+}
+
+# The subset that actually sends email today. Everything else is *reserved*:
+# registered (a stable identifier) but not implemented, so EmailService skips it.
+IMPLEMENTED_NOTIFICATIONS: frozenset[NotificationType] = frozenset({
+    NotificationType.PASSWORD_CHANGED,
+    NotificationType.PASSWORD_RESET_BY_ADMIN,
+    NotificationType.ACCOUNT_LOCKED,
+})
+
+
+def is_implemented(notification_type: NotificationType) -> bool:
+    """True if the type has full rendering support and may be enqueued. A
+    registered-but-not-implemented type is reserved (EmailService skips it)."""
+    return notification_type in IMPLEMENTED_NOTIFICATIONS
 
 
 class EmailStatus(str, Enum):

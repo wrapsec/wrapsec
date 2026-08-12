@@ -16,7 +16,7 @@ import uuid
 
 import pytest
 
-from domain.enums import EmailStatus, NotificationType
+from domain.enums import IMPLEMENTED_NOTIFICATIONS, EmailStatus, NotificationType
 from services.email.service import EmailService
 
 
@@ -61,7 +61,7 @@ async def test_queue_renders_and_enqueues_row():
     assert db.added == [row]
     assert row.status == EmailStatus.QUEUED.value
     assert row.attempt_count == 0
-    assert row.notification_type == "password_changed"
+    assert row.notification_type == "password.changed"
     assert row.recipient == "user@example.com"
     assert row.tenant_id == tid
     assert row.user_id == uid
@@ -98,8 +98,8 @@ async def test_queue_degrades_gracefully_on_render_error():
     assert db.added == []  # nothing written to the caller's transaction
 
 
-@pytest.mark.parametrize("nt", list(NotificationType))
-async def test_queue_supports_every_notification_type(nt):
+@pytest.mark.parametrize("nt", list(IMPLEMENTED_NOTIFICATIONS))
+async def test_queue_supports_every_implemented_type(nt):
     from services.email.renderer import REQUIRED_CONTEXT
 
     db  = FakeSession()
@@ -113,3 +113,19 @@ async def test_queue_supports_every_notification_type(nt):
     )
     assert row is not None
     assert row.notification_type == nt.value
+
+
+async def test_queue_skips_reserved_type():
+    # A registered-but-not-implemented type is skipped (returns None, nothing
+    # written), distinct from the master-switch skip.
+    reserved = next(iter(set(NotificationType) - IMPLEMENTED_NOTIFICATIONS))
+    db = FakeSession()
+    row = await EmailService().queue(
+        db,
+        notification_type=reserved,
+        recipient="user@example.com",
+        locale="en",
+        context={"display_name": "x", "event_time": "t"},
+    )
+    assert row is None
+    assert db.added == []

@@ -176,14 +176,18 @@
     }
   },
   "notifications": {
-    "password_changed": {
-      "subject": "Ihr WrapSec-Passwort wurde geändert"
+    "password": {
+      "changed": {
+        "subject": "Ihr WrapSec-Passwort wurde geändert"
+      },
+      "reset_by_admin": {
+        "subject": "Ihr WrapSec-Passwort wurde von einem Administrator zurückgesetzt"
+      }
     },
-    "admin_password_reset": {
-      "subject": "Ihr WrapSec-Passwort wurde von einem Administrator zurückgesetzt"
-    },
-    "account_locked": {
-      "subject": "Ihr WrapSec-Konto wurde vorübergehend gesperrt"
+    "account": {
+      "locked": {
+        "subject": "Ihr WrapSec-Konto wurde vorübergehend gesperrt"
+      }
     }
   },
   "pages": {
@@ -1277,9 +1281,13 @@
         "failed": "Fehlgeschlagen"
       },
       "type": {
-        "password_changed": "Passwort geändert",
-        "admin_password_reset": "Passwort von Admin zurückgesetzt",
-        "account_locked": "Konto gesperrt"
+        "password": {
+          "changed": "Passwort geändert",
+          "reset_by_admin": "Passwort von Admin zurückgesetzt"
+        },
+        "account": {
+          "locked": "Konto gesperrt"
+        }
       },
       "detail": {
         "title": "E-Mail-Zustellung",

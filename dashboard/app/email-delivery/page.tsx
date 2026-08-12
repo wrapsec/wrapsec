@@ -37,7 +37,9 @@ const LIST_SPEC = {
 } as const
 
 const STATUSES = ["queued", "sending", "provider_accepted", "failed"] as const
-const TYPES = ["password_changed", "admin_password_reset", "account_locked"] as const
+// Implemented notification types (dotted <namespace>.<event>); reserved types
+// never appear in delivery rows, so the filter only offers these.
+const TYPES = ["password.changed", "password.reset_by_admin", "account.locked"] as const
 
 const STATUS_BADGE: Record<string, string> = {
   queued:            "bg-slate-100 text-slate-600 border-slate-200",
@@ -61,6 +63,9 @@ function EmailDeliveryInner() {
   const t   = useTranslations("pages.email_delivery")
   const fmt = useFormat()
   const { resolve } = useErrorMessage()
+  // Dotted type value maps to a nested label key; fall back to the raw value for
+  // any type without a label (e.g. a future/reserved one).
+  const typeLabel = (v: string) => (t.has(`type.${v}`) ? t(`type.${v}`) : v)
   const { values, setParam, setParams, textValue, onTextChange } = useListParams(LIST_SPEC)
   const { openId: selectedId, open, close } = useDrawerParam("peek")
 
@@ -129,7 +134,7 @@ function EmailDeliveryInner() {
           <Field label={t("filters.type")}>
             <Select value={values.type} onChange={v => setFilter({ type: v })}>
               <option value="">{t("filters.all_types")}</option>
-              {TYPES.map(ty => <option key={ty} value={ty}>{t(`type.${ty}`)}</option>)}
+              {TYPES.map(ty => <option key={ty} value={ty}>{typeLabel(ty)}</option>)}
             </Select>
           </Field>
           <Field label={t("columns.department")}>
@@ -190,7 +195,7 @@ function EmailDeliveryInner() {
                     className="border-b border-slate-50 hover:bg-slate-50 cursor-pointer"
                   >
                     <td className="px-4 py-2 text-slate-600 whitespace-nowrap">{r.created_at ? fmt.timestamp(r.created_at) : "-"}</td>
-                    <td className="px-4 py-2 text-slate-900">{t(`type.${r.notification_type}`)}</td>
+                    <td className="px-4 py-2 text-slate-900">{typeLabel(r.notification_type)}</td>
                     <td className="px-4 py-2 text-slate-600 font-mono text-xs">{maskEmail(r.recipient)}</td>
                     <td className="px-4 py-2 text-slate-600">{deptName(r.department_id)}</td>
                     <td className="px-4 py-2"><StatusBadge status={r.status} label={t(`status.${r.status}`)} /></td>
@@ -270,7 +275,7 @@ function DetailDrawer({ id, deptName, onClose }: {
         ) : (
           <div>
             {line(t("detail.status"), <StatusBadge status={row.status} label={t(`status.${row.status}`)} />)}
-            {line(t("detail.notification"), t(`type.${row.notification_type}`))}
+            {line(t("detail.notification"), t.has(`type.${row.notification_type}`) ? t(`type.${row.notification_type}`) : row.notification_type)}
             {line(t("detail.recipient"), <span className="font-mono text-xs">{maskEmail(row.recipient)}</span>)}
             {line(t("detail.department"), deptName(row.department_id))}
             {line(t("detail.locale"), row.locale ?? t("detail.none"))}

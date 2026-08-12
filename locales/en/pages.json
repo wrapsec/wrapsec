@@ -1089,9 +1089,13 @@
       "failed": "Failed"
     },
     "type": {
-      "password_changed": "Password changed",
-      "admin_password_reset": "Password reset by admin",
-      "account_locked": "Account locked"
+      "password": {
+        "changed": "Password changed",
+        "reset_by_admin": "Password reset by admin"
+      },
+      "account": {
+        "locked": "Account locked"
+      }
     },
     "detail": {
       "title": "Email Delivery",

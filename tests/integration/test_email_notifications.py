@@ -56,7 +56,7 @@ async def test_password_changed_enqueues_on_caller_session(pg_db):
 
     rows = await _rows_for(pg_db, user.tenant_id)
     assert len(rows) == 1
-    assert rows[0].notification_type == "password_changed"
+    assert rows[0].notification_type == "password.changed"
     assert rows[0].recipient == user.email
     assert rows[0].user_id == user.id
     assert "password was changed" in rows[0].subject
@@ -69,7 +69,7 @@ async def test_admin_password_reset_enqueues(pg_db):
 
     rows = await _rows_for(pg_db, user.tenant_id)
     assert len(rows) == 1
-    assert rows[0].notification_type == "admin_password_reset"
+    assert rows[0].notification_type == "password.reset_by_admin"
     assert rows[0].trace_id == "trace-xyz"
 
 
@@ -91,7 +91,7 @@ async def test_account_locked_enqueues_in_own_session(pg_db):
 
     rows = await _rows_for(pg_db, user.tenant_id)
     assert len(rows) == 1
-    assert rows[0].notification_type == "account_locked"
+    assert rows[0].notification_type == "account.locked"
     assert "15 minutes" in rows[0].body_text  # 900s -> 15 min
 
 

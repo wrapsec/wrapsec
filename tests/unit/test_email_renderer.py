@@ -15,7 +15,12 @@ from __future__ import annotations
 
 import pytest
 
-from domain.enums import NotificationType
+from domain.enums import (
+    IMPLEMENTED_NOTIFICATIONS,
+    NOTIFICATION_CATEGORY,
+    NotificationType,
+    is_implemented,
+)
 from services.email import renderer as R
 from services.email.renderer import (
     REQUIRED_CONTEXT,
@@ -32,8 +37,8 @@ def _ctx(notification_type: NotificationType) -> dict[str, str]:
 
 
 # -- basic rendering -------------------------------------------------
-def test_render_returns_subject_text_and_html_for_every_type():
-    for nt in NotificationType:
+def test_render_returns_subject_text_and_html_for_every_implemented_type():
+    for nt in IMPLEMENTED_NOTIFICATIONS:
         r = render(nt, "en", _ctx(nt))
         assert r.subject and "WrapSec" in r.subject
         assert r.text_body.strip()
@@ -84,18 +89,41 @@ def test_missing_context_key_raises():
         render(NotificationType.ACCOUNT_LOCKED, "en", {"display_name": "x", "event_time": "t"})  # no lockout_minutes
 
 
-# -- completeness guards --------------------------------------------
-def test_every_notification_type_has_a_context_contract():
-    assert set(REQUIRED_CONTEXT) == set(NotificationType)
+# -- taxonomy invariants (Registered != Implemented != Sendable) ----
+def test_every_registered_type_has_a_category():
+    assert set(NotificationType) == set(NOTIFICATION_CATEGORY)
+
+
+def test_implemented_is_a_subset_of_registered():
+    assert IMPLEMENTED_NOTIFICATIONS <= set(NotificationType)
+    assert all(is_implemented(nt) for nt in IMPLEMENTED_NOTIFICATIONS)
+
+
+def test_reserved_types_are_registered_but_not_implemented():
+    reserved = set(NotificationType) - IMPLEMENTED_NOTIFICATIONS
+    assert reserved, "expected some reserved (future) types"
+    for nt in reserved:
+        assert not is_implemented(nt)
+
+
+def test_reserved_type_render_is_rejected():
+    reserved = next(iter(set(NotificationType) - IMPLEMENTED_NOTIFICATIONS))
+    with pytest.raises(TemplateError):
+        render(reserved, "en", {"display_name": "x", "event_time": "t"})
+
+
+# -- completeness guards (implemented types only) -------------------
+def test_context_contract_covers_exactly_the_implemented_types():
+    assert set(REQUIRED_CONTEXT) == set(IMPLEMENTED_NOTIFICATIONS)
 
 
 def test_every_supported_locale_has_all_templates_and_subjects():
     """No fallback allowed for a shipped locale: every supported locale must
-    carry its own HTML + text template and subject for every notification
-    type, so we never ship a half-translated security email."""
+    carry its own HTML + text template and subject for every IMPLEMENTED
+    notification type, so we never ship a half-translated security email."""
     for loc in supported_locales():
         subjects = _subjects_for_locale(loc)
-        for nt in NotificationType:
+        for nt in IMPLEMENTED_NOTIFICATIONS:
             key = f"notifications.{nt.value}.subject"
             assert key in subjects, f"locale {loc} missing subject {key}"
             assert _template(loc, nt.value, "html") is not None, f"{loc} missing {nt.value}.html"
@@ -106,7 +134,7 @@ def test_templates_reference_only_known_context_tokens():
     """Every {token} in a template must be a declared context key, so strict
     substitution can never raise at send time for a well-formed call."""
     for loc in supported_locales():
-        for nt in NotificationType:
+        for nt in IMPLEMENTED_NOTIFICATIONS:
             allowed = set(REQUIRED_CONTEXT[nt])
             for suffix in ("html", "txt"):
                 body = _template(loc, nt.value, suffix)

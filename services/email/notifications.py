@@ -79,7 +79,7 @@ async def notify_admin_password_reset(
     locale = await _resolve_user_locale(db, user)
     await EmailService().queue(
         db,
-        notification_type = NotificationType.ADMIN_PASSWORD_RESET,
+        notification_type = NotificationType.PASSWORD_RESET_BY_ADMIN,
         recipient         = user.email,
         locale            = locale,
         context           = {"display_name": user.email, "event_time": _event_time()},

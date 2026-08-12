@@ -186,12 +186,12 @@ async def test_retention_deletes_old_rows_keeps_recent(sf):
     old_id    = uuid.uuid4()
     async with sf() as db:
         db.add(EmailOutboxModel(
-            id=recent_id, notification_type="password_changed", recipient="r@x.com",
+            id=recent_id, notification_type="password.changed", recipient="r@x.com",
             subject="s", body_text="t", body_html=None, status="provider_accepted",
             attempt_count=1, available_at=utc_now(), created_at=utc_now(),
         ))
         db.add(EmailOutboxModel(
-            id=old_id, notification_type="password_changed", recipient="o@x.com",
+            id=old_id, notification_type="password.changed", recipient="o@x.com",
             subject="s", body_text="t", body_html=None, status="provider_accepted",
             attempt_count=1, available_at=utc_now(), created_at=utc_now() - timedelta(days=40),
         ))

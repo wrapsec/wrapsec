@@ -47,7 +47,7 @@ async def email_seeder():
     created_tenants: list[uuid.UUID] = []
 
     async def seed(*, tenant_id, user_id=None, status="provider_accepted", recipient="x@x.com",
-                   notification_type="password_changed"):
+                   notification_type="password.changed"):
         rid = uuid.uuid4()
         engine, sf = _sf()
         try:
@@ -262,16 +262,16 @@ async def test_filter_by_recipient_substring(auth_client, auth_setup, email_seed
 
 async def test_filter_by_notification_type(auth_client, auth_setup, email_seeder):
     tid = auth_setup["tenant"].id
-    await email_seeder(tenant_id=tid, notification_type="account_locked", recipient="al@x.com")
-    await email_seeder(tenant_id=tid, notification_type="password_changed", recipient="pc@x.com")
+    await email_seeder(tenant_id=tid, notification_type="account.locked", recipient="al@x.com")
+    await email_seeder(tenant_id=tid, notification_type="password.changed", recipient="pc@x.com")
 
     resp = await auth_client.get(
-        "/v1/admin/email?notification_type=account_locked",
+        "/v1/admin/email?notification_type=account.locked",
         headers={"Authorization": f"Bearer {auth_setup['admin_token']}"},
     )
     assert resp.status_code == 200
     types = {e["notification_type"] for e in resp.json()["emails"]}
-    assert types == {"account_locked"}
+    assert types == {"account.locked"}
 
 
 async def test_list_omits_subject_and_body(auth_client, auth_setup, email_seeder):

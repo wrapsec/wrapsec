@@ -27,7 +27,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from db.models import EmailOutboxModel
 from db.repositories.email_outbox import EmailOutboxRepository
-from domain.enums import NotificationType
+from domain.enums import NotificationType, is_implemented
 from services.email.renderer import TemplateError, render
 
 logger = logging.getLogger("wrapsec.email")
@@ -54,10 +54,19 @@ class EmailService:
         Rendering happens before any DB write, so a rendering failure leaves the
         caller's transaction untouched -- the business change still commits.
 
-        Honors the master notifications on/off switch: when disabled, nothing is
-        enqueued and None is returned.
+        Encodes the Registered != Implemented != Sendable invariant: a *reserved*
+        type (registered but not implemented) is skipped here, and an implemented
+        type is only *sendable* when the master notifications switch is on.
+        Either skip returns None without touching the caller's transaction.
         """
         from services.email.settings import get_email_settings
+
+        if not is_implemented(notification_type):
+            logger.info(
+                "email notification type=%s is reserved (not implemented); skipping",
+                notification_type.value,
+            )
+            return None
 
         if not (await get_email_settings(db)).notifications_enabled:
             logger.info(
