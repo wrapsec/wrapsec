@@ -287,3 +287,48 @@ async def test_nonexistent_ids_also_return_404(auth_client, two_tenant_setup):
             headers={"Authorization": f"Bearer {a['admin_token']}"},
         )
         assert response.status_code == 404, f"{path} returned {response.status_code}"
+
+
+# ── Webhooks (v1.3.0) ────────────────────────────────────────────────────────
+
+async def _create_webhook_for(auth_client, tok: str) -> str:
+    resp = await auth_client.post(
+        "/v1/admin/webhooks",
+        json={"url": "https://example.com/hook"},
+        headers={"Authorization": f"Bearer {tok}"},
+    )
+    assert resp.status_code in (200, 201), f"webhook create failed: {resp.status_code} {resp.text}"
+    body = resp.json()
+    return body.get("id") or body["endpoint_id"]
+
+
+@pytest.mark.asyncio
+async def test_delete_webhook_cross_tenant_returns_404(auth_client, two_tenant_setup):
+    a, b = two_tenant_setup["A"], two_tenant_setup["B"]
+    wid = await _create_webhook_for(auth_client, b["admin_token"])
+    # Tenant A's admin must not delete tenant B's webhook.
+    resp = await auth_client.delete(
+        f"/v1/admin/webhooks/{wid}",
+        headers={"Authorization": f"Bearer {a['admin_token']}"},
+    )
+    assert resp.status_code == 404
+    # Cleanup as the owner.
+    await auth_client.delete(
+        f"/v1/admin/webhooks/{wid}",
+        headers={"Authorization": f"Bearer {b['admin_token']}"},
+    )
+
+
+@pytest.mark.asyncio
+async def test_pause_webhook_cross_tenant_returns_404(auth_client, two_tenant_setup):
+    a, b = two_tenant_setup["A"], two_tenant_setup["B"]
+    wid = await _create_webhook_for(auth_client, b["admin_token"])
+    resp = await auth_client.post(
+        f"/v1/admin/webhooks/{wid}/pause",
+        headers={"Authorization": f"Bearer {a['admin_token']}"},
+    )
+    assert resp.status_code == 404
+    await auth_client.delete(
+        f"/v1/admin/webhooks/{wid}",
+        headers={"Authorization": f"Bearer {b['admin_token']}"},
+    )
