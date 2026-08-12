@@ -155,6 +155,38 @@ async def test_concurrent_claims_are_disjoint(sf):
         await db_a.commit()
 
 
+# -- retention -------------------------------------------------------
+async def test_retention_deletes_old_rows_keeps_recent(sf):
+    import uuid
+    from datetime import timedelta
+
+    from db.models import EmailOutboxModel
+    from workers.tasks import _cleanup_email_outbox
+
+    recent_id = uuid.uuid4()
+    old_id    = uuid.uuid4()
+    async with sf() as db:
+        db.add(EmailOutboxModel(
+            id=recent_id, notification_type="password_changed", recipient="r@x.com",
+            subject="s", body_text="t", body_html=None, status="provider_accepted",
+            attempt_count=1, available_at=utc_now(), created_at=utc_now(),
+        ))
+        db.add(EmailOutboxModel(
+            id=old_id, notification_type="password_changed", recipient="o@x.com",
+            subject="s", body_text="t", body_html=None, status="provider_accepted",
+            attempt_count=1, available_at=utc_now(), created_at=utc_now() - timedelta(days=40),
+        ))
+        await db.commit()
+
+    deleted = await _cleanup_email_outbox()  # default retention 30 days
+    assert deleted == 1
+
+    async with sf() as db:
+        repo = EmailOutboxRepository(db)
+        assert await repo.get_by_id(recent_id) is not None
+        assert await repo.get_by_id(old_id) is None
+
+
 # -- run() loop drains then stops -----------------------------------
 async def test_run_loop_drains_batch_then_stops(sf):
     for i in range(3):

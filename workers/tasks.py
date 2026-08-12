@@ -110,23 +110,34 @@ async def run_retention_cleanup() -> None:
         logger.error(f"Retention worker: refresh_tokens cleanup failed: {e}")
         tokens_deleted = -1
 
+    try:
+        email_deleted = await _cleanup_email_outbox()
+    except Exception as e:
+        logger.error(f"Retention worker: email_outbox cleanup failed: {e}")
+        email_deleted = -1
+
     elapsed_ms = int((utc_now() - start).total_seconds() * 1000)
 
-    all_ok = audit_deleted >= 0 and proxy_purged >= 0 and tokens_deleted >= 0
+    all_ok = (
+        audit_deleted >= 0 and proxy_purged >= 0
+        and tokens_deleted >= 0 and email_deleted >= 0
+    )
 
     if all_ok:
         logger.info(
             f"Retention worker: cleanup complete in {elapsed_ms}ms - "
             f"audit_logs deleted: {audit_deleted} | "
             f"proxy_interactions text purged: {proxy_purged} | "
-            f"refresh_tokens deleted: {tokens_deleted}"
+            f"refresh_tokens deleted: {tokens_deleted} | "
+            f"email_outbox deleted: {email_deleted}"
         )
     else:
         logger.warning(
             f"Retention worker: cleanup completed with errors in {elapsed_ms}ms - "
             f"audit_logs: {'OK' if audit_deleted >= 0 else 'FAILED'} | "
             f"proxy_interactions: {'OK' if proxy_purged >= 0 else 'FAILED'} | "
-            f"refresh_tokens: {'OK' if tokens_deleted >= 0 else 'FAILED'}"
+            f"refresh_tokens: {'OK' if tokens_deleted >= 0 else 'FAILED'} | "
+            f"email_outbox: {'OK' if email_deleted >= 0 else 'FAILED'}"
         )
 
 
@@ -248,6 +259,53 @@ async def _cleanup_proxy_interactions() -> int:
         logger.info(
             f"Retention worker: proxy_interactions - purged input_raw/output_raw "
             f"from {count} rows older than {retention_days} days (metadata retained)"
+        )
+        return count
+
+
+async def _cleanup_email_outbox() -> int:
+    """
+    Delete email_outbox rows older than the configured retention period.
+    Returns count of rows deleted.
+
+    Email rows carry no secrets, but they hold recipient addresses (personal
+    data), so they are not retained indefinitely. All statuses are purged by
+    age: terminal rows (provider_accepted / failed) and any long-stale queued
+    rows alike. Reads retention from config (env), like the proxy path.
+    """
+    from db.session import AsyncSessionFactory
+    from config.settings import get_settings
+    from sqlalchemy import text
+
+    cfg            = get_settings()
+    retention_days = cfg.email_retention_days
+    if retention_days < 1:
+        logger.error(
+            f"Retention worker: invalid email_retention_days={retention_days} - "
+            "must be >= 1, skipping email cleanup"
+        )
+        return 0
+
+    count_query  = text("SELECT COUNT(*) FROM email_outbox WHERE created_at < NOW() - INTERVAL '1 day' * :days")
+    delete_query = text("DELETE FROM email_outbox WHERE created_at < NOW() - INTERVAL '1 day' * :days")
+
+    async with AsyncSessionFactory() as session:
+        result = await session.execute(count_query, {"days": retention_days})
+        count  = result.scalar() or 0
+
+        if count == 0:
+            logger.info(
+                f"Retention worker: email_outbox - nothing to delete "
+                f"(retention: {retention_days} days)"
+            )
+            return 0
+
+        await session.execute(delete_query, {"days": retention_days})
+        await session.commit()
+
+        logger.info(
+            f"Retention worker: email_outbox - deleted {count} rows "
+            f"older than {retention_days} days"
         )
         return count
 
