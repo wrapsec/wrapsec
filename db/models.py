@@ -528,3 +528,61 @@ class WebhookDeliveryAttemptModel(Base):
         Index("ix_webhook_delivery_attempts_endpoint_status",  "endpoint_id", "status"),
         Index("ix_webhook_delivery_attempts_next_attempt",     "next_attempt_at"),
     )
+
+
+class EmailOutboxModel(Base):
+    """
+    Transactional email outbox (v1.8.3).
+
+    One row per notification to send. The row is created inside the business
+    transaction that triggers the notification (password change, admin reset,
+    lockout), so the intent to send an email is committed atomically with the
+    business change: if the business transaction rolls back, so does the email.
+
+    Subject and bodies are rendered at enqueue time and stored here, so the
+    delivery worker is template- and locale-agnostic and the exact content is
+    captured for audit. V1 notifications are informational and carry no secrets,
+    so persisting the rendered content is safe.
+
+    `tenant_id` is a foreign key (tenants are never hard-deleted). `user_id` is a
+    denormalized audit reference with no foreign key: the outbox is operational
+    history whose content (recipient address) is self-contained, and it must not
+    couple to the user lifecycle. `recipient` is likewise a snapshot of the
+    address at enqueue time.
+
+    Worker claim scan: `status = 'queued' AND available_at <= now()` ordered by
+    `available_at`, so the composite index leads with those columns for a range
+    scan. `available_at` is the retry gate -- a transient failure reschedules the
+    row by pushing `available_at` into the future per the shared retry schedule.
+
+    Status values are domain.enums.EmailStatus. `provider_accepted` means the
+    SMTP server accepted the message for relay; it is NOT proof of recipient
+    delivery. `delivered`/`bounced` are reserved for a future provider-webhook
+    capability and are never set by the SMTP-only V1.
+    """
+    __tablename__ = "email_outbox"
+
+    id                  = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    tenant_id           = Column(UUID(as_uuid=True), ForeignKey("tenants.id"), nullable=True)
+    user_id             = Column(UUID(as_uuid=True), nullable=True)
+    notification_type   = Column(String(64),  nullable=False)
+    recipient           = Column(String(255), nullable=False)
+    locale              = Column(String(35),  nullable=True)
+    subject             = Column(Text,        nullable=False)
+    body_text           = Column(Text,        nullable=False)
+    body_html           = Column(Text,        nullable=True)
+    status              = Column(String(20),  nullable=False, default="queued")
+    attempt_count       = Column(Integer,     nullable=False, default=0)
+    available_at        = Column(DateTime(timezone=True), nullable=False, default=utc_now)
+    created_at          = Column(DateTime(timezone=True), nullable=False, default=utc_now)
+    updated_at          = Column(DateTime(timezone=True), nullable=True)
+    sending_at          = Column(DateTime(timezone=True), nullable=True)
+    sent_at             = Column(DateTime(timezone=True), nullable=True)
+    provider_message_id = Column(String(255), nullable=True)
+    last_error          = Column(Text,        nullable=True)
+    trace_id            = Column(String(64),  nullable=True)
+
+    __table_args__ = (
+        Index("ix_email_outbox_status_available", "status", "available_at"),
+        Index("ix_email_outbox_tenant_created",   "tenant_id", "created_at"),
+    )
