@@ -462,3 +462,41 @@ export interface WebhookTestResult {
   duration_ms:      number | null
   error:            string | null
 }
+
+// ── Email delivery ────────────────────────────────────────────
+export interface EmailDelivery {
+  id:                  string
+  tenant_id:           string | null
+  department_id:       string | null
+  user_id:             string | null
+  notification_type:   string
+  recipient:           string
+  locale:              string | null
+  status:              string
+  attempt_count:       number
+  provider_message_id: string | null
+  trace_id:            string | null
+  last_error:          string | null
+  created_at:          string | null
+  last_attempt_at:     string | null
+  completed_at:        string | null
+}
+
+export interface EmailDeliveriesResponse {
+  emails: EmailDelivery[]
+}
+
+export interface EmailSummary {
+  counts: Record<string, number>
+}
+
+export interface EmailSettings {
+  notifications_enabled: boolean
+  max_attempts:          number
+  retention_days:        number
+  retry_schedule: {
+    intervals_seconds:    number[]
+    min_attempts:         number
+    max_attempts_ceiling: number
+  }
+}

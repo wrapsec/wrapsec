@@ -70,7 +70,9 @@
       "users": "Benutzer",
       "departments": "Abteilungen",
       "applications": "Anwendungen",
-      "system": "System"
+      "system": "System",
+      "email_delivery": "E-Mail-Zustellung",
+      "email_settings": "E-Mail"
     },
     "nav_section": {
       "configuration": "Konfiguration",
@@ -1237,6 +1239,87 @@
         "owner": "Verantwortlicher",
         "policy": "Richtlinie"
       }
+    },
+    "email_delivery": {
+      "title": "E-Mail-Zustellung",
+      "description": "Zustellstatus für Konto- und Sicherheitsbenachrichtigungen.",
+      "load_error": "E-Mail-Zustellungen konnten nicht geladen werden.",
+      "empty": "Keine E-Mails entsprechen den aktuellen Filtern.",
+      "summary": {
+        "queued": "In Warteschlange",
+        "sending": "Wird gesendet",
+        "provider_accepted": "Angenommen",
+        "failed": "Fehlgeschlagen"
+      },
+      "filters": {
+        "status": "Status",
+        "all_statuses": "Alle Status",
+        "type": "Benachrichtigung",
+        "all_types": "Alle Typen",
+        "recipient": "Empfänger",
+        "recipient_placeholder": "Empfänger suchen",
+        "from": "Von",
+        "to": "Bis",
+        "clear": "Zurücksetzen"
+      },
+      "columns": {
+        "time": "Zeit",
+        "notification": "Benachrichtigung",
+        "recipient": "Empfänger",
+        "department": "Abteilung",
+        "status": "Status",
+        "attempts": "Versuche"
+      },
+      "status": {
+        "queued": "In Warteschlange",
+        "sending": "Wird gesendet",
+        "provider_accepted": "Angenommen",
+        "failed": "Fehlgeschlagen"
+      },
+      "type": {
+        "password_changed": "Passwort geändert",
+        "admin_password_reset": "Passwort von Admin zurückgesetzt",
+        "account_locked": "Konto gesperrt"
+      },
+      "detail": {
+        "title": "E-Mail-Zustellung",
+        "status": "Status",
+        "notification": "Benachrichtigung",
+        "recipient": "Empfänger",
+        "department": "Abteilung",
+        "locale": "Sprache",
+        "attempts": "Versuche",
+        "created": "Erstellt",
+        "last_attempt": "Letzter Versuch",
+        "completed": "Abgeschlossen",
+        "provider_message_id": "Provider-Nachrichten-ID",
+        "trace_id": "Trace-ID",
+        "last_error": "Letzter Fehler",
+        "none": "-"
+      }
+    },
+    "email_settings": {
+      "title": "E-Mail",
+      "description": "Benachrichtigungs- und Zustelleinstellungen für Konto- und Sicherheits-E-Mails.",
+      "load_error": "E-Mail-Einstellungen konnten nicht geladen werden.",
+      "general_title": "Allgemein",
+      "notifications_label": "E-Mail-Benachrichtigungen",
+      "notifications_hint": "Wenn deaktiviert, sendet WrapSec keine Konto- oder Sicherheitsbenachrichtigungen per E-Mail.",
+      "on": "Ein",
+      "off": "Aus",
+      "delivery_title": "Zustellung",
+      "max_attempts_label": "Maximale Versuche",
+      "max_attempts_hint": "Sendeversuche, bevor eine Nachricht als fehlgeschlagen gilt (1 bis {max}).",
+      "retry_policy_label": "Wiederholungsrichtlinie",
+      "retry_policy_hint": "Feste Wartezeiten zwischen Versuchen (schreibgeschützt).",
+      "retry_intervals": "Wartezeiten: {intervals}",
+      "retention_label": "Aufbewahrung des Zustellverlaufs",
+      "retention_hint": "Zustelldatensätze, die älter sind, werden gelöscht.",
+      "days": "Tage",
+      "save": "Speichern",
+      "saved": "Gespeichert",
+      "err_max_attempts": "Maximale Versuche müssen zwischen {min} und {max} liegen.",
+      "err_retention": "Die Aufbewahrung muss mindestens 1 Tag betragen."
     }
   }
 }

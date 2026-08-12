@@ -69,7 +69,9 @@
     "users": "Benutzer",
     "departments": "Abteilungen",
     "applications": "Anwendungen",
-    "system": "System"
+    "system": "System",
+    "email_delivery": "E-Mail-Zustellung",
+    "email_settings": "E-Mail"
   },
   "nav_section": {
     "configuration": "Konfiguration",

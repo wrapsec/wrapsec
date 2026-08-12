@@ -28,6 +28,10 @@ import {
   WebhookEndpointCreated,
   ConnectorTypeSchema,
   WebhookTestResult,
+  EmailDelivery,
+  EmailDeliveriesResponse,
+  EmailSummary,
+  EmailSettings,
 } from "./types"
 
 // Internal type for retry tracking
@@ -785,5 +789,65 @@ export async function resumeWebhook(id: string): Promise<WebhookEndpoint> {
 export async function testWebhook(id: string): Promise<WebhookTestResult> {
   return request<WebhookTestResult>(`/v1/admin/webhooks/${id}/test`, {
     method: "POST",
+  })
+}
+
+// -- Email delivery audit + settings (JWT; audit = ADMIN/AUDITOR, settings = ADMIN) --
+export async function getEmailDeliveries(params: {
+  status?:            string
+  notification_type?: string
+  department_id?:     string
+  recipient?:         string
+  from?:              string
+  to?:                string
+  limit?:             number
+  offset?:            number
+} = {}): Promise<EmailDeliveriesResponse> {
+  const p = new URLSearchParams()
+  if (params.status)            p.set("status",            params.status)
+  if (params.notification_type) p.set("notification_type", params.notification_type)
+  if (params.department_id)     p.set("department_id",     params.department_id)
+  if (params.recipient)         p.set("recipient",         params.recipient)
+  if (params.from)              p.set("created_from",      params.from)
+  if (params.to)                p.set("created_to",        params.to)
+  if (params.limit  != null)    p.set("limit",             String(params.limit))
+  if (params.offset != null)    p.set("offset",            String(params.offset))
+  const qs = p.toString()
+  return request<EmailDeliveriesResponse>(`/v1/admin/email${qs ? `?${qs}` : ""}`)
+}
+
+export async function getEmailSummary(params: {
+  notification_type?: string
+  department_id?:     string
+  recipient?:         string
+  from?:              string
+  to?:                string
+} = {}): Promise<EmailSummary> {
+  const p = new URLSearchParams()
+  if (params.notification_type) p.set("notification_type", params.notification_type)
+  if (params.department_id)     p.set("department_id",     params.department_id)
+  if (params.recipient)         p.set("recipient",         params.recipient)
+  if (params.from)              p.set("created_from",      params.from)
+  if (params.to)                p.set("created_to",        params.to)
+  const qs = p.toString()
+  return request<EmailSummary>(`/v1/admin/email/summary${qs ? `?${qs}` : ""}`)
+}
+
+export async function getEmailDelivery(id: string): Promise<EmailDelivery> {
+  return request<EmailDelivery>(`/v1/admin/email/${encodeURIComponent(id)}`)
+}
+
+export async function getEmailSettings(): Promise<EmailSettings> {
+  return request<EmailSettings>("/v1/admin/email/settings")
+}
+
+export async function updateEmailSettings(data: {
+  notifications_enabled: boolean
+  max_attempts:          number
+  retention_days:        number
+}): Promise<EmailSettings> {
+  return request<EmailSettings>("/v1/admin/email/settings", {
+    method: "PUT",
+    body:   JSON.stringify(data),
   })
 }

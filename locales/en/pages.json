@@ -1051,5 +1051,86 @@
       "owner": "Owner",
       "policy": "Policy"
     }
+  },
+  "email_delivery": {
+    "title": "Email Delivery",
+    "description": "Delivery status for account and security notifications.",
+    "load_error": "Failed to load email deliveries.",
+    "empty": "No emails match the current filters.",
+    "summary": {
+      "queued": "Queued",
+      "sending": "Sending",
+      "provider_accepted": "Accepted",
+      "failed": "Failed"
+    },
+    "filters": {
+      "status": "Status",
+      "all_statuses": "All statuses",
+      "type": "Notification",
+      "all_types": "All types",
+      "recipient": "Recipient",
+      "recipient_placeholder": "Search recipient",
+      "from": "From",
+      "to": "To",
+      "clear": "Clear"
+    },
+    "columns": {
+      "time": "Time",
+      "notification": "Notification",
+      "recipient": "Recipient",
+      "department": "Department",
+      "status": "Status",
+      "attempts": "Attempts"
+    },
+    "status": {
+      "queued": "Queued",
+      "sending": "Sending",
+      "provider_accepted": "Accepted",
+      "failed": "Failed"
+    },
+    "type": {
+      "password_changed": "Password changed",
+      "admin_password_reset": "Password reset by admin",
+      "account_locked": "Account locked"
+    },
+    "detail": {
+      "title": "Email Delivery",
+      "status": "Status",
+      "notification": "Notification",
+      "recipient": "Recipient",
+      "department": "Department",
+      "locale": "Locale",
+      "attempts": "Attempts",
+      "created": "Created",
+      "last_attempt": "Last attempt",
+      "completed": "Completed",
+      "provider_message_id": "Provider message ID",
+      "trace_id": "Trace ID",
+      "last_error": "Last error",
+      "none": "-"
+    }
+  },
+  "email_settings": {
+    "title": "Email",
+    "description": "Notification and delivery settings for account and security emails.",
+    "load_error": "Failed to load email settings.",
+    "general_title": "General",
+    "notifications_label": "Email notifications",
+    "notifications_hint": "When off, WrapSec does not send any account or security notification emails.",
+    "on": "On",
+    "off": "Off",
+    "delivery_title": "Delivery",
+    "max_attempts_label": "Maximum attempts",
+    "max_attempts_hint": "Send attempts before a message is marked failed (1 to {max}).",
+    "retry_policy_label": "Retry policy",
+    "retry_policy_hint": "Fixed backoff between attempts (read-only).",
+    "retry_intervals": "Backoff: {intervals}",
+    "retention_label": "Delivery history retention",
+    "retention_hint": "Delivery records older than this are deleted.",
+    "days": "days",
+    "save": "Save",
+    "saved": "Saved",
+    "err_max_attempts": "Maximum attempts must be between {min} and {max}.",
+    "err_retention": "Retention must be at least 1 day."
   }
 }
