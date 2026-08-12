@@ -1,0 +1,36 @@
+# Dev-only override: adds Mailpit (a local SMTP catcher) and points the API at
+# it, so account/security notification emails can be inspected without a real
+# mail server. NOT used by production (docker-compose.prod.yml) or by the plain
+# `./setup.sh` flow (both pass -f explicitly, which disables override
+# auto-discovery). Enable it by running compose with BOTH files:
+#
+#   docker compose -f infrastructure/docker/docker-compose.yml \
+#                  -f infrastructure/docker/docker-compose.override.yml up -d
+#
+# Mailpit web UI:  http://localhost:8025
+# SMTP endpoint:   mailpit:1025 (internal to the compose network, no auth, plaintext)
+
+services:
+  mailpit:
+    image: axllent/mailpit:latest
+    container_name: wrapsec_mailpit
+    ports:
+      - "8025:8025"   # web UI (SMTP 1025 stays internal to the network)
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "/mailpit", "readyz"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  api:
+    # Route notification email through Mailpit. Plaintext, no auth -- correct for
+    # a local catcher (both TLS flags false is the local/test case the settings
+    # validator explicitly allows).
+    environment:
+      - SMTP_HOST=mailpit
+      - SMTP_PORT=1025
+      - SMTP_USE_TLS=false
+      - SMTP_START_TLS=false
+      - SMTP_FROM=no-reply@wrapsec.local
+      - SMTP_FROM_NAME=WrapSec
