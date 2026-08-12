@@ -2,6 +2,36 @@
 
 All notable changes to WrapSec are documented here.
 
+## [1.8.3] - 2026-08-12
+
+Transactional email. Adds a durable email foundation and the first
+notifications -- minimal, informational, link-free security emails triggered by
+authenticated or internal actions -- plus a delivery-status dashboard and
+admin-managed delivery settings. Self-service password reset and dashboard-
+managed providers are intentionally not part of this release. Email is optional:
+an install with no SMTP configured boots normally and simply does not send.
+
+### Added
+- **Transactional email foundation.** A PostgreSQL outbox plus a background
+  delivery worker over SMTP. Notifications are enqueued inside the business
+  transaction that triggers them, so the record commits atomically with the
+  change; the worker sends with bounded retry and honest delivery status
+  (`provider_accepted` reflects SMTP acceptance, not proof of receipt).
+- **Security notifications.** Password changed, administrator password reset,
+  and account locked. Each is informational only -- no links, tokens, or
+  credentials -- and is sent to the account's stored address. Subjects and
+  HTML/plain-text bodies are localized (English and German).
+- **Email delivery dashboard.** A metadata-only delivery-status view with
+  per-status summary counts, status / notification-type / department /
+  recipient / date-range filters, and a detail drawer for troubleshooting.
+  Tenant-scoped; readable by Admin and Auditor.
+- **Email settings.** An admin page and API for the master notifications on/off
+  switch, the maximum-attempts ceiling (bounded by the delivery retry schedule),
+  and delivery-history retention; the retry backoff is fixed and shown
+  read-only. Changes are recorded in the configuration audit.
+- **SMTP configuration.** Optional `SMTP_*` settings; a half-configured relay is
+  rejected at startup while an unconfigured one leaves email cleanly disabled.
+
 ## [1.8.2] - 2026-08-12
 
 Full dashboard localization. Completes the string migration begun in 1.8.1: the
