@@ -10,6 +10,7 @@ from api.v1.endpoints import (
     auth, setup, webhooks, capabilities,
 )
 from api.v1.endpoints.admin import users
+from api.v1.endpoints.admin import email as admin_email
 
 router = APIRouter()
 
@@ -30,6 +31,7 @@ router.include_router(proxy.router,               prefix="/v1",                 
 # ── JWT Auth ───────────────────────────────────────────────────────────────────
 router.include_router(auth.router,                prefix="/v1/auth",               tags=["Auth"])
 router.include_router(users.router,               prefix="/v1/admin/users",        tags=["Users"])
+router.include_router(admin_email.router,          prefix="/v1/admin/email",        tags=["Email Audit"])
 
 # ── First-run setup ────────────────────────────────────────────────────────────
 router.include_router(setup.router,               prefix="/v1/setup",              tags=["Setup"])

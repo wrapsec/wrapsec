@@ -1,0 +1,196 @@
+# SPDX-License-Identifier: MIT
+# Copyright (c) 2026 WrapSec. All rights reserved.
+# WrapSec v1.0 | AI Security Gateway - https://wrapsec.com
+
+"""
+Integration tests for the email audit endpoints (v1.8.3, Phase G).
+
+Covers interim RBAC (Admin and Auditor may read; Developer/Viewer/API key are
+rejected), strict tenant scoping (an admin never sees another tenant's rows),
+and the 404-on-cross-tenant-id behavior.
+"""
+
+from __future__ import annotations
+
+import uuid
+from unittest.mock import MagicMock
+
+import pytest
+import pytest_asyncio
+from sqlalchemy import delete as sa_delete
+from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_async_engine
+from sqlalchemy.pool import NullPool
+
+from config.settings import get_settings
+from db.models import EmailOutboxModel, TenantModel, UserModel
+from services.auth.token import create_access_token
+from services.time import utc_now
+
+pytestmark = pytest.mark.asyncio
+
+settings = get_settings()
+
+
+def _sf():
+    engine = create_async_engine(settings.database_url, poolclass=NullPool)
+    return engine, async_sessionmaker(bind=engine, class_=AsyncSession, expire_on_commit=False)
+
+
+@pytest_asyncio.fixture
+async def email_seeder():
+    """Seed email_outbox rows (creating any foreign tenant they need to satisfy
+    the tenant FK) and delete both on teardown -- before auth_setup removes its
+    own tenant, so no FK is ever violated."""
+    created_emails:  list[uuid.UUID] = []
+    created_tenants: list[uuid.UUID] = []
+
+    async def seed(*, tenant_id, user_id=None, status="provider_accepted", recipient="x@x.com"):
+        rid = uuid.uuid4()
+        engine, sf = _sf()
+        try:
+            async with sf() as db:
+                # Ensure the tenant exists (FK). Track only tenants we create so
+                # we do not delete auth_setup's tenant on teardown.
+                if await db.get(TenantModel, tenant_id) is None:
+                    db.add(TenantModel(
+                        id=tenant_id, slug=f"seed-{tenant_id.hex[:10]}", name="Seed",
+                        global_policy={}, is_active=True,
+                    ))
+                    created_tenants.append(tenant_id)
+                    await db.flush()
+                db.add(EmailOutboxModel(
+                    id=rid, tenant_id=tenant_id, user_id=user_id,
+                    notification_type="password_changed", recipient=recipient, locale="en",
+                    subject="Your WrapSec password was changed", body_text="t", body_html="<p>t</p>",
+                    status=status, attempt_count=1, available_at=utc_now(), created_at=utc_now(),
+                ))
+                await db.commit()
+        finally:
+            await engine.dispose()
+        created_emails.append(rid)
+        return rid
+
+    yield seed
+
+    engine, sf = _sf()
+    try:
+        async with sf() as db:
+            if created_emails:
+                await db.execute(sa_delete(EmailOutboxModel).where(EmailOutboxModel.id.in_(created_emails)))
+            if created_tenants:
+                await db.execute(sa_delete(TenantModel).where(TenantModel.id.in_(created_tenants)))
+            await db.commit()
+    finally:
+        await engine.dispose()
+
+
+async def _make_auditor(tenant_id) -> str:
+    """Create a real AUDITOR user (the middleware resolves role from the DB) and
+    return a signed access token. Cleaned up by auth_setup's tenant-user delete."""
+    uid = uuid.uuid4()
+    engine, sf = _sf()
+    try:
+        async with sf() as db:
+            db.add(UserModel(
+                id=uid, tenant_id=tenant_id, dept_id=None,
+                email=f"auditor-{uuid.uuid4().hex[:6]}@test.com", password_hash="x",
+                role="AUDITOR", token_version=1,
+            ))
+            await db.commit()
+    finally:
+        await engine.dispose()
+    m = MagicMock()
+    m.id = uid; m.tenant_id = tenant_id; m.dept_id = None; m.role = "AUDITOR"; m.token_version = 1
+    return create_access_token(m)
+
+
+# -- RBAC ------------------------------------------------------------
+async def test_admin_can_list_email_audit(auth_client, auth_setup, email_seeder):
+    tid = auth_setup["tenant"].id
+    await email_seeder(tenant_id=tid, recipient="a@x.com")
+
+    resp = await auth_client.get(
+        "/v1/admin/email", headers={"Authorization": f"Bearer {auth_setup['admin_token']}"}
+    )
+    assert resp.status_code == 200
+    emails = resp.json()["emails"]
+    assert any(e["recipient"] == "a@x.com" for e in emails)
+    # Bodies must NOT be exposed by the audit view.
+    assert all("body_text" not in e and "body_html" not in e for e in emails)
+
+
+async def test_auditor_can_list_email_audit(auth_client, auth_setup, email_seeder):
+    tid = auth_setup["tenant"].id
+    await email_seeder(tenant_id=tid, recipient="b@x.com")
+    auditor_token = await _make_auditor(tid)
+
+    resp = await auth_client.get(
+        "/v1/admin/email", headers={"Authorization": f"Bearer {auditor_token}"}
+    )
+    assert resp.status_code == 200
+
+
+async def test_developer_cannot_read_email_audit(auth_client, auth_setup):
+    resp = await auth_client.get(
+        "/v1/admin/email", headers={"Authorization": f"Bearer {auth_setup['dev_token']}"}
+    )
+    assert resp.status_code == 403
+
+
+async def test_viewer_cannot_read_email_audit(auth_client, auth_setup):
+    resp = await auth_client.get(
+        "/v1/admin/email", headers={"Authorization": f"Bearer {auth_setup['viewer_token']}"}
+    )
+    assert resp.status_code == 403
+
+
+async def test_api_key_cannot_read_email_audit(auth_client, auth_setup):
+    resp = await auth_client.get("/v1/admin/email", headers={"x-api-key": settings.admin_api_key})
+    assert resp.status_code == 403
+
+
+# -- tenant scoping --------------------------------------------------
+async def test_admin_sees_only_own_tenant_emails(auth_client, auth_setup, email_seeder):
+    own_tid   = auth_setup["tenant"].id
+    other_tid = uuid.uuid4()  # a tenant the admin does not belong to
+    await email_seeder(tenant_id=own_tid, recipient="own@x.com")
+    await email_seeder(tenant_id=other_tid, recipient="foreign@x.com")
+
+    resp = await auth_client.get(
+        "/v1/admin/email", headers={"Authorization": f"Bearer {auth_setup['admin_token']}"}
+    )
+    assert resp.status_code == 200
+    recipients = {e["recipient"] for e in resp.json()["emails"]}
+    assert "own@x.com" in recipients
+    assert "foreign@x.com" not in recipients
+
+
+async def test_get_email_cross_tenant_is_404(auth_client, auth_setup, email_seeder):
+    other_tid = uuid.uuid4()
+    foreign_id = await email_seeder(tenant_id=other_tid, recipient="foreign@x.com")
+
+    resp = await auth_client.get(
+        f"/v1/admin/email/{foreign_id}",
+        headers={"Authorization": f"Bearer {auth_setup['admin_token']}"},
+    )
+    assert resp.status_code == 404
+
+
+async def test_get_email_own_tenant_ok(auth_client, auth_setup, email_seeder):
+    tid = auth_setup["tenant"].id
+    rid = await email_seeder(tenant_id=tid, recipient="mine@x.com")
+
+    resp = await auth_client.get(
+        f"/v1/admin/email/{rid}",
+        headers={"Authorization": f"Bearer {auth_setup['admin_token']}"},
+    )
+    assert resp.status_code == 200
+    assert resp.json()["recipient"] == "mine@x.com"
+
+
+async def test_invalid_status_filter_rejected(auth_client, auth_setup):
+    resp = await auth_client.get(
+        "/v1/admin/email?status=bogus",
+        headers={"Authorization": f"Bearer {auth_setup['admin_token']}"},
+    )
+    assert resp.status_code == 400
