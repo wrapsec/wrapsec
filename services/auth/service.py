@@ -181,6 +181,16 @@ class AuthService:
                     ip_address     = ip_address,
                     user_agent     = user_agent,
                 )
+                # Notify on the TRANSITION into locked only (count == max), not
+                # on every failure during the lockout window. Best-effort and
+                # standalone: lockout state is in Redis, so there is no ambient
+                # DB transaction to co-commit with.
+                if locked and count == _settings.auth_max_failed_attempts:
+                    from services.email.notifications import notify_account_locked
+                    await notify_account_locked(
+                        matched,
+                        lockout_seconds = _settings.auth_lockout_duration_seconds,
+                    )
             raise AuthenticationError()
 
         user = outcome.user
@@ -424,6 +434,12 @@ class AuthService:
             "password_hash":         hash_password(new_password),
             "force_password_change": False,
         })
+        # Enqueue the password-changed notification on THIS session so the
+        # outbox row commits atomically with the password change below. Enqueue
+        # is a local INSERT (SMTP is not touched here), so it never couples the
+        # change to email delivery; a render failure is swallowed internally.
+        from services.email.notifications import notify_password_changed
+        await notify_password_changed(db, user)
         # No intermediate commit - password hash update and session invalidation
         # (token_version increment + refresh token revocations) must be committed
         # atomically. logout_all_sessions() issues the single commit.

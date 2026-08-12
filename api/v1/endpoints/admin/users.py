@@ -518,6 +518,13 @@ async def reset_password(
         "password_hash":         hash_password(body.new_password),
         "force_password_change": True,
     })
+    # Enqueue the admin-reset notification on this session so it commits
+    # atomically with the password change (enqueue is a local INSERT; SMTP is
+    # not touched here). Recipient is the target user's stored email.
+    from services.email.notifications import notify_admin_password_reset
+    await notify_admin_password_reset(
+        db, user, trace_id=getattr(request.state, "trace_id", None)
+    )
     await db.commit()
 
     await AuthService().logout_all_sessions(user_id, db)

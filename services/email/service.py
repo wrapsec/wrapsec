@@ -3,25 +3,18 @@
 # WrapSec v1.0 | AI Security Gateway - https://wrapsec.com
 
 """
-Email service -- the application boundary for sending notifications (v1.8.3).
+Email service -- the application boundary for enqueuing notifications (v1.8.3).
 
-Two entry points, matching the two ways a notification is triggered:
+queue(db, ...) renders a notification and writes an outbox row on the caller's
+session (flush only; the caller commits), so the row commits atomically with the
+business change that triggered it. Rendering happens up front, so the outbox
+stores final content and the delivery worker stays template-agnostic. A
+rendering failure is logged and the notification skipped -- it never touches the
+caller's transaction, so the business change still commits.
 
-  * queue(db, ...) enqueues an outbox row inside the CALLER'S transaction
-    (flush only; the caller commits). Use this when the notification accompanies
-    a database business change -- the outbox row then commits atomically with
-    that change (password change, admin reset). If the business transaction
-    rolls back, so does the email.
-
-  * notify(...) is a best-effort standalone enqueue with its own session and
-    commit. Use this when there is no ambient business transaction -- for
-    example an account lockout, whose state lives in Redis. It never raises, so
-    a notification failure cannot disrupt the triggering flow.
-
-Both render the message up front (subject + bodies, localized) so the outbox
-stores final content and the delivery worker stays template-agnostic. Rendering
-failures degrade gracefully: they are logged and the notification is skipped,
-never propagated into the caller's transaction.
+Trigger orchestration (locale resolution, context, and the best-effort
+standalone path for triggers with no ambient transaction) lives in
+services.email.notifications, which calls this boundary.
 """
 
 from __future__ import annotations
@@ -81,43 +74,3 @@ class EmailService:
             user_id           = user_id,
             trace_id          = trace_id,
         )
-
-    async def notify(
-        self,
-        *,
-        notification_type: NotificationType,
-        recipient:         str,
-        locale:            str | None,
-        context:           dict[str, Any],
-        tenant_id:         UUID | None = None,
-        user_id:           UUID | None = None,
-        trace_id:          str | None = None,
-    ) -> None:
-        """
-        Best-effort standalone enqueue (own session + commit). Never raises.
-
-        For triggers with no ambient database transaction. All exceptions --
-        rendering, DB, commit -- are caught and logged so a notification failure
-        cannot disrupt the flow that triggered it.
-        """
-        from db.session import AsyncSessionFactory
-
-        try:
-            async with AsyncSessionFactory() as db:
-                row = await self.queue(
-                    db,
-                    notification_type = notification_type,
-                    recipient         = recipient,
-                    locale            = locale,
-                    context           = context,
-                    tenant_id         = tenant_id,
-                    user_id           = user_id,
-                    trace_id          = trace_id,
-                )
-                if row is not None:
-                    await db.commit()
-        except Exception as exc:  # noqa: BLE001 - best-effort, never disrupt caller
-            logger.error(
-                "email notify failed type=%s recipient=%s: %s",
-                notification_type.value, recipient, exc,
-            )
