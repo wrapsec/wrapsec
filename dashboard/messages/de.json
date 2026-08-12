@@ -187,6 +187,17 @@
     "account": {
       "locked": {
         "subject": "Ihr WrapSec-Konto wurde vorübergehend gesperrt"
+      },
+      "deactivated": {
+        "subject": "Ihr WrapSec-Konto wurde deaktiviert"
+      },
+      "reactivated": {
+        "subject": "Ihr WrapSec-Konto wurde reaktiviert"
+      }
+    },
+    "role": {
+      "changed": {
+        "subject": "Ihre WrapSec-Rolle wurde geändert"
       }
     }
   },
@@ -1286,7 +1297,12 @@
           "reset_by_admin": "Passwort von Admin zurückgesetzt"
         },
         "account": {
-          "locked": "Konto gesperrt"
+          "locked": "Konto gesperrt",
+          "deactivated": "Konto deaktiviert",
+          "reactivated": "Konto reaktiviert"
+        },
+        "role": {
+          "changed": "Rolle geändert"
         }
       },
       "detail": {

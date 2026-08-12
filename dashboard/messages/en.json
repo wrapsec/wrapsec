@@ -187,6 +187,17 @@
     "account": {
       "locked": {
         "subject": "Your WrapSec account was temporarily locked"
+      },
+      "deactivated": {
+        "subject": "Your WrapSec account was deactivated"
+      },
+      "reactivated": {
+        "subject": "Your WrapSec account was reactivated"
+      }
+    },
+    "role": {
+      "changed": {
+        "subject": "Your WrapSec role was changed"
       }
     }
   },
@@ -1286,7 +1297,12 @@
           "reset_by_admin": "Password reset by admin"
         },
         "account": {
-          "locked": "Account locked"
+          "locked": "Account locked",
+          "deactivated": "Account deactivated",
+          "reactivated": "Account reactivated"
+        },
+        "role": {
+          "changed": "Role changed"
         }
       },
       "detail": {

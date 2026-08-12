@@ -64,6 +64,9 @@ REQUIRED_CONTEXT: dict[NotificationType, tuple[str, ...]] = {
     NotificationType.PASSWORD_CHANGED:        ("display_name", "event_time"),
     NotificationType.PASSWORD_RESET_BY_ADMIN: ("display_name", "event_time"),
     NotificationType.ACCOUNT_LOCKED:          ("display_name", "event_time", "lockout_minutes"),
+    NotificationType.ACCOUNT_DEACTIVATED:     ("display_name", "event_time"),
+    NotificationType.ACCOUNT_REACTIVATED:     ("display_name", "event_time"),
+    NotificationType.ROLE_CHANGED:            ("display_name", "event_time", "new_role"),
 }
 
 

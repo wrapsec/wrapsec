@@ -1,0 +1,7 @@
+Hi {display_name},
+
+Your WrapSec role was changed to {new_role} on {event_time} (UTC).
+
+If you were not expecting this change, contact your WrapSec administrator.
+
+This is an automated security notification from WrapSec. Please do not reply to this message.

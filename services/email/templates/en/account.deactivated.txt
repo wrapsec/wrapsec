@@ -1,0 +1,7 @@
+Hi {display_name},
+
+Your WrapSec account was deactivated on {event_time} (UTC). You will no longer be able to sign in.
+
+If you believe this was done in error, contact your WrapSec administrator.
+
+This is an automated security notification from WrapSec. Please do not reply to this message.

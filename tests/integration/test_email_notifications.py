@@ -20,9 +20,12 @@ import pytest
 from db.models import DepartmentModel, TenantModel, UserModel
 from db.repositories.email_outbox import EmailOutboxRepository
 from services.email.notifications import (
+    notify_account_deactivated,
     notify_account_locked,
+    notify_account_reactivated,
     notify_admin_password_reset,
     notify_password_changed,
+    notify_role_changed,
 )
 
 pytestmark = pytest.mark.asyncio
@@ -81,6 +84,35 @@ async def test_password_change_still_visible_even_if_render_skips(pg_db):
     await pg_db.commit()
     rows = await _rows_for(pg_db, user.tenant_id)
     assert len(rows) == 1
+
+
+# -- account lifecycle + role change --------------------------------
+async def test_account_deactivated_enqueues(pg_db):
+    user = await _make_user(pg_db, email=f"de-{uuid.uuid4().hex[:6]}@x.com")
+    await notify_account_deactivated(pg_db, user)
+    await pg_db.commit()
+    rows = await _rows_for(pg_db, user.tenant_id)
+    assert len(rows) == 1
+    assert rows[0].notification_type == "account.deactivated"
+
+
+async def test_account_reactivated_enqueues(pg_db):
+    user = await _make_user(pg_db, email=f"re-{uuid.uuid4().hex[:6]}@x.com")
+    await notify_account_reactivated(pg_db, user)
+    await pg_db.commit()
+    rows = await _rows_for(pg_db, user.tenant_id)
+    assert len(rows) == 1
+    assert rows[0].notification_type == "account.reactivated"
+
+
+async def test_role_changed_enqueues_with_new_role(pg_db):
+    user = await _make_user(pg_db, email=f"rc-{uuid.uuid4().hex[:6]}@x.com")
+    await notify_role_changed(pg_db, user, new_role="ADMIN")
+    await pg_db.commit()
+    rows = await _rows_for(pg_db, user.tenant_id)
+    assert len(rows) == 1
+    assert rows[0].notification_type == "role.changed"
+    assert "ADMIN" in rows[0].body_text  # the new role is rendered into the body
 
 
 # -- standalone lockout path ----------------------------------------

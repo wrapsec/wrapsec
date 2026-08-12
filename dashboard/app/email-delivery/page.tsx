@@ -39,7 +39,10 @@ const LIST_SPEC = {
 const STATUSES = ["queued", "sending", "provider_accepted", "failed"] as const
 // Implemented notification types (dotted <namespace>.<event>); reserved types
 // never appear in delivery rows, so the filter only offers these.
-const TYPES = ["password.changed", "password.reset_by_admin", "account.locked"] as const
+const TYPES = [
+  "password.changed", "password.reset_by_admin", "account.locked",
+  "account.deactivated", "account.reactivated", "role.changed",
+] as const
 
 const STATUS_BADGE: Record<string, string> = {
   queued:            "bg-slate-100 text-slate-600 border-slate-200",

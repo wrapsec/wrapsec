@@ -406,6 +406,22 @@ async def update_user(
             content={"error": {"code": "INVALID_REQUEST", "message": "Invalid request parameters."}},
         )
 
+    # Enqueue account/role notifications on THIS session so they commit
+    # atomically with the update below (session invalidation / the else-branch
+    # issues the commit). Enqueue is a local INSERT -- SMTP is not touched here.
+    from services.email.notifications import (
+        notify_account_deactivated,
+        notify_account_reactivated,
+        notify_role_changed,
+    )
+    _trace = getattr(request.state, "trace_id", None)
+    if new_is_active is False:
+        await notify_account_deactivated(db, updated, trace_id=_trace)
+    elif new_is_active is True:
+        await notify_account_reactivated(db, updated, trace_id=_trace)
+    if new_role is not None and new_role != old_role:
+        await notify_role_changed(db, updated, new_role=new_role, trace_id=_trace)
+
     # Session invalidation - commits the user update + invalidation atomically.
     invalidate_session = (
         new_role is not None or

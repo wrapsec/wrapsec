@@ -1094,7 +1094,12 @@
         "reset_by_admin": "Password reset by admin"
       },
       "account": {
-        "locked": "Account locked"
+        "locked": "Account locked",
+        "deactivated": "Account deactivated",
+        "reactivated": "Account reactivated"
+      },
+      "role": {
+        "changed": "Role changed"
       }
     },
     "detail": {

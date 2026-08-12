@@ -10,6 +10,17 @@
   "account": {
     "locked": {
       "subject": "Ihr WrapSec-Konto wurde vorübergehend gesperrt"
+    },
+    "deactivated": {
+      "subject": "Ihr WrapSec-Konto wurde deaktiviert"
+    },
+    "reactivated": {
+      "subject": "Ihr WrapSec-Konto wurde reaktiviert"
+    }
+  },
+  "role": {
+    "changed": {
+      "subject": "Ihre WrapSec-Rolle wurde geändert"
     }
   }
 }

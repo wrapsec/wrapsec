@@ -90,6 +90,60 @@ async def notify_admin_password_reset(
     )
 
 
+async def notify_account_deactivated(
+    db: AsyncSession, user: UserModel, *, trace_id: str | None = None
+) -> None:
+    """Enqueue an account-deactivated notice on the caller's session."""
+    locale = await _resolve_user_locale(db, user)
+    await EmailService().queue(
+        db,
+        notification_type = NotificationType.ACCOUNT_DEACTIVATED,
+        recipient         = user.email,
+        locale            = locale,
+        context           = {"display_name": user.email, "event_time": _event_time()},
+        tenant_id         = user.tenant_id,
+        department_id     = user.dept_id,
+        user_id           = user.id,
+        trace_id          = trace_id,
+    )
+
+
+async def notify_account_reactivated(
+    db: AsyncSession, user: UserModel, *, trace_id: str | None = None
+) -> None:
+    """Enqueue an account-reactivated notice on the caller's session."""
+    locale = await _resolve_user_locale(db, user)
+    await EmailService().queue(
+        db,
+        notification_type = NotificationType.ACCOUNT_REACTIVATED,
+        recipient         = user.email,
+        locale            = locale,
+        context           = {"display_name": user.email, "event_time": _event_time()},
+        tenant_id         = user.tenant_id,
+        department_id     = user.dept_id,
+        user_id           = user.id,
+        trace_id          = trace_id,
+    )
+
+
+async def notify_role_changed(
+    db: AsyncSession, user: UserModel, *, new_role: str, trace_id: str | None = None
+) -> None:
+    """Enqueue a role-changed notice (includes the new role) on the caller's session."""
+    locale = await _resolve_user_locale(db, user)
+    await EmailService().queue(
+        db,
+        notification_type = NotificationType.ROLE_CHANGED,
+        recipient         = user.email,
+        locale            = locale,
+        context           = {"display_name": user.email, "event_time": _event_time(), "new_role": new_role},
+        tenant_id         = user.tenant_id,
+        department_id     = user.dept_id,
+        user_id           = user.id,
+        trace_id          = trace_id,
+    )
+
+
 async def notify_account_locked(
     user: UserModel, *, lockout_seconds: int, trace_id: str | None = None
 ) -> None:

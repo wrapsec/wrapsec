@@ -1,0 +1,7 @@
+Hallo {display_name},
+
+Ihr WrapSec-Konto wurde am {event_time} (UTC) reaktiviert. Sie können sich wieder anmelden.
+
+Wenn Sie dies nicht erwartet haben, wenden Sie sich an Ihren WrapSec-Administrator.
+
+Dies ist eine automatische Sicherheitsbenachrichtigung von WrapSec. Bitte antworten Sie nicht auf diese Nachricht.

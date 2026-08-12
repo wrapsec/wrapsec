@@ -1,0 +1,7 @@
+Hallo {display_name},
+
+Ihre WrapSec-Rolle wurde am {event_time} (UTC) in {new_role} geändert.
+
+Wenn Sie diese Änderung nicht erwartet haben, wenden Sie sich an Ihren WrapSec-Administrator.
+
+Dies ist eine automatische Sicherheitsbenachrichtigung von WrapSec. Bitte antworten Sie nicht auf diese Nachricht.

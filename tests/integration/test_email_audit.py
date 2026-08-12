@@ -297,6 +297,34 @@ async def test_bad_created_from_rejected(auth_client, auth_setup):
     assert resp.status_code == 400
 
 
+# -- trigger wiring (endpoint -> outbox) ----------------------------
+async def test_deactivate_user_endpoint_enqueues_notification(auth_client, auth_setup):
+    # Deactivate the viewer as admin; the update_user endpoint should enqueue an
+    # account.deactivated notification co-committed with the change.
+    viewer_id = str(auth_setup["viewer_user"].id)
+    tid = auth_setup["tenant"].id
+    resp = await auth_client.patch(
+        f"/v1/admin/users/{viewer_id}",
+        json={"is_active": False},
+        headers={"Authorization": f"Bearer {auth_setup['admin_token']}"},
+    )
+    assert resp.status_code == 200
+
+    engine, sf = _sf()
+    try:
+        async with sf() as db:
+            rows = await EmailOutboxRepository(db).list_by_tenant(tenant_id=tid)
+            assert any(
+                r.notification_type == "account.deactivated" and str(r.user_id) == viewer_id
+                for r in rows
+            )
+            # Clean the outbox rows so auth_setup can delete the tenant (FK).
+            await db.execute(sa_delete(EmailOutboxModel).where(EmailOutboxModel.tenant_id == tid))
+            await db.commit()
+    finally:
+        await engine.dispose()
+
+
 # -- settings API ---------------------------------------------------
 def _admin(auth_setup):
     return {"Authorization": f"Bearer {auth_setup['admin_token']}"}

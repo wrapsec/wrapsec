@@ -1,0 +1,7 @@
+Hi {display_name},
+
+Your WrapSec account was reactivated on {event_time} (UTC). You can sign in again.
+
+If you were not expecting this, contact your WrapSec administrator.
+
+This is an automated security notification from WrapSec. Please do not reply to this message.

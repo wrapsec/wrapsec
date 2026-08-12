@@ -184,8 +184,9 @@ class NotificationType(str, Enum):
     PASSWORD_CHANGED        = "password.changed"         # implemented
     PASSWORD_RESET_BY_ADMIN = "password.reset_by_admin"  # implemented
     ACCOUNT_LOCKED          = "account.locked"           # implemented
-    ACCOUNT_DEACTIVATED     = "account.deactivated"      # reserved
-    ROLE_CHANGED            = "role.changed"             # reserved
+    ACCOUNT_DEACTIVATED     = "account.deactivated"      # implemented
+    ACCOUNT_REACTIVATED     = "account.reactivated"      # implemented
+    ROLE_CHANGED            = "role.changed"             # implemented
     # API SECURITY
     API_KEY_CREATED         = "api_key.created"          # reserved
     API_KEY_REVOKED         = "api_key.revoked"          # reserved
@@ -201,6 +202,7 @@ NOTIFICATION_CATEGORY: dict[NotificationType, NotificationCategory] = {
     NotificationType.PASSWORD_RESET_BY_ADMIN: NotificationCategory.ACCOUNT,
     NotificationType.ACCOUNT_LOCKED:          NotificationCategory.ACCOUNT,
     NotificationType.ACCOUNT_DEACTIVATED:     NotificationCategory.ACCOUNT,
+    NotificationType.ACCOUNT_REACTIVATED:     NotificationCategory.ACCOUNT,
     NotificationType.ROLE_CHANGED:            NotificationCategory.ACCOUNT,
     NotificationType.API_KEY_CREATED:         NotificationCategory.API_SECURITY,
     NotificationType.API_KEY_REVOKED:         NotificationCategory.API_SECURITY,
@@ -212,6 +214,9 @@ IMPLEMENTED_NOTIFICATIONS: frozenset[NotificationType] = frozenset({
     NotificationType.PASSWORD_CHANGED,
     NotificationType.PASSWORD_RESET_BY_ADMIN,
     NotificationType.ACCOUNT_LOCKED,
+    NotificationType.ACCOUNT_DEACTIVATED,
+    NotificationType.ACCOUNT_REACTIVATED,
+    NotificationType.ROLE_CHANGED,
 })
 
 

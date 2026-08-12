@@ -1094,7 +1094,12 @@
         "reset_by_admin": "Passwort von Admin zurückgesetzt"
       },
       "account": {
-        "locked": "Konto gesperrt"
+        "locked": "Konto gesperrt",
+        "deactivated": "Konto deaktiviert",
+        "reactivated": "Konto reaktiviert"
+      },
+      "role": {
+        "changed": "Rolle geändert"
       }
     },
     "detail": {

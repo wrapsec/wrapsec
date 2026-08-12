@@ -1,0 +1,7 @@
+Hallo {display_name},
+
+Ihr WrapSec-Konto wurde am {event_time} (UTC) deaktiviert. Sie können sich nicht mehr anmelden.
+
+Wenn dies versehentlich geschehen ist, wenden Sie sich an Ihren WrapSec-Administrator.
+
+Dies ist eine automatische Sicherheitsbenachrichtigung von WrapSec. Bitte antworten Sie nicht auf diese Nachricht.
