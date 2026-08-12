@@ -163,6 +163,30 @@ async def lifespan(app: FastAPI):
                 concurrency = _settings.webhook_delivery_concurrency,
             ))
 
+        # Outbox email delivery worker (v1.8.3). Postgres polling loop that
+        # drains email_outbox. Starts only when an email provider is configured
+        # (SMTP set, or a dev sink), so an install with no SMTP boots normally
+        # with email simply disabled -- notifications are enqueued but not sent.
+        _email_stop = _email_task = _email_provider = None
+        if _settings.email_worker_enabled:
+            from db.session import AsyncSessionFactory
+            from services.email.factory import email_from_address, get_email_provider
+            from workers import email_delivery
+            _email_provider = get_email_provider(_settings)
+            if _email_provider is not None:
+                _email_from, _email_from_name = email_from_address(_settings)
+                _email_stop = asyncio.Event()
+                _email_task = asyncio.create_task(email_delivery.run(
+                    session_factory = AsyncSessionFactory,
+                    provider        = _email_provider,
+                    from_addr       = _email_from,
+                    from_name       = _email_from_name,
+                    stop_event      = _email_stop,
+                    poll_seconds    = _settings.email_worker_poll_seconds,
+                    batch           = _settings.email_worker_batch,
+                    concurrency     = _settings.email_worker_concurrency,
+                ))
+
         print(f"Starting {_settings.app_name} v{_settings.app_version}")
         print(f"Environment: {_settings.environment}")
         print(f"Redis: {'connected' if redis_ok else 'unavailable'}")
@@ -179,6 +203,17 @@ async def lifespan(app: FastAPI):
                 _wh_task.cancel()
             await _wh_handler.aclose()
             await close_webhook_worker_redis()
+
+        # Stop the email worker: signal, let it drain in-flight sends, then
+        # release the provider's resources.
+        if _email_task is not None:
+            _email_stop.set()
+            try:
+                await asyncio.wait_for(_email_task, timeout=30)
+            except asyncio.TimeoutError:
+                _email_task.cancel()
+            if _email_provider is not None:
+                await _email_provider.aclose()
 
         await stop_scheduler()
         await close()
