@@ -44,6 +44,9 @@ python-multipart==0.0.32      # FastAPI form parsing — required for login endp
 APScheduler==3.11.2           # background retention worker
 email-validator==2.3.0
 
+# ── Email (transactional notifications, v1.8.3) ───────────────────────────────
+aiosmtplib==3.0.2             # async SMTP client for the outbox delivery worker
+
 # ── Cryptography ──────────────────────────────────────────────────────────────
 cryptography==49.0.0          # AES-256-GCM encryption for proxy provider API keys
 

@@ -153,6 +153,37 @@ class LogoutReason(str, Enum):
     EXPIRED    = "expired"
 
 
+class NotificationType(str, Enum):
+    """
+    Transactional email notification types (v1.8.3).
+
+    V1 ships only minimal, informational security notifications, all triggered
+    by an authenticated or internal action. Each value maps 1:1 to a subject
+    key under the `notifications` locale namespace and a pair of per-locale
+    body templates (HTML + text). Self-service password reset is intentionally
+    absent: it is deferred to a later release as its own security mini-project.
+    """
+    PASSWORD_CHANGED     = "password_changed"       # user changed their own password
+    ADMIN_PASSWORD_RESET = "admin_password_reset"   # an admin reset the user's password
+    ACCOUNT_LOCKED       = "account_locked"         # lockout after repeated failed logins
+
+
+class EmailStatus(str, Enum):
+    """
+    Lifecycle of an email_outbox row (v1.8.3).
+
+    Names are deliberately honest about what WrapSec actually knows over plain
+    SMTP: PROVIDER_ACCEPTED means the configured SMTP server accepted the
+    message for relay -- it is NOT proof of recipient delivery. DELIVERED and
+    BOUNCED are reserved for a future transactional-provider capability that
+    reports real delivery events; the SMTP-only V1 never sets them.
+    """
+    QUEUED            = "queued"             # committed to the outbox, awaiting a worker
+    SENDING           = "sending"            # a worker has claimed the row
+    PROVIDER_ACCEPTED = "provider_accepted"  # SMTP server accepted the message for relay
+    FAILED            = "failed"             # non-retryable, or retries exhausted
+
+
 def get_risk_level(score: float) -> RiskLevel:
     if score >= 0.9:
         return RiskLevel.CRITICAL

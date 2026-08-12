@@ -224,6 +224,38 @@ class Settings(BaseSettings):
     # api/v1/endpoints/auth.py:_resolve_refresh_cookie_path.
     refresh_cookie_path: str = Field(default="/v1/auth")
 
+    # ── Email (transactional notifications, v1.8.3) ───────────────────────────
+    # Email is OPTIONAL infrastructure. When smtp_host is unset the application
+    # boots normally, the outbox delivery worker does not start, and business
+    # actions that would send a notification still complete (the notification is
+    # simply not delivered). Never make these mandatory at boot.
+    #
+    # smtp_use_tls   -- implicit TLS on connect (SMTPS, typically port 465).
+    # smtp_start_tls -- opportunistic STARTTLS upgrade (typically port 587).
+    # Set exactly one to True for a TLS connection; both False is plaintext and
+    # is only appropriate for a local/test relay.
+    smtp_host:                 str | None = Field(default=None)
+    smtp_port:                 int  = 587
+    smtp_username:             str | None = Field(default=None)
+    smtp_password:             str | None = Field(default=None)
+    smtp_use_tls:              bool = False
+    smtp_start_tls:            bool = True
+    smtp_from:                 str | None = Field(default=None)   # From: header address
+    smtp_from_name:            str  = "WrapSec"                    # From: display name
+    smtp_timeout_seconds:      int  = 15
+
+    # Outbox delivery worker. Long-running poll loop started in the API lifespan
+    # (like the webhook worker). Disabled automatically when smtp_host is unset;
+    # _ENABLED=false also keeps it off (dedicated worker process, or tests).
+    email_worker_enabled:      bool = True
+    email_worker_poll_seconds: int  = 10     # idle poll interval between batches
+    email_worker_batch:        int  = 20     # rows claimed per poll
+    email_worker_concurrency:  int  = 5      # concurrent provider sends per batch
+    # Retention for the email_outbox audit table (days). Reuses the existing
+    # APScheduler retention job. Email rows carry no secrets, but they hold
+    # recipient addresses (personal data), so they are not retained forever.
+    email_retention_days:      int  = 30
+
     # -- Data storage ----------------------------------------------------------
     data_storage_mode:        str = Field(default="masked")
     # full   -- store input_raw and output_raw as-is (development)
@@ -276,6 +308,28 @@ class Settings(BaseSettings):
                 "python -c \"import secrets; print('wsk_admin_' + secrets.token_hex(24))\""
             )
 
+    def validate_email_config(self) -> None:
+        # Email is optional: with no smtp_host there is nothing to validate and
+        # the app must still boot (email disabled). Only when a host IS provided
+        # do we enforce a coherent, sendable configuration so a half-configured
+        # relay fails loudly at boot instead of silently dropping every message.
+        import os
+        if os.getenv("TESTING") == "true":
+            return
+        if not self.smtp_host:
+            return
+        if self.smtp_use_tls and self.smtp_start_tls:
+            raise ValueError(
+                "SMTP_USE_TLS and SMTP_START_TLS are mutually exclusive. "
+                "Use SMTP_USE_TLS=true for implicit TLS (port 465) OR "
+                "SMTP_START_TLS=true for STARTTLS (port 587), not both."
+            )
+        if not self.smtp_from:
+            raise ValueError(
+                "SMTP_FROM must be set when SMTP_HOST is configured "
+                "(the From: address for outgoing notifications)."
+            )
+
     def validate_cookie_security(self) -> None:
         # Fail closed in deployed environments: refusing to boot with
         # COOKIE_SECURE=false forces the operator to fix the misconfig
@@ -301,4 +355,5 @@ def get_settings() -> Settings:
     settings.validate_source_posture()
     settings.validate_secrets()
     settings.validate_cookie_security()
+    settings.validate_email_config()
     return settings
