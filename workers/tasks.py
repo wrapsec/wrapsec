@@ -271,14 +271,15 @@ async def _cleanup_email_outbox() -> int:
     Email rows carry no secrets, but they hold recipient addresses (personal
     data), so they are not retained indefinitely. All statuses are purged by
     age: terminal rows (provider_accepted / failed) and any long-stale queued
-    rows alike. Reads retention from config (env), like the proxy path.
+    rows alike. Retention is the admin-managed email setting (DB), falling back
+    to the env default -- the same pattern as audit retention.
     """
     from db.session import AsyncSessionFactory
-    from config.settings import get_settings
+    from services.email.settings import get_email_settings
     from sqlalchemy import text
 
-    cfg            = get_settings()
-    retention_days = cfg.email_retention_days
+    async with AsyncSessionFactory() as session:
+        retention_days = (await get_email_settings(session)).retention_days
     if retention_days < 1:
         logger.error(
             f"Retention worker: invalid email_retention_days={retention_days} - "

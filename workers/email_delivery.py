@@ -99,6 +99,7 @@ async def _process_one(
     from_name:       str,
     row:             _Claimed,
     sem:             asyncio.Semaphore,
+    max_attempts:    int,
 ) -> None:
     """Send one claimed row and record the outcome in its own transaction, so
     one row's failure never rolls back another's status write."""
@@ -121,11 +122,11 @@ async def _process_one(
             logger.warning("email permanent failure id=%s attempt=%d: %s", row.id, attempt, exc)
             return
         except TransientEmailError as exc:
-            await _retry_or_fail(session_factory, row.id, attempt, str(exc))
+            await _retry_or_fail(session_factory, row.id, attempt, str(exc), max_attempts)
             return
         except Exception as exc:  # noqa: BLE001 - unknown error: bounded retry, never drop
             logger.exception("email send raised unexpectedly id=%s", row.id)
-            await _retry_or_fail(session_factory, row.id, attempt, f"unexpected: {exc}")
+            await _retry_or_fail(session_factory, row.id, attempt, f"unexpected: {exc}", max_attempts)
             return
 
         await _mark_accepted(session_factory, row.id, attempt, provider_message_id)
@@ -139,9 +140,13 @@ async def _retry_or_fail(
     row_id:          UUID,
     attempt:         int,
     error:           str,
+    max_attempts:    int,
 ) -> None:
+    # Exhausted when we hit the configured attempt ceiling OR the fixed backoff
+    # schedule has no further interval. The configured max can only cap earlier,
+    # never beyond the schedule (settings clamps it to MAX_ATTEMPTS).
     delay = next_retry_delay(attempt)
-    if delay is None:
+    if attempt >= max_attempts or delay is None:
         await _mark_failed(session_factory, row_id, attempt, f"retries exhausted: {error}")
         logger.warning("email retries exhausted id=%s attempt=%d: %s", row_id, attempt, error)
         return
@@ -215,8 +220,14 @@ async def run(
                 await _sleep_or_stop(stop_event, poll_seconds)
                 continue
 
+            # Read the configured attempt ceiling once per batch (cheap PK
+            # lookup) so a mid-run settings change takes effect promptly.
+            from services.email.settings import get_email_settings
+            async with session_factory() as db:
+                max_attempts = (await get_email_settings(db)).max_attempts
+
             await asyncio.gather(
-                *(_process_one(session_factory, provider, from_addr, from_name, row, sem) for row in claimed),
+                *(_process_one(session_factory, provider, from_addr, from_name, row, sem, max_attempts) for row in claimed),
                 return_exceptions=True,
             )
     finally:

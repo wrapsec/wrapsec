@@ -20,8 +20,15 @@ from domain.enums import EmailStatus, NotificationType
 from services.email.service import EmailService
 
 
+class _NoRow:
+    def scalar_one_or_none(self):
+        return None
+
+
 class FakeSession:
-    """Minimal AsyncSession stand-in: records added rows, flush is a no-op."""
+    """Minimal AsyncSession stand-in: records added rows, flush is a no-op, and
+    any query returns no row -- so the email-settings lookup falls back to
+    defaults (notifications enabled)."""
 
     def __init__(self) -> None:
         self.added: list = []
@@ -31,6 +38,9 @@ class FakeSession:
 
     async def flush(self) -> None:
         return None
+
+    async def execute(self, *args, **kwargs) -> _NoRow:
+        return _NoRow()
 
 
 async def test_queue_renders_and_enqueues_row():

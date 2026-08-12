@@ -43,6 +43,7 @@ class EmailService:
         locale:            str | None,
         context:           dict[str, Any],
         tenant_id:         UUID | None = None,
+        department_id:     UUID | None = None,
         user_id:           UUID | None = None,
         trace_id:          str | None = None,
     ) -> EmailOutboxModel | None:
@@ -52,7 +53,19 @@ class EmailService:
 
         Rendering happens before any DB write, so a rendering failure leaves the
         caller's transaction untouched -- the business change still commits.
+
+        Honors the master notifications on/off switch: when disabled, nothing is
+        enqueued and None is returned.
         """
+        from services.email.settings import get_email_settings
+
+        if not (await get_email_settings(db)).notifications_enabled:
+            logger.info(
+                "email notifications disabled; skipping type=%s recipient=%s",
+                notification_type.value, recipient,
+            )
+            return None
+
         try:
             rendered = render(notification_type, locale, context)
         except TemplateError as exc:
@@ -71,6 +84,7 @@ class EmailService:
             body_html         = rendered.html_body,
             locale            = locale,
             tenant_id         = tenant_id,
+            department_id     = department_id,
             user_id           = user_id,
             trace_id          = trace_id,
         )

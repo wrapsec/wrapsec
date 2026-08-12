@@ -25,6 +25,7 @@ from domain.enums import EmailStatus, NotificationType
 from services.email.fake_provider import FakeEmailProvider
 from services.email.service import EmailService
 from services.time import utc_now
+from services.webhooks.retry_schedule import MAX_ATTEMPTS
 from workers import email_delivery
 
 pytestmark = pytest.mark.asyncio
@@ -69,7 +70,7 @@ async def test_worker_delivers_and_marks_accepted(sf):
 
     claimed = await email_delivery._claim(sf, batch=10)
     assert len(claimed) == 1
-    await email_delivery._process_one(sf, provider, "no-reply@wrapsec.com", "WrapSec", claimed[0], asyncio.Semaphore(1))
+    await email_delivery._process_one(sf, provider, "no-reply@wrapsec.com", "WrapSec", claimed[0], asyncio.Semaphore(1), MAX_ATTEMPTS)
 
     assert len(provider.sent) == 1
     assert provider.sent[0].to_addr == "a@x.com"
@@ -87,7 +88,7 @@ async def test_transient_failure_reschedules(sf):
     provider.fail_next = "transient"
 
     claimed = await email_delivery._claim(sf, batch=10)
-    await email_delivery._process_one(sf, provider, "no-reply@wrapsec.com", "WrapSec", claimed[0], asyncio.Semaphore(1))
+    await email_delivery._process_one(sf, provider, "no-reply@wrapsec.com", "WrapSec", claimed[0], asyncio.Semaphore(1), MAX_ATTEMPTS)
 
     row = await _status(sf, rid)
     assert row.status == EmailStatus.QUEUED.value
@@ -103,7 +104,7 @@ async def test_permanent_failure_marks_failed(sf):
     provider.fail_next = "permanent"
 
     claimed = await email_delivery._claim(sf, batch=10)
-    await email_delivery._process_one(sf, provider, "no-reply@wrapsec.com", "WrapSec", claimed[0], asyncio.Semaphore(1))
+    await email_delivery._process_one(sf, provider, "no-reply@wrapsec.com", "WrapSec", claimed[0], asyncio.Semaphore(1), MAX_ATTEMPTS)
 
     row = await _status(sf, rid)
     assert row.status == EmailStatus.FAILED.value
@@ -126,12 +127,30 @@ async def test_retry_exhaustion_marks_failed(sf):
     provider = FakeEmailProvider()
     provider.fail_next = "transient"
     claimed = await email_delivery._claim(sf, batch=10)
-    await email_delivery._process_one(sf, provider, "no-reply@wrapsec.com", "WrapSec", claimed[0], asyncio.Semaphore(1))
+    await email_delivery._process_one(sf, provider, "no-reply@wrapsec.com", "WrapSec", claimed[0], asyncio.Semaphore(1), MAX_ATTEMPTS)
 
     row = await _status(sf, rid)
     assert row.status == EmailStatus.FAILED.value
     assert row.attempt_count == MAX_ATTEMPTS
     assert "exhausted" in (row.last_error or "")
+
+
+async def test_configured_max_attempts_caps_before_schedule(sf):
+    # With max_attempts=1 the first failure is already terminal, even though the
+    # fixed schedule still has a defined backoff for attempt 1. Proves the
+    # configured ceiling caps earlier than the schedule.
+    rid = await _enqueue(sf, NotificationType.PASSWORD_CHANGED, "a@x.com", _ctx())
+    provider = FakeEmailProvider()
+    provider.fail_next = "transient"
+
+    claimed = await email_delivery._claim(sf, batch=10)
+    await email_delivery._process_one(
+        sf, provider, "no-reply@wrapsec.com", "WrapSec", claimed[0], asyncio.Semaphore(1), 1
+    )
+
+    row = await _status(sf, rid)
+    assert row.status == EmailStatus.FAILED.value
+    assert row.attempt_count == 1
 
 
 # -- concurrent claim disjointness (SKIP LOCKED) --------------------
