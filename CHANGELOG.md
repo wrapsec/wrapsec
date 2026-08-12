@@ -2,6 +2,23 @@
 
 All notable changes to WrapSec are documented here.
 
+## [1.8.4] - 2026-08-13
+
+Follow-up to the email release: account-lifecycle and role notifications, plus a
+user-administration fix.
+
+### Added
+- **Account and role notifications.** Deactivating, reactivating, or changing a
+  user's role now emails the affected account (informational, link-free,
+  localized). They use the same delivery pipeline, settings, and audit view as
+  the existing security notifications, and are wired into the taxonomy's
+  reserved-then-implemented model.
+
+### Fixed
+- **User update from the dashboard.** Deactivate / reactivate and role/department
+  edits now use the correct HTTP method (PATCH), resolving a 405 that blocked
+  those actions.
+
 ## [1.8.3] - 2026-08-12
 
 Transactional email. Adds a durable email foundation and the first
