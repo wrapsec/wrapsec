@@ -564,6 +564,11 @@ class EmailOutboxModel(Base):
 
     id                  = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
     tenant_id           = Column(UUID(as_uuid=True), ForeignKey("tenants.id"), nullable=True)
+    # Denormalized audit reference (no FK), snapshotted from the recipient user
+    # at enqueue. NULL for tenant-level notifications (e.g. an admin recipient
+    # has no department). Belongs to tenant_id by construction: both are copied
+    # from the same user, whose dept-in-tenant is a DB invariant.
+    department_id       = Column(UUID(as_uuid=True), nullable=True)
     user_id             = Column(UUID(as_uuid=True), nullable=True)
     notification_type   = Column(String(64),  nullable=False)
     recipient           = Column(String(255), nullable=False)

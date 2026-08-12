@@ -27,7 +27,7 @@ from __future__ import annotations
 from datetime import datetime
 from uuid import UUID
 
-from sqlalchemy import select
+from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from db.models import EmailOutboxModel
@@ -49,6 +49,7 @@ class EmailOutboxRepository:
         body_html:         str | None,
         locale:            str | None = None,
         tenant_id:         UUID | None = None,
+        department_id:     UUID | None = None,
         user_id:           UUID | None = None,
         trace_id:          str | None = None,
         now:               datetime | None = None,
@@ -64,6 +65,7 @@ class EmailOutboxRepository:
         row = EmailOutboxModel(
             id                = uuid.uuid4(),
             tenant_id         = tenant_id,
+            department_id     = department_id,
             user_id           = user_id,
             notification_type = notification_type,
             recipient         = recipient,
@@ -183,23 +185,83 @@ class EmailOutboxRepository:
         it -- this repo does not know the calling tenant."""
         return await self._db.get(EmailOutboxModel, row_id)
 
+    def _filtered(
+        self,
+        stmt,
+        *,
+        tenant_id:         UUID,
+        status:            str | None,
+        notification_type: str | None,
+        department_id:     UUID | None,
+        recipient:         str | None,
+        created_from:      datetime | None,
+        created_to:        datetime | None,
+    ):
+        """Apply the shared delivery-audit filters to a select. Always
+        tenant-scoped; recipient is a case-insensitive substring match."""
+        stmt = stmt.where(EmailOutboxModel.tenant_id == tenant_id)
+        if status is not None:
+            stmt = stmt.where(EmailOutboxModel.status == status)
+        if notification_type is not None:
+            stmt = stmt.where(EmailOutboxModel.notification_type == notification_type)
+        if department_id is not None:
+            stmt = stmt.where(EmailOutboxModel.department_id == department_id)
+        if recipient:
+            stmt = stmt.where(EmailOutboxModel.recipient.ilike(f"%{recipient}%"))
+        if created_from is not None:
+            stmt = stmt.where(EmailOutboxModel.created_at >= ensure_utc(created_from))
+        if created_to is not None:
+            stmt = stmt.where(EmailOutboxModel.created_at <= ensure_utc(created_to))
+        return stmt
+
     async def list_by_tenant(
         self,
         *,
-        tenant_id: UUID,
-        limit:     int = 50,
-        offset:    int = 0,
-        status:    str | None = None,
+        tenant_id:         UUID,
+        limit:             int = 50,
+        offset:            int = 0,
+        status:            str | None = None,
+        notification_type: str | None = None,
+        department_id:     UUID | None = None,
+        recipient:         str | None = None,
+        created_from:      datetime | None = None,
+        created_to:        datetime | None = None,
     ) -> list[EmailOutboxModel]:
-        """Tenant-scoped listing, newest first, for the email audit view."""
-        stmt = (
-            select(EmailOutboxModel)
-            .where(EmailOutboxModel.tenant_id == tenant_id)
+        """Tenant-scoped listing, newest first, for the delivery audit view."""
+        stmt = self._filtered(
+            select(EmailOutboxModel),
+            tenant_id=tenant_id, status=status, notification_type=notification_type,
+            department_id=department_id, recipient=recipient,
+            created_from=created_from, created_to=created_to,
         )
-        if status is not None:
-            stmt = stmt.where(EmailOutboxModel.status == status)
         stmt = stmt.order_by(EmailOutboxModel.created_at.desc()).limit(limit).offset(offset)
         return list((await self._db.execute(stmt)).scalars().all())
+
+    async def count_by_status(
+        self,
+        *,
+        tenant_id:         UUID,
+        notification_type: str | None = None,
+        department_id:     UUID | None = None,
+        recipient:         str | None = None,
+        created_from:      datetime | None = None,
+        created_to:        datetime | None = None,
+    ) -> dict[str, int]:
+        """Per-status counts for the summary row, with the same filters as the
+        listing (minus status). Every EmailStatus is present, zero-filled."""
+        from domain.enums import EmailStatus
+
+        stmt = self._filtered(
+            select(EmailOutboxModel.status, func.count()).select_from(EmailOutboxModel),
+            tenant_id=tenant_id, status=None, notification_type=notification_type,
+            department_id=department_id, recipient=recipient,
+            created_from=created_from, created_to=created_to,
+        ).group_by(EmailOutboxModel.status)
+        rows = (await self._db.execute(stmt)).all()
+        counts = {s.value: 0 for s in EmailStatus}
+        for status_value, count in rows:
+            counts[status_value] = count
+        return counts
 
 
 # Cap on the persisted error string so a verbose SMTP transcript cannot bloat

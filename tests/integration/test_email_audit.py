@@ -44,7 +44,8 @@ async def email_seeder():
     created_emails:  list[uuid.UUID] = []
     created_tenants: list[uuid.UUID] = []
 
-    async def seed(*, tenant_id, user_id=None, status="provider_accepted", recipient="x@x.com"):
+    async def seed(*, tenant_id, user_id=None, status="provider_accepted", recipient="x@x.com",
+                   notification_type="password_changed"):
         rid = uuid.uuid4()
         engine, sf = _sf()
         try:
@@ -60,7 +61,7 @@ async def email_seeder():
                     await db.flush()
                 db.add(EmailOutboxModel(
                     id=rid, tenant_id=tenant_id, user_id=user_id,
-                    notification_type="password_changed", recipient=recipient, locale="en",
+                    notification_type=notification_type, recipient=recipient, locale="en",
                     subject="Your WrapSec password was changed", body_text="t", body_html="<p>t</p>",
                     status=status, attempt_count=1, available_at=utc_now(), created_at=utc_now(),
                 ))
@@ -191,6 +192,90 @@ async def test_get_email_own_tenant_ok(auth_client, auth_setup, email_seeder):
 async def test_invalid_status_filter_rejected(auth_client, auth_setup):
     resp = await auth_client.get(
         "/v1/admin/email?status=bogus",
+        headers={"Authorization": f"Bearer {auth_setup['admin_token']}"},
+    )
+    assert resp.status_code == 400
+
+
+# -- summary + filters ----------------------------------------------
+async def test_summary_counts_by_status(auth_client, auth_setup, email_seeder):
+    tid = auth_setup["tenant"].id
+    await email_seeder(tenant_id=tid, status="provider_accepted", recipient="s1@x.com")
+    await email_seeder(tenant_id=tid, status="provider_accepted", recipient="s2@x.com")
+    await email_seeder(tenant_id=tid, status="failed", recipient="s3@x.com")
+
+    resp = await auth_client.get(
+        "/v1/admin/email/summary",
+        headers={"Authorization": f"Bearer {auth_setup['admin_token']}"},
+    )
+    assert resp.status_code == 200
+    counts = resp.json()["counts"]
+    # Every status key is present (zero-filled), and our seeds are reflected.
+    assert set(counts) == {"queued", "sending", "provider_accepted", "failed"}
+    assert counts["provider_accepted"] >= 2
+    assert counts["failed"] >= 1
+
+
+async def test_filter_by_status(auth_client, auth_setup, email_seeder):
+    tid = auth_setup["tenant"].id
+    await email_seeder(tenant_id=tid, status="failed", recipient="f1@x.com")
+    await email_seeder(tenant_id=tid, status="provider_accepted", recipient="ok1@x.com")
+
+    resp = await auth_client.get(
+        "/v1/admin/email?status=failed",
+        headers={"Authorization": f"Bearer {auth_setup['admin_token']}"},
+    )
+    assert resp.status_code == 200
+    statuses = {e["status"] for e in resp.json()["emails"]}
+    assert statuses == {"failed"}
+
+
+async def test_filter_by_recipient_substring(auth_client, auth_setup, email_seeder):
+    tid = auth_setup["tenant"].id
+    await email_seeder(tenant_id=tid, recipient="alice@needle.com")
+    await email_seeder(tenant_id=tid, recipient="bob@haystack.com")
+
+    resp = await auth_client.get(
+        "/v1/admin/email?recipient=needle",
+        headers={"Authorization": f"Bearer {auth_setup['admin_token']}"},
+    )
+    assert resp.status_code == 200
+    recipients = [e["recipient"] for e in resp.json()["emails"]]
+    assert recipients == ["alice@needle.com"]
+
+
+async def test_filter_by_notification_type(auth_client, auth_setup, email_seeder):
+    tid = auth_setup["tenant"].id
+    await email_seeder(tenant_id=tid, notification_type="account_locked", recipient="al@x.com")
+    await email_seeder(tenant_id=tid, notification_type="password_changed", recipient="pc@x.com")
+
+    resp = await auth_client.get(
+        "/v1/admin/email?notification_type=account_locked",
+        headers={"Authorization": f"Bearer {auth_setup['admin_token']}"},
+    )
+    assert resp.status_code == 200
+    types = {e["notification_type"] for e in resp.json()["emails"]}
+    assert types == {"account_locked"}
+
+
+async def test_list_omits_subject_and_body(auth_client, auth_setup, email_seeder):
+    tid = auth_setup["tenant"].id
+    await email_seeder(tenant_id=tid, recipient="meta@x.com")
+    resp = await auth_client.get(
+        "/v1/admin/email?recipient=meta",
+        headers={"Authorization": f"Bearer {auth_setup['admin_token']}"},
+    )
+    e = resp.json()["emails"][0]
+    for forbidden in ("subject", "body_text", "body_html"):
+        assert forbidden not in e
+    # doc field vocabulary is present
+    for field in ("last_attempt_at", "completed_at", "department_id"):
+        assert field in e
+
+
+async def test_bad_created_from_rejected(auth_client, auth_setup):
+    resp = await auth_client.get(
+        "/v1/admin/email?created_from=not-a-date",
         headers={"Authorization": f"Bearer {auth_setup['admin_token']}"},
     )
     assert resp.status_code == 400

@@ -17,7 +17,7 @@ import uuid
 
 import pytest
 
-from db.models import TenantModel, UserModel
+from db.models import DepartmentModel, TenantModel, UserModel
 from db.repositories.email_outbox import EmailOutboxRepository
 from services.email.notifications import (
     notify_account_locked,
@@ -104,6 +104,41 @@ async def test_account_locked_is_best_effort_and_never_raises(pg_db):
     rows = await _rows_for(pg_db, user.tenant_id)
     assert len(rows) == 2
     assert "1 minutes" in rows[0].body_text  # 60s -> 1 min
+
+
+# -- department snapshot --------------------------------------------
+async def test_department_id_snapshotted_from_user(pg_db):
+    tenant = TenantModel(
+        id=uuid.uuid4(), slug=f"t-{uuid.uuid4().hex[:10]}", name="T",
+        global_policy={}, is_active=True,
+    )
+    pg_db.add(tenant)
+    await pg_db.flush()
+    dept = DepartmentModel(
+        id=uuid.uuid4(), tenant_id=tenant.id, slug="eng", name="Engineering", is_active=True,
+    )
+    pg_db.add(dept)
+    await pg_db.flush()
+    user = UserModel(
+        id=uuid.uuid4(), tenant_id=tenant.id, dept_id=dept.id,
+        email=f"dev-{uuid.uuid4().hex[:6]}@x.com", password_hash="x", role="DEVELOPER",
+    )
+    pg_db.add(user)
+    await pg_db.commit()
+
+    await notify_password_changed(pg_db, user)
+    await pg_db.commit()
+
+    row = (await _rows_for(pg_db, tenant.id))[0]
+    assert row.department_id == dept.id  # snapshotted from the recipient user
+
+
+async def test_admin_recipient_has_null_department(pg_db):
+    user = await _make_user(pg_db, email=f"adm-{uuid.uuid4().hex[:6]}@x.com")  # ADMIN, dept_id None
+    await notify_password_changed(pg_db, user)
+    await pg_db.commit()
+    row = (await _rows_for(pg_db, user.tenant_id))[0]
+    assert row.department_id is None  # tenant-level notification
 
 
 # -- locale resolution ----------------------------------------------

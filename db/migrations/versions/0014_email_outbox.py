@@ -51,8 +51,11 @@ def upgrade() -> None:
         sa.Column("id",                  UUID(as_uuid=True), nullable=False),
         sa.Column("tenant_id",           UUID(as_uuid=True),
                                          sa.ForeignKey("tenants.id"), nullable=True),
-        # Denormalized audit reference (no FK): the outbox must not couple to the
-        # user lifecycle, and the recipient address is snapshotted below.
+        # Denormalized audit references (no FK): the outbox must not couple to
+        # the user/department lifecycle, and the recipient address is
+        # snapshotted below. department_id is NULL for tenant-level notifications
+        # and belongs to tenant_id by construction (both copied from the user).
+        sa.Column("department_id",       UUID(as_uuid=True), nullable=True),
         sa.Column("user_id",             UUID(as_uuid=True), nullable=True),
         sa.Column("notification_type",   sa.String(64),  nullable=False),
         sa.Column("recipient",           sa.String(255), nullable=False),

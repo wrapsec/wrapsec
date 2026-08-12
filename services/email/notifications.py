@@ -66,6 +66,7 @@ async def notify_password_changed(
         locale            = locale,
         context           = {"display_name": user.email, "event_time": _event_time()},
         tenant_id         = user.tenant_id,
+        department_id     = user.dept_id,
         user_id           = user.id,
         trace_id          = trace_id,
     )
@@ -83,6 +84,7 @@ async def notify_admin_password_reset(
         locale            = locale,
         context           = {"display_name": user.email, "event_time": _event_time()},
         tenant_id         = user.tenant_id,
+        department_id     = user.dept_id,
         user_id           = user.id,
         trace_id          = trace_id,
     )
@@ -112,9 +114,10 @@ async def notify_account_locked(
                     "event_time":      _event_time(),
                     "lockout_minutes": str(lockout_minutes),
                 },
-                tenant_id = user.tenant_id,
-                user_id   = user.id,
-                trace_id  = trace_id,
+                tenant_id     = user.tenant_id,
+                department_id = user.dept_id,
+                user_id       = user.id,
+                trace_id      = trace_id,
             )
             if row is not None:
                 await db.commit()
