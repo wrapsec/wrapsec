@@ -1,0 +1,13 @@
+Hi {display_name},
+
+Your WrapSec account was temporarily locked on {event_time} (UTC) after several
+failed sign-in attempts. Access is automatically restored after about
+{lockout_minutes} minutes.
+
+If this was you, simply wait and try signing in again.
+
+If this was NOT you, someone may be attempting to access your account. Contact
+your WrapSec administrator.
+
+This is an automated security notification from WrapSec. Please do not reply to
+this message.

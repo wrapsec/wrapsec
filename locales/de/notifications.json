@@ -1,1 +1,11 @@
-{}
+{
+  "password_changed": {
+    "subject": "Ihr WrapSec-Passwort wurde geändert"
+  },
+  "admin_password_reset": {
+    "subject": "Ihr WrapSec-Passwort wurde von einem Administrator zurückgesetzt"
+  },
+  "account_locked": {
+    "subject": "Ihr WrapSec-Konto wurde vorübergehend gesperrt"
+  }
+}

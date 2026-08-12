@@ -1,0 +1,13 @@
+Hallo {display_name},
+
+Ihr WrapSec-Konto wurde am {event_time} (UTC) nach mehreren fehlgeschlagenen
+Anmeldeversuchen vorübergehend gesperrt. Der Zugriff wird nach etwa
+{lockout_minutes} Minuten automatisch wiederhergestellt.
+
+Wenn Sie das waren, warten Sie einfach und melden Sie sich erneut an.
+
+Wenn Sie das NICHT waren, versucht möglicherweise jemand, auf Ihr Konto
+zuzugreifen. Wenden Sie sich an Ihren WrapSec-Administrator.
+
+Dies ist eine automatische Sicherheitsbenachrichtigung von WrapSec. Bitte
+antworten Sie nicht auf diese Nachricht.

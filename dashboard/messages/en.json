@@ -173,7 +173,17 @@
       "department_required": "Department is required."
     }
   },
-  "notifications": {},
+  "notifications": {
+    "password_changed": {
+      "subject": "Your WrapSec password was changed"
+    },
+    "admin_password_reset": {
+      "subject": "Your WrapSec password was reset by an administrator"
+    },
+    "account_locked": {
+      "subject": "Your WrapSec account was temporarily locked"
+    }
+  },
   "pages": {
     "overview": {
       "title": "Overview",
