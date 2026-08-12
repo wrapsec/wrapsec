@@ -17,25 +17,39 @@ returned in full to these authorized roles and masked in the dashboard display.
 
 from __future__ import annotations
 
+import logging
 import uuid
 
 from fastapi import APIRouter, Depends, Query, Request
 from fastapi.responses import JSONResponse
+from pydantic import BaseModel
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from api.v1.dependencies.auth import require_role
+from api.v1.dependencies.auth import require_admin, require_role
 from api.v1.dependencies.db import get_db
+from api.v1.middleware.auth import get_client_ip
 from db.models import EmailOutboxModel
+from db.repositories.admin_event import AdminEventRepository
 from db.repositories.email_outbox import EmailOutboxRepository
 from domain.entities.principal import Principal
-from domain.enums import EmailStatus
+from domain.enums import AdminEventAction, EmailStatus
 from errors.exceptions import NotFoundError, ValidationError
+from services.email.settings import (
+    MAX_MAX_ATTEMPTS,
+    MIN_MAX_ATTEMPTS,
+    get_email_settings,
+    set_email_settings,
+)
 from services.time import parse_utc_iso, to_iso_z
+from services.webhooks.retry_schedule import RETRY_SCHEDULE_SECONDS
 
 router = APIRouter()
+logger = logging.getLogger("wrapsec.admin.email")
 
 # Admin and Auditor may read the tenant's email delivery audit (interim RBAC).
 _require_email_audit = require_role("ADMIN", "AUDITOR")
+# Email settings are system-level configuration: ADMIN only.
+_require_email_admin = require_admin()
 
 
 def _completed_at(row: EmailOutboxModel):
@@ -164,6 +178,98 @@ async def email_summary(
         recipient=recipient, **f,
     )
     return JSONResponse(content={"counts": counts})
+
+
+class EmailSettingsUpdate(BaseModel):
+    notifications_enabled: bool
+    max_attempts:          int
+    retention_days:        int
+
+
+def _settings_payload(s) -> dict:
+    """Effective settings plus the READ-ONLY retry policy, served from the real
+    schedule so the UI always shows server truth (the backoff intervals are
+    fixed policy in V1; only max attempts and retention are editable)."""
+    return {
+        "notifications_enabled": s.notifications_enabled,
+        "max_attempts":          s.max_attempts,
+        "retention_days":        s.retention_days,
+        "retry_schedule": {
+            "intervals_seconds":    list(RETRY_SCHEDULE_SECONDS),
+            "min_attempts":         MIN_MAX_ATTEMPTS,
+            "max_attempts_ceiling": MAX_MAX_ATTEMPTS,
+        },
+    }
+
+
+@router.get("/settings")
+async def get_email_settings_endpoint(
+    principal: Principal    = Depends(_require_email_admin),
+    db:        AsyncSession = Depends(get_db),
+) -> JSONResponse:
+    """
+    Return the effective email delivery settings and the read-only retry policy.
+
+    Auth: JWT + ADMIN role.
+    """
+    return JSONResponse(content=_settings_payload(await get_email_settings(db)))
+
+
+@router.put("/settings")
+async def put_email_settings_endpoint(
+    body:      EmailSettingsUpdate,
+    request:   Request,
+    principal: Principal    = Depends(_require_email_admin),
+    db:        AsyncSession = Depends(get_db),
+) -> JSONResponse:
+    """
+    Update the email delivery settings (notifications on/off, max attempts,
+    retention). max_attempts is bounded by the real retry schedule; retention
+    must be >= 1. Emits a configuration-change audit event.
+
+    Auth: JWT + ADMIN role.
+    """
+    old = await get_email_settings(db)
+    try:
+        updated = await set_email_settings(
+            db,
+            notifications_enabled = body.notifications_enabled,
+            max_attempts          = body.max_attempts,
+            retention_days        = body.retention_days,
+        )
+    except ValueError as exc:
+        raise ValidationError(str(exc)) from exc
+    await db.commit()
+
+    # Configuration-change audit (best-effort; never fails the request).
+    try:
+        actor_id  = uuid.UUID(str(principal.id).replace("user:", ""))
+        tenant_id = uuid.UUID(str(principal.tenant_id))
+        await AdminEventRepository(db).insert(
+            tenant_id     = tenant_id,
+            actor_user_id = actor_id,
+            action        = AdminEventAction.SETTINGS_CHANGED,
+            metadata      = {
+                "setting": "email_settings",
+                "old": {
+                    "notifications_enabled": old.notifications_enabled,
+                    "max_attempts":          old.max_attempts,
+                    "retention_days":        old.retention_days,
+                },
+                "new": {
+                    "notifications_enabled": updated.notifications_enabled,
+                    "max_attempts":          updated.max_attempts,
+                    "retention_days":        updated.retention_days,
+                },
+            },
+            ip_address = get_client_ip(request),
+            user_agent = request.headers.get("user-agent"),
+        )
+        await db.commit()
+    except Exception as exc:  # noqa: BLE001 - audit is best-effort, never fail the request
+        logger.warning("email settings config-audit failed: %s", exc)
+
+    return JSONResponse(content=_settings_payload(updated))
 
 
 @router.get("/{email_id}")

@@ -22,9 +22,11 @@ from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_asyn
 from sqlalchemy.pool import NullPool
 
 from config.settings import get_settings
-from db.models import EmailOutboxModel, TenantModel, UserModel
+from db.models import EmailOutboxModel, SettingsModel, TenantModel, UserModel
+from db.repositories.email_outbox import EmailOutboxRepository
 from services.auth.token import create_access_token
 from services.time import utc_now
+from services.webhooks.retry_schedule import MAX_ATTEMPTS, RETRY_SCHEDULE_SECONDS
 
 pytestmark = pytest.mark.asyncio
 
@@ -80,6 +82,20 @@ async def email_seeder():
                 await db.execute(sa_delete(EmailOutboxModel).where(EmailOutboxModel.id.in_(created_emails)))
             if created_tenants:
                 await db.execute(sa_delete(TenantModel).where(TenantModel.id.in_(created_tenants)))
+            await db.commit()
+    finally:
+        await engine.dispose()
+
+
+@pytest_asyncio.fixture
+async def reset_email_settings():
+    """email_settings is a single global row; delete it on teardown so a
+    mutating test cannot leak (e.g. notifications=off) into other tests."""
+    yield
+    engine, sf = _sf()
+    try:
+        async with sf() as db:
+            await db.execute(sa_delete(SettingsModel).where(SettingsModel.key == "email_settings"))
             await db.commit()
     finally:
         await engine.dispose()
@@ -279,3 +295,109 @@ async def test_bad_created_from_rejected(auth_client, auth_setup):
         headers={"Authorization": f"Bearer {auth_setup['admin_token']}"},
     )
     assert resp.status_code == 400
+
+
+# -- settings API ---------------------------------------------------
+def _admin(auth_setup):
+    return {"Authorization": f"Bearer {auth_setup['admin_token']}"}
+
+
+async def test_get_settings_returns_defaults_and_real_schedule(auth_client, auth_setup):
+    resp = await auth_client.get("/v1/admin/email/settings", headers=_admin(auth_setup))
+    assert resp.status_code == 200
+    body = resp.json()
+    assert body["notifications_enabled"] is True
+    assert body["max_attempts"] == MAX_ATTEMPTS
+    assert body["retention_days"] >= 1
+    # Retry policy is served from the REAL schedule, read-only.
+    assert body["retry_schedule"]["intervals_seconds"] == list(RETRY_SCHEDULE_SECONDS)
+    assert body["retry_schedule"]["max_attempts_ceiling"] == MAX_ATTEMPTS
+    assert body["retry_schedule"]["min_attempts"] == 1
+
+
+async def test_put_settings_roundtrip(auth_client, auth_setup, reset_email_settings):
+    put = await auth_client.put(
+        "/v1/admin/email/settings",
+        json={"notifications_enabled": False, "max_attempts": 3, "retention_days": 7},
+        headers=_admin(auth_setup),
+    )
+    assert put.status_code == 200
+    assert put.json()["max_attempts"] == 3
+
+    got = await auth_client.get("/v1/admin/email/settings", headers=_admin(auth_setup))
+    body = got.json()
+    assert body["notifications_enabled"] is False
+    assert body["max_attempts"] == 3
+    assert body["retention_days"] == 7
+
+
+async def test_put_settings_rejects_max_above_ceiling(auth_client, auth_setup, reset_email_settings):
+    resp = await auth_client.put(
+        "/v1/admin/email/settings",
+        json={"notifications_enabled": True, "max_attempts": MAX_ATTEMPTS + 1, "retention_days": 30},
+        headers=_admin(auth_setup),
+    )
+    assert resp.status_code == 400
+
+
+async def test_put_settings_rejects_zero_retention(auth_client, auth_setup, reset_email_settings):
+    resp = await auth_client.put(
+        "/v1/admin/email/settings",
+        json={"notifications_enabled": True, "max_attempts": 3, "retention_days": 0},
+        headers=_admin(auth_setup),
+    )
+    assert resp.status_code == 400
+
+
+async def test_auditor_cannot_change_settings(auth_client, auth_setup):
+    auditor_token = await _make_auditor(auth_setup["tenant"].id)
+    # Auditor may read the delivery audit but not the system email settings.
+    get_resp = await auth_client.get(
+        "/v1/admin/email/settings", headers={"Authorization": f"Bearer {auditor_token}"}
+    )
+    assert get_resp.status_code == 403
+    put_resp = await auth_client.put(
+        "/v1/admin/email/settings",
+        json={"notifications_enabled": True, "max_attempts": 3, "retention_days": 30},
+        headers={"Authorization": f"Bearer {auditor_token}"},
+    )
+    assert put_resp.status_code == 403
+
+
+async def test_developer_cannot_change_settings(auth_client, auth_setup):
+    resp = await auth_client.get(
+        "/v1/admin/email/settings",
+        headers={"Authorization": f"Bearer {auth_setup['dev_token']}"},
+    )
+    assert resp.status_code == 403
+
+
+async def test_notifications_off_skips_enqueue(auth_client, auth_setup, reset_email_settings):
+    # Turn notifications off, then a trigger enqueue is skipped.
+    await auth_client.put(
+        "/v1/admin/email/settings",
+        json={"notifications_enabled": False, "max_attempts": 8, "retention_days": 30},
+        headers=_admin(auth_setup),
+    )
+
+    from services.email.notifications import notify_password_changed
+
+    tenant_id = auth_setup["tenant"].id
+    engine, sf = _sf()
+    try:
+        async with sf() as db:
+            uid = uuid.uuid4()
+            db.add(UserModel(
+                id=uid, tenant_id=tenant_id, dept_id=None,
+                email=f"off-{uuid.uuid4().hex[:6]}@x.com", password_hash="x", role="ADMIN",
+            ))
+            await db.commit()
+            user = await db.get(UserModel, uid)
+            await notify_password_changed(db, user)
+            await db.commit()
+            rows = await EmailOutboxRepository(db).list_by_tenant(tenant_id=tenant_id)
+            assert rows == []  # nothing enqueued while notifications are off
+            await db.execute(sa_delete(UserModel).where(UserModel.id == uid))
+            await db.commit()
+    finally:
+        await engine.dispose()
