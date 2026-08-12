@@ -95,8 +95,10 @@ class TenantUpdateSchema(BaseModel):
     contact_email: str                | None = None
     global_policy: GlobalPolicySchema | None = None
     # Tenant default locale (BCP-47). Validated against the supported-locales
-    # allowlist; an unsupported value is rejected 422 INVALID_ENUM.
-    locale:        str                | None = None
+    # allowlist; an unsupported value is rejected 422 INVALID_ENUM. max_length
+    # mirrors the tenants.locale VARCHAR(35) column and caps an oversized string
+    # before the allowlist validator runs (same boundary as MePatchSchema).
+    locale:        str                | None = Field(default=None, max_length=35)
 
     @field_validator("locale")
     @classmethod

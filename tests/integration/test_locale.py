@@ -136,3 +136,15 @@ async def test_tenant_rejects_unsupported_locale(auth_client, auth_setup):
     assert err["code"] == "VALIDATION_ERROR"
     assert any(p["field"] == "locale" and p["code"] == "INVALID_ENUM"
                for p in err.get("invalid_params", []))
+
+
+@pytest.mark.asyncio
+async def test_tenant_rejects_overlong_locale(auth_client, auth_setup):
+    # Same max_length(35) boundary as /me: an oversized string is a schema
+    # (string_too_long) rejection on the locale field, not the allowlist enum.
+    token = auth_setup["admin_token"]
+    r = await auth_client.put("/v1/admin/tenant", json={"locale": "x" * 36}, headers=_auth(token))
+    assert r.status_code == 422
+    err = r.json()["error"]
+    assert err["code"] == "VALIDATION_ERROR"
+    assert any(p["field"] == "locale" for p in err.get("invalid_params", []))
