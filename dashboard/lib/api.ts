@@ -718,8 +718,9 @@ export async function updateUser(
     is_active?: boolean
   }
 ): Promise<DashboardUser> {
+  // Backend route is PATCH /v1/admin/users/{id} (partial update); PUT returns 405.
   return request<DashboardUser>(`/v1/admin/users/${userId}`, {
-    method: "PUT",
+    method: "PATCH",
     body:   JSON.stringify(data),
   })
 }
