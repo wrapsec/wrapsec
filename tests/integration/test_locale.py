@@ -78,14 +78,41 @@ async def test_patch_me_clears_locale_with_null(auth_client, auth_setup):
 
 
 @pytest.mark.asyncio
-async def test_patch_me_rejects_unsupported_locale(auth_client, auth_setup):
+async def test_patch_me_accepts_de_when_enabled(auth_client, auth_setup):
+    # German is now a supported locale (locales/_meta.json), so it is accepted,
+    # persisted, and resolved -- no longer the "unsupported" example.
     token = auth_setup["admin_token"]
     r = await auth_client.patch("/v1/auth/me", json={"locale": "de"}, headers=_auth(token))
+    assert r.status_code == 200
+    assert r.json()["locale"] == "de"
+    again = await auth_client.get("/v1/auth/me", headers=_auth(token))
+    assert again.json()["locale"] == "de"
+    assert again.json()["resolved_locale"] == "de"
+
+
+@pytest.mark.asyncio
+async def test_patch_me_rejects_unsupported_locale(auth_client, auth_setup):
+    # 'zz' is unassigned -- a stable stand-in that will never be an allowlisted
+    # locale, unlike a real language code that might later be enabled.
+    token = auth_setup["admin_token"]
+    r = await auth_client.patch("/v1/auth/me", json={"locale": "zz"}, headers=_auth(token))
     assert r.status_code == 422
     err = r.json()["error"]
     assert err["code"] == "VALIDATION_ERROR"
     assert any(p["field"] == "locale" and p["code"] == "INVALID_ENUM"
                for p in err.get("invalid_params", []))
+
+
+@pytest.mark.asyncio
+async def test_patch_me_rejects_overlong_locale(auth_client, auth_setup):
+    # max_length=35 caps the request before the allowlist validator runs; an
+    # oversized string is a schema (VALIDATION_ERROR) rejection on the locale field.
+    token = auth_setup["admin_token"]
+    r = await auth_client.patch("/v1/auth/me", json={"locale": "x" * 36}, headers=_auth(token))
+    assert r.status_code == 422
+    err = r.json()["error"]
+    assert err["code"] == "VALIDATION_ERROR"
+    assert any(p["field"] == "locale" for p in err.get("invalid_params", []))
 
 
 @pytest.mark.asyncio
@@ -103,7 +130,7 @@ async def test_tenant_exposes_and_sets_locale(auth_client, auth_setup):
 @pytest.mark.asyncio
 async def test_tenant_rejects_unsupported_locale(auth_client, auth_setup):
     token = auth_setup["admin_token"]
-    r = await auth_client.put("/v1/admin/tenant", json={"locale": "de"}, headers=_auth(token))
+    r = await auth_client.put("/v1/admin/tenant", json={"locale": "zz"}, headers=_auth(token))
     assert r.status_code == 422
     err = r.json()["error"]
     assert err["code"] == "VALIDATION_ERROR"

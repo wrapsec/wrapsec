@@ -8,7 +8,7 @@ from services.time import to_iso_z, utc_now
 
 from fastapi import APIRouter, Depends, Request, Response
 from fastapi.responses import JSONResponse
-from pydantic import BaseModel, EmailStr, field_validator
+from pydantic import BaseModel, EmailStr, Field, field_validator
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from api.v1.dependencies.auth import require_jwt
@@ -407,7 +407,10 @@ async def _me_payload(db: AsyncSession, user) -> dict:
 class MePatchSchema(BaseModel):
     # Optional preference. Explicit null clears it (inherit tenant/system). An
     # unsupported value is rejected 422 INVALID_ENUM (see services.localization).
-    locale: str | None = None
+    # max_length mirrors the users.locale VARCHAR(35) column and the BCP-47
+    # identifier ceiling: a clean HTTP -> allowlist -> DB boundary, and it caps an
+    # oversized string before the validator runs.
+    locale: str | None = Field(default=None, max_length=35)
 
     @field_validator("locale")
     @classmethod
