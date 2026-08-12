@@ -4,16 +4,7 @@
 "use client"
 
 import { useRouter } from "next/navigation"
-
-const LOCALE_COOKIE = "wrapsec_locale"
-// Match the BFF login cookie lifetime (session ~= refresh token, 30d default).
-const MAX_AGE_S = 60 * 60 * 24 * 30
-
-function writeLocaleCookie(locale: string): void {
-  const secure = typeof window !== "undefined" && window.location.protocol === "https:" ? "; Secure" : ""
-  document.cookie =
-    `${LOCALE_COOKIE}=${encodeURIComponent(locale)}; Path=/; Max-Age=${MAX_AGE_S}; SameSite=Strict${secure}`
-}
+import { writeLocaleCookie } from "@/lib/locale"
 
 /**
  * Change the current user's locale preference and reflect it immediately.
@@ -29,8 +20,8 @@ function writeLocaleCookie(locale: string): void {
  * mirrors the result. An unsupported request is rejected 422 by the backend and
  * this throws without touching the cookie.
  *
- * (No locale-switcher UI ships yet; this is the wired mechanism a future
- * switcher calls.)
+ * Called by the header LocaleSwitcher; also see AuthProvider's load-time
+ * reconcile, which mirrors an out-of-band (SDK/API) change from GET /me.
  */
 export function useSetLocale() {
   const router = useRouter()

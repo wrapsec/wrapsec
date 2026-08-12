@@ -75,12 +75,15 @@ def test_validate_rejects_unsupported_as_invalid_locale():
 # -- canonical _meta.json config invariant --------------------------
 def test_meta_valid_config_passes():
     _validate_meta({
-        "locales": {"en": {"direction": "ltr"}},
+        "locales": {"en": {"direction": "ltr", "label": "English"}},
         "default_locale": "en",
         "catalog_version": "1.0.0",
     })
     _validate_meta({
-        "locales": {"en": {"direction": "ltr"}, "ar": {"direction": "rtl"}},
+        "locales": {
+            "en": {"direction": "ltr", "label": "English"},
+            "ar": {"direction": "rtl", "label": "العربية"},
+        },
         "default_locale": "ar",
         "catalog_version": "1.0.0",
     })
@@ -89,7 +92,7 @@ def test_meta_valid_config_passes():
 def test_meta_rejects_default_outside_allowlist():
     with pytest.raises(ValueError, match="default_locale"):
         _validate_meta({
-            "locales": {"en": {"direction": "ltr"}},
+            "locales": {"en": {"direction": "ltr", "label": "English"}},
             "default_locale": "de",
             "catalog_version": "1.0.0",
         })
@@ -98,26 +101,44 @@ def test_meta_rejects_default_outside_allowlist():
 def test_meta_requires_english_nonempty_and_version():
     with pytest.raises(ValueError, match="must include 'en'"):
         _validate_meta({
-            "locales": {"de": {"direction": "ltr"}},
+            "locales": {"de": {"direction": "ltr", "label": "Deutsch"}},
             "default_locale": "de",
             "catalog_version": "1.0.0",
         })
     with pytest.raises(ValueError, match="non-empty object"):
         _validate_meta({"locales": {}, "default_locale": "en", "catalog_version": "1.0.0"})
     with pytest.raises(ValueError, match="catalog_version"):
-        _validate_meta({"locales": {"en": {"direction": "ltr"}}, "default_locale": "en"})
+        _validate_meta({
+            "locales": {"en": {"direction": "ltr", "label": "English"}},
+            "default_locale": "en",
+        })
 
 
 def test_meta_rejects_invalid_or_missing_direction():
     with pytest.raises(ValueError, match="direction"):
         _validate_meta({
-            "locales": {"en": {"direction": "sideways"}},
+            "locales": {"en": {"direction": "sideways", "label": "English"}},
             "default_locale": "en",
             "catalog_version": "1.0.0",
         })
     with pytest.raises(ValueError, match="direction"):
         _validate_meta({
-            "locales": {"en": {}},
+            "locales": {"en": {"label": "English"}},
+            "default_locale": "en",
+            "catalog_version": "1.0.0",
+        })
+
+
+def test_meta_requires_nonempty_label():
+    with pytest.raises(ValueError, match="label"):
+        _validate_meta({
+            "locales": {"en": {"direction": "ltr"}},
+            "default_locale": "en",
+            "catalog_version": "1.0.0",
+        })
+    with pytest.raises(ValueError, match="label"):
+        _validate_meta({
+            "locales": {"en": {"direction": "ltr", "label": "  "}},
             "default_locale": "en",
             "catalog_version": "1.0.0",
         })

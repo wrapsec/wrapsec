@@ -19,7 +19,7 @@ artifact. No consumer maintains its own copy of the config or the text:
                                                 locale, for next-intl)
     dashboard/messages/locale-config.json    -- frontend locale config (supported
                                                 locales + default + directions +
-                                                catalog_version)
+                                                labels + catalog_version)
 
 Run whenever locales/ changes:
 
@@ -178,6 +178,7 @@ def build_locale_config() -> dict[str, Any]:
         "default_locale":    meta["default_locale"],
         "supported_locales": list(locales.keys()),
         "directions":        {loc: entry["direction"] for loc, entry in locales.items()},
+        "labels":            {loc: entry["label"] for loc, entry in locales.items()},
     }
 
 

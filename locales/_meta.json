@@ -2,7 +2,7 @@
   "catalog_version": "1.0.0",
   "default_locale": "en",
   "locales": {
-    "en": { "direction": "ltr" },
-    "de": { "direction": "ltr" }
+    "en": { "direction": "ltr", "label": "English" },
+    "de": { "direction": "ltr", "label": "Deutsch" }
   }
 }

@@ -115,6 +115,17 @@ def test_locale_config_directions_cover_every_locale():
     assert dirs["en"] == "ltr", "English is left-to-right"
 
 
+# -- Guard 7b: a display label (endonym) is emitted for every locale ----------
+def test_locale_config_labels_cover_every_locale():
+    config    = build_locale_config()
+    supported = set(config["supported_locales"])
+    labels    = config["labels"]
+    assert set(labels) == supported, "labels must cover exactly the supported locales"
+    assert all(isinstance(v, str) and v.strip() for v in labels.values()), (
+        "every locale label must be a non-empty string"
+    )
+
+
 # -- Guard 8: translation lockstep (non-default locales vs the fallback base) ---
 # The fallback base is default_locale: a key missing from another locale resolves
 # to it (i18n/request.ts deepMerge), so a NON-default locale is a valid override

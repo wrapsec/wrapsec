@@ -13,5 +13,9 @@
   "directions": {
     "en": "ltr",
     "de": "ltr"
+  },
+  "labels": {
+    "en": "English",
+    "de": "Deutsch"
   }
 }

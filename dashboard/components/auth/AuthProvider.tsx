@@ -35,6 +35,23 @@ import {
   type AuthUser,
   type LoginResponse,
 } from "@/lib/auth"
+import { writeLocaleCookie } from "@/lib/locale"
+
+// Reflect an out-of-band locale change (set via the SDK/API, or a tenant-level
+// change) without a manual double-refresh. `resolved_locale` from /me is the
+// authoritative effective locale; `<html lang>` is what the page was actually
+// rendered with. When they differ, mirror the resolved value into the cookie
+// (only ever from a backend-resolved value) and re-render server components.
+// Reuses the getMe() that initAuth already performs -- no extra fetch.
+function reconcileRenderedLocale(user: AuthUser, refresh: () => void): void {
+  const resolved = user.resolved_locale
+  if (!resolved || typeof document === "undefined") return
+  const rendered = document.documentElement.lang
+  if (resolved !== rendered) {
+    writeLocaleCookie(resolved)
+    refresh()
+  }
+}
 
 // ── Context shape ──────────────────────────────────────────────────────────
 
@@ -63,7 +80,10 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     ;(async () => {
       try {
         const user = await initAuth()
-        if (!cancelled) setCurrentUser(user)
+        if (!cancelled) {
+          setCurrentUser(user)
+          reconcileRenderedLocale(user, () => router.refresh())
+        }
       } catch {
         if (!cancelled) setCurrentUser(null)
       } finally {
@@ -71,6 +91,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       }
     })()
     return () => { cancelled = true }
+    // router is stable from next/navigation; effect must run once on mount.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
 
   const login = useCallback(async (

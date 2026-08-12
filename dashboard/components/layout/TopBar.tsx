@@ -9,6 +9,7 @@ import { useRouter } from "next/navigation"
 import Link from "next/link"
 import { getHealth } from "@/lib/api"
 import { logout } from "@/lib/auth"
+import { LocaleSwitcher } from "@/components/layout/LocaleSwitcher"
 
 export function TopBar({ title }: { title: string }) {
   const [status,    setStatus]    = useState<"ok" | "degraded" | "down">("ok")
@@ -109,6 +110,9 @@ export function TopBar({ title }: { title: string }) {
             {statusLabel}
           </span>
         </div>
+
+        {/* Language switcher (hidden for single-locale or API-key sessions) */}
+        <LocaleSwitcher />
 
         {/* User menu */}
         <div style={{ position: "relative" }}>

@@ -62,6 +62,12 @@ def _validate_meta(data: dict) -> None:
                 f"_meta.json: locale {loc!r} direction ({direction!r}) must be "
                 f"one of {VALID_DIRECTIONS}"
             )
+        label = entry.get("label")
+        if not isinstance(label, str) or not label.strip():
+            raise ValueError(
+                f"_meta.json: locale {loc!r} must declare a non-empty label (its "
+                f"endonym, e.g. 'English' / 'Deutsch')"
+            )
     default = data.get("default_locale")
     if not default or default.lower() not in lowered:
         raise ValueError(
@@ -95,6 +101,13 @@ def catalog_version() -> str:
 def locale_directions() -> dict[str, str]:
     """Map of every supported locale to its text direction ('ltr' | 'rtl')."""
     return {loc: entry["direction"] for loc, entry in _meta()["locales"].items()}
+
+
+def locale_labels() -> dict[str, str]:
+    """Map of every supported locale to its human display label (endonym), for a
+    locale switcher. Endonyms are not per-UI-locale translated, so they live in
+    the config, not the message catalogs."""
+    return {loc: entry["label"] for loc, entry in _meta()["locales"].items()}
 
 
 def locale_direction(locale: str | None) -> str:

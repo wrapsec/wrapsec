@@ -190,6 +190,11 @@ export interface AuthUser {
   is_active:             boolean
   force_password_change: boolean
   last_login_at:         string | null
+  // Stored preference and the backend-resolved effective locale (User -> Tenant
+  // -> System -> English). AuthProvider uses resolved_locale to reconcile the
+  // rendered locale after an out-of-band (SDK/API) change.
+  locale?:               string | null
+  resolved_locale?:      string
 }
 
 export interface LoginResponse {

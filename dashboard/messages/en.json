@@ -47,10 +47,12 @@
       "untrusted": "Untrusted origin - indirect prompt-injection surface",
       "user": "End-user prompt"
     },
+    "language": "Language",
     "aria": {
       "breadcrumb": "Breadcrumb",
       "close": "Close",
-      "detail": "Detail"
+      "detail": "Detail",
+      "language": "Select language"
     },
     "requires_admin": "Administrator access required - <link>sign in with your email</link>",
     "overridden": "Overridden",
