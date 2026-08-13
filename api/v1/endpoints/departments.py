@@ -2,6 +2,7 @@
 # Copyright (c) 2026 WrapSec. All rights reserved.
 # WrapSec v1.0 | AI Security Gateway - https://wrapsec.com
 
+import logging
 import uuid
 
 from fastapi import APIRouter, Depends, Request
@@ -27,6 +28,8 @@ from security.encryption import decrypt, encrypt, mask
 from security.url_validator import validate_llm_base_url
 from services.slug import is_reserved_slug, slugify
 from services.time import to_iso_z
+
+logger = logging.getLogger("wrapsec.departments")
 
 router = APIRouter()
 
@@ -408,8 +411,13 @@ async def update_department(
                 user_agent    = request.headers.get("user-agent"),
             )
             await db.commit()
-        except Exception:
-            pass  # Audit-event write is best-effort; the change was committed above and must not fail the request on an audit-log error.
+        except Exception as e:
+            # Audit-event write is best-effort; the change was committed above and
+            # must not fail the request on an audit-log error.
+            logger.error(
+                "admin_event write failed action=policy_override_changed dept_id=%s error=%s",
+                dept_id, e,
+            )
 
     return JSONResponse(content=_format(record))
 
@@ -472,8 +480,13 @@ async def update_dept_llm_override(
             user_agent    = request.headers.get("user-agent"),
         )
         await db.commit()
-    except Exception:
-        pass  # Audit-event write is best-effort; the change was committed above and must not fail the request on an audit-log error.
+    except Exception as e:
+        # Audit-event write is best-effort; the change was committed above and
+        # must not fail the request on an audit-log error.
+        logger.error(
+            "admin_event write failed action=policy_override_changed dept_id=%s error=%s",
+            dept_id, e,
+        )
 
     return JSONResponse(content=_format(record))
 
@@ -536,8 +549,13 @@ async def update_dept_proxy_override(
             user_agent    = request.headers.get("user-agent"),
         )
         await db.commit()
-    except Exception:
-        pass  # Audit-event write is best-effort; the change was committed above and must not fail the request on an audit-log error.
+    except Exception as e:
+        # Audit-event write is best-effort; the change was committed above and
+        # must not fail the request on an audit-log error.
+        logger.error(
+            "admin_event write failed action=policy_override_changed dept_id=%s error=%s",
+            dept_id, e,
+        )
 
     return JSONResponse(content=_format(record))
 
