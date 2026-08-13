@@ -4,6 +4,10 @@
 
 import os
 os.environ["TESTING"] = "true"
+# Runtime posture defaults to production (safe) when unset; the test suite runs
+# as development explicitly (drop/create tables, docs enabled), matching the
+# pre-migration behavior. setdefault so an explicit override still wins.
+os.environ.setdefault("ENVIRONMENT", "development")
 
 import pytest
 import pytest_asyncio

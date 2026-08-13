@@ -59,6 +59,33 @@ def get_capabilities() -> list[str]:
     return sorted(_CAPABILITIES)
 
 
+# ── Settings-aware resolver ───────────────────────────────────────────────────
+# The registry functions above stay PURE and settings-agnostic. The resolver
+# below composes the registry with the WRAPSEC_FEATURES ceiling. It answers "is
+# this plugin capability available?" -- it is never an authorization control, and
+# it never touches per-principal (proxy) or per-build (transformer) gating.
+
+def capability_available(name: str) -> bool:
+    """
+    True if `name` is a registered plugin capability AND permitted by the
+    configured ceiling. Unset ceiling (WRAPSEC_FEATURES) means no restriction:
+
+        capability_available(name) =
+            is_enabled(name) AND (features unset OR name in features)
+
+    Authorization (per-key / per-tenant / per-build) stays entirely separate.
+    """
+    from config.settings import get_settings
+    features = get_settings().configured_features()
+    return is_enabled(name) and (features is None or name in features)
+
+
+def effective_capabilities() -> list[str]:
+    """Registered plugin capabilities that survive the configured ceiling -- the
+    informational set surfaced by GET /v1/capabilities. Non-authoritative."""
+    return [c for c in get_capabilities() if capability_available(c)]
+
+
 def load_plugins(app) -> None:
     """
     Discover and load every plugin registered under the `wrapsec.plugins`

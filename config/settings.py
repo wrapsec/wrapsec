@@ -3,8 +3,21 @@
 # WrapSec v1.0 | AI Security Gateway - https://wrapsec.com
 
 from pydantic_settings import BaseSettings
-from pydantic import Field
+from pydantic import Field, field_validator
 from functools import lru_cache
+from typing import Literal
+
+
+# Static catalog of configurable PLUGIN-capability names -- the single source of
+# truth for valid WRAPSEC_FEATURES entries. It contains ONLY capabilities
+# governed by the plugin registry + ceiling. It deliberately excludes:
+#   - always-on core (api/sdk/dashboard/rules/ml)
+#   - per-principal capabilities (proxy -- governed by API-key authorization)
+#   - per-build capabilities (transformer -- governed by BUILD_ENV/dependency)
+# WRAPSEC_FEATURES is validated against this at startup (an ordering constraint:
+# config is parsed before plugins register, so we cannot validate against the
+# live registry). Add names here only as real plugin capabilities land.
+CONFIGURABLE_CAPABILITIES: frozenset[str] = frozenset({"mcp"})
 
 
 class Settings(BaseSettings):
@@ -13,12 +26,41 @@ class Settings(BaseSettings):
     app_name:        str = "WrapSec"
     app_version:     str = "1.0.0"
     debug:           bool = False
-    environment:     str = Field(default="development")  # development | staging | production
+    # Runtime posture. Production is the SAFE DEFAULT: an unset/empty ENVIRONMENT
+    # resolves to "production", so a fresh install gets production security
+    # behavior (e.g. the COOKIE_SECURE fail-closed guard) rather than silently
+    # running as development. An explicit invalid value fails startup. Dev and
+    # test set ENVIRONMENT=development explicitly.
+    environment:     Literal["development", "staging", "production"] = "production"
+
+    @field_validator("environment", mode="before")
+    @classmethod
+    def _normalize_environment(cls, v: object) -> str:
+        val = (str(v) if v is not None else "").strip().lower()
+        if not val:
+            return "production"   # missing/empty -> production-safe default
+        if val not in ("development", "staging", "production"):
+            raise ValueError(
+                f"ENVIRONMENT must be development|staging|production (got {v!r}); "
+                "unset defaults to production"
+            )
+        return val
 
     # Localization config (supported_locales / default_locale / catalog_version)
     # is NOT here: locales/_meta.json is the single source of truth, read via
     # services.localization. Keeping it out of settings prevents a second,
     # drift-prone copy (see the error-handling/localization rules doc).
+
+    # ── Capabilities ──────────────────────────────────────────
+    # Optional ceiling over the PLUGIN capability layer only. Comma-separated
+    # capability names (e.g. "mcp"). UNSET/empty means NO restriction (all
+    # registered plugin capabilities are available) -- required so existing
+    # private plugins keep working without a new env var. Names are validated
+    # against CONFIGURABLE_CAPABILITIES at startup; an unknown name (e.g. a typo
+    # "proxi") fails startup rather than being silently accepted. This ceiling
+    # NEVER touches core, per-principal (proxy), or per-build (transformer)
+    # gating, and can only restrict availability -- never grant it.
+    wrapsec_features: str | None = Field(default=None)
 
     # ── API ───────────────────────────────────────────────────
     api_host:        str = "0.0.0.0"
@@ -330,6 +372,37 @@ class Settings(BaseSettings):
                 "(the From: address for outgoing notifications)."
             )
 
+    def configured_features(self) -> frozenset[str] | None:
+        """The WRAPSEC_FEATURES ceiling as a normalized set, or None when unset.
+
+        None (unset/empty) means NO restriction over the plugin layer. A returned
+        set is the exact ceiling: only registered plugin capabilities whose name
+        is in this set are available. Whitespace and duplicates are normalized;
+        an empty/whitespace value is treated as unset (no ceiling), so an empty
+        ceiling can never be created accidentally.
+        """
+        raw = self.wrapsec_features
+        if raw is None:
+            return None
+        names = {n.strip().lower() for n in raw.split(",") if n.strip()}
+        return frozenset(names) if names else None
+
+    def validate_capability_config(self) -> None:
+        # Validate WRAPSEC_FEATURES against the static catalog (config is parsed
+        # before plugins register, so the live registry cannot be used here). An
+        # unknown name fails startup rather than being silently accepted.
+        features = self.configured_features()
+        if features is None:
+            return
+        unknown = sorted(features - CONFIGURABLE_CAPABILITIES)
+        if unknown:
+            raise ValueError(
+                f"WRAPSEC_FEATURES contains unknown capability name(s): {unknown}. "
+                f"Valid configurable capabilities: {sorted(CONFIGURABLE_CAPABILITIES)}. "
+                "This ceiling governs plugin capabilities only -- not proxy, "
+                "transformer, or core."
+            )
+
     def validate_cookie_security(self) -> None:
         # Fail closed in deployed environments: refusing to boot with
         # COOKIE_SECURE=false forces the operator to fix the misconfig
@@ -356,4 +429,5 @@ def get_settings() -> Settings:
     settings.validate_secrets()
     settings.validate_cookie_security()
     settings.validate_email_config()
+    settings.validate_capability_config()
     return settings

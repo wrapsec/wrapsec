@@ -26,6 +26,9 @@ services:
     env_file:
       - ../../.env
     environment:
+      # Dev posture is explicit: an unset ENVIRONMENT now defaults to production
+      # (safe), which the COOKIE_SECURE guard would reject over local http.
+      - ENVIRONMENT=development
       - DATABASE_URL=postgresql+asyncpg://wrapsec:wrapsec@postgres:5432/wrapsec
       - REDIS_URL=redis://redis:6379/0
     depends_on:
