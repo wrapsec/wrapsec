@@ -338,14 +338,11 @@ async def rotate_key(
     Returns the new key secret - shown once, store securely.
     """
     repo   = ApiKeyRepository(db)
+    # get_by_key_id only returns non-revoked keys, so a revoked key resolves to
+    # None and 404s here - no separate revoked-key branch is reachable.
     record = await repo.get_by_key_id(key_id)
     if not record or str(record.tenant_id) != request.state.tenant_id:
         raise NotFoundError("key", key_id)
-    if record.revoked:
-        return JSONResponse(
-            content={"error": {"code": "KEY_REVOKED", "message": "Cannot rotate a revoked key."}},
-            status_code=400,
-        )
 
     if record.expires_at is not None:
         now = utc_now()
