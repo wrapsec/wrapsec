@@ -175,3 +175,292 @@ async def test_create_key_without_dept_rejected(client, admin_jwt_headers):
     )
     assert response.status_code == 422
     assert response.json()["error"]["code"] == "VALIDATION_ERROR"
+
+
+# ── helpers for app-scoped / cross-tenant / grace-state coverage ─────────────
+
+def _admin_tenant_id(admin_jwt_headers) -> uuid.UUID:
+    from services.auth.token import decode_access_token
+    token = admin_jwt_headers["Authorization"].split()[1]
+    return uuid.UUID(decode_access_token(token)["tenant_id"])
+
+
+async def _make_app(test_db, tenant_id):
+    """Create a dept + application under `tenant_id`; return (dept_id, app_id) strings."""
+    from db.models import ApplicationModel, DepartmentModel
+
+    did = uuid.uuid4()
+    aid = uuid.uuid4()
+    test_db.add(DepartmentModel(id=did, tenant_id=tenant_id, slug=f"d-{did.hex[:6]}",
+                                name="Dept", is_active=True))
+    await test_db.commit()
+    test_db.add(ApplicationModel(id=aid, tenant_id=tenant_id, dept_id=did,
+                                 slug=f"a-{aid.hex[:6]}", name="App", is_active=True))
+    await test_db.commit()
+    return str(did), str(aid)
+
+
+async def _seed_key(test_db, *, tenant_id=None, expires_at=None, revoked=False):
+    """Seed an APIKeyModel row with its own dept. When tenant_id is None a fresh
+    (foreign) tenant is created -- used to prove cross-tenant reads 404.
+    Returns key_id."""
+    from db.models import APIKeyModel, DepartmentModel, TenantModel
+
+    tid = tenant_id or uuid.uuid4()
+    did = uuid.uuid4()
+    if tenant_id is None:
+        test_db.add(TenantModel(id=tid, slug=f"t-{tid.hex[:8]}", name="T",
+                                global_policy={}, is_active=True))
+        await test_db.commit()
+    test_db.add(DepartmentModel(id=did, tenant_id=tid, slug=f"d-{did.hex[:6]}",
+                                name="D", is_active=True))
+    await test_db.commit()
+    kid = "key_" + uuid.uuid4().hex[:8]
+    test_db.add(APIKeyModel(
+        id=uuid.uuid4(), key_id=kid, tenant_id=tid, dept_id=did, name="seed",
+        key_hash=hashlib.sha256(kid.encode()).hexdigest(),
+        key_type="live", is_admin=False, revoked=revoked, expires_at=expires_at,
+    ))
+    await test_db.commit()
+    return kid
+
+
+# ── create: app-scoped chain + not-found + validation branches ───────────────
+
+@pytest.mark.asyncio
+async def test_create_app_scoped_key_derives_dept_and_tenant(client, admin_jwt_headers, test_db):
+    tid = _admin_tenant_id(admin_jwt_headers)
+    did, aid = await _make_app(test_db, tid)
+    r = await client.post("/v1/keys", json={"name": "app-key", "app_id": aid}, headers=admin_jwt_headers)
+    assert r.status_code == 201, r.text
+    d = r.json()
+    assert d["app_id"] == aid          # app_id echoed
+    assert d["dept_id"] == did         # dept derived from the app record
+    assert d["tenant_id"] == str(tid)  # tenant derived from the app record
+
+
+@pytest.mark.asyncio
+async def test_create_key_unknown_app_id_404(client, admin_jwt_headers):
+    r = await client.post("/v1/keys", json={"name": "x", "app_id": str(uuid.uuid4())}, headers=admin_jwt_headers)
+    assert r.status_code == 404
+
+
+@pytest.mark.asyncio
+async def test_create_key_cross_tenant_app_id_404(client, admin_jwt_headers, test_db):
+    # App belongs to a different tenant -> the tenant-match guard must 404, never
+    # let an admin mint a key scoped into someone else's tenant.
+    from db.models import TenantModel
+    other = uuid.uuid4()
+    test_db.add(TenantModel(id=other, slug=f"t-{other.hex[:8]}", name="O", global_policy={}, is_active=True))
+    await test_db.commit()
+    _, aid = await _make_app(test_db, other)
+    r = await client.post("/v1/keys", json={"name": "x", "app_id": aid}, headers=admin_jwt_headers)
+    assert r.status_code == 404
+
+
+@pytest.mark.asyncio
+async def test_create_key_unknown_dept_id_404(client, admin_jwt_headers):
+    r = await client.post("/v1/keys", json={"name": "x", "dept_id": str(uuid.uuid4())}, headers=admin_jwt_headers)
+    assert r.status_code == 404
+
+
+@pytest.mark.asyncio
+async def test_create_key_invalid_dept_uuid_422(client, admin_jwt_headers):
+    r = await client.post("/v1/keys", json={"name": "x", "dept_id": "not-a-uuid"}, headers=admin_jwt_headers)
+    assert r.status_code == 422
+
+
+@pytest.mark.asyncio
+async def test_create_key_invalid_key_type_422(client, admin_jwt_headers, admin_key_scope):
+    r = await client.post(
+        "/v1/keys",
+        json={"name": "x", "dept_id": admin_key_scope, "key_type": "bogus"},
+        headers=admin_jwt_headers,
+    )
+    assert r.status_code == 422
+
+
+@pytest.mark.asyncio
+async def test_create_key_invalid_expires_at_422(client, admin_jwt_headers, admin_key_scope):
+    r = await client.post(
+        "/v1/keys",
+        json={"name": "x", "dept_id": admin_key_scope, "expires_at": "not-a-date"},
+        headers=admin_jwt_headers,
+    )
+    assert r.status_code == 422
+
+
+@pytest.mark.asyncio
+async def test_create_trial_key_has_trial_prefix(client, admin_jwt_headers, admin_key_scope):
+    r = await client.post(
+        "/v1/keys",
+        json={"name": "t", "dept_id": admin_key_scope, "key_type": "trial"},
+        headers=admin_jwt_headers,
+    )
+    assert r.status_code == 201, r.text
+    assert r.json()["api_key"].startswith("wsk_trial_")
+    assert r.json()["key_type"] == "trial"
+
+
+# ── get single key ───────────────────────────────────────────────────────────
+
+@pytest.mark.asyncio
+async def test_get_key_returns_metadata(client, admin_jwt_headers, admin_key_scope):
+    c = await client.post("/v1/keys", json={"name": "g", "dept_id": admin_key_scope}, headers=admin_jwt_headers)
+    kid = c.json()["key_id"]
+    r = await client.get(f"/v1/keys/{kid}", headers=admin_jwt_headers)
+    assert r.status_code == 200
+    d = r.json()
+    assert d["key_id"] == kid
+    assert d["name"] == "g"
+    assert d["revoked"] is False
+    assert d["is_admin"] is False
+    assert "api_key" not in d          # secret never returned on read
+
+
+@pytest.mark.asyncio
+async def test_get_key_nonexistent_404(client, admin_jwt_headers):
+    r = await client.get("/v1/keys/key_nope", headers=admin_jwt_headers)
+    assert r.status_code == 404
+
+
+@pytest.mark.asyncio
+async def test_get_key_cross_tenant_404(client, admin_jwt_headers, test_db):
+    kid = await _seed_key(test_db)   # foreign tenant
+    r = await client.get(f"/v1/keys/{kid}", headers=admin_jwt_headers)
+    assert r.status_code == 404
+
+
+# ── rename (update) ──────────────────────────────────────────────────────────
+
+@pytest.mark.asyncio
+async def test_update_key_renames(client, admin_jwt_headers, admin_key_scope):
+    c = await client.post("/v1/keys", json={"name": "old", "dept_id": admin_key_scope}, headers=admin_jwt_headers)
+    kid = c.json()["key_id"]
+    r = await client.put(f"/v1/keys/{kid}", json={"name": "new"}, headers=admin_jwt_headers)
+    assert r.status_code == 200
+    assert r.json()["name"] == "new"
+    g = await client.get(f"/v1/keys/{kid}", headers=admin_jwt_headers)
+    assert g.json()["name"] == "new"
+
+
+@pytest.mark.asyncio
+async def test_update_key_nonexistent_404(client, admin_jwt_headers):
+    r = await client.put("/v1/keys/key_nope", json={"name": "x"}, headers=admin_jwt_headers)
+    assert r.status_code == 404
+
+
+@pytest.mark.asyncio
+async def test_update_key_cross_tenant_404(client, admin_jwt_headers, test_db):
+    kid = await _seed_key(test_db)
+    r = await client.put(f"/v1/keys/{kid}", json={"name": "x"}, headers=admin_jwt_headers)
+    assert r.status_code == 404
+
+
+@pytest.mark.asyncio
+async def test_update_key_empty_name_422(client, admin_jwt_headers, admin_key_scope):
+    c = await client.post("/v1/keys", json={"name": "old", "dept_id": admin_key_scope}, headers=admin_jwt_headers)
+    kid = c.json()["key_id"]
+    r = await client.put(f"/v1/keys/{kid}", json={"name": ""}, headers=admin_jwt_headers)
+    assert r.status_code == 422
+
+
+# ── delete: grace-period warning branch ──────────────────────────────────────
+
+@pytest.mark.asyncio
+async def test_delete_key_in_grace_period_warns(client, admin_jwt_headers, test_db):
+    tid = _admin_tenant_id(admin_jwt_headers)
+    kid = await _seed_key(test_db, tenant_id=tid, expires_at=utc_now() + timedelta(hours=1))
+    r = await client.delete(f"/v1/keys/{kid}", headers=admin_jwt_headers)
+    assert r.status_code == 200
+    assert r.json()["was_in_grace"] is True
+    assert r.json()["warning"] is not None
+
+
+# ── rotate ───────────────────────────────────────────────────────────────────
+
+@pytest.mark.asyncio
+async def test_rotate_key_success(client, admin_jwt_headers, admin_key_scope):
+    c = await client.post("/v1/keys", json={"name": "r", "dept_id": admin_key_scope}, headers=admin_jwt_headers)
+    kid, old_api = c.json()["key_id"], c.json()["api_key"]
+    r = await client.post(f"/v1/keys/{kid}/rotate", json={"grace_period_minutes": 30}, headers=admin_jwt_headers)
+    assert r.status_code == 201, r.text
+    d = r.json()
+    assert d["new_api_key"].startswith("wsk_live_")
+    assert d["new_api_key"] != old_api        # a genuinely new secret
+    assert d["new_key_id"] != kid
+    assert d["old_key_id"] == kid
+    assert d["grace_period_minutes"] == 30
+
+
+@pytest.mark.asyncio
+async def test_rotate_key_grace_zero_immediate(client, admin_jwt_headers, admin_key_scope):
+    c = await client.post("/v1/keys", json={"name": "r0", "dept_id": admin_key_scope}, headers=admin_jwt_headers)
+    kid = c.json()["key_id"]
+    r = await client.post(f"/v1/keys/{kid}/rotate", json={"grace_period_minutes": 0}, headers=admin_jwt_headers)
+    assert r.status_code == 201
+    assert r.json()["grace_period_minutes"] == 0
+
+
+@pytest.mark.asyncio
+async def test_rotate_key_grace_out_of_bounds_422(client, admin_jwt_headers, admin_key_scope):
+    c = await client.post("/v1/keys", json={"name": "rb", "dept_id": admin_key_scope}, headers=admin_jwt_headers)
+    kid = c.json()["key_id"]
+    r = await client.post(f"/v1/keys/{kid}/rotate", json={"grace_period_minutes": 99999}, headers=admin_jwt_headers)
+    assert r.status_code == 422
+
+
+@pytest.mark.asyncio
+async def test_rotate_revoked_key_404(client, admin_jwt_headers, admin_key_scope):
+    # A revoked key cannot be rotated. The lookup (get_by_key_id) filters
+    # revoked == False, so a revoked key resolves to None and the endpoint 404s
+    # before reaching its KEY_REVOKED branch (that branch is therefore
+    # unreachable via this path). 404 also avoids confirming the key existed.
+    c = await client.post("/v1/keys", json={"name": "rv", "dept_id": admin_key_scope}, headers=admin_jwt_headers)
+    kid = c.json()["key_id"]
+    await client.delete(f"/v1/keys/{kid}", headers=admin_jwt_headers)
+    r = await client.post(f"/v1/keys/{kid}/rotate", json={}, headers=admin_jwt_headers)
+    assert r.status_code == 404
+    assert r.json()["error"]["code"] == "NOT_FOUND"
+
+
+@pytest.mark.asyncio
+async def test_rotate_key_already_in_grace_400(client, admin_jwt_headers, admin_key_scope):
+    c = await client.post("/v1/keys", json={"name": "rg", "dept_id": admin_key_scope}, headers=admin_jwt_headers)
+    kid = c.json()["key_id"]
+    await client.post(f"/v1/keys/{kid}/rotate", json={"grace_period_minutes": 60}, headers=admin_jwt_headers)
+    # Rotating the OLD key again -> it is now in its grace window -> rejected.
+    r = await client.post(f"/v1/keys/{kid}/rotate", json={}, headers=admin_jwt_headers)
+    assert r.status_code == 400
+    assert r.json()["error"]["code"] == "KEY_IN_GRACE_PERIOD"
+
+
+@pytest.mark.asyncio
+async def test_rotate_key_grace_expired_400(client, admin_jwt_headers, test_db):
+    tid = _admin_tenant_id(admin_jwt_headers)
+    kid = await _seed_key(test_db, tenant_id=tid, expires_at=utc_now() - timedelta(hours=1))
+    r = await client.post(f"/v1/keys/{kid}/rotate", json={}, headers=admin_jwt_headers)
+    assert r.status_code == 400
+    assert r.json()["error"]["code"] == "KEY_EXPIRED"
+
+
+@pytest.mark.asyncio
+async def test_rotate_key_nonexistent_404(client, admin_jwt_headers):
+    r = await client.post("/v1/keys/key_nope/rotate", json={}, headers=admin_jwt_headers)
+    assert r.status_code == 404
+
+
+# ── list enrichment (dept_name / app_name join) ──────────────────────────────
+
+@pytest.mark.asyncio
+async def test_list_keys_enriched_with_dept_and_app_names(client, admin_jwt_headers, test_db):
+    tid = _admin_tenant_id(admin_jwt_headers)
+    did, aid = await _make_app(test_db, tid)
+    await client.post("/v1/keys", json={"name": "enr", "app_id": aid}, headers=admin_jwt_headers)
+    r = await client.get("/v1/keys", headers=admin_jwt_headers)
+    assert r.status_code == 200
+    match = [k for k in r.json()["keys"] if k["app_id"] == aid]
+    assert match, "app-scoped key not present in listing"
+    assert match[0]["dept_id"] == did
+    assert match[0]["dept_name"] == "Dept"
+    assert match[0]["app_name"] == "App"
