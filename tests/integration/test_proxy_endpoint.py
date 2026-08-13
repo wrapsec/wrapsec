@@ -807,6 +807,53 @@ class TestProxyChatCompletions:
 
         assert resp.status_code == 200
 
+    # -----------------------------------------------------------------------
+    # B5: unrecognized data_storage_mode must fail CLOSED (never store raw)
+    # -----------------------------------------------------------------------
+
+    @pytest.mark.asyncio
+    async def test_data_storage_mode_invalid_fails_closed(self, app, monkeypatch):
+        from config.settings import get_settings as _gs
+        from db.models import ProxyInteractionModel
+
+        config                = _make_config()
+        fake_get_db, mock_db  = _patch_config(config)
+        from api.v1.dependencies.db import get_db
+        app.dependency_overrides[get_db] = fake_get_db
+
+        async def _post_and_capture():
+            added = []
+            mock_db.add = MagicMock(side_effect=lambda o: added.append(o))
+            with patch("httpx.AsyncClient") as mock_cls:
+                mock_client      = AsyncMock()
+                mock_client.post = AsyncMock(return_value=_openai_response())
+                mock_cls.return_value.__aenter__ = AsyncMock(return_value=mock_client)
+                mock_cls.return_value.__aexit__  = AsyncMock(return_value=False)
+                async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as client:
+                    await client.post(
+                        "/v1/chat/completions",
+                        headers={"x-api-key": settings.admin_api_key},
+                        json={"model": "openai/gpt-4o", "messages": _clean_messages()},
+                    )
+            return next(o for o in added if isinstance(o, ProxyInteractionModel))
+
+        try:
+            # Explicit "full" opts into raw retention (anchors the discriminator).
+            monkeypatch.setenv("DATA_STORAGE_MODE", "full")
+            _gs.cache_clear()
+            full_i = await _post_and_capture()
+            assert full_i.input_raw is not None
+
+            # A typo / unrecognized value must NOT fall through to full.
+            monkeypatch.setenv("DATA_STORAGE_MODE", "maskd")
+            _gs.cache_clear()
+            bad_i = await _post_and_capture()
+            assert bad_i.input_raw is None
+            assert bad_i.output_raw is None
+        finally:
+            app.dependency_overrides = {}
+            _gs.cache_clear()   # drop the overridden settings for later tests
+
 
 # ---------------------------------------------------------------------------
 # M1 regression -- proxy audit row must be tenant-attributed AND hash-chained

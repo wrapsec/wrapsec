@@ -293,15 +293,22 @@ async def _log_interaction(
             stored_input_sanitized  = None
             stored_output_raw       = None
             stored_output_sanitized = None
-        elif mode == "masked":
-            stored_input_raw        = None
-            stored_input_sanitized  = input_sanitized
-            stored_output_raw       = None
-            stored_output_sanitized = output_sanitized
-        else:  # "full" or any unrecognized value falls back to full for backwards compat
+        elif mode == "full":
             stored_input_raw        = input_raw
             stored_input_sanitized  = input_sanitized
             stored_output_raw       = output_raw
+            stored_output_sanitized = output_sanitized
+        else:
+            # "masked" and -- critically -- any unrecognized value fail CLOSED:
+            # never store raw prompt/response on a misconfigured mode. Only an
+            # explicit "full" opts into plaintext retention.
+            if mode != "masked":
+                logger.warning(
+                    "unrecognized data_storage_mode=%r; defaulting to masked", mode
+                )
+            stored_input_raw        = None
+            stored_input_sanitized  = input_sanitized
+            stored_output_raw       = None
             stored_output_sanitized = output_sanitized
 
         # 1. Insert into proxy_interactions
