@@ -46,7 +46,7 @@ class SetupRequest(BaseModel):
         try:
             validate_password_strength(v)
         except ValueError as e:
-            raise ValueError(str(e))
+            raise ValueError(str(e)) from None
         return v
 
 

@@ -180,13 +180,13 @@ def execute_request(
     except requests.exceptions.Timeout:
         raise WrapSecSystemError(
             f"Request timed out after {timeout}s. Increase with --timeout.",
-        )
+        ) from None
     except requests.exceptions.ConnectionError:
         raise WrapSecSystemError(
             "Cannot reach WrapSec API. Check your network connection and base_url.",
-        )
+        ) from None
     except requests.exceptions.RequestException as e:
-        raise WrapSecSystemError(f"Request failed: {e}")
+        raise WrapSecSystemError(f"Request failed: {e}") from e
 
     # Parse response body
     response_data: dict[str, Any] | None = None
@@ -197,7 +197,7 @@ def execute_request(
             raise WrapSecSystemError(
                 "Invalid response from API.",
                 status_code=resp.status_code,
-            )
+            ) from None
 
     if not resp.ok:
         raise map_response_error(resp.status_code, response_data, resp.text)
@@ -234,13 +234,13 @@ async def execute_request_async(
     except httpx.TimeoutException:
         raise WrapSecSystemError(
             f"Request timed out after {timeout}s. Increase with --timeout.",
-        )
+        ) from None
     except httpx.ConnectError:
         raise WrapSecSystemError(
             "Cannot reach WrapSec API. Check your network connection and base_url.",
-        )
+        ) from None
     except httpx.RequestError as e:
-        raise WrapSecSystemError(f"Request failed: {e}")
+        raise WrapSecSystemError(f"Request failed: {e}") from e
 
     response_data: dict[str, Any] | None = None
     try:
@@ -250,7 +250,7 @@ async def execute_request_async(
             raise WrapSecSystemError(
                 "Invalid response from API.",
                 status_code=resp.status_code,
-            )
+            ) from None
 
     if not resp.is_success:
         raise map_response_error(resp.status_code, response_data, resp.text)

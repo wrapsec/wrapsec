@@ -84,7 +84,7 @@ def validate_config_value(key: str, value: str) -> str | int:
         try:
             v = int(value)
         except (ValueError, TypeError):
-            raise ValueError(f"timeout must be an integer, got {value!r}")
+            raise ValueError(f"timeout must be an integer, got {value!r}") from None
         if v < TIMEOUT_MIN:
             raise ValueError(
                 f"timeout must be at least {TIMEOUT_MIN} second, got {v}"

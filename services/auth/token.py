@@ -6,12 +6,16 @@ import hashlib
 import logging
 import secrets
 from datetime import timedelta
+from typing import TYPE_CHECKING
 
 import jwt
 from jwt.exceptions import InvalidTokenError
 
 from config.settings import get_settings
 from services.time import utc_now
+
+if TYPE_CHECKING:
+    from db.models import UserModel
 
 logger = logging.getLogger("wrapsec.auth")
 
@@ -108,7 +112,7 @@ def decode_access_token(token: str) -> dict:
         header_alg = jwt.get_unverified_header(token).get("alg")
     except InvalidTokenError as e:
         logger.warning("auth token_decode_failed reason=%s", str(e))
-        raise InvalidTokenError("Token validation failed")
+        raise InvalidTokenError("Token validation failed") from None
 
     if header_alg != _settings.jwt_algorithm:
         logger.warning(
@@ -126,7 +130,7 @@ def decode_access_token(token: str) -> dict:
         )
     except InvalidTokenError as e:
         logger.warning("auth token_decode_failed reason=%s", str(e))
-        raise InvalidTokenError("Token validation failed")  # generic - no details to client
+        raise InvalidTokenError("Token validation failed") from None  # generic - no details to client
 
     if payload.get("type") != "access":
         logger.warning(

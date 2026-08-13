@@ -168,7 +168,9 @@ async def create_application(
         await db.commit()
     except IntegrityError:
         await db.rollback()
-        raise ConflictError(f"An application with slug '{body.slug}' already exists")
+        raise ConflictError(
+            f"An application with slug '{body.slug}' already exists"
+        ) from None
     return JSONResponse(content=_format(record), status_code=201)
 
 

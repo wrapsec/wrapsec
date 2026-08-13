@@ -302,7 +302,7 @@ async def _reject_bad_egress(url: str) -> None:
     except webhook_ssrf.WebhookEgressBlocked as exc:
         if exc.reason == "dns_resolution_failed":
             return
-        raise ValidationError(f"webhook destination rejected: {exc.reason}")
+        raise ValidationError(f"webhook destination rejected: {exc.reason}") from None
 
 
 async def _get_owned_endpoint_or_404(

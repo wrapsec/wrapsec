@@ -58,7 +58,7 @@ class CreateKeySchema(BaseModel):
         try:
             uuid.UUID(v)
         except ValueError:
-            raise ValueError("must be a valid UUID")
+            raise ValueError("must be a valid UUID") from None
         return v
 
     @field_validator("expires_at")
@@ -70,7 +70,7 @@ class CreateKeySchema(BaseModel):
         try:
             parse_utc_iso(v)
         except Exception:
-            raise ValueError("expires_at must be an ISO-8601 datetime")
+            raise ValueError("expires_at must be an ISO-8601 datetime") from None
         return v
 
 

@@ -42,7 +42,7 @@ def _date_range(from_value: str | None, to_value: str | None):
         from errors.exceptions import ValidationError
         raise ValidationError(
             "Invalid date format. Use ISO 8601, e.g. 2026-01-15T00:00:00Z"
-        )
+        ) from None
 
 
 def _parse_uuid_filter(value: str | None, field: str) -> str | None:
@@ -59,7 +59,7 @@ def _parse_uuid_filter(value: str | None, field: str) -> str | None:
         from errors.exceptions import ValidationError
         raise ValidationError(
             f"Invalid {field}: must be a UUID"
-        )
+        ) from None
 
 
 def _format_item(

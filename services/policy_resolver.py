@@ -219,7 +219,7 @@ async def resolve_policy(
                 raise ValueError(
                     f"Provider API key for section '{section}' could not be decrypted. "
                     "The stored credential is invalid. Re-enter it via Settings."
-                )
+                ) from None
 
     # Validate final thresholds - DB or override values could be inconsistent
     block    = policy["thresholds"]["block"]

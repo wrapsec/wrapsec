@@ -524,11 +524,11 @@ class Client:
         except requests.exceptions.Timeout:
             raise WrapSecSystemError(
                 f"Request timed out after {t}s. Use --timeout to increase.",
-            )
+            ) from None
         except requests.exceptions.ConnectionError:
             raise WrapSecSystemError(
                 "Cannot reach WrapSec API. Check your network connection and base_url.",
-            )
+            ) from None
 
         response_data: dict[str, Any] | None = None
         try:

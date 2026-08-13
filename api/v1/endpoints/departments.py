@@ -208,7 +208,9 @@ async def create_department(
         # The (tenant_id, slug) unique index is the race-safe backstop for the
         # pre-check above (two concurrent creates of the same slug).
         await db.rollback()
-        raise ConflictError(f"A department with slug '{body.slug}' already exists")
+        raise ConflictError(
+            f"A department with slug '{body.slug}' already exists"
+        ) from None
     return JSONResponse(content=_format(record), status_code=201)
 
 
