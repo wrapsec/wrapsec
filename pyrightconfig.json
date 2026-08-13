@@ -1,7 +1,7 @@
 {
   "include": ["sdk/python/wrapsec"],
   "extraPaths": ["sdk/python"],
-  "typeCheckingMode": "basic",
+  "typeCheckingMode": "standard",
   "pythonVersion": "3.10",
   "venvPath": ".",
   "venv": ".venv"
