@@ -248,3 +248,6 @@ scripts/.seed_keys.json
 
 # Node SDK build output
 sdk/node/dist/
+
+# Static-analysis scan output (regenerated on demand)
+semgrep-results.json

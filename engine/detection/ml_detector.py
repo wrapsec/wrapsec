@@ -83,6 +83,7 @@ class MLDetector(BaseDetector):
                 )
                 return
 
+            # nosemgrep: python.lang.security.deserialization.pickle.avoid-pickle -- gated by the SHA-256 integrity check above: unpickling is refused unless the model's hash matches the committed hash file, and the model is a trusted local build artifact (never untrusted input).
             self._model             = pickle.loads(raw)
             self._ready             = True
             MLDetector._class_ready = True

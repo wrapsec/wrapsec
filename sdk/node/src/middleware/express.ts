@@ -134,6 +134,7 @@ export function wrapSecMiddleware(options: ExpressMiddlewareOptions = {}) {
       // If sanitized, update body input field with sanitized version
       if (result.isSanitized && result.sanitizedInput) {
         if (typeof req.body === "object" && req.body !== null) {
+          // nosemgrep: javascript.express.security.audit.remote-property-injection.remote-property-injection -- inputKey is a developer-supplied middleware option (options.inputKey), never request-derived, so this is not attacker-controlled property injection.
           req.body[inputKey] = result.sanitizedInput
         }
       }

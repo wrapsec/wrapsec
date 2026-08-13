@@ -1,0 +1,25 @@
+# Paths excluded from static-analysis scanning. Kept focused on artifacts that
+# are not a runtime attack surface, so real findings in application code stand
+# out.
+
+# Vendored / generated
+.venv/
+node_modules/
+dashboard/node_modules/
+dashboard/.next/
+**/__pycache__/
+
+# Database migrations: reviewed, developer-authored DDL with no user input. Raw
+# SQL / f-string-on-static-constant rules only fire false positives here
+# (migrations are inherently raw SQL the ORM cannot express).
+db/migrations/
+
+# Documentation contains placeholder example keys that trip secret-detection
+# rules; it is not executable.
+docs/
+
+# SDK usage examples are illustrative, not the shipped middleware.
+sdk/node/examples/
+
+# Scanner output should never itself be scanned.
+semgrep-results.json

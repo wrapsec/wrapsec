@@ -95,6 +95,7 @@ async function wrapSecPlugin(fastify: any, options: FastifyPluginOptions) {
 
       if (result.isSanitized && result.sanitizedInput) {
         if (typeof request.body === "object" && request.body !== null) {
+          // nosemgrep: javascript.express.security.audit.remote-property-injection.remote-property-injection -- inputKey is a developer-supplied middleware option (options.inputKey), never request-derived, so this is not attacker-controlled property injection.
           request.body[inputKey] = result.sanitizedInput
         }
       }
