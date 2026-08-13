@@ -172,3 +172,41 @@ async def test_get_request_includes_proxy_interaction(client, admin_headers, tes
     assert d["proxy"]["provider"] == "openai"
     assert d["proxy"]["model"] == "gpt-4o"
     assert d["proxy"]["execution_status"] == "completed"
+
+
+# ── B2: semantic-cache hits are audited too ──────────────────────────────────
+
+@pytest.mark.asyncio
+async def test_cache_hit_writes_audit_row(client, test_db):
+    # Force a cache hit deterministically (no Redis dependency) by patching the
+    # lookup to return a cached ALLOW body. The endpoint must still write a
+    # tenant-attributed, hash-chained audit row for it.
+    from unittest.mock import AsyncMock, patch
+
+    from sqlalchemy import select
+
+    from db.models import AuditLogModel
+
+    raw, ids = await _seed_key(test_db)
+    cached_body = {
+        "trace_id":        "orig-trace",
+        "decision":        "ALLOW",
+        "risk_score":      0.05,
+        "primary_reason":  "NO_THREAT_DETECTED",
+        "confidence":      0.9,
+        "confidence_band": "HIGH",
+        "threats":         [],
+        "processing":      {"llm_invoked": False, "latency_ms": 2.0},
+    }
+    with patch("cache.semantic_cache.get_cached_result", AsyncMock(return_value=cached_body)):
+        r = await client.post("/v1/ai/request", json={"input": "hello world"}, headers={"x-api-key": raw})
+
+    assert r.status_code == 200
+    rows = (await test_db.execute(
+        select(AuditLogModel).where(AuditLogModel.tenant_id == str(ids["tenant_id"]))
+    )).scalars().all()
+    assert len(rows) == 1                       # the cache hit produced an audit row
+    row = rows[0]
+    assert row.policy_source == "cache"
+    assert row.decision == "ALLOW"
+    assert row.record_hash is not None          # tenant-attributed -> hash-chained

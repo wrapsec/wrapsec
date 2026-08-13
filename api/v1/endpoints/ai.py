@@ -3,6 +3,7 @@
 # WrapSec v1.0 | AI Security Gateway - https://wrapsec.com
 
 import asyncio
+import hashlib
 import logging
 import uuid
 
@@ -213,6 +214,69 @@ def _build_audit_data(
     }
 
 
+def _build_cache_hit_audit(
+    request,
+    body,
+    cached:       dict,
+    det_mode_str: str,
+    exe_mode_str: str,
+) -> dict:
+    """Project a semantic-cache-hit response into an audit row.
+
+    A cache hit skips the detection pipeline, so there is no GatewayResult; the
+    row is rebuilt from the cached decision plus the request's attribution. It is
+    tenant-attributed so it lands in tenant-scoped audit reads and the hash chain
+    -- otherwise repeated allowed prompts vanish from the audit trail. policy_source
+    'cache' and a 'cache:'-prefixed input_hash mark its origin.
+    """
+    decision       = cached.get("decision", "ALLOW")
+    risk_score     = cached.get("risk_score", 0.0)
+    primary_reason = cached.get("primary_reason")
+    processing     = cached.get("processing", {})
+    source = (
+        (body.metadata.source if body.metadata and body.metadata.source else None)
+        or getattr(request.state, "key_name", None)
+        or "unknown"
+    )
+    return {
+        "trace_id":             cached.get("trace_id"),
+        "decision":             decision,
+        "risk_score":           risk_score,
+        "threats":              cached.get("threats", []),
+        "input_hash":           "cache:" + hashlib.sha256(body.input.encode()).hexdigest()[:64],
+        "detection_mode":       det_mode_str,
+        "execution_mode":       exe_mode_str,
+        "llm_invoked":          processing.get("llm_invoked", False),
+        "latency_ms":           round(processing.get("latency_ms", 0.0), 2),
+        "detection_scores":     {},
+        "guardrail_scores":     {},
+        "tenant_id":            getattr(request.state, "tenant_id", None),
+        "source":               source,
+        "user_id":              body.metadata.user_id if body.metadata else None,
+        "key_id":               getattr(request.state, "key_id",     None),
+        "ip_address":           getattr(request.state, "ip_address",  None),
+        "user_agent":           getattr(request.state, "user_agent",  None),
+        "attribution_verified": False,
+        "app_id":               getattr(request.state, "app_id",     None),
+        "dept_id":              getattr(request.state, "dept_id",    None),
+        "policy_source":        "cache",
+        "primary_reason":       primary_reason,
+        "confidence":           cached.get("confidence"),
+        "confidence_band":      cached.get("confidence_band"),
+        "input_length":         len(body.input),
+        "session_id":           body.session_id,
+        "turn_index":           body.turn_index,
+        "run_id":               body.run_id,
+        "input_source":         body.input_source,
+        "proxy_interaction_id": None,
+        "severity":             compute_severity(
+            decision       = decision,
+            risk_score     = risk_score,
+            primary_reason = primary_reason,
+        ),
+    }
+
+
 @router.post("/request", response_model=None)
 async def ai_request(
     body:            AIRequestSchema,
@@ -319,6 +383,13 @@ async def ai_request(
         _current_trace_id = getattr(request.state, "trace_id", None)
         if _current_trace_id:
             cached = {**cached, "trace_id": _current_trace_id}
+        # Audit the cache hit too. Every request must land in the tenant audit
+        # trail and the tamper-evident hash chain -- otherwise repeated allowed
+        # prompts (same tenant, within the TTL) are silently absent from the log,
+        # per-source stats, and the chain.
+        cache_audit = _build_cache_hit_audit(request, body, cached, det_mode_str, exe_mode_str)
+        await AuditRepository(db).create(cache_audit)
+        background_tasks.add_task(emit_from_audit_background, cache_audit)
         return JSONResponse(content=cached)
     CACHE_MISSES.inc()
 
