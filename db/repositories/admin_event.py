@@ -5,8 +5,7 @@
 from datetime import datetime
 from uuid import UUID
 
-from sqlalchemy import select, func
-from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy import func, select
 
 from db.models import AdminEventModel
 from db.repositories.base import BaseRepository

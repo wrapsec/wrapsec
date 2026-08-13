@@ -50,7 +50,6 @@ from __future__ import annotations
 
 from datetime import datetime, timedelta
 
-
 # Default grace window before an endpoint that has been continuously
 # failing gets auto-disabled. Overridable per-install via
 # WEBHOOK_CIRCUIT_BREAKER_HOURS in settings; kept here as the source

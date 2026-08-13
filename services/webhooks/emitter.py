@@ -35,10 +35,8 @@ tenant and would drown the delivery pipeline in low-value fanout.
 """
 
 from __future__ import annotations
-from services.time import to_iso_z, utc_now
 
 import logging
-from datetime import datetime
 from typing import Any
 from uuid import UUID
 
@@ -50,6 +48,7 @@ from cache.redis_client import get_redis
 from db.repositories.webhook_endpoint import WebhookEndpointRepository
 from db.session import AsyncSessionFactory
 from domain.value_objects.severity import compute_severity
+from services.time import to_iso_z, utc_now
 
 logger = logging.getLogger("wrapsec.webhook_emitter")
 
@@ -172,7 +171,7 @@ async def emit_from_audit(
             tenant_id  = tenant_id if isinstance(tenant_id, UUID) else UUID(tenant_str),
             event_type = event_type,
         )
-    except Exception as exc:                              # noqa: BLE001
+    except Exception as exc:
         logger.exception("webhook_endpoints lookup failed trace_id=%s: %s", trace_id, exc)
         return 0
 
@@ -197,7 +196,7 @@ async def emit_from_audit(
         try:
             await webhook_queue.enqueue(redis, payload)
             enqueued += 1
-        except Exception as exc:                          # noqa: BLE001
+        except Exception as exc:
             logger.exception(
                 "webhook enqueue failed endpoint_id=%s trace_id=%s: %s",
                 ep.id, trace_id, exc,
@@ -225,7 +224,7 @@ async def emit_from_audit_background(audit_data: dict[str, Any]) -> None:
     try:
         async with AsyncSessionFactory() as db:
             await emit_from_audit(db=db, redis=get_redis(), audit_data=audit_data)
-    except Exception as exc:                              # noqa: BLE001
+    except Exception as exc:
         logger.exception(
             "webhook background emit failed trace_id=%s: %s",
             audit_data.get("trace_id"), exc,

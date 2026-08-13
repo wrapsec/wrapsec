@@ -19,8 +19,8 @@ from __future__ import annotations
 import base64
 import re
 import unicodedata
+from collections.abc import Callable
 from dataclasses import dataclass
-from typing import Callable
 
 from engine.normalization import confusables
 from engine.normalization.limits import MAX_DECODE_DEPTH

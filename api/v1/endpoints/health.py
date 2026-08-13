@@ -5,10 +5,11 @@
 from fastapi import APIRouter, Depends
 from sqlalchemy import text
 from sqlalchemy.ext.asyncio import AsyncSession
+
 from api.v1.dependencies.auth import get_current_principal
 from api.v1.dependencies.db import get_db
-from domain.entities.principal import Principal
 from config.settings import get_settings
+from domain.entities.principal import Principal
 
 router = APIRouter()
 

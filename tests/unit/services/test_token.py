@@ -2,19 +2,20 @@
 # Copyright (c) 2026 WrapSec. All rights reserved.
 # WrapSec v1.0 | AI Security Gateway - https://wrapsec.com
 
-import uuid
 import datetime
-import pytest
-from datetime import timezone, timedelta
+import uuid
+from datetime import timedelta, timezone
 from unittest.mock import MagicMock
+
+import pytest
 from jwt.exceptions import InvalidTokenError
 
 from services.auth.token import (
+    ACCESS_TOKEN_AUDIENCE,
     create_access_token,
     create_refresh_token,
     decode_access_token,
     hash_refresh_token,
-    ACCESS_TOKEN_AUDIENCE,
 )
 
 
@@ -100,6 +101,7 @@ def test_decode_tampered_raises():
 def test_decode_wrong_type_raises():
     """Refresh token must not be accepted as access token."""
     import jwt
+
     from config.settings import get_settings
     _settings = get_settings()
     payload = {
@@ -120,6 +122,7 @@ def test_decode_wrong_type_raises():
 
 def test_decode_wrong_audience_raises():
     import jwt
+
     from config.settings import get_settings
     _settings = get_settings()
     payload = {
@@ -140,6 +143,7 @@ def test_decode_wrong_audience_raises():
 
 def test_decode_missing_sub_raises():
     import jwt
+
     from config.settings import get_settings
     _settings = get_settings()
     payload = {
@@ -159,6 +163,7 @@ def test_decode_missing_sub_raises():
 
 def test_decode_missing_tenant_id_raises():
     import jwt
+
     from config.settings import get_settings
     _settings = get_settings()
     payload = {
@@ -206,6 +211,7 @@ def test_decode_rejects_alg_none():
 def test_decode_rejects_mismatched_algorithm():
     """Token signed with a different HMAC alg must be rejected."""
     import jwt
+
     from config.settings import get_settings
     _settings = get_settings()
     if _settings.jwt_algorithm == "HS512":

@@ -12,7 +12,6 @@ Spec reference: Section 13.2 (wrapsec scan), Section 11 (Exit Codes),
 from __future__ import annotations
 
 import logging
-
 import signal
 import sys
 
@@ -20,10 +19,17 @@ import click
 
 logger = logging.getLogger('wrapsec.cli.scan')
 
+from wrapsec.cli._output import (
+    format_scan_result_human,
+    get_scan_exit_code,
+    print_error,
+    print_json,
+    scan_result_to_dict,
+)
+from wrapsec.cli._spinner import Spinner, should_show_spinner
 from wrapsec.client import Client
 from wrapsec.config.loader import load_config
 from wrapsec.core.validation import (
-    MAX_INPUT_CHARS,
     normalize_text,
     validate_input,
     validate_session_id,
@@ -31,15 +37,6 @@ from wrapsec.core.validation import (
     warn_if_dense,
 )
 from wrapsec.exceptions import WrapSecError
-from wrapsec.cli._output import (
-    format_scan_result_human,
-    get_scan_exit_code,
-    print_error,
-    print_json,
-    print_success,
-    scan_result_to_dict,
-)
-from wrapsec.cli._spinner import Spinner, should_show_spinner
 
 
 @click.command()

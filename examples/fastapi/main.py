@@ -44,15 +44,13 @@ Test:
     -d '{"message": "my SSN is 123-45-6789"}'
 """
 
-import os
 import logging
 
+import wrapsec
 from fastapi import FastAPI, Request
 from fastapi.responses import JSONResponse
 from pydantic import BaseModel
-
-import wrapsec
-from wrapsec.exceptions import WrapSecError, WrapSecAuthError, WrapSecRateLimitError
+from wrapsec.exceptions import WrapSecAuthError, WrapSecError, WrapSecRateLimitError
 
 # ── Logging ──────────────────────────────────────────────────────────────────
 

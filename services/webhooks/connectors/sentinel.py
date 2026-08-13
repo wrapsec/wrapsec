@@ -57,7 +57,6 @@ from typing import Any
 
 from services.webhooks.connectors.base import ConnectorRequest
 
-
 CONNECTOR_TYPE = "sentinel_logs_ingestion"
 
 # Pinned Logs Ingestion API version (current stable per Microsoft docs).

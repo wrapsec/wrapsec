@@ -51,7 +51,6 @@ from typing import Any
 
 from services.time import ensure_utc
 
-
 # Explicit sorted list. Every audit_logs column EXCEPT id (DB-assigned,
 # not part of the content) and record_hash/prev_hash (the chain output
 # itself). New columns must be added here explicitly -- do not derive from

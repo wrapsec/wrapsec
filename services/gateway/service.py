@@ -3,32 +3,32 @@
 # WrapSec v1.0 | AI Security Gateway - https://wrapsec.com
 
 import asyncio
-import time
 import hashlib
 import logging
+import time
 from dataclasses import dataclass
-from domain.enums import DecisionType, ThreatCategory, DetectionMode, ExecutionMode
-from domain.value_objects.risk_score import RiskScore
-from domain.value_objects.trace_id import TraceId
-from domain.entities.request import IncomingRequest
-from domain.entities.decision import GatewayDecision, LayerScores
+
+from config.settings import get_settings
 from domain.entities.audit_log import AuditLog
-from engine.detection.rule_detector import RuleDetector
+from domain.entities.decision import GatewayDecision, LayerScores
+from domain.entities.request import IncomingRequest
+from domain.enums import DecisionType, DetectionMode, ExecutionMode
+from domain.value_objects.risk_score import RiskScore
+from engine.detection.base import DetectionResult
+from engine.detection.llm_detector import LLMDetector
 from engine.detection.pipeline import DetectionPipeline
 from engine.detection.profiles import get_profile
-from engine.detection.llm_detector import LLMDetector
-from engine.detection.base import DetectionResult
+from engine.detection.rule_detector import RuleDetector
 from engine.detection.view_evaluator import evaluate_views
-from engine.normalization import normalize, NormalizedInput
-from engine.guardrails.pii.detector import PIIDetector
 from engine.guardrails.input_guard import InputGuard
 from engine.guardrails.output_guard import OutputGuard
-from engine.scoring.risk_scorer import RiskScorer
+from engine.guardrails.pii.detector import PIIDetector
+from engine.normalization import NormalizedInput, normalize
 from engine.policy.engine import PolicyEngine
+from engine.policy.posture.source import apply_posture, resolve_source_posture
 from engine.policy.rules import PolicyRules
 from engine.provenance.registry import SourceRegistry
-from engine.policy.posture.source import resolve_source_posture, apply_posture
-from config.settings import get_settings
+from engine.scoring.risk_scorer import RiskScorer
 
 logger = logging.getLogger("wrapsec.gateway")
 

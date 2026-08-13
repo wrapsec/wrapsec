@@ -3,8 +3,8 @@
 # WrapSec v1.0 | AI Security Gateway - https://wrapsec.com
 
 import logging
-from cache import keyspace
 
+from cache import keyspace
 from cache.redis_client import get_redis
 from config.settings import get_settings
 

@@ -26,8 +26,8 @@ from engine.policy.posture.source import (
 )
 
 __all__ = [
-    "Posture",
     "EffectiveThresholds",
-    "resolve_source_posture",
+    "Posture",
     "apply_posture",
+    "resolve_source_posture",
 ]

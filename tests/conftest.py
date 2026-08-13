@@ -3,22 +3,24 @@
 # WrapSec v1.0 | AI Security Gateway - https://wrapsec.com
 
 import os
+
 os.environ["TESTING"] = "true"
 # Runtime posture defaults to production (safe) when unset; the test suite runs
 # as development explicitly (drop/create tables, docs enabled), matching the
 # pre-migration behavior. setdefault so an explicit override still wins.
 os.environ.setdefault("ENVIRONMENT", "development")
 
+import uuid
+
 import pytest
 import pytest_asyncio
-import uuid
-from httpx import AsyncClient, ASGITransport
-from sqlalchemy.ext.asyncio import create_async_engine, async_sessionmaker, AsyncSession
+from httpx import ASGITransport, AsyncClient
+from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_async_engine
 
 from api.main import app
 from api.v1.dependencies.db import get_db
-from db.models import Base
 from config.settings import get_settings
+from db.models import Base
 
 settings = get_settings()
 
@@ -109,11 +111,12 @@ async def admin_jwt_headers():
 
     Cleanup: removes the test user after the test completes.
     """
+    from sqlalchemy import delete as sa_delete
+
+    from db.models import AdminEventModel, RefreshTokenModel, UserModel
+    from db.repositories.tenant import TenantRepository
     from services.auth.password import hash_password, normalize_email
     from services.auth.token import create_access_token
-    from db.models import UserModel, RefreshTokenModel, AdminEventModel
-    from db.repositories.tenant import TenantRepository
-    from sqlalchemy import delete as sa_delete
 
     test_user_id = uuid.uuid4()
     test_email   = normalize_email(f"testadmin-{test_user_id.hex[:8]}@wrapsec-test.com")
@@ -172,14 +175,18 @@ async def auth_setup():
 
     All created rows are cleaned up after the test function completes.
     """
-    from services.auth.password import hash_password, normalize_email
-    from services.auth.token import create_access_token
+    from sqlalchemy import delete as sa_delete
+
     from db.models import (
-        UserModel, RefreshTokenModel, DepartmentModel,
-        AdminEventModel, AuthEventModel,
+        AdminEventModel,
+        AuthEventModel,
+        DepartmentModel,
+        RefreshTokenModel,
+        UserModel,
     )
     from db.repositories.tenant import TenantRepository
-    from sqlalchemy import delete as sa_delete
+    from services.auth.password import hash_password, normalize_email
+    from services.auth.token import create_access_token
 
     run_id    = uuid.uuid4().hex[:8]
     dept_id   = uuid.uuid4()

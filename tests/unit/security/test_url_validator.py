@@ -6,7 +6,6 @@ import pytest
 
 from security.url_validator import is_ssrf_target, validate_llm_base_url
 
-
 # ── is_ssrf_target ─────────────────────────────────────────────────────────────
 
 @pytest.mark.parametrize("url", [

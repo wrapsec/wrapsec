@@ -2,31 +2,36 @@
 # Copyright (c) 2026 WrapSec. All rights reserved.
 # WrapSec v1.0 | AI Security Gateway - https://wrapsec.com
 
-import logging
-import time
-from contextlib import asynccontextmanager
-from observability.logging import setup_logging
-from observability.metrics import get_metrics
 import hmac
+import logging
+from contextlib import asynccontextmanager
+
 from fastapi import FastAPI, Request
 
-logger = logging.getLogger("wrapsec.metrics")
-from fastapi.middleware.cors import CORSMiddleware
-from fastapi import Response
+from observability.logging import setup_logging
+from observability.metrics import get_metrics
 
+logger = logging.getLogger("wrapsec.metrics")
+from fastapi import Response
+from fastapi.exceptions import RequestValidationError
+from fastapi.middleware.cors import CORSMiddleware
+
+from api.v1.middleware.auth import AuthMiddleware
+from api.v1.middleware.idempotency import IdempotencyMiddleware
+from api.v1.middleware.logging import LoggingMiddleware
+from api.v1.middleware.rate_limit import RateLimitMiddleware
+from api.v1.middleware.security_headers import SecurityHeadersMiddleware
+from api.v1.middleware.trace import TraceMiddleware
+from api.v1.router import router as v1_router
 from config.settings import get_settings
 from errors.catalog import ErrorCode
 from errors.exceptions import WrapSecError
-from errors.handlers import wrapsec_exception_handler, unhandled_exception_handler, validation_exception_handler
+from errors.handlers import (
+    unhandled_exception_handler,
+    validation_exception_handler,
+    wrapsec_exception_handler,
+)
 from errors.response import error_response
-from fastapi.exceptions import RequestValidationError
-from api.v1.router import router as v1_router
-from api.v1.middleware.trace import TraceMiddleware
-from api.v1.middleware.logging import LoggingMiddleware
-from api.v1.middleware.auth import AuthMiddleware
-from api.v1.middleware.rate_limit import RateLimitMiddleware
-from api.v1.middleware.idempotency import IdempotencyMiddleware
-from api.v1.middleware.security_headers import SecurityHeadersMiddleware
 
 setup_logging()
 
@@ -40,9 +45,9 @@ async def seed_default_tenant() -> None:
     import logging
     logger = logging.getLogger("wrapsec.seed")
     try:
-        from db.session import AsyncSessionFactory
-        from db.repositories.tenant import TenantRepository
         from db.models import TenantModel
+        from db.repositories.tenant import TenantRepository
+        from db.session import AsyncSessionFactory
         async with AsyncSessionFactory() as db:
             repo   = TenantRepository(db)
             tenant = await repo.get_default()
@@ -82,11 +87,13 @@ async def bootstrap_admin() -> None:
                         "use the dashboard /setup page to create the first admin user")
             return
 
-        from db.session import AsyncSessionFactory
         from db.repositories.tenant import TenantRepository
         from db.repositories.user import UserRepository
+        from db.session import AsyncSessionFactory
         from services.auth.password import (
-            hash_password, normalize_email, validate_password_strength,
+            hash_password,
+            normalize_email,
+            validate_password_strength,
         )
 
         async with AsyncSessionFactory() as db:
@@ -126,11 +133,11 @@ async def bootstrap_admin() -> None:
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    import os
     import asyncio
+    import os
     if os.getenv("TESTING") != "true":
-        from db.session import run_migrations, dispose_engine
-        from cache.redis_client import ping, close
+        from cache.redis_client import close, ping
+        from db.session import dispose_engine, run_migrations
         from workers.queue import start_scheduler, stop_scheduler
         _settings = get_settings()
         await run_migrations()
@@ -275,7 +282,8 @@ app.include_router(v1_router)
 # Open-core seam: discover and load plugins registered under the
 # `wrapsec.plugins` entry-point group (paid features plug into the OSS
 # extension points here). No-op in the OSS edition -- nothing is installed.
-from services.capabilities import load_plugins  # noqa: E402
+from services.capabilities import load_plugins
+
 load_plugins(app)
 
 # ── Metrics endpoint ──────────────────────────────────────────

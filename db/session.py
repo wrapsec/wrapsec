@@ -4,7 +4,8 @@
 
 from pathlib import Path
 
-from sqlalchemy.ext.asyncio import create_async_engine, async_sessionmaker, AsyncSession
+from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_async_engine
+
 from config.settings import get_settings
 
 _settings = get_settings()

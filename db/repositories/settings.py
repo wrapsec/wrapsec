@@ -3,13 +3,13 @@
 # WrapSec v1.0 | AI Security Gateway - https://wrapsec.com
 
 import json
-from services.time import utc_now
 import logging
-from datetime import datetime
+
 from sqlalchemy import select
-from sqlalchemy.ext.asyncio import AsyncSession
+
 from db.models import SettingsModel
 from db.repositories.base import BaseRepository
+from services.time import utc_now
 
 logger = logging.getLogger("wrapsec.db")
 

@@ -35,10 +35,12 @@ Notes:
 """
 
 import random
-from locust import HttpUser, task, between, constant_throughput
+
+from locust import HttpUser, between, constant_throughput, task
+
 from config import (
-    ADMIN_KEY, PURCHASE_KEY, FINANCE_KEY, TRIAL_KEY,
-    ALL_PROMPTS, BENIGN_PROMPTS, THRESHOLDS,
+    ALL_PROMPTS,
+    PURCHASE_KEY,
 )
 
 

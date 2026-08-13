@@ -42,7 +42,6 @@ from typing import Any
 
 from services.webhooks.connectors.base import ConnectorRequest, _epoch_seconds
 
-
 CONNECTOR_TYPE = "splunk_hec"
 
 # HEC single-event ingest path. Appended to the configured base url unless

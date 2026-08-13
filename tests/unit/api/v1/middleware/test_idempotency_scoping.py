@@ -14,7 +14,6 @@ The middleware already prefixes the redis key with request.state.key_id.
 These tests pin that behaviour so the scoping cannot regress.
 """
 
-import json
 
 import pytest
 from httpx import ASGITransport, AsyncClient

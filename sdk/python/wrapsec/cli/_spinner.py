@@ -108,7 +108,7 @@ class Spinner:
             # Use a short sleep with lock release so stop() isn't delayed
             time.sleep(0.08)
 
-    def __enter__(self) -> "Spinner":
+    def __enter__(self) -> Spinner:
         self.start()
         return self
 

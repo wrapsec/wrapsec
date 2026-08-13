@@ -4,9 +4,9 @@
 
 import logging
 import re
-from engine.detection.base import BaseDetector, DetectionResult
+
 from domain.enums import ThreatCategory
-from config.settings import get_settings
+from engine.detection.base import BaseDetector, DetectionResult
 
 logger = logging.getLogger("wrapsec.engine")
 

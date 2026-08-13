@@ -17,9 +17,12 @@ from datetime import datetime, timedelta, timezone
 import pytest
 
 from services.time import (
-    utc_now, ensure_utc, to_iso_z, parse_utc_iso, date_range_bounds,
+    date_range_bounds,
+    ensure_utc,
+    parse_utc_iso,
+    to_iso_z,
+    utc_now,
 )
-
 
 # --- utc_now ----------------------------------------------------------
 

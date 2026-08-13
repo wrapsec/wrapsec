@@ -21,11 +21,13 @@ Run from repo root. API must be running at localhost:8000.
 """
 
 from __future__ import annotations
-import sys
-import time
-import requests
 
 import os as _os
+import sys
+import time
+
+import requests
+
 BASE_URL         = "http://127.0.0.1:8000"
 ADMIN_KEY        = _os.environ.get("WRAPSEC_ADMIN_KEY",        "")
 PURCHASE_KEY     = _os.environ.get("WRAPSEC_PURCHASE_KEY",     "")

@@ -2,33 +2,33 @@
 # Copyright (c) 2026 WrapSec. All rights reserved.
 # WrapSec v1.0 | AI Security Gateway - https://wrapsec.com
 
-import logging
-from services.time import to_iso_z
 import asyncio
-import time
+import logging
 import uuid
-import hashlib
-from fastapi import APIRouter, BackgroundTasks, Request, Depends
+
+from fastapi import APIRouter, BackgroundTasks, Depends, Request
 from fastapi.responses import JSONResponse
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from api.v1.schemas.request import AIRequestSchema, ScanBatchSchema
 from api.v1.dependencies.auth import get_current_principal
-from api.v1.dependencies.scope import get_scoped_audit_record
 from api.v1.dependencies.db import get_db
-from domain.entities.principal import Principal
-from db.repositories.audit import AuditRepository
+from api.v1.dependencies.scope import get_scoped_audit_record
+from api.v1.schemas.request import AIRequestSchema, ScanBatchSchema
 from config.settings import get_settings
-from domain.enums import DecisionType, DetectionMode, ExecutionMode
-from domain.value_objects.trace_id import TraceId
+from db.repositories.audit import AuditRepository
+from domain.entities.principal import Principal
 from domain.entities.request import (
-    IncomingRequest, RequestMetadata,
-    RequestContext, RequestOptions
+    IncomingRequest,
+    RequestContext,
+    RequestMetadata,
+    RequestOptions,
 )
-from errors.exceptions import NotFoundError, DebugForbiddenError
+from domain.enums import DecisionType, DetectionMode, ExecutionMode
 from domain.value_objects.severity import compute_severity
+from errors.exceptions import DebugForbiddenError, NotFoundError
 from services.gateway.service import GatewayService
+from services.time import to_iso_z
 from services.webhooks.emitter import emit_from_audit_background
 
 router   = APIRouter()

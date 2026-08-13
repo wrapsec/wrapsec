@@ -19,8 +19,9 @@ Timeout:
 """
 
 import logging
-from engine.detection.base import BaseDetector, DetectionResult
+
 from domain.enums import ThreatCategory
+from engine.detection.base import BaseDetector, DetectionResult
 
 logger = logging.getLogger("wrapsec.engine.transformer")
 

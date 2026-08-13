@@ -12,6 +12,7 @@ Spec reference: Section 8 (SDK Error Mapping), Section 4 (Public API Surface)
 """
 
 from __future__ import annotations
+
 from typing import Any
 
 
@@ -86,9 +87,9 @@ class WrapSecBlockError(WrapSecError):
 
 
 __all__ = [
-    "WrapSecError",
     "WrapSecAuthError",
+    "WrapSecBlockError",
+    "WrapSecError",
     "WrapSecRateLimitError",
     "WrapSecSystemError",
-    "WrapSecBlockError",
 ]

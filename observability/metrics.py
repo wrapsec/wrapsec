@@ -3,9 +3,11 @@
 # WrapSec v1.0 | AI Security Gateway - https://wrapsec.com
 
 from prometheus_client import (
-    Counter, Histogram, Gauge,
-    generate_latest, CONTENT_TYPE_LATEST,
-    CollectorRegistry, REGISTRY,
+    CONTENT_TYPE_LATEST,
+    REGISTRY,
+    Counter,
+    Histogram,
+    generate_latest,
 )
 
 # ── Request metrics ───────────────────────────────────────────

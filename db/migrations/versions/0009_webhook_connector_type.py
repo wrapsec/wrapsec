@@ -35,17 +35,16 @@ so a re-run (or a fresh install that already has them) is a no-op.
 """
 from __future__ import annotations
 
-from typing import Sequence, Union
+from collections.abc import Sequence
 
 import sqlalchemy as sa
 from alembic import op
 from sqlalchemy.dialects.postgresql import JSONB
 
-
 revision: str = "0009_webhook_connector_type"
-down_revision: Union[str, None] = "0008_webhook_delivery_attempts"
-branch_labels: Union[str, Sequence[str], None] = None
-depends_on: Union[str, Sequence[str], None] = None
+down_revision: str | None = "0008_webhook_delivery_attempts"
+branch_labels: str | Sequence[str] | None = None
+depends_on: str | Sequence[str] | None = None
 
 
 _TABLE = "webhook_endpoints"

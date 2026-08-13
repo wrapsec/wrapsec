@@ -4,7 +4,15 @@
 
 from dataclasses import dataclass, field
 from datetime import datetime, timezone
-from domain.enums import DecisionType, ThreatCategory, DetectionMode, ExecutionMode, get_risk_level, RiskLevel
+
+from domain.enums import (
+    DecisionType,
+    DetectionMode,
+    ExecutionMode,
+    RiskLevel,
+    ThreatCategory,
+    get_risk_level,
+)
 from domain.value_objects.risk_score import RiskScore
 from domain.value_objects.trace_id import TraceId
 

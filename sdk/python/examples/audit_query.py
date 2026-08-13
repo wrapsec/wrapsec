@@ -10,6 +10,7 @@ Run:
 """
 
 from pathlib import Path
+
 import wrapsec
 
 client = wrapsec.Client()

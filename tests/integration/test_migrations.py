@@ -13,13 +13,11 @@ These verify that:
 """
 from pathlib import Path
 
-import pytest
 from alembic import command
 from alembic.config import Config
 from sqlalchemy import create_engine, inspect
 
 from db.models import Base
-
 
 _REPO_ROOT = Path(__file__).resolve().parents[2]
 
@@ -110,6 +108,7 @@ def test_users_check_constraint_admits_auditor(tmp_path):
     """
     import uuid
     from datetime import datetime
+
     from sqlalchemy import text
 
     db_file   = tmp_path / "migrated.db"

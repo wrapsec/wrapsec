@@ -3,26 +3,24 @@
 # WrapSec v1.0 | AI Security Gateway - https://wrapsec.com
 
 import hashlib
-from cache import keyspace
-from services.time import utc_now
 import hmac
 import ipaddress
 import logging
 import os
-from datetime import datetime
 from uuid import UUID
 
 from fastapi import Request
 from jwt.exceptions import ExpiredSignatureError, InvalidTokenError
-from sqlalchemy.ext.asyncio import create_async_engine, async_sessionmaker, AsyncSession
+from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_async_engine
 from sqlalchemy.pool import NullPool
 from starlette.middleware.base import BaseHTTPMiddleware
 from starlette.responses import JSONResponse, Response
 
+from cache import keyspace
+from config.settings import get_settings
 from errors.catalog import ErrorCode
 from errors.response import error_response
-
-from config.settings import get_settings
+from services.time import utc_now
 
 logger = logging.getLogger("wrapsec.auth")
 
@@ -138,6 +136,7 @@ async def _log_session_expired(
     # Attempt context extraction from token even if invalid/expired
     try:
         import jwt as _jwt
+
         from config.settings import get_settings as _get_settings
         _s = _get_settings()
         raw_payload = _jwt.decode(
@@ -167,7 +166,8 @@ async def _log_session_expired(
     )
 
     from db.repositories.auth_event import AuthEventRepository
-    from domain.enums import AuthEventAction as _Action, AuthFailureReason as _Reason
+    from domain.enums import AuthEventAction as _Action
+    from domain.enums import AuthFailureReason as _Reason
 
     session = _auth_event_sf()
     try:
@@ -261,7 +261,11 @@ async def _get_db_session():
     but completely safe when each pytest test function gets its own event loop.
     """
     if _TESTING:
-        from sqlalchemy.ext.asyncio import create_async_engine, async_sessionmaker, AsyncSession
+        from sqlalchemy.ext.asyncio import (
+            AsyncSession,
+            async_sessionmaker,
+            create_async_engine,
+        )
         from sqlalchemy.pool import NullPool
         engine = create_async_engine(get_settings().database_url, poolclass=NullPool)
         sf     = async_sessionmaker(bind=engine, class_=AsyncSession,

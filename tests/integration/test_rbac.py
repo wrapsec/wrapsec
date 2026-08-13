@@ -8,6 +8,7 @@ Fixtures (auth_client, auth_setup) auto-injected from conftest.py.
 Users are created in PostgreSQL so JWT middleware can find them.
 """
 import pytest
+
 from config.settings import get_settings
 
 settings = get_settings()
@@ -169,9 +170,10 @@ async def test_admin_can_create_user(auth_client, auth_setup):
 
     # Cleanup created user
     user_id = data["id"]
-    from db.session import AsyncSessionFactory
-    from db.models import UserModel, RefreshTokenModel, AdminEventModel
     from sqlalchemy import delete as sa_delete
+
+    from db.models import AdminEventModel, RefreshTokenModel, UserModel
+    from db.session import AsyncSessionFactory
     async with AsyncSessionFactory() as db:
         import uuid
         uid = uuid.UUID(user_id)

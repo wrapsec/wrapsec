@@ -27,8 +27,7 @@ from datetime import datetime
 
 import pytest
 
-from db.models import TenantModel, WebhookEndpointModel, WebhookDeliveryAttemptModel
-
+from db.models import TenantModel, WebhookDeliveryAttemptModel, WebhookEndpointModel
 
 # ─── helpers ────────────────────────────────────────────────────────
 
@@ -434,7 +433,7 @@ async def test_delete_endpoint_with_delivery_history(client, admin_jwt_headers, 
     assert r.json()["deleted"] is True
 
     assert await test_db.get(WebhookEndpointModel, ep.id) is None
-    from sqlalchemy import select, func
+    from sqlalchemy import func, select
     remaining = await test_db.scalar(
         select(func.count())
         .select_from(WebhookDeliveryAttemptModel)

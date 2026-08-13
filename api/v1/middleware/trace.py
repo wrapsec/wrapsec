@@ -4,9 +4,11 @@
 
 import re
 import uuid
+
 from fastapi import Request
 from starlette.middleware.base import BaseHTTPMiddleware
 from starlette.responses import Response
+
 from observability.tracing import set_trace_id
 
 # Allow only safe alphanumeric-plus-hyphen/underscore trace IDs (max 64 chars)

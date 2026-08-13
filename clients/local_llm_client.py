@@ -2,11 +2,13 @@
 # Copyright (c) 2026 WrapSec. All rights reserved.
 # WrapSec v1.0 | AI Security Gateway - https://wrapsec.com
 
-import time
 import logging
+import time
+
 import httpx
-from interfaces.base_llm import BaseLLMClient, LLMResponse
+
 from config.settings import get_settings
+from interfaces.base_llm import BaseLLMClient, LLMResponse
 
 logger = logging.getLogger("wrapsec.clients")
 

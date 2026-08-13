@@ -27,18 +27,17 @@ already unreadable before this migration and the runtime treats it as
 from __future__ import annotations
 
 import logging
-from typing import Sequence, Union
+from collections.abc import Sequence
 
 import sqlalchemy as sa
 from alembic import op
 
 from security.encryption import decrypt, encrypt
 
-
 revision: str = "0002_envelope_reencrypt"
-down_revision: Union[str, None] = "0001_baseline"
-branch_labels: Union[str, Sequence[str], None] = None
-depends_on: Union[str, Sequence[str], None] = None
+down_revision: str | None = "0001_baseline"
+branch_labels: str | Sequence[str] | None = None
+depends_on: str | Sequence[str] | None = None
 
 
 _V2_PREFIX  = "v2:"

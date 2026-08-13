@@ -10,6 +10,7 @@ Spec reference: Section 3 (Module Boundaries - config/schema.py),
 """
 
 from __future__ import annotations
+
 from dataclasses import dataclass
 
 # Keys the user is allowed to set via `wrapsec config set`

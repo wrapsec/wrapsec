@@ -38,7 +38,7 @@ def _has_module_level_settings(module_path: str) -> bool:
     mod = importlib.import_module(module_path)
     if not hasattr(mod, "settings"):
         return False
-    val = getattr(mod, "settings")
+    val = mod.settings
     # A submodule (config.settings) is fine; we only care about a captured
     # Settings instance shared across the whole process.
     import types

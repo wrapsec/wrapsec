@@ -37,33 +37,36 @@ Response headers added to every response:
 """
 
 import copy
-from services.time import utc_now
 import logging
 import time
-from datetime import datetime
 
 import httpx
 from fastapi import APIRouter, BackgroundTasks, Depends, Request
-from api.v1.dependencies.auth import get_current_principal
-from domain.entities.principal import Principal
 from fastapi.responses import JSONResponse
 from pydantic import BaseModel
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from api.v1.dependencies.auth import get_current_principal
 from api.v1.dependencies.db import get_db
 from config.settings import get_settings
 from db.models import ProxyInteractionModel, ProxyProviderConfigModel
 from db.repositories.audit import AuditRepository
-from domain.enums import DetectionMode, ExecutionMode
+from domain.entities.principal import Principal
 from domain.entities.request import IncomingRequest, RequestMetadata
+from domain.enums import DetectionMode, ExecutionMode
 from domain.value_objects.severity import compute_severity
 from domain.value_objects.trace_id import TraceId
 from engine.guardrails.output_guard import OutputGuard
-from engine.proxy.router import parse_model_string, resolve_provider, resolve_provider_from_dict
+from engine.proxy.router import (
+    parse_model_string,
+    resolve_provider,
+    resolve_provider_from_dict,
+)
 from observability.metrics import record_proxy_request, record_request
 from services.gateway.service import GatewayService
 from services.policy_resolver import resolve_policy
+from services.time import utc_now
 from services.webhooks.emitter import emit_from_audit_background
 
 router = APIRouter()

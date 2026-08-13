@@ -10,8 +10,9 @@ risk_score 1.0 and primary_reason SYSTEM_ERROR. A single detector crash
 must not smuggle a payload past the remaining layers.
 """
 
-import pytest
 from unittest.mock import patch
+
+import pytest
 
 from domain.entities.request import IncomingRequest
 from domain.enums import DecisionType, DetectionMode, ExecutionMode

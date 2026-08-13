@@ -22,7 +22,6 @@ from services.webhooks.retry_schedule import (
     next_retry_delay,
 )
 
-
 # ─── Schedule shape ─────────────────────────────────────────────────
 
 def test_schedule_is_the_documented_seven_slot_tuple():

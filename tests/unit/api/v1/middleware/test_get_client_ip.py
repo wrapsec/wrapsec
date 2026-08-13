@@ -13,8 +13,6 @@ IPs into audit logs.
 
 from unittest.mock import MagicMock, patch
 
-import pytest
-
 from api.v1.middleware.auth import get_client_ip
 
 

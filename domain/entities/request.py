@@ -4,6 +4,7 @@
 
 from dataclasses import dataclass, field
 from datetime import datetime, timezone
+
 from domain.enums import DetectionMode, ExecutionMode
 from domain.value_objects.trace_id import TraceId
 

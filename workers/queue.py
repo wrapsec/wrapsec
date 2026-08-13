@@ -33,6 +33,7 @@ APScheduler is used because:
 """
 
 import logging
+
 from config.settings import get_settings
 
 logger = logging.getLogger("wrapsec.worker_queue")

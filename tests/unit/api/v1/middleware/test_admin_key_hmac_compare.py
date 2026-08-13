@@ -25,7 +25,6 @@ This test locks the invariant in two ways:
 """
 
 import inspect
-import hmac as _hmac
 from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest

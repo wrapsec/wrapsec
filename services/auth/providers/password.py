@@ -42,7 +42,11 @@ class PasswordAuthProvider(AuthProvider):
     ) -> AuthenticationOutcome:
         from db.repositories.user import UserRepository
         from services.auth.password import (
-            hash_password, needs_rehash, normalize_email, verify_dummy, verify_password,
+            hash_password,
+            needs_rehash,
+            normalize_email,
+            verify_dummy,
+            verify_password,
         )
 
         email    = normalize_email(credentials["email"])

@@ -3,15 +3,25 @@
 # WrapSec v1.0 | AI Security Gateway - https://wrapsec.com
 
 import uuid
-from sqlalchemy import (
-    Column, String, Float, Boolean,
-    DateTime, Text, JSON, Integer, Index, ForeignKey,
-    CheckConstraint, UniqueConstraint
-)
-from services.time import utc_now
-from sqlalchemy.orm import DeclarativeBase, relationship
-from sqlalchemy.dialects.postgresql import UUID, JSONB
 
+from sqlalchemy import (
+    JSON,
+    Boolean,
+    CheckConstraint,
+    Column,
+    DateTime,
+    Float,
+    ForeignKey,
+    Index,
+    Integer,
+    String,
+    Text,
+    UniqueConstraint,
+)
+from sqlalchemy.dialects.postgresql import JSONB, UUID
+from sqlalchemy.orm import DeclarativeBase
+
+from services.time import utc_now
 
 # JSONB on PostgreSQL (indexed, containment ops, jsonb_* functions), plain
 # JSON on SQLite (no jsonb type). Every JSON-holding column uses this alias

@@ -10,10 +10,10 @@ Run:
     pytest tests/unit/test_proxy_provider_layer.py -v
 """
 
-import pytest
 from unittest.mock import AsyncMock, MagicMock, patch
-import httpx
 
+import httpx
+import pytest
 
 # ===========================================================================
 # Model string parser tests

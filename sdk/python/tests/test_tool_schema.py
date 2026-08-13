@@ -9,9 +9,8 @@ from __future__ import annotations
 import json
 
 import pytest
-
-from wrapsec import scan_tool_schema, openai_tool, anthropic_tool, SCAN_TOOL_NAME
-from wrapsec.tool_schema import SCAN_TOOL_PARAMETERS, INPUT_SOURCES
+from wrapsec import SCAN_TOOL_NAME, anthropic_tool, openai_tool, scan_tool_schema
+from wrapsec.tool_schema import INPUT_SOURCES, SCAN_TOOL_PARAMETERS
 
 
 def test_canonical_schema_shape():

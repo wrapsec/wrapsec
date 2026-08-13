@@ -21,11 +21,11 @@ Usage:
   python scripts/cleanup_audit_logs.py --audit-only
   python scripts/cleanup_audit_logs.py --proxy-only
 """
-import asyncio
 import argparse
+import asyncio
 import logging
-import sys
 import os
+import sys
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
@@ -41,8 +41,9 @@ async def cleanup_audit_logs(retention_days: int = 30, dry_run: bool = False) ->
     Delete audit_logs rows older than retention_days.
     Returns count of rows deleted (or that would be deleted).
     """
-    from db.session import AsyncSessionFactory
     from sqlalchemy import text
+
+    from db.session import AsyncSessionFactory
 
     if retention_days < 1:
         raise ValueError(f"retention_days must be >= 1, got {retention_days}")
@@ -84,8 +85,9 @@ async def cleanup_proxy_interactions(retention_days: int = 7, dry_run: bool = Fa
 
     Returns count of rows updated (or that would be updated).
     """
-    from db.session import AsyncSessionFactory
     from sqlalchemy import text
+
+    from db.session import AsyncSessionFactory
 
     if retention_days < 1:
         raise ValueError(f"retention_days must be >= 1, got {retention_days}")
@@ -171,8 +173,8 @@ async def main():
         logger.info(f"Using audit retention from CLI: {audit_retention} days")
     else:
         try:
-            from db.session import AsyncSessionFactory
             from db.repositories.settings import SettingsRepository
+            from db.session import AsyncSessionFactory
             async with AsyncSessionFactory() as session:
                 repo   = SettingsRepository(session)
                 stored = await repo.get("audit_retention")

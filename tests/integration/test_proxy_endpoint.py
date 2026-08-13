@@ -12,10 +12,11 @@ Run:
     pytest tests/integration/test_proxy_endpoint.py -v
 """
 
-import pytest
-from unittest.mock import AsyncMock, MagicMock, patch, PropertyMock
-from httpx import AsyncClient, ASGITransport
+from unittest.mock import AsyncMock, MagicMock, patch
+
 import httpx
+import pytest
+from httpx import ASGITransport, AsyncClient
 
 from config.settings import get_settings
 from security.encryption import encrypt

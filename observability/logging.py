@@ -7,6 +7,7 @@ import logging
 import re
 import sys
 from datetime import datetime, timezone
+
 from config.settings import get_settings
 
 settings = get_settings()

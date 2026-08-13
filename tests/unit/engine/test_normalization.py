@@ -15,13 +15,8 @@ from __future__ import annotations
 
 import base64
 
-import pytest
-
-from engine.normalization import normalize, PIPELINE_VERSION
-from engine.normalization import confusables, limits
+from engine.normalization import PIPELINE_VERSION, confusables, limits, normalize
 from engine.normalization import stages as stages_mod
-from engine.normalization.types import DetectionView, StageOutput
-
 
 # --- canonical stages -------------------------------------------------
 
@@ -73,7 +68,7 @@ def test_base64_view_decoded():
 
 def test_base64_binary_junk_not_added():
     # base64 of random bytes decodes to non-printable -> not a view
-    b = base64.b64encode(bytes(range(0, 32)) * 2).decode()
+    b = base64.b64encode(bytes(range(32)) * 2).decode()
     r = normalize(f"data {b}")
     assert not any(v.kind == "base64" for v in r.views)
 

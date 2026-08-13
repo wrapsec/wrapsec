@@ -36,9 +36,9 @@ import asyncio
 import logging
 import os
 import socket
+from collections.abc import Awaitable, Callable
 from dataclasses import dataclass
 from enum import Enum
-from typing import Awaitable, Callable
 
 from redis.asyncio import Redis
 
@@ -102,7 +102,7 @@ async def _dispatch_one(
     async with sem:
         try:
             outcome = await handler(payload)
-        except Exception as exc:                          # noqa: BLE001
+        except Exception as exc:
             logger.exception(
                 "webhook handler raised, requeueing with 60s backoff: %s", exc
             )
@@ -172,7 +172,7 @@ async def run(
             # XREADGROUP call can pick them up alongside fresh entries.
             try:
                 await webhook_queue.promote_delayed(redis)
-            except Exception as exc:                      # noqa: BLE001
+            except Exception as exc:
                 logger.exception("promote_delayed failed: %s", exc)
 
             try:
@@ -182,7 +182,7 @@ async def run(
                     count     = batch,
                     block_ms  = poll_block_ms,
                 )
-            except Exception as exc:                      # noqa: BLE001
+            except Exception as exc:
                 logger.exception("XREADGROUP failed, backing off 1s: %s", exc)
                 await asyncio.sleep(1.0)
                 continue

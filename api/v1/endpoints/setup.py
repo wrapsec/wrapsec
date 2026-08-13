@@ -13,7 +13,11 @@ from api.v1.dependencies.db import get_db
 from cache.redis_client import get_redis
 from db.repositories.tenant import TenantRepository
 from db.repositories.user import UserRepository
-from services.auth.password import hash_password, normalize_email, validate_password_strength
+from services.auth.password import (
+    hash_password,
+    normalize_email,
+    validate_password_strength,
+)
 
 logger = logging.getLogger("wrapsec.setup")
 

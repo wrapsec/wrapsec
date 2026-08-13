@@ -4,6 +4,7 @@
 
 import logging
 from dataclasses import dataclass
+
 from domain.enums import DecisionType, ThreatCategory
 from domain.value_objects.risk_score import RiskScore
 from engine.policy.rules import PolicyRules

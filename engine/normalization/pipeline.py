@@ -21,7 +21,7 @@ import hashlib
 import logging
 from time import perf_counter
 
-from engine.normalization.limits import MAX_VIEWS, MAX_VIEW_BYTES
+from engine.normalization.limits import MAX_VIEW_BYTES, MAX_VIEWS
 from engine.normalization.stages import STAGES
 from engine.normalization.types import (
     AppliedStage,

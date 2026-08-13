@@ -14,7 +14,6 @@ Spec: Section 10.4 rule 7
 from __future__ import annotations
 
 import json
-import sys
 
 import click
 

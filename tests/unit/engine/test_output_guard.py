@@ -21,12 +21,11 @@ These tests lock in three invariants:
 """
 
 from types import SimpleNamespace
-from unittest.mock import patch, MagicMock
+from unittest.mock import MagicMock, patch
 
 import pytest
 
 from engine.guardrails.output_guard import OutputGuard, OutputGuardResult
-
 
 # ── helpers ──────────────────────────────────────────────────────────────────
 

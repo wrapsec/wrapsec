@@ -21,7 +21,7 @@ from typing import Any
 
 from fastapi.responses import JSONResponse
 
-from errors.catalog import ErrorCode, ERROR_CATALOG
+from errors.catalog import ERROR_CATALOG, ErrorCode
 from errors.messages import get_message
 
 

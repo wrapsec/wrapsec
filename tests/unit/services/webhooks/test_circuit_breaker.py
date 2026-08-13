@@ -23,7 +23,6 @@ from services.webhooks.circuit_breaker import (
     should_disable,
 )
 
-
 # ─── Policy constants ───────────────────────────────────────────────
 
 def test_default_threshold_is_120_hours():

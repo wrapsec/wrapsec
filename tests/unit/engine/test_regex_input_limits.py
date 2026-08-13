@@ -19,12 +19,9 @@ that by truncating input fed into regex detectors to MAX_REGEX_INPUT_LENGTH
 import re
 import time
 
-import pytest
-
 from engine.detection.limits import MAX_REGEX_INPUT_LENGTH, clamp_for_regex
 from engine.detection.rule_detector import RuleDetector
 from engine.guardrails.pii.detector import PIIDetector
-
 
 # ── clamp_for_regex ─────────────────────────────────────────────
 
@@ -132,8 +129,8 @@ def test_rule_detector_bounded_on_pathological_whitespace_payload():
 
 def test_rule_detector_survives_broken_pattern(monkeypatch):
     """A pattern that raises re.error must not disable the whole detector."""
-    from engine.detection import rule_detector as rd
     from domain.enums import ThreatCategory
+    from engine.detection import rule_detector as rd
 
     class BrokenPattern:
         pattern = "broken"

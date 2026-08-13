@@ -3,7 +3,9 @@
 # WrapSec v1.0 | AI Security Gateway - https://wrapsec.com
 
 import logging
-from redis.asyncio import Redis, ConnectionPool
+
+from redis.asyncio import ConnectionPool, Redis
+
 from config.settings import get_settings
 
 logger = logging.getLogger("wrapsec.cache")

@@ -11,8 +11,8 @@ as separate modules in this package, selected via DetectorProfile.rule_patterns.
 """
 
 import re
-from domain.enums import ThreatCategory
 
+from domain.enums import ThreatCategory
 
 PROMPT_INJECTION_PATTERNS = [
     r"ignore\s+(all\s+)?previous\s+instructions?",

@@ -3,14 +3,13 @@
 # WrapSec v1.0 | AI Security Gateway - https://wrapsec.com
 
 from datetime import datetime, timedelta
-from services.time import utc_now
 from uuid import UUID
 
-from sqlalchemy import select, update, delete
-from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy import delete, select, update
 
 from db.models import RefreshTokenModel
 from db.repositories.base import BaseRepository
+from services.time import utc_now
 
 
 class RefreshTokenRepository(BaseRepository):

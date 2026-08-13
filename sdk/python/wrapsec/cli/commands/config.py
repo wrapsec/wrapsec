@@ -17,6 +17,7 @@ import sys
 
 import click
 
+from wrapsec.cli._output import print_error, print_success
 from wrapsec.config.loader import (
     clear_config,
     get_config_path,
@@ -25,8 +26,7 @@ from wrapsec.config.loader import (
     mask_api_key,
     set_config_value,
 )
-from wrapsec.config.schema import ALLOWED_CONFIG_KEYS, validate_config_value
-from wrapsec.cli._output import print_error, print_success
+from wrapsec.config.schema import ALLOWED_CONFIG_KEYS
 
 
 @click.group()

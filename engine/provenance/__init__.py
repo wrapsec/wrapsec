@@ -19,7 +19,7 @@ job of engine/policy/posture) and never touches detection.
 from engine.provenance.registry import SourceDescriptor, SourceRegistry, TrustTier
 
 __all__ = [
-    "SourceRegistry",
     "SourceDescriptor",
+    "SourceRegistry",
     "TrustTier",
 ]

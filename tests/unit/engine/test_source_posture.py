@@ -11,12 +11,12 @@ unknown are no-ops, the adapter tightens both thresholds by the same delta
 when the delta is 0.
 """
 
-from engine.provenance.registry import SourceDescriptor, TrustTier
 from engine.policy.posture.source import (
     Posture,
     apply_posture,
     resolve_source_posture,
 )
+from engine.provenance.registry import SourceDescriptor, TrustTier
 
 
 def _descriptor(tier: TrustTier) -> SourceDescriptor:

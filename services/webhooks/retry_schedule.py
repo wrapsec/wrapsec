@@ -46,7 +46,6 @@ but it is what makes retries safe to apply here.
 
 from __future__ import annotations
 
-
 # Delay between attempt N (which just failed) and attempt N+1.
 # Index i corresponds to failure of attempt (i+1).
 RETRY_SCHEDULE_SECONDS: tuple[int, ...] = (

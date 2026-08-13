@@ -38,17 +38,16 @@ Same pattern used in 0003_audit_session_hash.
 """
 from __future__ import annotations
 
-from typing import Sequence, Union
+from collections.abc import Sequence
 
 import sqlalchemy as sa
 from alembic import op
 from sqlalchemy.dialects.postgresql import JSONB, UUID
 
-
 revision: str = "0007_webhook_endpoints"
-down_revision: Union[str, None] = "0006_json_to_jsonb"
-branch_labels: Union[str, Sequence[str], None] = None
-depends_on: Union[str, Sequence[str], None] = None
+down_revision: str | None = "0006_json_to_jsonb"
+branch_labels: str | Sequence[str] | None = None
+depends_on: str | Sequence[str] | None = None
 
 
 _TABLE = "webhook_endpoints"

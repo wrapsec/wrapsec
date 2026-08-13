@@ -18,9 +18,7 @@ import json
 
 import pytest
 
-from services.webhooks.connectors.base import ConnectorRequest
 from services.webhooks.connectors.elastic import CONNECTOR_TYPE, build_request
-
 
 _CFG = {"index": "logs-wrapsec.security-default"}
 

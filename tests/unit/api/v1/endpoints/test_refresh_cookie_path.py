@@ -31,7 +31,6 @@ from api.v1.endpoints.auth import (
     _valid_cookie_path,
 )
 
-
 # ── path validation ─────────────────────────────────────────────────────
 
 @pytest.mark.parametrize("path", [

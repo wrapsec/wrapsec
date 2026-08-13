@@ -2,14 +2,12 @@
 # Copyright (c) 2026 WrapSec. All rights reserved.
 # WrapSec v1.0 | AI Security Gateway - https://wrapsec.com
 
-import pytest
 from engine.scoring.confidence import (
-    detector_confidence,
-    guardrail_confidence,
     compute_confidence,
+    detector_confidence,
     get_confidence_band,
+    guardrail_confidence,
 )
-
 
 # ── detector_confidence ────────────────────────────────────────
 

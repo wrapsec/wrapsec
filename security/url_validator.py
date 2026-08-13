@@ -27,7 +27,6 @@ Deliberately does NOT do DNS resolution:
 import ipaddress
 from urllib.parse import urlparse
 
-
 _PRIVATE_NETS = (
     ipaddress.ip_network("127.0.0.0/8"),
     ipaddress.ip_network("10.0.0.0/8"),

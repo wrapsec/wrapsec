@@ -17,7 +17,7 @@ audit sub-path, aligned with OpenTelemetry GenAI / LangSmith / OpenAI-Assistants
 run semantics. Reuses the audit repository, scope, and item formatter.
 """
 
-from fastapi import APIRouter, Query, Depends, Request
+from fastapi import APIRouter, Depends, Query, Request
 from fastapi.responses import JSONResponse
 from sqlalchemy.ext.asyncio import AsyncSession
 

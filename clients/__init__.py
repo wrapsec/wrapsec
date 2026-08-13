@@ -8,8 +8,8 @@ async def get_llm_settings_from_db() -> dict:
         import os
         if os.getenv("TESTING") == "true":
             return {}
-        from db.session import AsyncSessionFactory
         from db.repositories.settings import SettingsRepository
+        from db.session import AsyncSessionFactory
         from security.encryption import decrypt
         async with AsyncSessionFactory() as session:
             repo    = SettingsRepository(session)

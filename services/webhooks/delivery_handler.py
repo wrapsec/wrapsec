@@ -31,7 +31,6 @@ circuit-breaker side effects.
 """
 
 from __future__ import annotations
-from services.time import utc_now
 
 import json
 import logging
@@ -53,6 +52,7 @@ from db.repositories.webhook_delivery_attempt import (
 from db.repositories.webhook_endpoint import WebhookEndpointRepository
 from security import webhook_signing, webhook_ssrf
 from security.encryption import decrypt
+from services.time import utc_now
 from services.webhooks import retry_schedule
 from services.webhooks.connectors import azure_token, registry
 from services.webhooks.connectors.registry import AuthKind, UnknownConnectorError
@@ -111,7 +111,7 @@ class WebhookDeliveryHandler:
     async def aclose(self) -> None:
         await self._client.aclose()
 
-    async def __call__(self, payload: dict) -> "DeliveryOutcome":
+    async def __call__(self, payload: dict) -> DeliveryOutcome:
         async with self._sf() as db:
             return await self._handle(db, payload)
 
@@ -218,7 +218,7 @@ class WebhookDeliveryHandler:
 
     # --- Queue delivery (attempt row + circuit breaker + outcome) ---
 
-    async def _handle(self, db, payload: dict) -> "DeliveryOutcome":
+    async def _handle(self, db, payload: dict) -> DeliveryOutcome:
         endpoint_id    = UUID(str(payload["endpoint_id"]))
         tenant_id      = UUID(str(payload["tenant_id"]))
         msg_id         = str(payload["msg_id"])

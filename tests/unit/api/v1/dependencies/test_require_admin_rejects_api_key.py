@@ -16,10 +16,14 @@ constructing a mock Request with the state fields those dependencies read.
 """
 
 from types import SimpleNamespace
+
 import pytest
 
 from api.v1.dependencies.auth import (
-    require_admin, require_role, require_jwt, require_any_admin,
+    require_admin,
+    require_any_admin,
+    require_jwt,
+    require_role,
 )
 from errors.exceptions import ForbiddenError
 

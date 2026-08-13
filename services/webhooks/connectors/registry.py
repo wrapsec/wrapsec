@@ -38,9 +38,9 @@ label here means the handler has no magic connector-type strings.
 
 from __future__ import annotations
 
+from collections.abc import Callable
 from dataclasses import dataclass
 from enum import Enum
-from typing import Callable
 
 from services.webhooks.connectors import datadog, elastic, sentinel, splunk
 from services.webhooks.connectors.base import ConnectorRequest

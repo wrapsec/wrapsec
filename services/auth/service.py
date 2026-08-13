@@ -3,15 +3,16 @@
 # WrapSec v1.0 | AI Security Gateway - https://wrapsec.com
 
 import logging
-from cache import keyspace
-from services.time import ensure_utc, utc_now
 from dataclasses import dataclass
 from datetime import datetime, timedelta
 from uuid import UUID
 
-from sqlalchemy.ext.asyncio import AsyncSession, create_async_engine, async_sessionmaker
+from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_async_engine
 from sqlalchemy.pool import NullPool
+
+from cache import keyspace
 from config.settings import get_settings as _get_settings
+from services.time import ensure_utc, utc_now
 
 logger = logging.getLogger("wrapsec.auth")
 
@@ -55,7 +56,8 @@ async def _log_auth_event(
         Unknown user -> both None (user not found, cannot resolve tenant)
     """
     from db.repositories.auth_event import AuthEventRepository
-    from domain.enums import AuthEventAction as _Action, AuthFailureReason as _Reason
+    from domain.enums import AuthEventAction as _Action
+    from domain.enums import AuthFailureReason as _Reason
 
     session = _auth_event_sf()
     try:
@@ -252,7 +254,9 @@ class AuthService:
         from db.repositories.user import UserRepository
         from errors.exceptions import InvalidTokenException, SessionInvalidatedException
         from services.auth.token import (
-            create_access_token, create_refresh_token, hash_refresh_token,
+            create_access_token,
+            create_refresh_token,
+            hash_refresh_token,
         )
 
         _settings  = get_settings()
@@ -416,7 +420,9 @@ class AuthService:
         from db.repositories.user import UserRepository
         from errors.exceptions import AuthenticationError
         from services.auth.password import (
-            hash_password, validate_password_strength, verify_password,
+            hash_password,
+            validate_password_strength,
+            verify_password,
         )
 
         user_repo = UserRepository(db)

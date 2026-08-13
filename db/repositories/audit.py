@@ -5,13 +5,14 @@
 from __future__ import annotations
 
 from datetime import datetime
-from services.time import ensure_utc, utc_now
-from sqlalchemy import select, func, case, cast, text
+
+from sqlalchemy import case, cast, func, select, text
 from sqlalchemy.dialects.postgresql import JSONB
-from sqlalchemy.ext.asyncio import AsyncSession
+
 from db.models import AuditLogModel
 from db.repositories.base import BaseRepository
 from security.audit_chain import compute_record_hash
+from services.time import ensure_utc, utc_now
 
 
 class AuditRepository(BaseRepository):

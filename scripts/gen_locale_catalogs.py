@@ -48,8 +48,8 @@ REPO_ROOT = Path(__file__).resolve().parent.parent
 if str(REPO_ROOT) not in sys.path:
     sys.path.insert(0, str(REPO_ROOT))
 
-from errors.catalog import ERROR_CATALOG, VALIDATION_CATALOG  # noqa: E402
-from services.localization import _validate_meta               # noqa: E402
+from errors.catalog import ERROR_CATALOG, VALIDATION_CATALOG
+from services.localization import _validate_meta
 
 LOCALES_DIR    = REPO_ROOT / "locales"
 META_FILE      = LOCALES_DIR / "_meta.json"

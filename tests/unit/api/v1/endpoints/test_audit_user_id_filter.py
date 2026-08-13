@@ -15,6 +15,7 @@ Coverage:
 """
 
 import uuid
+
 import pytest
 
 from api.v1.endpoints.audit import _parse_uuid_filter
@@ -55,7 +56,6 @@ def test_repo_uses_equality_not_ilike():
     Read the compiled repo predicate to confirm equality, not ILIKE.
     A regression to `.ilike(...)` shows up as an `ILIKE` in the compiled SQL.
     """
-    from db.repositories.audit import AuditRepository
     from db.models import AuditLogModel
 
     # Build the exact predicate the repo would apply for the user_id branch

@@ -18,7 +18,6 @@ import click
 
 from wrapsec import __version__
 
-
 # ── SIGPIPE guard - Unix only ───────────────────────────────────────────────
 # Spec: Section 14.3
 if hasattr(signal, "SIGPIPE"):
@@ -66,14 +65,14 @@ def cli(ctx: click.Context) -> None:
 
 # ── Register all subcommands ────────────────────────────────────────────────
 
-from wrapsec.cli.commands.scan     import scan      # noqa: E402
-from wrapsec.cli.commands.batch    import batch     # noqa: E402
-from wrapsec.cli.commands.audit    import audit     # noqa: E402
-from wrapsec.cli.commands.settings import settings  # noqa: E402
-from wrapsec.cli.commands.keys     import keys      # noqa: E402
-from wrapsec.cli.commands.config   import config    # noqa: E402
-from wrapsec.cli.commands.doctor   import ping, doctor  # noqa: E402
-from wrapsec.cli.commands.chat     import chat          # noqa: E402
+from wrapsec.cli.commands.audit import audit
+from wrapsec.cli.commands.batch import batch
+from wrapsec.cli.commands.chat import chat
+from wrapsec.cli.commands.config import config
+from wrapsec.cli.commands.doctor import doctor, ping
+from wrapsec.cli.commands.keys import keys
+from wrapsec.cli.commands.scan import scan
+from wrapsec.cli.commands.settings import settings
 
 cli.add_command(scan)
 cli.add_command(batch)

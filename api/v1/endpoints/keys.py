@@ -2,24 +2,25 @@
 # Copyright (c) 2026 WrapSec. All rights reserved.
 # WrapSec v1.0 | AI Security Gateway - https://wrapsec.com
 
-import uuid
-from services.time import to_iso_z, utc_now
-import secrets
 import hashlib
+import secrets
+import uuid
 from datetime import timedelta
 from enum import Enum
+
 from fastapi import APIRouter, Depends, Request
 from fastapi.responses import JSONResponse
 from pydantic import BaseModel, Field, field_validator
 from sqlalchemy.ext.asyncio import AsyncSession
+
 from api.v1.dependencies.auth import get_current_principal, require_admin
 from api.v1.dependencies.db import get_db
 from db.repositories.api_key import ApiKeyRepository
 from db.repositories.application import ApplicationRepository
 from db.repositories.department import DepartmentRepository
-from db.repositories.tenant import TenantRepository
 from domain.entities.principal import Principal
 from errors.exceptions import NotFoundError
+from services.time import to_iso_z, utc_now
 
 router = APIRouter()
 

@@ -9,22 +9,26 @@ Flushes rate_limit and auth lockout Redis keys before each auth test
 to prevent cross-test accumulation.
 """
 import os
+
 os.environ["TESTING"] = "true"
 
 import uuid
+
 import pytest
 import pytest_asyncio
-from httpx import AsyncClient, ASGITransport
+from httpx import ASGITransport, AsyncClient
 from sqlalchemy import select, text
 from sqlalchemy.ext.asyncio import (
-    create_async_engine, async_sessionmaker, AsyncSession,
+    AsyncSession,
+    async_sessionmaker,
+    create_async_engine,
 )
 from sqlalchemy.pool import NullPool
 
 from api.main import app
 from api.v1.dependencies.db import get_db
-from db.models import Base, TenantModel
 from config.settings import get_settings
+from db.models import Base, TenantModel
 
 settings = get_settings()
 
@@ -407,12 +411,14 @@ async def auth_setup():
     JWT middleware also uses NullPool in test mode (auth.py _get_db_session).
     Cleans up all DB rows after each test.
     """
-    from db.models import TenantModel, DepartmentModel, UserModel, RefreshTokenModel
+    from unittest.mock import MagicMock
+
+    from sqlalchemy import delete as sa_delete
+
+    from db.models import DepartmentModel, RefreshTokenModel, TenantModel, UserModel
     from db.repositories.user import UserRepository
     from services.auth.password import hash_password, normalize_email
     from services.auth.token import create_access_token
-    from sqlalchemy import delete as sa_delete
-    from unittest.mock import MagicMock
 
     tenant_id     = uuid.uuid4()
     dept_id       = uuid.uuid4()
@@ -522,16 +528,25 @@ async def two_tenant_setup():
     JWT cannot access tenant B's resources via any endpoint. Cleans up all
     seeded rows after each test.
     """
+    from unittest.mock import MagicMock
+
+    from sqlalchemy import delete as sa_delete
+
     from db.models import (
-        TenantModel, DepartmentModel, ApplicationModel, APIKeyModel,
-        UserModel, AuditLogModel, ProxyInteractionModel,
-        ProxyProviderConfigModel, RefreshTokenModel, AdminEventModel,
+        AdminEventModel,
+        APIKeyModel,
+        ApplicationModel,
+        AuditLogModel,
+        DepartmentModel,
+        ProxyInteractionModel,
+        ProxyProviderConfigModel,
+        RefreshTokenModel,
+        TenantModel,
+        UserModel,
     )
     from db.repositories.user import UserRepository
     from services.auth.password import hash_password, normalize_email
     from services.auth.token import create_access_token
-    from sqlalchemy import delete as sa_delete
-    from unittest.mock import MagicMock
 
     def _mock(uid, tid, did, role):
         m = MagicMock()

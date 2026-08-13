@@ -50,7 +50,6 @@ from typing import Any
 
 from services.webhooks.connectors.base import ConnectorRequest
 
-
 CONNECTOR_TYPE = "elastic_ecs"
 
 _DEFAULT_ECS_VERSION = "8.11.0"

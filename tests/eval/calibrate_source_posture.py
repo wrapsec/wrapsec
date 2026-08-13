@@ -33,8 +33,8 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
 
-from tests.eval.schema import load_corpus          # noqa: E402
-from tests.eval.runner import run_corpus            # noqa: E402
+from tests.eval.runner import run_corpus
+from tests.eval.schema import load_corpus
 
 CORPUS_RAG_DIR = Path(__file__).parent / "corpus_rag"
 DELTAS = [0.0, 0.05, 0.10, 0.15, 0.20, 0.30]

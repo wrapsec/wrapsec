@@ -10,18 +10,19 @@ GET /v1/proxy/interactions/:trace_id -- get single interaction detail
 """
 
 import logging
-from services.time import to_iso_z
 import uuid
+
 from fastapi import APIRouter, Depends, Request
 from fastapi.responses import JSONResponse
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from api.v1.dependencies.auth import get_current_principal
 from api.v1.dependencies.db import get_db
-from domain.entities.principal import Principal
-from db.repositories.proxy_interaction import ProxyInteractionRepository
-from db.repositories.api_key import ApiKeyRepository
 from db.models import ProxyInteractionModel
+from db.repositories.api_key import ApiKeyRepository
+from db.repositories.proxy_interaction import ProxyInteractionRepository
+from domain.entities.principal import Principal
+from services.time import to_iso_z
 
 router = APIRouter()
 logger = logging.getLogger("wrapsec.proxy.interactions")

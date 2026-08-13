@@ -14,24 +14,23 @@ Run: pytest sdk/python/tests/test_sdk_unit.py -v
 from __future__ import annotations
 
 import asyncio
-import pytest
 from unittest.mock import AsyncMock, MagicMock, patch
+
+import pytest
 from wrapsec.async_client import AsyncClient
 from wrapsec.client import Client
-from wrapsec.models import ScanResult, AuditLog, AuditStats
+from wrapsec.config.loader import mask_api_key
+from wrapsec.config.schema import WrapSecConfig, validate_config_value
+from wrapsec.core.http import map_response_error, resolve_timeout
+from wrapsec.core.validation import normalize_text, validate_input, warn_if_dense
 from wrapsec.exceptions import (
-    WrapSecError,
     WrapSecAuthError,
+    WrapSecBlockError,
+    WrapSecError,
     WrapSecRateLimitError,
     WrapSecSystemError,
-    WrapSecBlockError,
 )
-from wrapsec.config.schema import validate_config_value, WrapSecConfig
-from wrapsec.config.loader import mask_api_key
-from wrapsec.core.http import resolve_timeout, map_response_error
-from wrapsec.core.validation import normalize_text, validate_input, warn_if_dense
-
-
+from wrapsec.models import AuditLog, ScanResult
 
 # ── Fixtures ────────────────────────────────────────────────────────────────
 
@@ -91,7 +90,6 @@ class TestClientConstructor:
     def test_raises_auth_error_when_no_api_key(self):
         # Construct client with no api_key and no env var
         # Patch load_config to return a config with no api_key
-        from wrapsec.config.schema import WrapSecConfig
         empty_config = WrapSecConfig(api_key=None, base_url="http://localhost:8000", timeout=30)
         with patch("wrapsec.client.load_config", return_value=empty_config):
             client = Client(base_url="http://localhost:8000")
@@ -1027,8 +1025,8 @@ class TestSessionKwargsAsync:
 # ── CLI session/run flag forwarding ──────────────────────────────────────────
 
 from click.testing import CliRunner
-from wrapsec.cli.commands import scan  as scan_cmd
 from wrapsec.cli.commands import batch as batch_cmd
+from wrapsec.cli.commands import scan as scan_cmd
 
 
 def _cfg_stub(api_key: str = "wsk_live_testkey1234567890123456789012"):

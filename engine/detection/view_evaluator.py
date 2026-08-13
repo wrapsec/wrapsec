@@ -19,7 +19,7 @@ supplied detector already produced.
 
 from __future__ import annotations
 
-from typing import Awaitable, Callable
+from collections.abc import Awaitable, Callable
 
 from engine.detection.base import DetectionResult
 from engine.normalization import NormalizedInput

@@ -4,9 +4,10 @@
 
 import logging
 from dataclasses import dataclass, field
-from engine.detection.base import DetectionResult
+
 from domain.enums import ThreatCategory
 from domain.value_objects.risk_score import RiskScore
+from engine.detection.base import DetectionResult
 
 logger = logging.getLogger("wrapsec.engine")
 

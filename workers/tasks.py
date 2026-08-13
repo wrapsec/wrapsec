@@ -25,8 +25,8 @@ Design decisions:
 """
 
 import logging
+
 from services.time import utc_now
-from datetime import datetime
 
 logger = logging.getLogger("wrapsec.retention_worker")
 
@@ -147,9 +147,9 @@ async def _resolve_audit_retention() -> int:
     Falls back to config if DB is unavailable.
     """
     try:
-        from db.session import AsyncSessionFactory
-        from db.repositories.settings import SettingsRepository
         from config.settings import get_settings
+        from db.repositories.settings import SettingsRepository
+        from db.session import AsyncSessionFactory
         cfg = get_settings()
 
         async with AsyncSessionFactory() as session:
@@ -177,8 +177,9 @@ async def _cleanup_audit_logs() -> int:
     Delete audit_logs rows older than the configured retention period.
     Returns count of rows deleted.
     """
-    from db.session import AsyncSessionFactory
     from sqlalchemy import text
+
+    from db.session import AsyncSessionFactory
 
     retention_days = await _resolve_audit_retention()
     if retention_days < 1:
@@ -217,9 +218,10 @@ async def _cleanup_proxy_interactions() -> int:
     Metadata (decisions, scores, threats, latency, execution_status) is
     kept permanently for audit and analytics - only raw text is purged.
     """
-    from db.session import AsyncSessionFactory
-    from config.settings import get_settings
     from sqlalchemy import text
+
+    from config.settings import get_settings
+    from db.session import AsyncSessionFactory
 
     cfg            = get_settings()
     retention_days = cfg.data_retention_days_proxy
@@ -274,9 +276,10 @@ async def _cleanup_email_outbox() -> int:
     rows alike. Retention is the admin-managed email setting (DB), falling back
     to the env default -- the same pattern as audit retention.
     """
+    from sqlalchemy import text
+
     from db.session import AsyncSessionFactory
     from services.email.settings import get_email_settings
-    from sqlalchemy import text
 
     async with AsyncSessionFactory() as session:
         retention_days = (await get_email_settings(session)).retention_days
@@ -330,8 +333,8 @@ async def _cleanup_refresh_tokens() -> int:
     Combined: no token older than 90 days survives.
     Returns total deleted rows from both clauses combined.
     """
-    from db.session import AsyncSessionFactory
     from db.repositories.refresh_token import RefreshTokenRepository
+    from db.session import AsyncSessionFactory
 
     async with AsyncSessionFactory() as session:
         repo    = RefreshTokenRepository(session)

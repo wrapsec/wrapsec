@@ -31,12 +31,12 @@ import asyncio
 import logging
 from enum import Enum
 
+from domain.enums import ThreatCategory
 from engine.detection.base import DetectionResult
 from engine.detection.ml_detector import MLDetector
-from engine.detection.transformer_detector import TransformerDetector
 from engine.detection.preprocessors import BasePreprocessor
 from engine.detection.profiles import DetectorProfile
-from domain.enums import ThreatCategory
+from engine.detection.transformer_detector import TransformerDetector
 
 logger = logging.getLogger("wrapsec.engine.pipeline")
 

@@ -4,10 +4,10 @@
 
 import logging
 import uuid
-from db.repositories.tenant import TenantRepository
-from db.repositories.department import DepartmentRepository
-from db.repositories.application import ApplicationRepository
+
 from config.settings import get_settings
+from db.repositories.application import ApplicationRepository
+from db.repositories.department import DepartmentRepository
 from security.encryption import decrypt
 
 logger = logging.getLogger("wrapsec.policy")

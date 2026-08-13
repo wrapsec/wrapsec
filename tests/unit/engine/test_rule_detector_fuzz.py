@@ -28,10 +28,10 @@ RuleDetector.detect. The invariants we hold across every input:
 import time
 
 import pytest
-from hypothesis import given, settings, HealthCheck, strategies as st
+from hypothesis import HealthCheck, given, settings
+from hypothesis import strategies as st
 
 from engine.detection.rule_detector import RuleDetector
-
 
 _TIME_BUDGET_SECONDS = 2.0
 

@@ -18,10 +18,10 @@ import sys
 
 import click
 
+from wrapsec.cli._output import print_error, print_json
 from wrapsec.client import Client
 from wrapsec.config.loader import load_config
 from wrapsec.exceptions import WrapSecError
-from wrapsec.cli._output import print_error, print_json
 
 
 def _get_client() -> Client:

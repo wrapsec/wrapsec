@@ -2,15 +2,13 @@
 # Copyright (c) 2026 WrapSec. All rights reserved.
 # WrapSec v1.0 | AI Security Gateway - https://wrapsec.com
 
-from datetime import datetime
-from services.time import utc_now
 from uuid import UUID
 
-from sqlalchemy import select, func, update
-from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy import func, select, update
 
 from db.models import DepartmentModel, UserModel
 from db.repositories.base import BaseRepository
+from services.time import utc_now
 
 
 class UserRepository(BaseRepository):

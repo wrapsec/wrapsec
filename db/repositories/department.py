@@ -3,7 +3,7 @@
 # WrapSec v1.0 | AI Security Gateway - https://wrapsec.com
 
 from sqlalchemy import select
-from sqlalchemy.ext.asyncio import AsyncSession
+
 from db.models import DepartmentModel
 from db.repositories.base import BaseRepository
 

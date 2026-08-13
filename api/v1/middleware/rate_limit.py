@@ -4,10 +4,11 @@
 
 import hashlib
 import json
-import time
+
 from fastapi import Request
 from starlette.middleware.base import BaseHTTPMiddleware
 from starlette.responses import Response
+
 from config.settings import get_settings
 from errors.catalog import ErrorCode
 from errors.response import error_response
@@ -46,8 +47,8 @@ async def _get_live_rate_limit() -> int:
             return int(json.loads(cached).get("per_minute", _settings.rate_limit_per_minute))
 
         # Cache miss - read from DB
-        from db.session import AsyncSessionFactory
         from db.repositories.settings import SettingsRepository
+        from db.session import AsyncSessionFactory
         async with AsyncSessionFactory() as session:
             repo   = SettingsRepository(session)
             stored = await repo.get("rate_limit")

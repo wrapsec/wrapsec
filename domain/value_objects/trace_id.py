@@ -47,11 +47,11 @@ class TraceId:
             raise ValueError(f"Invalid trace_id format: {value}")
         suffix = value[len(prefix):]
         if len(suffix) < cls._MIN_SUFFIX_LEN:
-            raise ValueError(f"Invalid trace_id format: suffix too short")
+            raise ValueError("Invalid trace_id format: suffix too short")
         if len(value) > cls._MAX_LEN:
-            raise ValueError(f"Invalid trace_id format: value too long")
+            raise ValueError("Invalid trace_id format: value too long")
         if not all(c in "0123456789abcdefghijklmnopqrstuvwxyz-" for c in suffix):
-            raise ValueError(f"Invalid trace_id format: invalid characters in suffix")
+            raise ValueError("Invalid trace_id format: invalid characters in suffix")
         return cls(value)
 
     def __str__(self) -> str:

@@ -10,12 +10,13 @@ Run:
     pytest tests/unit/test_proxy_settings.py -v
 """
 
-import pytest
 from unittest.mock import AsyncMock, MagicMock, patch
-from httpx import AsyncClient, ASGITransport
 
-from security.encryption import encrypt, decrypt, mask
+import pytest
+from httpx import ASGITransport, AsyncClient
+
 from config.settings import get_settings
+from security.encryption import decrypt, encrypt, mask
 
 settings = get_settings()
 
@@ -327,7 +328,6 @@ class TestProxySettingsEndpoints:
     @pytest.mark.asyncio
     async def test_proxy_health_reachable(self, mock_config):
         """Health endpoint returns reachable=true when provider responds 200."""
-        import httpx
 
         async with AsyncClient(
             transport=ASGITransport(app=self.app), base_url="http://test"

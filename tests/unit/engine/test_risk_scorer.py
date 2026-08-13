@@ -23,11 +23,10 @@ If any of these break, the gateway makes wrong decisions in silence.
 
 import pytest
 
-from engine.detection.base import DetectionResult
-from engine.scoring.risk_scorer import RiskScorer, ScoringResult
 from domain.enums import ThreatCategory
 from domain.value_objects.risk_score import RiskScore
-
+from engine.detection.base import DetectionResult
+from engine.scoring.risk_scorer import RiskScorer, ScoringResult
 
 # ── helpers ──────────────────────────────────────────────────────────────────
 

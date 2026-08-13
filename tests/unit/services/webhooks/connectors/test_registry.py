@@ -26,7 +26,6 @@ from services.webhooks.connectors.registry import (
     missing_config,
 )
 
-
 # --- Generic (NULL) path ----------------------------------------------
 
 def test_null_connector_type_is_generic_webhook():

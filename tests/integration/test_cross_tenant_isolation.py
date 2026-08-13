@@ -16,8 +16,8 @@ so probing for existence does not leak the fact that another tenant owns
 the ID.
 """
 import uuid
-import pytest
 
+import pytest
 
 # ── API Keys ─────────────────────────────────────────────────────────────────
 

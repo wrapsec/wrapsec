@@ -3,7 +3,6 @@
 # WrapSec v1.0 | AI Security Gateway - https://wrapsec.com
 
 import pytest
-import pytest_asyncio
 
 
 @pytest.mark.asyncio

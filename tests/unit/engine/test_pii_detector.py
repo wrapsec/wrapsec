@@ -3,8 +3,9 @@
 # WrapSec v1.0 | AI Security Gateway - https://wrapsec.com
 
 import pytest
-from engine.guardrails.pii.detector import PIIDetector
+
 from domain.enums import ThreatCategory
+from engine.guardrails.pii.detector import PIIDetector
 
 
 @pytest.fixture

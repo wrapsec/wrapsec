@@ -3,8 +3,6 @@
 # WrapSec v1.0 | AI Security Gateway - https://wrapsec.com
 
 import logging
-from cache import keyspace
-from services.time import to_iso_z, utc_now
 
 from fastapi import APIRouter, Depends, Request, Response
 from fastapi.responses import JSONResponse
@@ -14,6 +12,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from api.v1.dependencies.auth import require_jwt
 from api.v1.dependencies.db import get_db
 from api.v1.middleware.auth import get_client_ip
+from cache import keyspace
 from domain.entities.principal import Principal
 from errors.catalog import ErrorCode
 from errors.exceptions import (
@@ -24,8 +23,9 @@ from errors.exceptions import (
     SessionInvalidatedException,
 )
 from errors.response import error_response
-from services.localization import resolve_locale, validate_locale_input
 from services.auth.service import AuthService
+from services.localization import resolve_locale, validate_locale_input
+from services.time import to_iso_z, utc_now
 
 logger = logging.getLogger("wrapsec.auth")
 router = APIRouter()
@@ -48,6 +48,7 @@ REFRESH_COOKIE_NAME = "refresh_token"
 # tight-scoping preserved.
 
 import re
+
 _REFRESH_COOKIE_PATH_RE = re.compile(r"^/[a-zA-Z0-9/_-]*$")
 _MAX_COOKIE_PATH_LEN    = 128
 
@@ -176,6 +177,7 @@ async def login(
         429 ACCOUNT_LOCKED      - too many failed attempts
     """
     import os
+
     from config.settings import get_settings
     _settings = get_settings()
 
@@ -357,8 +359,8 @@ async def _blacklist_current_access_token(request: Request) -> None:
     token's remaining lifetime. Any failure is swallowed - logout must
     always succeed even if blacklisting fails.
     """
-    from services.auth.token import decode_access_token
     from services.auth.jti_blacklist import blacklist_jti
+    from services.auth.token import decode_access_token
 
     auth_header = request.headers.get("authorization", "")
     if not auth_header.lower().startswith("bearer "):
@@ -431,6 +433,7 @@ async def me(
     Auth: JWT Bearer required.
     """
     from uuid import UUID
+
     from db.repositories.user import UserRepository
 
     # principal.id is "user:{uuid}" - strip prefix
@@ -464,6 +467,7 @@ async def update_me(
     Auth: JWT Bearer required.
     """
     from uuid import UUID
+
     from db.repositories.user import UserRepository
 
     raw_id    = principal.id.replace("user:", "", 1)

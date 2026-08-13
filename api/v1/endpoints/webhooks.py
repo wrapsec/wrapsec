@@ -46,12 +46,10 @@ Deliberately out of scope for v1.3.0:
 """
 
 from __future__ import annotations
-from services.time import to_iso_z, utc_now
 
 import logging
 import secrets as pysecrets
 import uuid
-from datetime import datetime
 
 from fastapi import APIRouter, Depends, Request
 from fastapi.responses import JSONResponse
@@ -69,6 +67,7 @@ from db.repositories.webhook_endpoint import WebhookEndpointRepository
 from domain.entities.principal import Principal
 from domain.enums import AdminEventAction
 from errors.exceptions import NotFoundError, ValidationError
+from services.time import to_iso_z, utc_now
 from services.webhooks.emitter import EVENT_BLOCKED, EVENT_SANITIZED
 
 # The only event types WrapSec emits today (BLOCK / SANITIZE gateway decisions).
@@ -85,9 +84,9 @@ def _validate_event_types(v: list[str] | None) -> list[str] | None:
             f"allowed: {', '.join(sorted(_ALLOWED_EVENT_TYPES))}"
         )
     return v
-from security.encryption import encrypt, mask
 from cache.redis_client import get_redis
 from security import webhook_ssrf
+from security.encryption import encrypt, mask
 from security.url_validator import validate_llm_base_url
 from services.webhooks.connectors import registry
 from services.webhooks.connectors.form_schema import connector_forms
@@ -148,7 +147,7 @@ class WebhookCreateSchema(BaseModel):
             ) from None
 
     @model_validator(mode="after")
-    def _validate_connector(self) -> "WebhookCreateSchema":
+    def _validate_connector(self) -> WebhookCreateSchema:
         if self.connector_type is None:
             # Generic webhook: the signing secret is generated server-side.
             if self.secret is not None:

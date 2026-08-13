@@ -3,14 +3,26 @@
 # WrapSec v1.0 | AI Security Gateway - https://wrapsec.com
 
 from fastapi import APIRouter
+
 from api.v1.endpoints import (
-    health, ai, audit, agent_runs, settings, keys,
-    departments, applications, tenant,
-    proxy_settings, proxy,
-    auth, setup, webhooks, capabilities,
+    agent_runs,
+    ai,
+    applications,
+    audit,
+    auth,
+    capabilities,
+    departments,
+    health,
+    keys,
+    proxy,
+    proxy_settings,
+    settings,
+    setup,
+    tenant,
+    webhooks,
 )
-from api.v1.endpoints.admin import users
 from api.v1.endpoints.admin import email as admin_email
+from api.v1.endpoints.admin import users
 
 router = APIRouter()
 

@@ -10,8 +10,9 @@ mutate the text seen by the detectors. A failing preprocessor must not
 deny a request; detection continues on the last successful text.
 """
 
-import pytest
 from unittest.mock import patch
+
+import pytest
 
 from engine.detection.base import DetectionResult
 from engine.detection.pipeline import DetectionPipeline

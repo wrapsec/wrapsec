@@ -3,7 +3,6 @@
 # WrapSec v1.0 | AI Security Gateway - https://wrapsec.com
 
 from pydantic import BaseModel
-from domain.enums import DecisionType, ThreatCategory, DetectionMode, ExecutionMode
 
 
 class ProcessingSchema(BaseModel):

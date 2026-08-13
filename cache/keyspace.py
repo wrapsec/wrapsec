@@ -24,7 +24,6 @@ addresses.
 
 from __future__ import annotations
 
-
 # --- auth --------------------------------------------------------------
 
 def auth_user(user_id: object) -> str:

@@ -32,10 +32,10 @@ from engine.normalization.types import (
 )
 
 __all__ = [
-    "normalize",
     "PIPELINE_VERSION",
-    "NormalizedInput",
-    "DetectionView",
     "AppliedStage",
+    "DetectionView",
+    "NormalizedInput",
     "StageOutput",
+    "normalize",
 ]

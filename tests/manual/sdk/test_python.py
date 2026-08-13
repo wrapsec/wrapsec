@@ -22,9 +22,8 @@ import sys
 # Allow running from repo root without installation
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), "../../../sdk/python"))
 
-import wrapsec
-from wrapsec import Client, AsyncClient
-from wrapsec.exceptions import WrapSecError, WrapSecAuthError
+from wrapsec import AsyncClient, Client
+from wrapsec.exceptions import WrapSecAuthError, WrapSecError
 
 # ── Config ────────────────────────────────────────────────────────────────────
 
@@ -360,7 +359,7 @@ def main() -> None:
     if not API_KEY:
         print(f"{YELLOW}WARNING: WRAPSEC_API_KEY not set. Most tests will be skipped.{NC}")
         print("Set it with: export WRAPSEC_API_KEY=wsk_live_...")
-        print(f"Set base_url with: export WRAPSEC_URL=http://localhost:8000")
+        print("Set base_url with: export WRAPSEC_URL=http://localhost:8000")
         print()
 
     test_input_validation()

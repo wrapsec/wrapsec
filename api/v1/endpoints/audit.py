@@ -6,20 +6,27 @@ import csv
 import hashlib
 import io
 import uuid
-from services.time import date_range_bounds, to_iso_z, utc_now
 from typing import Literal
-from fastapi import APIRouter, Query, Depends, Request
-from api.v1.dependencies.auth import get_current_principal, endpoint_rate_limit
-from api.v1.dependencies.scope import get_audit_scope
-from domain.entities.principal import Principal
-from domain.value_objects.severity import compute_severity
+
+from fastapi import APIRouter, Depends, Query, Request
 from fastapi.responses import JSONResponse
-from sqlalchemy import func, case, Integer, select
+from sqlalchemy import case, func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 from starlette.responses import StreamingResponse
+
+from api.v1.dependencies.auth import endpoint_rate_limit, get_current_principal
 from api.v1.dependencies.db import get_db
+from api.v1.dependencies.scope import get_audit_scope
+from db.models import (
+    ApplicationModel,
+    AuditLogModel,
+    DepartmentModel,
+    ProxyInteractionModel,
+)
 from db.repositories.audit import AuditRepository
-from db.models import AuditLogModel, DepartmentModel, ApplicationModel, ProxyInteractionModel
+from domain.entities.principal import Principal
+from domain.value_objects.severity import compute_severity
+from services.time import date_range_bounds, to_iso_z, utc_now
 
 router = APIRouter()
 
@@ -113,7 +120,7 @@ async def _enrich(
     for a paginated result set. Three PK-indexed lookups on small ID sets.
     IDs come from already tenant-scoped audit rows - no cross-tenant leakage.
     """
-    from sqlalchemy import cast, String
+    from sqlalchemy import String, cast
 
     dept_ids  = list({i.dept_id  for i in items if i.dept_id})
     app_ids   = list({i.app_id   for i in items if i.app_id})

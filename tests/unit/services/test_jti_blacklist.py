@@ -22,13 +22,11 @@ These tests lock in three invariants:
      jti reads back as True; unrelated jtis stay False.
 """
 
-from unittest.mock import MagicMock
 
 import pytest
 
-from services.auth.token import create_access_token, decode_access_token
 from services.auth import jti_blacklist
-
+from services.auth.token import create_access_token, decode_access_token
 
 # ── create_access_token embeds jti ────────────────────────────────────────────
 
@@ -52,8 +50,8 @@ def test_create_access_token_embeds_unique_jti():
     payload_a = decode_access_token(token_a)
     payload_b = decode_access_token(token_b)
 
-    assert "jti" in payload_a and payload_a["jti"]
-    assert "jti" in payload_b and payload_b["jti"]
+    assert payload_a.get("jti")
+    assert payload_b.get("jti")
     # jti must be per-token, not per-user - otherwise blacklisting one
     # revokes every token the user has ever received.
     assert payload_a["jti"] != payload_b["jti"]
@@ -65,8 +63,10 @@ def test_decode_rejects_token_without_jti():
     payload) must not authenticate. If jti were optional, the blacklist
     check would silently pass for every legacy token.
     """
-    import jwt as _jwt
     from datetime import datetime, timedelta, timezone
+
+    import jwt as _jwt
+
     from config.settings import get_settings
     from services.auth.token import ACCESS_TOKEN_AUDIENCE
 

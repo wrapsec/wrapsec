@@ -10,7 +10,7 @@ header without losing the rest.
 """
 
 import pytest
-from httpx import AsyncClient, ASGITransport
+from httpx import ASGITransport, AsyncClient
 from starlette.applications import Starlette
 from starlette.exceptions import HTTPException
 from starlette.middleware import Middleware
@@ -18,8 +18,8 @@ from starlette.responses import JSONResponse
 from starlette.routing import Route
 
 from api.v1.middleware.security_headers import (
-    SecurityHeadersMiddleware,
     _SECURITY_HEADERS,
+    SecurityHeadersMiddleware,
 )
 
 

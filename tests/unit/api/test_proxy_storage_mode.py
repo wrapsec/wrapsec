@@ -14,7 +14,6 @@ Before v1.0.1 this setting was a no-op and every proxy call persisted raw
 input/output. See pentest_round3 C2.
 """
 
-import pytest
 from unittest.mock import AsyncMock, MagicMock, patch
 
 from api.v1.endpoints.proxy import _log_interaction

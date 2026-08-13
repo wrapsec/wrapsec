@@ -62,9 +62,9 @@ def ping() -> None:
         sys.exit(0)
     else:
         click.secho(
-            f" Cannot reach WrapSec API.\n"
-            f"   Check your network connection and base_url.\n"
-            f"   Run 'wrapsec doctor' for detailed diagnostics.",
+            " Cannot reach WrapSec API.\n"
+            "   Check your network connection and base_url.\n"
+            "   Run 'wrapsec doctor' for detailed diagnostics.",
             fg="red",
             err=True,
         )
@@ -212,7 +212,7 @@ def doctor() -> None:
             err=True,
         )
     else:
-        click.secho(f"  + compatible", fg="green")
+        click.secho("  + compatible", fg="green")
 
     # ── Final summary ───────────────────────────────────────────────────────
     _print_final(all_ok)

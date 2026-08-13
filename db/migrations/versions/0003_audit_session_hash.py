@@ -30,16 +30,15 @@ the hash chain is theatre.
 """
 from __future__ import annotations
 
-from typing import Sequence, Union
+from collections.abc import Sequence
 
 import sqlalchemy as sa
 from alembic import op
 
-
 revision: str = "0003_audit_session_hash"
-down_revision: Union[str, None] = "0002_envelope_reencrypt"
-branch_labels: Union[str, Sequence[str], None] = None
-depends_on: Union[str, Sequence[str], None] = None
+down_revision: str | None = "0002_envelope_reencrypt"
+branch_labels: str | Sequence[str] | None = None
+depends_on: str | Sequence[str] | None = None
 
 
 _NEW_COLUMNS = (

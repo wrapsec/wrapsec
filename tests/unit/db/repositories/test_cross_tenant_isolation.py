@@ -21,21 +21,25 @@ Postgres required. This keeps the unit tier hermetic (see H10).
 """
 
 import uuid
-from datetime import datetime
 
 import pytest
 from sqlalchemy import select
 
 from db.models import (
-    TenantModel, DepartmentModel, ApplicationModel, APIKeyModel,
-    UserModel, AuditLogModel, ProxyInteractionModel, ProxyProviderConfigModel,
+    APIKeyModel,
+    ApplicationModel,
+    AuditLogModel,
+    DepartmentModel,
+    ProxyInteractionModel,
+    ProxyProviderConfigModel,
+    TenantModel,
+    UserModel,
 )
-from db.repositories.user           import UserRepository
-from db.repositories.application    import ApplicationRepository
-from db.repositories.api_key        import ApiKeyRepository
-from db.repositories.audit          import AuditRepository
+from db.repositories.api_key import ApiKeyRepository
+from db.repositories.application import ApplicationRepository
+from db.repositories.audit import AuditRepository
 from db.repositories.proxy_interaction import ProxyInteractionRepository
-
+from db.repositories.user import UserRepository
 
 # ── Seed helpers ──────────────────────────────────────────────────────────────
 

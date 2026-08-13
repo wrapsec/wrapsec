@@ -28,8 +28,7 @@ import base64
 
 import pytest
 
-from security.encryption import encrypt, decrypt, mask
-
+from security.encryption import decrypt, encrypt, mask
 
 SECRET = "a" * 32   # matches SECRET_KEY min length in production settings
 
@@ -236,6 +235,7 @@ def _make_v1_ciphertext(plaintext: str, secret_key: str) -> str:
     """
     import hashlib
     import os
+
     from cryptography.hazmat.primitives.ciphers.aead import AESGCM
     key = hashlib.pbkdf2_hmac(
         "sha256",

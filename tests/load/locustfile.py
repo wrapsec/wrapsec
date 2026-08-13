@@ -25,10 +25,8 @@ Weight split: 70% full scan, 30% proxy (proxy is slower due to LLM roundtrip)
 """
 
 import random
-import time
-from locust import HttpUser, task, between, events, constant_throughput
-from locust.runners import MasterRunner, WorkerRunner
 
+from locust import HttpUser, between, events, task
 
 # ── Auth ──────────────────────────────────────────────────────────────────────
 

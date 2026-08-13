@@ -26,8 +26,6 @@ from typing import Any
 
 import requests
 
-from wrapsec.exceptions import WrapSecError
-
 from wrapsec.config.loader import load_config
 from wrapsec.config.schema import WrapSecConfig
 from wrapsec.core.http import (
@@ -40,14 +38,14 @@ from wrapsec.core.http import (
 )
 from wrapsec.core.retry import with_retry
 from wrapsec.core.validation import (
-    normalize_text,
     normalize_batch_items,
+    normalize_text,
     validate_input,
+    validate_input_source,
     validate_session_id,
     validate_turn_index,
-    validate_input_source,
 )
-from wrapsec.exceptions import WrapSecAuthError, WrapSecSystemError
+from wrapsec.exceptions import WrapSecAuthError, WrapSecError, WrapSecSystemError
 from wrapsec.models import AuditLog, AuditStats, BatchScanResult, ScanResult
 
 logger = logging.getLogger("wrapsec.client")

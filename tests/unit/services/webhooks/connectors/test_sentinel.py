@@ -19,7 +19,6 @@ import pytest
 from services.webhooks.connectors.base import ConnectorRequest
 from services.webhooks.connectors.sentinel import CONNECTOR_TYPE, build_request
 
-
 _CFG = {"dcr_immutable_id": "dcr-0a0a", "stream_name": "Custom-WrapSec_CL"}
 
 

@@ -56,7 +56,6 @@ from typing import Any
 from redis.asyncio import Redis
 from redis.exceptions import ResponseError
 
-
 # Redis keys. Constants (not settings) because rename would be a
 # migration event; every deployment must agree.
 STREAM_MAIN    = "wrapsec:webhooks:main"

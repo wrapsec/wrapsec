@@ -20,13 +20,13 @@ reachable DB skip cleanly instead of failing.
 """
 
 import uuid
-import pytest
-import pytest_asyncio
 from datetime import datetime, timedelta, timezone
 from urllib.parse import quote
 
-from db.models import AuditLogModel
+import pytest
+import pytest_asyncio
 
+from db.models import AuditLogModel
 
 pytestmark = pytest.mark.pg
 

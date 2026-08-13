@@ -25,9 +25,9 @@ from pathlib import Path
 # directory on sys.path, not the repo root) in addition to `-m tests.eval...`.
 sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
 
-from tests.eval.metrics import compute       # noqa: E402
-from tests.eval.report import format_report   # noqa: E402
-from tests.eval.runner import run_corpus      # noqa: E402
+from tests.eval.metrics import compute
+from tests.eval.report import format_report
+from tests.eval.runner import run_corpus
 
 
 def main() -> None:

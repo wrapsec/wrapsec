@@ -4,9 +4,10 @@
 
 import logging
 from dataclasses import dataclass, field
+
+from config.settings import get_settings
 from engine.guardrails.pii.detector import PIIDetector
 from engine.guardrails.pii.redactor import PIIRedactor
-from config.settings import get_settings
 
 logger = logging.getLogger("wrapsec.engine")
 

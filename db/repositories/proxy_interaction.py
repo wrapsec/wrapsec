@@ -3,8 +3,9 @@
 # WrapSec v1.0 | AI Security Gateway - https://wrapsec.com
 
 import uuid as _uuid
-from sqlalchemy import select, func, desc, asc
-from sqlalchemy.ext.asyncio import AsyncSession
+
+from sqlalchemy import desc, func, select
+
 from db.models import APIKeyModel, ProxyInteractionModel
 from db.repositories.base import BaseRepository
 

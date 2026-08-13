@@ -2,8 +2,11 @@
 # Copyright (c) 2026 WrapSec. All rights reserved.
 # WrapSec v1.0 | AI Security Gateway - https://wrapsec.com
 
-import pytest
-from services.policy_resolver import deep_merge, system_defaults, determine_policy_source
+from services.policy_resolver import (
+    deep_merge,
+    determine_policy_source,
+    system_defaults,
+)
 
 
 def test_deep_merge_null_child_inherits_parent():

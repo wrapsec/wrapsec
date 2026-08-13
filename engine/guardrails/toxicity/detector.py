@@ -31,8 +31,8 @@ Categories covered by the training data:
   - Implicit toxicity (ToxiGen)
 """
 
-from engine.detection.base import DetectionResult
 from domain.enums import ThreatCategory
+from engine.detection.base import DetectionResult
 
 
 class ToxicityDetector:

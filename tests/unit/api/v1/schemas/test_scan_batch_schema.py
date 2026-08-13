@@ -12,8 +12,8 @@ per-item provenance default, and the plain-string coercion of input_source.
 import pytest
 from pydantic import ValidationError
 
-from config.settings import get_settings
 from api.v1.schemas.request import ScanBatchItem, ScanBatchSchema
+from config.settings import get_settings
 
 
 def test_accepts_mixed_items():

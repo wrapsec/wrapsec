@@ -4,10 +4,11 @@
 
 import logging
 from dataclasses import dataclass
+
+from engine.detection.base import DetectionResult
 from engine.guardrails.pii.detector import PIIDetector
 from engine.guardrails.pii.redactor import PIIRedactor
 from engine.guardrails.toxicity.detector import ToxicityDetector
-from engine.detection.base import DetectionResult
 
 logger = logging.getLogger("wrapsec.engine")
 

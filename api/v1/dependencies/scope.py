@@ -3,7 +3,9 @@
 # WrapSec v1.0 | AI Security Gateway - https://wrapsec.com
 
 from __future__ import annotations
+
 from typing import TYPE_CHECKING
+
 from fastapi import Request
 
 if TYPE_CHECKING:
@@ -49,10 +51,10 @@ def get_audit_scope(request: Request) -> dict:
 
 
 async def get_scoped_audit_record(
-    repo:     "AuditRepository",
+    repo:     AuditRepository,
     trace_id: str,
     request:  Request,
-) -> "AuditLogModel | None":
+) -> AuditLogModel | None:
     """
     Fetches a single audit record by trace_id, enforcing the principal's scope.
 

@@ -124,7 +124,7 @@ async def _process_one(
         except TransientEmailError as exc:
             await _retry_or_fail(session_factory, row.id, attempt, str(exc), max_attempts)
             return
-        except Exception as exc:  # noqa: BLE001 - unknown error: bounded retry, never drop
+        except Exception as exc:
             logger.exception("email send raised unexpectedly id=%s", row.id)
             await _retry_or_fail(session_factory, row.id, attempt, f"unexpected: {exc}", max_attempts)
             return
@@ -211,7 +211,7 @@ async def run(
         while not stop_event.is_set():
             try:
                 claimed = await _claim(session_factory, batch)
-            except Exception:  # noqa: BLE001 - never let a claim error kill the loop
+            except Exception:
                 logger.exception("email claim failed, backing off 5s")
                 await _sleep_or_stop(stop_event, 5)
                 continue

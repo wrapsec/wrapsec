@@ -3,10 +3,12 @@
 # WrapSec v1.0 | AI Security Gateway - https://wrapsec.com
 
 from collections.abc import AsyncGenerator
-from sqlalchemy.ext.asyncio import AsyncSession
-from db.session import AsyncSessionFactory
-from cache.redis_client import get_redis
+
 from redis.asyncio import Redis
+from sqlalchemy.ext.asyncio import AsyncSession
+
+from cache.redis_client import get_redis
+from db.session import AsyncSessionFactory
 
 
 async def get_db() -> AsyncGenerator[AsyncSession, None]:

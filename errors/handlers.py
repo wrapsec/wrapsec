@@ -28,14 +28,14 @@ import logging
 from typing import Any
 
 from fastapi import Request
-from fastapi.responses import JSONResponse
 from fastapi.exceptions import RequestValidationError
+from fastapi.responses import JSONResponse
 
 from errors.catalog import (
+    PYDANTIC_TYPE_TO_VALIDATION,
+    VALIDATION_CATALOG,
     ErrorCode,
     ValidationCode,
-    VALIDATION_CATALOG,
-    PYDANTIC_TYPE_TO_VALIDATION,
 )
 from errors.exceptions import WrapSecError
 from errors.response import error_response

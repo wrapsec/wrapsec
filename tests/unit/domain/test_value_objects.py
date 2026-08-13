@@ -3,9 +3,10 @@
 # WrapSec v1.0 | AI Security Gateway - https://wrapsec.com
 
 import pytest
-from engine.scoring.risk_scorer import RiskScorer
-from engine.detection.base import DetectionResult
+
 from domain.enums import ThreatCategory
+from engine.detection.base import DetectionResult
+from engine.scoring.risk_scorer import RiskScorer
 
 
 @pytest.fixture

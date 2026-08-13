@@ -22,10 +22,11 @@ Requirements:
 """
 
 from __future__ import annotations
+
+import statistics
 import subprocess
 import sys
 import time
-import statistics
 from datetime import datetime
 
 try:
@@ -139,7 +140,7 @@ def pg_long_queries() -> int:
 # ── Main monitor loop ─────────────────────────────────────────────────────────
 
 def main():
-    print(f"\nWrapSec System Monitor")
+    print("\nWrapSec System Monitor")
     print(f"Sampling every {SAMPLE_INTERVAL}s - press Ctrl+C to stop\n")
 
     # History for summary
@@ -238,7 +239,7 @@ def main():
     print(f"{'='*60}")
 
     if api_cpu:
-        print(f"\n  API Process:")
+        print("\n  API Process:")
         print(f"    CPU%:   avg={statistics.mean(api_cpu):.1f}%  "
               f"max={max(api_cpu):.1f}%  "
               f"p95={sorted(api_cpu)[int(len(api_cpu)*0.95)]:.1f}%")
@@ -252,28 +253,28 @@ def main():
             print(f"     Memory stable (grew {mem_growth:.0f}MB)")
 
     if sys_cpu:
-        print(f"\n  System CPU:")
+        print("\n  System CPU:")
         print(f"    avg={statistics.mean(sys_cpu):.1f}%  "
               f"max={max(sys_cpu):.1f}%  "
               f"p95={sorted(sys_cpu)[int(len(sys_cpu)*0.95)]:.1f}%")
 
     if pg_conns:
-        print(f"\n  PostgreSQL connections:")
+        print("\n  PostgreSQL connections:")
         print(f"    avg={statistics.mean(pg_conns):.1f}  "
               f"max={max(pg_conns)}  "
               f"min={min(pg_conns)}")
         if max(pg_conns) > 20:
             print(f"    ⚠ Peak connections {max(pg_conns)} - check pool size")
         else:
-            print(f"     Connections healthy")
+            print("     Connections healthy")
 
     if redis_ops:
-        print(f"\n  Redis:")
+        print("\n  Redis:")
         print(f"    ops/s: avg={statistics.mean(redis_ops):.0f}  "
               f"max={max(redis_ops)}  "
               f"peak_mem={redis_mem[-1] if redis_mem else '?'}")
 
-    print(f"\n  Pass criteria:")
+    print("\n  Pass criteria:")
     api_cpu_ok  = max(api_cpu)  < 80  if api_cpu  else True
     api_mem_ok  = max(api_mem_mb) < 500 if api_mem_mb else True
     pg_conn_ok  = max(pg_conns) < 25  if pg_conns else True

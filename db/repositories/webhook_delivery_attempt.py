@@ -21,7 +21,6 @@ Status vocabulary (String(20)):
 """
 
 from __future__ import annotations
-from services.time import utc_now
 
 import uuid
 from datetime import datetime
@@ -30,6 +29,7 @@ from uuid import UUID
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from db.models import WebhookDeliveryAttemptModel
+from services.time import utc_now
 
 STATUS_SUCCESS = "success"
 STATUS_FAILED  = "failed"

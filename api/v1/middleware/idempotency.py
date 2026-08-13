@@ -2,18 +2,19 @@
 # Copyright (c) 2026 WrapSec. All rights reserved.
 # WrapSec v1.0 | AI Security Gateway - https://wrapsec.com
 
-import json
-from cache import keyspace
 import hashlib
+import json
 import logging
+
 from fastapi import Request
 from starlette.middleware.base import BaseHTTPMiddleware
 from starlette.responses import JSONResponse, Response
 
-from errors.catalog import ErrorCode
-from errors.response import error_response
+from cache import keyspace
 from cache.redis_client import get_redis
 from config.settings import get_settings
+from errors.catalog import ErrorCode
+from errors.response import error_response
 
 logger = logging.getLogger("wrapsec.idempotency")
 

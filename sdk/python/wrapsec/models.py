@@ -12,6 +12,7 @@ Spec reference: Section 4 (Public API Surface), Section 5 (Field Naming Conventi
 """
 
 from __future__ import annotations
+
 from dataclasses import dataclass, field
 from typing import Any
 
@@ -47,7 +48,7 @@ class ScanResult:
     assessment:            dict[str, Any] | None = None
 
     @classmethod
-    def from_dict(cls, data: dict[str, Any]) -> "ScanResult":
+    def from_dict(cls, data: dict[str, Any]) -> ScanResult:
         processing = data.get("processing") or {}
         return cls(
             decision             = data["decision"],
@@ -107,7 +108,7 @@ class BatchItemResult:
     assessment: dict[str, Any] | None = None
 
     @classmethod
-    def from_dict(cls, data: dict[str, Any]) -> "BatchItemResult":
+    def from_dict(cls, data: dict[str, Any]) -> BatchItemResult:
         return cls(
             id         = data.get("id"),
             trace_id   = data.get("trace_id", ""),
@@ -144,7 +145,7 @@ class BatchScanResult:
     results: list[BatchItemResult]
 
     @classmethod
-    def from_dict(cls, data: dict[str, Any]) -> "BatchScanResult":
+    def from_dict(cls, data: dict[str, Any]) -> BatchScanResult:
         return cls(
             count   = int(data.get("count", 0)),
             summary = data.get("summary") or {},
@@ -158,7 +159,7 @@ class BatchScanResult:
         return len(self.results)
 
     @property
-    def blocked(self) -> list["BatchItemResult"]:
+    def blocked(self) -> list[BatchItemResult]:
         return [r for r in self.results if r.is_blocked]
 
     @property
@@ -222,7 +223,7 @@ class AuditLog:
     model_version:        str | None = None
 
     @classmethod
-    def from_dict(cls, data: dict[str, Any]) -> "AuditLog":
+    def from_dict(cls, data: dict[str, Any]) -> AuditLog:
         return cls(
             trace_id             = data.get("trace_id", ""),
             created_at           = data.get("timestamp", data.get("created_at", "")),
@@ -282,7 +283,7 @@ class AuditStats:
     })
 
     @classmethod
-    def from_dict(cls, data: dict[str, Any]) -> "AuditStats":
+    def from_dict(cls, data: dict[str, Any]) -> AuditStats:
         total      = int(data.get("total_requests", 0))
         block_rate = float(data.get("block_rate", 0.0))
         san_rate   = float(data.get("sanitize_rate", 0.0))
@@ -303,9 +304,9 @@ class AuditStats:
 
 
 __all__ = [
-    "ScanResult",
-    "BatchItemResult",
-    "BatchScanResult",
     "AuditLog",
     "AuditStats",
+    "BatchItemResult",
+    "BatchScanResult",
+    "ScanResult",
 ]

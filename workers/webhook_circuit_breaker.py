@@ -106,7 +106,7 @@ async def run_circuit_breaker_sweep() -> None:
                 "webhook circuit breaker: no endpoints past %dh grace this tick",
                 threshold_h,
             )
-    except Exception as exc:                              # noqa: BLE001
+    except Exception as exc:
         logger.exception(
             "webhook circuit breaker: sweep failed: %s", exc,
         )

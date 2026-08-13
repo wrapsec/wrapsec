@@ -22,12 +22,14 @@ Requirements: API running at 127.0.0.1:8000, rate limit >= 200/min
 """
 
 from __future__ import annotations
-import statistics
-import time
-import requests
-import sys
 
 import os as _os
+import statistics
+import sys
+import time
+
+import requests
+
 BASE_URL     = "http://127.0.0.1:8000"
 PURCHASE_KEY = _os.environ.get("WRAPSEC_PURCHASE_KEY", "")
 SAMPLES      = 50
@@ -81,7 +83,7 @@ def measure_fn(fn, n: int) -> list[float]:
         ms    = (time.perf_counter() - start) * 1000
         if hasattr(r, "status_code") and r.status_code == 429:
             print(f"\n  ⚠ RATE LIMITED at sample {i}")
-            print(f"  Fix: PUT /v1/settings/rate_limit {{\"per_minute\": 500}}")
+            print("  Fix: PUT /v1/settings/rate_limit {\"per_minute\": 500}")
             sys.exit(1)
         results.append(ms)
     return results
@@ -110,7 +112,7 @@ if r.status_code == 429:
     print("  python -c \"import requests; ...")
     sys.exit(1)
 
-print(f"\nWrapSec Request Timing Breakdown")
+print("\nWrapSec Request Timing Breakdown")
 print(f"Samples: {SAMPLES} per measurement, {WARMUP} warmup")
 print(f"Target:  {BASE_URL}")
 
@@ -140,7 +142,7 @@ stats("GET /v1/settings/thresholds", settings_times)
 settings_p50  = statistics.median(settings_times)
 auth_overhead = settings_p50 - net_p50
 print(f"\n  -> Auth adds: ~{auth_overhead:.1f}ms over baseline")
-print(f"     (SHA-256 key hash lookup in DB + sliding window Redis check)")
+print("     (SHA-256 key hash lookup in DB + sliding window Redis check)")
 
 
 # ── 3. DB read overhead ───────────────────────────────────────────────────────
@@ -157,7 +159,7 @@ stats("GET /v1/audit/logs?limit=1", audit_times)
 audit_p50   = statistics.median(audit_times)
 db_read_add = audit_p50 - settings_p50
 print(f"\n  -> DB read adds: ~{db_read_add:.1f}ms over auth-only")
-print(f"     (asyncpg pooled connection, indexed query on audit_logs)")
+print("     (asyncpg pooled connection, indexed query on audit_logs)")
 
 
 # ── 4. Scan fast - benign prompts ─────────────────────────────────────────────
@@ -219,8 +221,8 @@ if detection_times:
     residual   = scan_p50 - net_p50 - det_p50
     print(f"  -> residual (auth + DB write + serialization): ~{residual:.1f}ms")
 else:
-    print(f"\n  ⚠ No detection times captured")
-    print(f"     Check: does response have 'processing.latency_ms'?")
+    print("\n  ⚠ No detection times captured")
+    print("     Check: does response have 'processing.latency_ms'?")
     det_p50 = 0.0
     scan_p50 = statistics.median(scan_total_times) if scan_total_times else 0
 
@@ -313,7 +315,7 @@ if full_detect:
     if llm_invoked_count > 0:
         print(f"  -> LLM detector adds: ~{llm_add:.1f}ms when triggered")
     else:
-        print(f"  -> LLM not triggered (score below llm_trigger_threshold)")
+        print("  -> LLM not triggered (score below llm_trigger_threshold)")
 
 
 # ── 7. Summary ────────────────────────────────────────────────────────────────

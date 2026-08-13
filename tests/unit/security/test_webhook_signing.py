@@ -24,7 +24,6 @@ from security.webhook_signing import (
     verify,
 )
 
-
 SECRET_A = b"secret-active-1234567890"
 SECRET_B = b"secret-old-abcdefghijklm"
 SECRET_C = b"unrelated-key-xyz"
@@ -39,7 +38,7 @@ def test_sign_matches_manual_hmac() -> None:
     The wire format must be reproducible by a receiver that only knows
     the shared secret and the three headers. Compute it by hand.
     """
-    signed_string = f"{MSG_ID}.{TS}.".encode("utf-8") + BODY
+    signed_string = f"{MSG_ID}.{TS}.".encode() + BODY
     expected      = "v1," + base64.b64encode(
         hmac.new(SECRET_A, signed_string, sha256).digest()
     ).decode("ascii")

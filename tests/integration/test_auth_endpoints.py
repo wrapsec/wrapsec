@@ -8,8 +8,9 @@ Fixtures (auth_client, auth_setup) auto-injected from conftest.py.
 Users are created in PostgreSQL so JWT middleware can find them.
 """
 import pytest
-from sqlalchemy.ext.asyncio import create_async_engine, async_sessionmaker, AsyncSession
+from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_async_engine
 from sqlalchemy.pool import NullPool
+
 from config.settings import get_settings
 
 settings = get_settings()
@@ -182,12 +183,14 @@ async def test_change_password_weak_new_400(auth_client, auth_setup):
 async def test_force_password_change_blocks_other_endpoints(auth_client, auth_setup):
     """Middleware blocks all endpoints except allowlist when force_password_change=True."""
     import uuid
-    from db.session import AsyncSessionFactory
+
+    from sqlalchemy import delete as sa_delete
+
+    from db.models import UserModel
     from db.repositories.user import UserRepository
+    from db.session import AsyncSessionFactory
     from services.auth.password import hash_password, normalize_email
     from services.auth.token import create_access_token
-    from db.models import UserModel
-    from sqlalchemy import delete as sa_delete
 
     tenant = auth_setup["tenant"]
     dept   = auth_setup["dept"]
@@ -227,12 +230,14 @@ async def test_force_password_change_blocks_other_endpoints(auth_client, auth_se
 @pytest.mark.asyncio
 async def test_force_password_change_allows_me(auth_client, auth_setup):
     import uuid
-    from db.session import AsyncSessionFactory
+
+    from sqlalchemy import delete as sa_delete
+
+    from db.models import RefreshTokenModel, UserModel
     from db.repositories.user import UserRepository
+    from db.session import AsyncSessionFactory
     from services.auth.password import hash_password, normalize_email
     from services.auth.token import create_access_token
-    from db.models import UserModel, RefreshTokenModel
-    from sqlalchemy import delete as sa_delete
 
     tenant = auth_setup["tenant"]
     dept   = auth_setup["dept"]
@@ -380,11 +385,12 @@ async def test_login_lockout_clears_on_success(auth_client, auth_setup):
 async def test_login_inactive_user_401(auth_client, auth_setup):
     """Inactive account returns 401 with identical message - no status leak."""
     import uuid
-    from db.session import AsyncSessionFactory
-    from db.repositories.user import UserRepository
-    from db.models import UserModel, RefreshTokenModel
-    from services.auth.password import hash_password, normalize_email
+
     from sqlalchemy import delete as sa_delete
+
+    from db.models import RefreshTokenModel, UserModel
+    from db.repositories.user import UserRepository
+    from services.auth.password import hash_password, normalize_email
 
     tenant = auth_setup["tenant"]
     dept   = auth_setup["dept"]
@@ -617,8 +623,10 @@ async def test_admin_reset_invalidates_existing_sessions(auth_client, auth_setup
 async def test_admin_create_user_sets_force_password_change(auth_client, auth_setup):
     """New users created by admin must have force_password_change=True."""
     import uuid
-    from db.models import UserModel, RefreshTokenModel
+
     from sqlalchemy import delete as sa_delete
+
+    from db.models import RefreshTokenModel, UserModel
 
     admin_token = auth_setup["admin_token"]
     dept_id     = str(auth_setup["dept"].id)

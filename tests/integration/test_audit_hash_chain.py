@@ -12,10 +12,9 @@ that the write path stitches rows together correctly.
 """
 from __future__ import annotations
 
-from datetime import datetime, timedelta
+from datetime import datetime
 
 import pytest
-from sqlalchemy import select
 
 from db.models import AuditLogModel
 from db.repositories.audit import AuditRepository

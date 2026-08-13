@@ -56,6 +56,7 @@ def test_primary_reason_module_and_allowlist_agree():
     grew a new return value (TOXICITY_GUARDRAIL_*) but metrics.py wasn't updated.
     """
     import inspect
+
     from engine.scoring import primary_reason as pr_mod
 
     source = inspect.getsource(pr_mod)

@@ -8,7 +8,6 @@ All providers must implement chat_completions() and return ProviderResponse.
 Exceptions must propagate -- providers must never swallow errors.
 """
 
-import time
 from abc import ABC, abstractmethod
 from dataclasses import dataclass
 
@@ -46,4 +45,3 @@ class BaseProxyProvider(ABC):
           - All other exceptions must propagate -- do not swallow them.
           - Must forward X-WrapSec-Trace-Id header when trace_id is provided.
         """
-        pass

@@ -8,11 +8,10 @@ import secrets
 from datetime import timedelta
 
 import jwt
-
-from services.time import utc_now
 from jwt.exceptions import InvalidTokenError
 
 from config.settings import get_settings
+from services.time import utc_now
 
 logger = logging.getLogger("wrapsec.auth")
 

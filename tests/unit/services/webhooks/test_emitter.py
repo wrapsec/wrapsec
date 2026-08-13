@@ -26,8 +26,8 @@ matter for that placement:
 
 from __future__ import annotations
 
-from uuid import UUID, uuid4
 from unittest.mock import AsyncMock, MagicMock, patch
+from uuid import uuid4
 
 import pytest
 

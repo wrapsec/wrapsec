@@ -16,12 +16,12 @@ Examples:
 
 import logging
 
+from config.settings import get_settings
 from db.models import ProxyProviderConfigModel
 from engine.proxy.providers.base import BaseProxyProvider
-from engine.proxy.providers.openai import OpenAIProxyProvider
 from engine.proxy.providers.ollama import OllamaProxyProvider
+from engine.proxy.providers.openai import OpenAIProxyProvider
 from security.encryption import decrypt
-from config.settings import get_settings
 
 logger = logging.getLogger("wrapsec.proxy.router")
 

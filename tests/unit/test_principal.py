@@ -3,14 +3,15 @@
 # WrapSec v1.0 | AI Security Gateway - https://wrapsec.com
 
 import uuid
-import pytest
 from unittest.mock import MagicMock
 
+import pytest
+
 from domain.entities.principal import (
-    Principal,
     ROLE_PERMISSIONS,
-    build_principal_from_user,
+    Principal,
     build_principal_from_api_key,
+    build_principal_from_user,
 )
 from domain.enums import PrincipalType
 

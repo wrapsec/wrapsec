@@ -3,10 +3,12 @@
 # WrapSec v1.0 | AI Security Gateway - https://wrapsec.com
 
 import math
+
 from pydantic import BaseModel, Field, model_validator
-from domain.enums import DetectionMode, ExecutionMode, InputSource
-from errors.exceptions import StreamNotSupportedError, ModelRequiredError, WrapSecError
+
 from config.settings import get_settings
+from domain.enums import DetectionMode, ExecutionMode, InputSource
+from errors.exceptions import ModelRequiredError, StreamNotSupportedError
 
 
 class RequestMetadataSchema(BaseModel):

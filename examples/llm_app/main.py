@@ -27,18 +27,17 @@ Setup:
   export LLM_TIMEOUT=60
 """
 
-import os
 import logging
+import os
 
 import httpx
+import wrapsec
 from fastapi import FastAPI
 from fastapi.responses import JSONResponse
 from pydantic import BaseModel
-
-import wrapsec
 from wrapsec.exceptions import (
-    WrapSecError,
     WrapSecAuthError,
+    WrapSecError,
     WrapSecRateLimitError,
 )
 
@@ -271,7 +270,7 @@ async def chat_batch(body: BatchRequest):
                 mode = WRAPSEC_DETECTION_MODE,
                 user = body.user_id,
             )
-        except WrapSecError as e:
+        except WrapSecError:
             results.append({
                 "index":          i,
                 "message_length": len(message),

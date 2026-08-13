@@ -2,9 +2,10 @@
 # Copyright (c) 2026 WrapSec. All rights reserved.
 # WrapSec v1.0 | AI Security Gateway - https://wrapsec.com
 
-import json
 import hashlib
+import json
 import logging
+
 from cache.redis_client import get_redis
 
 logger = logging.getLogger("wrapsec.cache")

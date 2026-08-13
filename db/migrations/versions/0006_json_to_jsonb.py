@@ -44,16 +44,15 @@ keep working without any schema changes.
 """
 from __future__ import annotations
 
-from typing import Sequence, Union
+from collections.abc import Sequence
 
 from alembic import op
 from sqlalchemy import text
 
-
 revision: str = "0006_json_to_jsonb"
-down_revision: Union[str, None] = "0005_add_auditor_role"
-branch_labels: Union[str, Sequence[str], None] = None
-depends_on: Union[str, Sequence[str], None] = None
+down_revision: str | None = "0005_add_auditor_role"
+branch_labels: str | Sequence[str] | None = None
+depends_on: str | Sequence[str] | None = None
 
 
 _TARGETS: list[tuple[str, str]] = [

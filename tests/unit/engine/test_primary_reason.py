@@ -2,7 +2,6 @@
 # Copyright (c) 2026 WrapSec. All rights reserved.
 # WrapSec v1.0 | AI Security Gateway - https://wrapsec.com
 
-import pytest
 from engine.scoring.primary_reason import compute_primary_reason
 
 

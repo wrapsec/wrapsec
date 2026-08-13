@@ -3,8 +3,9 @@
 # WrapSec v1.0 | AI Security Gateway - https://wrapsec.com
 
 import pytest
-from engine.detection.rule_detector import RuleDetector
+
 from domain.enums import ThreatCategory
+from engine.detection.rule_detector import RuleDetector
 
 
 @pytest.fixture

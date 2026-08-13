@@ -3,17 +3,17 @@
 # WrapSec v1.0 | AI Security Gateway - https://wrapsec.com
 
 import pytest
+
 from services.auth.password import (
-    normalize_email,
-    hash_password,
-    verify_password,
-    verify_dummy,
-    validate_password_strength,
     _DUMMY_HASH,
     _MAX_PASSWORD_LEN,
+    hash_password,
+    normalize_email,
     pwd_context,
+    validate_password_strength,
+    verify_dummy,
+    verify_password,
 )
-
 
 # ── normalize_email ────────────────────────────────────────────────────────────
 

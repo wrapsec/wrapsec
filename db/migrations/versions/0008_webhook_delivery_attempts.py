@@ -47,19 +47,18 @@ Existing v1.2.x upgraders take the same ADD path.
 """
 from __future__ import annotations
 
+from collections.abc import Sequence
 from datetime import datetime
-from typing import Sequence, Union
 
 import sqlalchemy as sa
 from alembic import op
 from sqlalchemy import text
 from sqlalchemy.dialects.postgresql import UUID
 
-
 revision: str = "0008_webhook_delivery_attempts"
-down_revision: Union[str, None] = "0007_webhook_endpoints"
-branch_labels: Union[str, Sequence[str], None] = None
-depends_on: Union[str, Sequence[str], None] = None
+down_revision: str | None = "0007_webhook_endpoints"
+branch_labels: str | Sequence[str] | None = None
+depends_on: str | Sequence[str] | None = None
 
 
 _TABLE           = "webhook_delivery_attempts"

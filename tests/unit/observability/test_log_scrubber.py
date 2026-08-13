@@ -24,7 +24,6 @@ from observability.logging import (
     scrub_sensitive,
 )
 
-
 # ── scrub_sensitive ─────────────────────────────────────────────
 
 @pytest.mark.parametrize("token", [

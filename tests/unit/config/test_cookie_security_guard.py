@@ -11,7 +11,6 @@ session cookies leak in cleartext. The Settings guard fails the boot instead
 of quietly issuing insecure cookies.
 """
 
-from unittest.mock import patch
 
 import pytest
 

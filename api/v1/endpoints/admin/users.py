@@ -2,16 +2,15 @@
 # Copyright (c) 2026 WrapSec. All rights reserved.
 # WrapSec v1.0 | AI Security Gateway - https://wrapsec.com
 
-import uuid
-from services.time import to_iso_z
 import logging
+import uuid
 
 from fastapi import APIRouter, Depends, Query, Request
 from fastapi.responses import JSONResponse
 from pydantic import BaseModel, EmailStr
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from api.v1.dependencies.auth import require_admin, endpoint_rate_limit
+from api.v1.dependencies.auth import endpoint_rate_limit, require_admin
 from api.v1.dependencies.db import get_db
 from api.v1.middleware.auth import get_client_ip
 from db.repositories.admin_event import AdminEventRepository
@@ -21,8 +20,13 @@ from domain.enums import AdminEventAction
 from errors.catalog import ErrorCode
 from errors.exceptions import NotFoundError
 from errors.response import error_response
-from services.auth.password import hash_password, normalize_email, validate_password_strength
+from services.auth.password import (
+    hash_password,
+    normalize_email,
+    validate_password_strength,
+)
 from services.auth.service import AuthService
+from services.time import to_iso_z
 
 router = APIRouter()
 logger = logging.getLogger("wrapsec.admin.users")

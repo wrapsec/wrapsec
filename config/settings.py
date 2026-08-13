@@ -2,11 +2,11 @@
 # Copyright (c) 2026 WrapSec. All rights reserved.
 # WrapSec v1.0 | AI Security Gateway - https://wrapsec.com
 
-from pydantic_settings import BaseSettings
-from pydantic import Field, field_validator
 from functools import lru_cache
 from typing import Literal
 
+from pydantic import Field, field_validator
+from pydantic_settings import BaseSettings
 
 # Static catalog of configurable PLUGIN-capability names -- the single source of
 # truth for valid WRAPSEC_FEATURES entries. It contains ONLY capabilities

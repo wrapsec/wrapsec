@@ -10,27 +10,27 @@ This includes: core/, config/, cli/ internals.
 Spec reference: Section 4 (Public API Surface)
 """
 
-from wrapsec.client       import Client
 from wrapsec.async_client import AsyncClient
-from wrapsec.models       import (
-    ScanResult,
-    BatchItemResult,
-    BatchScanResult,
-    AuditLog,
-    AuditStats,
-)
-from wrapsec.tool_schema  import (
-    scan_tool_schema,
-    openai_tool,
-    anthropic_tool,
-    SCAN_TOOL_NAME,
-)
-from wrapsec.exceptions   import (
-    WrapSecError,
+from wrapsec.client import Client
+from wrapsec.exceptions import (
     WrapSecAuthError,
     WrapSecBlockError,
+    WrapSecError,
     WrapSecRateLimitError,
     WrapSecSystemError,
+)
+from wrapsec.models import (
+    AuditLog,
+    AuditStats,
+    BatchItemResult,
+    BatchScanResult,
+    ScanResult,
+)
+from wrapsec.tool_schema import (
+    SCAN_TOOL_NAME,
+    anthropic_tool,
+    openai_tool,
+    scan_tool_schema,
 )
 
 __version__ = "1.0.0"

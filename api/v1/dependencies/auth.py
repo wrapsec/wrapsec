@@ -3,14 +3,11 @@
 # WrapSec v1.0 | AI Security Gateway - https://wrapsec.com
 
 from fastapi import Request
-from cache import keyspace
-from starlette.responses import JSONResponse
 
+from cache import keyspace
 from domain.entities.principal import (
-    Principal,
     ROLE_PERMISSIONS,
-    build_principal_from_api_key,
-    build_principal_from_user,
+    Principal,
 )
 from domain.enums import PrincipalType
 from errors.exceptions import ForbiddenError, UnauthorizedError
@@ -158,10 +155,11 @@ def endpoint_rate_limit(limit_setting: str):
     async def _dependency(request: Request) -> None:
         import json
         import os
-        from cache.rate_limit_store import is_rate_limited
-        from errors.exceptions import RateLimitError
+
         from api.v1.middleware.auth import get_client_ip
+        from cache.rate_limit_store import is_rate_limited
         from config.settings import get_settings
+        from errors.exceptions import RateLimitError
 
         limit = None
 
@@ -178,8 +176,8 @@ def endpoint_rate_limit(limit_setting: str):
             # 2. DB - also warms the cache on hit
             if limit is None:
                 try:
-                    from db.session import AsyncSessionFactory
                     from db.repositories.settings import SettingsRepository
+                    from db.session import AsyncSessionFactory
                     async with AsyncSessionFactory() as session:
                         stored = await SettingsRepository(session).get("admin_rate_limits")
                         if stored and limit_setting in stored:

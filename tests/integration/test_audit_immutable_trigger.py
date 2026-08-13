@@ -26,16 +26,18 @@ from pathlib import Path
 
 import pytest
 import pytest_asyncio
-from sqlalchemy import delete as sa_delete, select, text, update
+from sqlalchemy import delete as sa_delete
+from sqlalchemy import select, text, update
 from sqlalchemy.exc import DBAPIError
 from sqlalchemy.ext.asyncio import (
-    AsyncSession, async_sessionmaker, create_async_engine,
+    AsyncSession,
+    async_sessionmaker,
+    create_async_engine,
 )
 from sqlalchemy.pool import NullPool
 
 from config.settings import get_settings
 from db.models import AuditLogModel
-
 
 _settings = get_settings()
 

@@ -20,8 +20,8 @@ import os
 from typing import Literal
 
 from mcp.server import MCPServer
-
 from wrapsec import Client
+
 from mcp_server.tool import run_scan
 
 # Enum surface for the tool's input schema; FastMCP derives the JSON Schema from

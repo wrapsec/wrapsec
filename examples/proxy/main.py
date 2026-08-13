@@ -21,14 +21,14 @@ Setup:
   export LLM_MODEL=openai/gpt-4o-mini   # must match configured provider
 """
 
-import os
 import logging
+import os
 
 import httpx
 from fastapi import FastAPI
 from fastapi.responses import JSONResponse
+from openai import BadRequestError, OpenAI
 from pydantic import BaseModel
-from openai import OpenAI, BadRequestError
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s [%(levelname)s] %(name)s: %(message)s")
 logger = logging.getLogger("wrapsec.proxy_example")

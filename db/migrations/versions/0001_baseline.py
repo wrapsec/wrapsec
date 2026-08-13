@@ -17,17 +17,16 @@ Base.metadata.create_all(checkfirst=True) so the same migration is safe on:
 Downstream migrations (v1.2.0+) use idiomatic op.create_table / op.add_column
 calls so schema diffs stay auditable in git history.
 """
-from typing import Sequence, Union
+from collections.abc import Sequence
 
 from alembic import op
 
 from db.models import Base
 
-
 revision: str = "0001_baseline"
-down_revision: Union[str, None] = None
-branch_labels: Union[str, Sequence[str], None] = None
-depends_on: Union[str, Sequence[str], None] = None
+down_revision: str | None = None
+branch_labels: str | Sequence[str] | None = None
+depends_on: str | Sequence[str] | None = None
 
 
 def upgrade() -> None:

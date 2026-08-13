@@ -3,11 +3,13 @@
 # WrapSec v1.0 | AI Security Gateway - https://wrapsec.com
 
 import uuid
-from services.time import to_iso_z
+
 from fastapi import APIRouter, Depends, Request
 from fastapi.responses import JSONResponse
 from pydantic import BaseModel, EmailStr, Field, SecretStr, field_validator
+from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
+
 from api.v1.dependencies.auth import get_current_principal, require_admin
 from api.v1.dependencies.db import get_db
 from api.v1.middleware.auth import get_client_ip
@@ -17,12 +19,12 @@ from db.repositories.application import ApplicationRepository
 from db.repositories.department import DepartmentRepository
 from domain.entities.principal import Principal
 from domain.enums import AdminEventAction
-from errors.exceptions import NotFoundError, ValidationError, ConflictError
-from services.slug import slugify, is_reserved_slug
-from sqlalchemy.exc import IntegrityError
-from security.encryption import encrypt, decrypt, mask
+from errors.exceptions import ConflictError, NotFoundError, ValidationError
+from security.encryption import decrypt, encrypt, mask
 from security.url_validator import validate_llm_base_url
 from services.policy_resolver import resolve_policy
+from services.slug import is_reserved_slug, slugify
+from services.time import to_iso_z
 
 router = APIRouter()
 

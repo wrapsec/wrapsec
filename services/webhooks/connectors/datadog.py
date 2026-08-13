@@ -43,7 +43,6 @@ from typing import Any
 
 from services.webhooks.connectors.base import ConnectorRequest
 
-
 CONNECTOR_TYPE = "datadog_logs"
 
 _INTAKE_PATH = "/api/v2/logs"

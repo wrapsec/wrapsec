@@ -55,7 +55,7 @@ def _epoch_seconds(iso_timestamp: str | None) -> float | None:
     """
     if not iso_timestamp:
         return None
-    raw = iso_timestamp[:-1] if iso_timestamp.endswith("Z") else iso_timestamp
+    raw = iso_timestamp.removesuffix("Z")
     try:
         dt = datetime.fromisoformat(raw)
     except ValueError:

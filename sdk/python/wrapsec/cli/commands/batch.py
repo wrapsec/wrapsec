@@ -28,6 +28,12 @@ from pathlib import Path
 
 import click
 
+from wrapsec.cli._output import (
+    get_scan_exit_code,
+    print_error,
+    print_warning,
+    scan_result_to_dict,
+)
 from wrapsec.client import Client
 from wrapsec.config.loader import load_config
 from wrapsec.core.validation import (
@@ -38,12 +44,6 @@ from wrapsec.core.validation import (
     validate_session_id,
 )
 from wrapsec.exceptions import WrapSecError, WrapSecRateLimitError
-from wrapsec.cli._output import (
-    get_scan_exit_code,
-    print_error,
-    print_warning,
-    scan_result_to_dict,
-)
 
 MAX_FILE_BYTES  = 10 * 1024 * 1024   # 10MB
 MAX_LINE_CHARS  = MAX_INPUT_CHARS
@@ -176,8 +176,8 @@ def batch(
         estimated_lines = file_size // 50
         if estimated_lines > LARGE_FILE_WARN and delay == 0:
             click.echo(
-                f"Warning: large file - potentially many prompts with no delay.\n"
-                f"Consider --delay 100 to avoid rate limiting.",
+                "Warning: large file - potentially many prompts with no delay.\n"
+                "Consider --delay 100 to avoid rate limiting.",
                 err=True,
             )
             if not click.confirm("Continue?", default=False):
@@ -303,7 +303,7 @@ def batch(
                         fg=color,
                     )
 
-            except WrapSecRateLimitError as e:
+            except WrapSecRateLimitError:
                 print_error(
                     f"Rate limit hit after {processed} prompts. "
                     f"Use --delay to slow requests."

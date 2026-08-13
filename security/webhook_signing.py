@@ -50,9 +50,8 @@ from __future__ import annotations
 import base64
 import hmac
 import time
+from collections.abc import Sequence
 from hashlib import sha256
-from typing import Sequence
-
 
 # Signature scheme prefix. Bumping to v2 (e.g. HMAC-SHA512, EdDSA) would
 # emit "v2,<sig>" alongside "v1,<sig>" during transition; verifiers accept
@@ -76,7 +75,7 @@ def sign(
     The emitter typically calls this once per active secret and joins
     the results with " " to build the webhook-signature header value.
     """
-    signed = f"{msg_id}.{timestamp}.".encode("utf-8") + body
+    signed = f"{msg_id}.{timestamp}.".encode() + body
     mac    = hmac.new(secret, signed, sha256).digest()
     return f"{SIGNATURE_VERSION},{base64.b64encode(mac).decode('ascii')}"
 
@@ -143,7 +142,7 @@ def verify(
         return False
 
     # Compute the expected raw HMAC bytes for each secret once.
-    signed        = f"{msg_id}.{ts_signed}.".encode("utf-8") + body
+    signed        = f"{msg_id}.{ts_signed}.".encode() + body
     expected_macs = [hmac.new(s, signed, sha256).digest() for s in secrets]
 
     for entry in signature_header.split(" "):

@@ -20,7 +20,7 @@ async def _seed_api_key(test_db, *, expires_at):
     """Seed a usable (hash-matching) non-admin API key with the given expiry and
     return the raw key string to present as x-api-key. Own tenant+dept so the
     non-admin CheckConstraint is satisfied."""
-    from db.models import TenantModel, DepartmentModel, APIKeyModel
+    from db.models import APIKeyModel, DepartmentModel, TenantModel
 
     tid = uuid.uuid4()
     did = uuid.uuid4()
