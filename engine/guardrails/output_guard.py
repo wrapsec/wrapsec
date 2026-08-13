@@ -4,6 +4,7 @@
 
 import logging
 from dataclasses import dataclass, field
+from typing import cast
 
 from config.settings import get_settings
 from engine.guardrails.pii.detector import PIIDetector
@@ -99,7 +100,7 @@ class OutputGuard:
                     decision       = "BLOCK",
                     primary_reason = "PII_GUARDRAIL_BLOCK",
                     pii_score      = pii_score,
-                    threats        = pii_result.threats if pii_result else [],
+                    threats        = cast(list[str], pii_result.threats) if pii_result else [],
                     confidence     = pii_score,
                 )
 

@@ -3,9 +3,10 @@
 # WrapSec v1.0 | AI Security Gateway - https://wrapsec.com
 
 from datetime import datetime, timedelta
+from typing import cast
 from uuid import UUID
 
-from sqlalchemy import delete, select, update
+from sqlalchemy import CursorResult, delete, select, update
 
 from db.models import RefreshTokenModel
 from db.repositories.base import BaseRepository
@@ -90,7 +91,7 @@ class RefreshTokenRepository(BaseRepository):
             )
             .values(revoked_at=utc_now())
         )
-        return result.rowcount
+        return cast(CursorResult, result).rowcount
 
     async def cleanup_expired(self) -> int:
         """
@@ -132,4 +133,4 @@ class RefreshTokenRepository(BaseRepository):
             )
         )
 
-        return result1.rowcount + result2.rowcount
+        return cast(CursorResult, result1).rowcount + cast(CursorResult, result2).rowcount
