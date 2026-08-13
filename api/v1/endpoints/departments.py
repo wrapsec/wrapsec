@@ -275,7 +275,7 @@ async def get_department_stats(
         .where(AuditLogModel.dept_id == dept_id)
         .group_by(AuditLogModel.decision)
     )
-    decision_counts = {row.decision: row.count for row in decisions}
+    decision_counts = {row.decision: row._mapping["count"] for row in decisions}
 
     # Average latency
     avg_latency = await db.scalar(

@@ -203,6 +203,7 @@ async def lifespan(app: FastAPI):
         # deliveries, then release its resources before the rest.
         if _wh_task is not None:
             from cache.redis_client import close_webhook_worker_redis
+            assert _wh_stop is not None and _wh_handler is not None
             _wh_stop.set()
             try:
                 await asyncio.wait_for(_wh_task, timeout=30)
@@ -214,6 +215,7 @@ async def lifespan(app: FastAPI):
         # Stop the email worker: signal, let it drain in-flight sends, then
         # release the provider's resources.
         if _email_task is not None:
+            assert _email_stop is not None
             _email_stop.set()
             try:
                 await asyncio.wait_for(_email_task, timeout=30)
@@ -272,8 +274,8 @@ app.add_middleware(
 app.add_middleware(SecurityHeadersMiddleware)
 
 # ── Exception handlers ────────────────────────────────────────
-app.add_exception_handler(WrapSecError, wrapsec_exception_handler)
-app.add_exception_handler(RequestValidationError, validation_exception_handler)
+app.add_exception_handler(WrapSecError, wrapsec_exception_handler)  # type: ignore[arg-type]
+app.add_exception_handler(RequestValidationError, validation_exception_handler)  # type: ignore[arg-type]
 app.add_exception_handler(Exception, unhandled_exception_handler)
 
 # ── Routers ───────────────────────────────────────────────────

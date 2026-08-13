@@ -5,6 +5,7 @@
 import logging
 from dataclasses import dataclass
 from datetime import datetime, timedelta
+from typing import TYPE_CHECKING
 from uuid import UUID
 
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_async_engine
@@ -13,6 +14,9 @@ from sqlalchemy.pool import NullPool
 from cache import keyspace
 from config.settings import get_settings as _get_settings
 from services.time import ensure_utc, utc_now
+
+if TYPE_CHECKING:
+    from db.models import UserModel
 
 logger = logging.getLogger("wrapsec.auth")
 
@@ -84,7 +88,7 @@ class LoginResult:
     refresh_token:         str
     expires_in:            int
     force_password_change: bool
-    user:                  object
+    user:                  "UserModel"
 
 
 @dataclass
@@ -92,7 +96,7 @@ class RefreshResult:
     access_token:  str
     refresh_token: str
     expires_in:    int
-    user:          object
+    user:          "UserModel"
 
 
 class AuthService:

@@ -137,7 +137,7 @@ class IdempotencyMiddleware(BaseHTTPMiddleware):
 
                 # Consume body iterator to read response
                 response_body = b""
-                async for chunk in response.body_iterator:
+                async for chunk in response.body_iterator:  # type: ignore[attr-defined]  # call_next returns a streaming response
                     response_body += chunk
 
                 response_data = json.loads(response_body)

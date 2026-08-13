@@ -15,12 +15,13 @@ Endpoints:
 
 import logging
 import time
+from typing import cast
 
 import httpx
 from fastapi import APIRouter, Depends, Request
 from fastapi.responses import JSONResponse, Response
 from pydantic import BaseModel, SecretStr, field_validator
-from sqlalchemy import delete, select
+from sqlalchemy import CursorResult, delete, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from api.v1.dependencies.auth import get_current_principal, require_any_admin
@@ -218,7 +219,7 @@ async def delete_proxy_settings(
     )
     await db.commit()
 
-    if result.rowcount == 0:
+    if cast(CursorResult, result).rowcount == 0:
         return JSONResponse(
             status_code=404,
             content={"error": {"code": "NOT_FOUND", "message": "No proxy provider configured."}},

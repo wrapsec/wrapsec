@@ -546,8 +546,8 @@ async def proxy_chat_completions(
 
     gd             = gateway_result.decision
     input_decision = gd.decision.value          # ALLOW / BLOCK / SANITIZE
-    input_reason   = gd.primary_reason
-    input_conf     = gd.confidence
+    input_reason   = gd.primary_reason if gd.primary_reason is not None else "NO_THREAT_DETECTED"
+    input_conf     = gd.confidence if gd.confidence is not None else 0.0
     input_threats  = [t.value for t in gd.threats]
     input_attack   = input_threats[0] if input_threats else None
     input_sanit    = gd.sanitized_input
@@ -632,6 +632,8 @@ async def proxy_chat_completions(
         if config:
             provider_instance, _ = resolve_provider(provider_name, config)
         else:
+            if dept_proxy_cfg is None:
+                raise ValueError("no proxy provider configured")
             provider_instance, _ = resolve_provider_from_dict(provider_name, dept_proxy_cfg)
     except ValueError as exc:
         total_ms = int((time.monotonic() - wall_start) * 1000)
@@ -654,6 +656,7 @@ async def proxy_chat_completions(
     provider_latency = None
     provider_response = None
 
+    assert model_name is not None
     try:
         provider_response = await provider_instance.chat_completions(
             model    = model_name,

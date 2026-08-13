@@ -346,6 +346,7 @@ async def create_webhook(
         secret_enc       = encrypt(plaintext_secret, get_settings().secret_key)
     else:
         plaintext_secret = None
+        assert body.secret is not None  # required for connector_type by the schema validator
         secret_enc       = encrypt(body.secret, get_settings().secret_key)
 
     repo = WebhookEndpointRepository(db)
@@ -440,6 +441,8 @@ async def update_webhook(
 
     data = {k: v for k, v in body.model_dump().items() if v is not None}
     ep   = await repo.update(endpoint_id=endpoint_id, data=data)
+    if ep is None:
+        raise NotFoundError("webhook_endpoint", str(endpoint_id))
     await db.commit()
 
     await _log_admin_event(
@@ -513,6 +516,8 @@ async def rotate_webhook_secret(
         new_secret_enc = secret_enc,
         grace_hours    = body.grace_hours,
     )
+    if ep is None:
+        raise NotFoundError("webhook_endpoint", str(endpoint_id))
     await db.commit()
 
     await _log_admin_event(
@@ -541,6 +546,8 @@ async def pause_webhook(
     await _get_owned_endpoint_or_404(repo, endpoint_id, tenant_id)
 
     ep = await repo.pause(endpoint_id=endpoint_id)
+    if ep is None:
+        raise NotFoundError("webhook_endpoint", str(endpoint_id))
     await db.commit()
 
     await _log_admin_event(
@@ -566,6 +573,8 @@ async def reactivate_webhook(
     await _get_owned_endpoint_or_404(repo, endpoint_id, tenant_id)
 
     ep = await repo.reactivate(endpoint_id=endpoint_id)
+    if ep is None:
+        raise NotFoundError("webhook_endpoint", str(endpoint_id))
     await db.commit()
 
     await _log_admin_event(

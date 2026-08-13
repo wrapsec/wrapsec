@@ -7,6 +7,7 @@ import hmac
 import ipaddress
 import logging
 import os
+from typing import TYPE_CHECKING, cast
 from uuid import UUID
 
 from fastapi import Request
@@ -21,6 +22,9 @@ from config.settings import get_settings
 from errors.catalog import ErrorCode
 from errors.response import error_response
 from services.time import utc_now
+
+if TYPE_CHECKING:
+    from db.models import UserModel
 
 logger = logging.getLogger("wrapsec.auth")
 
@@ -424,7 +428,7 @@ class AuthMiddleware(BaseHTTPMiddleware):
             return _unauthorized(request, "invalid_or_expired_token")
 
         # Step 2 - parse sub claim
-        user_id_str = payload.get("sub")
+        user_id_str = payload.get("sub") or ""
         try:
             user_uuid = UUID(user_id_str)
         except (ValueError, TypeError):
@@ -442,6 +446,9 @@ class AuthMiddleware(BaseHTTPMiddleware):
             logger.warning("auth JWT user_not_found user_id=%s path=%s",
                            user_id_str, request.url.path)
             return _unauthorized(request, "invalid_token")
+
+        # After the sentinel/existence guards above, user is a UserModel.
+        user = cast("UserModel", user)
 
         # Step 2c - active
         if not user.is_active:
