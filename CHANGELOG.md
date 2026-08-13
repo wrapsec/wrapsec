@@ -2,6 +2,33 @@
 
 All notable changes to WrapSec are documented here.
 
+## [1.8.5] - 2026-08-13
+
+Internal quality release: type safety, lint hardening, and a broad test-coverage
+pass. No API or behavior changes for callers beyond a few latent-bug fixes; the
+work targets maintainability and the coverage baseline.
+
+### Added
+- Integration coverage across the endpoint layer -- settings, keys, departments,
+  applications, audit, admin users, health, first-run setup, the AI scan
+  branches, and the proxy chat path -- plus coverage tooling (`make coverage`,
+  `.coveragerc`) with branch coverage enabled.
+
+### Changed
+- Migrated the ORM models to SQLAlchemy 2.0 `Mapped[]` annotations (typing only;
+  the compiled DDL is byte-identical, so there is no schema change).
+- Added a static type-checking gate across the server and the Python SDK, plus a
+  lint configuration, and resolved the findings each surfaced.
+
+### Fixed
+- Redis-down fail-open path that could raise an unbound error and return 500
+  instead of failing open.
+- Missing not-found guards after an update that turned a stale row into a 500
+  rather than a 404.
+- Proxy-interactions read endpoint: mounted it and corrected its tenant scoping.
+- Removed dead code -- an unreachable revoked-key rotation branch and two unused
+  response-schema modules.
+
 ## [1.8.4] - 2026-08-13
 
 Follow-up to the email release: account-lifecycle and role notifications, plus a
