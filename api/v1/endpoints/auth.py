@@ -59,9 +59,7 @@ def _valid_cookie_path(candidate: str) -> bool:
         return False
     if not _REFRESH_COOKIE_PATH_RE.match(candidate):
         return False
-    if ".." in candidate or "//" in candidate:
-        return False
-    return True
+    return not (".." in candidate or "//" in candidate)
 
 
 def _resolve_refresh_cookie_path(request: Request | None) -> str:

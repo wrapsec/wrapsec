@@ -218,13 +218,13 @@ def scan(
         print_error(str(e))
         sys.exit(1)
 
-    except Exception as e:
+    except Exception:
         if spinner:
             spinner.stop()
         # Fix #4 - log full exception internally, show generic message to user.
         # Full exception text may contain internal paths, module names, or
         # server responses that should not be exposed to end users.
-        logger.error("Unexpected error during scan: %s", e, exc_info=True)
+        logger.exception("Unexpected error during scan")
         print_error("An unexpected error occurred. Check logs for details.")
         sys.exit(1)
 

@@ -44,9 +44,8 @@ class _ThresholdsPolicy(BaseModel):
 
     @model_validator(mode="after")
     def block_gt_sanitize(self) -> "_ThresholdsPolicy":
-        if self.block is not None and self.sanitize is not None:
-            if self.block <= self.sanitize:
-                raise ValueError("block must be greater than sanitize")
+        if self.block is not None and self.sanitize is not None and self.block <= self.sanitize:
+            raise ValueError("block must be greater than sanitize")
         return self
 
 

@@ -14,6 +14,7 @@ network or live Redis.
 
 from __future__ import annotations
 
+from typing import ClassVar
 from unittest.mock import AsyncMock
 
 import httpx
@@ -40,7 +41,7 @@ class _FakeResp:
 class _FakeClient:
     """Async-context-manager stand-in for httpx.AsyncClient capturing the
     POST args and returning a canned response (or raising)."""
-    last = {}
+    last: ClassVar[dict] = {}
 
     def __init__(self, resp=None, raise_exc=None):
         self._resp = resp
@@ -72,11 +73,11 @@ def _redis(get_return=None):
     return r
 
 
-_ARGS = dict(
-    tenant_id="11111111-1111-1111-1111-111111111111",
-    client_id="22222222-2222-2222-2222-222222222222",
-    client_secret="s3cr3t",
-)
+_ARGS = {
+    "tenant_id": "11111111-1111-1111-1111-111111111111",
+    "client_id": "22222222-2222-2222-2222-222222222222",
+    "client_secret": "s3cr3t",
+}
 
 
 # --- Cache hit --------------------------------------------------------

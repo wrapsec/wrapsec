@@ -40,14 +40,14 @@ def test_canonical_rejects_empty_none_and_unsupported():
 
 # -- resolve_locale precedence --------------------------------------
 def test_resolve_prefers_user_then_tenant_then_system():
-    kw = dict(supported=["en", "de"], default="de")
+    kw = {"supported": ["en", "de"], "default": "de"}
     assert resolve_locale("en", "de", **kw) == "en"   # user wins
     assert resolve_locale(None, "de", **kw) == "de"   # tenant
     assert resolve_locale(None, None, **kw) == "de"   # system default
 
 
 def test_resolve_skips_invalid_candidates():
-    kw = dict(supported=["en", "de"], default="de")
+    kw = {"supported": ["en", "de"], "default": "de"}
     assert resolve_locale("xx", "de", **kw) == "de"   # bad user -> tenant
     assert resolve_locale("xx", "yy", **kw) == "de"   # both bad -> system
 

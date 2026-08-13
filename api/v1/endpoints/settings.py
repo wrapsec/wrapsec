@@ -208,9 +208,8 @@ class LLMSettingsSchema(BaseModel):
             raise ValueError("timeout must be at least 5 seconds")
         if self.timeout is not None and self.timeout > 120:
             raise ValueError("timeout cannot exceed 120 seconds")
-        if self.llm_trigger is not None:
-            if self.llm_trigger < 0.0 or self.llm_trigger > 1.0:
-                raise ValueError("llm_trigger must be between 0.0 and 1.0")
+        if self.llm_trigger is not None and (self.llm_trigger < 0.0 or self.llm_trigger > 1.0):
+            raise ValueError("llm_trigger must be between 0.0 and 1.0")
         return self
 
 

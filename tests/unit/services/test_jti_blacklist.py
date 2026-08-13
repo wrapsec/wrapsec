@@ -24,6 +24,7 @@ These tests lock in three invariants:
 
 
 import pytest
+from jwt.exceptions import InvalidTokenError
 
 from services.auth import jti_blacklist
 from services.auth.token import create_access_token, decode_access_token
@@ -86,7 +87,7 @@ def test_decode_rejects_token_without_jti():
     }
     token = _jwt.encode(payload, _settings.secret_key, algorithm=_settings.jwt_algorithm)
 
-    with pytest.raises(Exception):
+    with pytest.raises(InvalidTokenError):
         decode_access_token(token)
 
 

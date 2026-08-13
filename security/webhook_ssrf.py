@@ -100,10 +100,13 @@ async def check_egress(url: str) -> None:
 
     allow_hosts, allow_nets = _parse_allowlist(settings.webhook_egress_allowlist)
 
-    if settings.webhook_require_https and parsed.scheme.lower() != "https":
-        # http only for an explicitly allowlisted internal host.
-        if host not in allow_hosts:
-            raise WebhookEgressBlocked("https_required")
+    # Require https unless the host is an explicitly allowlisted internal host.
+    if (
+        settings.webhook_require_https
+        and parsed.scheme.lower() != "https"
+        and host not in allow_hosts
+    ):
+        raise WebhookEgressBlocked("https_required")
 
     if not settings.webhook_block_private_egress:
         return  # operator opted out (fully trusted network)

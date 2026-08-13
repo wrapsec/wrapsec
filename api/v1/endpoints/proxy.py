@@ -269,8 +269,8 @@ async def _log_interaction(
     total_latency_ms: int,
     # Audit fields for audit_logs
     risk_score:       float = 0.0,
-    detection_scores: dict  = None,
-    guardrail_scores: dict  = None,
+    detection_scores: dict | None  = None,
+    guardrail_scores: dict | None  = None,
     input_length:     int   = 0,
 ) -> None:
     try:

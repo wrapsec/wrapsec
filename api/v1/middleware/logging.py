@@ -5,6 +5,7 @@
 import json
 import logging
 import time
+from typing import ClassVar
 
 from fastapi import Request
 from starlette.middleware.base import BaseHTTPMiddleware
@@ -20,7 +21,7 @@ class LoggingMiddleware(BaseHTTPMiddleware):
     Skips /health endpoints to reduce noise.
     """
 
-    SKIP_PATHS = {"/health", "/health/ready", "/health/live", "/metrics"}
+    SKIP_PATHS: ClassVar[set[str]] = {"/health", "/health/ready", "/health/live", "/metrics"}
 
     async def dispatch(self, request: Request, call_next) -> Response:
         if request.url.path in self.SKIP_PATHS:

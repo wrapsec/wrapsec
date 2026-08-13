@@ -128,8 +128,8 @@ def pg_long_queries() -> int:
         result = subprocess.run(
             ["docker", "exec", DOCKER_POSTGRES, "psql", "-U", "wrapsec", "-d", "wrapsec",
              "-t", "-c",
-             "SELECT count(*) FROM pg_stat_activity "
-             "WHERE state='active' AND query_start < NOW() - INTERVAL '1 second';"],
+             ("SELECT count(*) FROM pg_stat_activity "
+             "WHERE state='active' AND query_start < NOW() - INTERVAL '1 second';")],
             capture_output=True, text=True, timeout=5,
         )
         return int(result.stdout.strip()) if result.returncode == 0 else 0
@@ -151,7 +151,6 @@ def main():
     redis_ops:   list[int]   = []
     redis_mem:   list[str]   = []
 
-    prev_redis_total = None
     sample_count = 0
 
     print(f"{'Time':<10} {'API CPU%':>8} {'API MEM':>10} {'SYS CPU%':>9} "
@@ -169,7 +168,7 @@ def main():
                     with api_proc.oneshot():
                         a_cpu = api_proc.cpu_percent(interval=None)
                         a_mem = api_proc.memory_info().rss / 1024 / 1024  # MB
-                        a_fds = api_proc.num_fds() if hasattr(api_proc, 'num_fds') else 0
+                        api_proc.num_fds() if hasattr(api_proc, 'num_fds') else 0
                     api_cpu.append(a_cpu)
                     api_mem_mb.append(a_mem)
                     api_str = f"{a_cpu:>7.1f}% {a_mem:>8.1f}MB"
@@ -180,7 +179,7 @@ def main():
 
             # System CPU
             s_cpu = psutil.cpu_percent(interval=None)
-            s_mem = psutil.virtual_memory()
+            psutil.virtual_memory()
             sys_cpu.append(s_cpu)
             sys_str = f"{s_cpu:>8.1f}%"
 
@@ -202,7 +201,7 @@ def main():
             hits   = r_info.get("keyspace_hits", 0)
             misses = r_info.get("keyspace_misses", 0)
             total  = hits + misses
-            hit_rate = f"{hits/total*100:.0f}%" if total > 0 else "N/A"
+            f"{hits/total*100:.0f}%" if total > 0 else "N/A"
 
             print(
                 f"{now:<10} {api_str:<20} {sys_str:<10} "

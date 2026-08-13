@@ -746,10 +746,10 @@ class TestScanExecutionModeValidation:
         result = client.scan("hello", execution_mode="proxy", model="gpt-4o")
         assert result.is_proxy
         # Verify the body sent to with_retry includes both fields
-        call_fn = mock_retry.call_args[0][0]  # the lambda
+        mock_retry.call_args[0][0]  # the lambda
         # Check that the json body was built correctly by inspecting what mock received
         # with_retry is called with a lambda - verify execution_mode in the captured body
-        body = mock_retry.call_args[1] if mock_retry.call_args[1] else {}
+        mock_retry.call_args[1] if mock_retry.call_args[1] else {}
         # The lambda captures body via closure; just verify result is PROXY_RESPONSE
         assert result.execution_mode == "proxy"
 
@@ -798,7 +798,6 @@ class TestGetRequest:
         mock_retry.return_value = GET_REQUEST_RESPONSE
         client = make_client()
         client.get_request("req_abc123")
-        call_args = mock_retry.call_args
         # The lambda passed to with_retry calls execute_request with the URL
         # Verify by checking mock was called (URL built in closure)
         mock_retry.assert_called_once()

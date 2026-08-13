@@ -155,10 +155,8 @@ class DetectionPipeline:
         """
         if transformer_result.score >= tfidf_result.score:
             dominant = transformer_result
-            other    = tfidf_result
         else:
             dominant = tfidf_result
-            other    = transformer_result
 
         combined_score = dominant.score
 

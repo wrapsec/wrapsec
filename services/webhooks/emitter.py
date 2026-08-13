@@ -171,8 +171,8 @@ async def emit_from_audit(
             tenant_id  = tenant_id if isinstance(tenant_id, UUID) else UUID(tenant_str),
             event_type = event_type,
         )
-    except Exception as exc:
-        logger.exception("webhook_endpoints lookup failed trace_id=%s: %s", trace_id, exc)
+    except Exception:
+        logger.exception("webhook_endpoints lookup failed trace_id=%s", trace_id)
         return 0
 
     if not endpoints:
@@ -196,10 +196,10 @@ async def emit_from_audit(
         try:
             await webhook_queue.enqueue(redis, payload)
             enqueued += 1
-        except Exception as exc:
+        except Exception:
             logger.exception(
-                "webhook enqueue failed endpoint_id=%s trace_id=%s: %s",
-                ep.id, trace_id, exc,
+                "webhook enqueue failed endpoint_id=%s trace_id=%s",
+                ep.id, trace_id,
             )
 
     logger.debug(
@@ -224,8 +224,8 @@ async def emit_from_audit_background(audit_data: dict[str, Any]) -> None:
     try:
         async with AsyncSessionFactory() as db:
             await emit_from_audit(db=db, redis=get_redis(), audit_data=audit_data)
-    except Exception as exc:
+    except Exception:
         logger.exception(
-            "webhook background emit failed trace_id=%s: %s",
-            audit_data.get("trace_id"), exc,
+            "webhook background emit failed trace_id=%s",
+            audit_data.get("trace_id"),
         )

@@ -21,18 +21,18 @@ from domain.value_objects.trace_id import TraceId
 
 def _decision(**over):
     tid = TraceId.generate() if hasattr(TraceId, "generate") else TraceId("t_1")
-    kw = dict(
-        trace_id       = tid,
-        decision       = DecisionType.BLOCK,
-        risk_score     = RiskScore(0.88),
-        threats        = [ThreatCategory.JAILBREAK],
-        layer_scores   = LayerScores(
+    kw = {
+        "trace_id": tid,
+        "decision": DecisionType.BLOCK,
+        "risk_score": RiskScore(0.88),
+        "threats": [ThreatCategory.JAILBREAK],
+        "layer_scores": LayerScores(
             rule_score=0.88, ml_score=0.2, pii_score=0.0, transformer_jailbreak=0.91
         ),
-        primary_reason  = "RULE_DETECTOR",
-        confidence      = 0.9,
-        confidence_band = "high",
-    )
+        "primary_reason": "RULE_DETECTOR",
+        "confidence": 0.9,
+        "confidence_band": "high",
+    }
     kw.update(over)
     return GatewayDecision(**kw)
 

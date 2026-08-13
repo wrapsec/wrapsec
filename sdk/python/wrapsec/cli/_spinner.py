@@ -25,6 +25,10 @@ import os
 import sys
 import threading
 import time
+from typing import TYPE_CHECKING
+
+if TYPE_CHECKING:
+    from typing_extensions import Self
 
 
 def get_spinner_frames() -> list[str]:
@@ -108,7 +112,7 @@ class Spinner:
             # Use a short sleep with lock release so stop() isn't delayed
             time.sleep(0.08)
 
-    def __enter__(self) -> Spinner:
+    def __enter__(self) -> Self:
         self.start()
         return self
 

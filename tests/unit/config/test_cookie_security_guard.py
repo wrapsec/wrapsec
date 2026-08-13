@@ -18,11 +18,11 @@ from config.settings import Settings
 
 
 def _make(**overrides):
-    defaults = dict(
-        secret_key    = "x" * 32,
-        admin_api_key = "wsk_admin_" + "y" * 32,
-        database_url  = "postgresql+asyncpg://u:p@localhost/db",
-    )
+    defaults = {
+        "secret_key": "x" * 32,
+        "admin_api_key": "wsk_admin_" + "y" * 32,
+        "database_url": "postgresql+asyncpg://u:p@localhost/db",
+    }
     defaults.update(overrides)
     return Settings(**defaults)
 

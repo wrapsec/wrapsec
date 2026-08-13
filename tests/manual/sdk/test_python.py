@@ -131,7 +131,6 @@ def test_sync_client() -> None:
     assert_eq("sanitization_applied false", result.sanitization_applied, False)
     assert_eq("is_proxy false",             result.is_proxy, False)
 
-    SAFE_TRACE = result.trace_id
 
     # ------------------------------------------------------------------
     section("Python SDK - sync Client.scan() - prompt injection (BLOCK)")

@@ -21,3 +21,19 @@ line-length = 88
 #   comment. Narrowing these handlers would let an unexpected exception escape
 #   a worker or auth path -- the opposite of the fail-safe intent.
 ignore = ["B008", "BLE001", "S110"]
+
+[lint.per-file-ignores]
+# Load/monitoring tooling and the grafana guard test shell out to fixed,
+# trusted commands (docker, psql, pip, bash); the default check=False is
+# intentional (return codes are handled inline), so the explicit-check rule
+# is noise here.
+"tests/load/monitor.py" = ["PLW1510"]
+"tests/integration/test_grafana_password_guard.py" = ["PLW1510"]
+# locust runs its files via `-f` and never imports them as modules, so the
+# hyphenated filename is the framework convention, not an invalid module name.
+"tests/load/locustfile-b.py" = ["N999"]
+# The SDK validation layer and the localization loader raise ValueError
+# uniformly for every invalid input -- a single documented exception type for
+# callers to catch. TypeError (TRY004) would fragment that contract.
+"sdk/python/wrapsec/core/validation.py" = ["TRY004"]
+"services/localization.py" = ["TRY004"]

@@ -114,7 +114,7 @@ def test_isolation() -> None:
     check("Purchase audit list succeeds", resp.status_code == 200)
     if resp.status_code == 200:
         items            = resp.json().get("items", [])
-        dept_ids         = set(i.get("dept_id") for i in items if i.get("dept_id"))
+        dept_ids         = {i.get("dept_id") for i in items if i.get("dept_id")}
         finance_visible  = any(i.get("trace_id") == finance_trace for i in items)
         check("Purchase cannot see Finance logs", not finance_visible,
               f"Finance trace {finance_trace} visible in Purchase audit list")

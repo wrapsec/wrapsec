@@ -128,11 +128,11 @@ def chat(
         print_error(str(e))
         sys.exit(2 if blocked else 1)
 
-    except Exception as e:
+    except Exception:
         if spinner:
             spinner.stop()
         import logging
-        logging.getLogger("wrapsec.cli.chat").error("Unexpected error: %s", e, exc_info=True)
+        logging.getLogger("wrapsec.cli.chat").exception("Unexpected error")
         print_error("An unexpected error occurred. Check logs for details.")
         sys.exit(1)
 

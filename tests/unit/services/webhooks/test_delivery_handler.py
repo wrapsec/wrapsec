@@ -59,14 +59,14 @@ def _handler(monkeypatch, response=None, raise_exc=None):
 
 
 def _endpoint(**over):
-    base = dict(
-        connector_type=None,
-        url="https://recv.example/hook",
-        secret_enc="enc:sk_secret",
-        old_secrets=[],
-        config=None,
-        headers=None,
-    )
+    base = {
+        "connector_type": None,
+        "url": "https://recv.example/hook",
+        "secret_enc": "enc:sk_secret",
+        "old_secrets": [],
+        "config": None,
+        "headers": None,
+    }
     base.update(over)
     return SimpleNamespace(**base)
 

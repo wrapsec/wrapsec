@@ -16,7 +16,7 @@ from __future__ import annotations
 
 import asyncio
 import logging
-from typing import Any
+from typing import TYPE_CHECKING, Any
 
 import httpx
 
@@ -41,6 +41,9 @@ from wrapsec.core.validation import (
 )
 from wrapsec.exceptions import WrapSecAuthError, WrapSecError
 from wrapsec.models import AuditLog, AuditStats, BatchScanResult, ScanResult
+
+if TYPE_CHECKING:
+    from typing_extensions import Self
 
 logger = logging.getLogger("wrapsec.async_client")
 
@@ -80,7 +83,7 @@ class AsyncClient:
             raise ValueError(f"timeout must be at least 1 second, got {timeout}")
         self._timeout: int | None = timeout
 
-    async def __aenter__(self) -> AsyncClient:
+    async def __aenter__(self) -> Self:
         return self
 
     async def __aexit__(self, *_: object) -> None:

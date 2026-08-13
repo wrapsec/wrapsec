@@ -329,7 +329,7 @@ class AuthMiddleware(BaseHTTPMiddleware):
         if hmac.compare_digest(api_key, get_settings().admin_api_key or ""):
             return await self._authenticate_admin_key(request, call_next)
 
-        if api_key.startswith("wsk_live_") or api_key.startswith("wsk_trial_"):
+        if api_key.startswith(("wsk_live_", "wsk_trial_")):
             key_record = await self._get_standard_key(api_key)
             if key_record:
                 request.state.principal_type = "api_key"
@@ -526,9 +526,8 @@ class AuthMiddleware(BaseHTTPMiddleware):
                 if not record or record.revoked:
                     return None
 
-                if record.expires_at is not None:
-                    if utc_now() > record.expires_at:
-                        return None
+                if record.expires_at is not None and utc_now() > record.expires_at:
+                    return None
 
                 try:
                     record.last_used_at = utc_now()

@@ -563,7 +563,7 @@ class TestProxyChatCompletions:
         mock_db.add = MagicMock(side_effect=lambda obj: added_objects.append(obj))
 
         async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as client:
-            resp = await client.post(
+            await client.post(
                 "/v1/chat/completions",
                 headers={"x-api-key": settings.admin_api_key},
                 json={"model": "openai/gpt-4o", "messages": _injection_messages()},

@@ -14,10 +14,10 @@ from engine.provenance.registry import SourceRegistry, TrustTier
 
 
 def _registry(**kwargs):
-    defaults = dict(
-        trusted   = ["user_prompt"],
-        untrusted = ["tool_output", "retrieved_document", "external_content"],
-    )
+    defaults = {
+        "trusted": ["user_prompt"],
+        "untrusted": ["tool_output", "retrieved_document", "external_content"],
+    }
     defaults.update(kwargs)
     return SourceRegistry(**defaults)
 

@@ -571,7 +571,7 @@ async def two_tenant_setup():
                 tid   = uuid.uuid4()
                 did   = uuid.uuid4()
                 aid   = uuid.uuid4()
-                uid   = uuid.uuid4()
+                uuid.uuid4()
                 keyid = f"wsk_live_{letter.lower()}_" + uuid.uuid4().hex[:12]
                 trace = f"trace-{letter.lower()}-" + uuid.uuid4().hex[:8]
                 email = normalize_email(

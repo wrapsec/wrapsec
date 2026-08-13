@@ -91,10 +91,10 @@ def _format(report: dict) -> str:
         lines.append(f"{r['delta']:>7.2f}  {r['poisoned_catch']:>14.1%}  {r['benign_fpr']:>10.1%}")
     lines += [
         "-" * 52,
-        f"poisoned docs: {report['sweep'][0]['poisoned_n']}   "
-        f"benign docs: {report['sweep'][0]['benign_n']}",
-        f"RECOMMENDED untrusted_threshold_delta: {report['recommended_delta']:.2f} "
-        f"(default ships as 0.00 / opt-in)",
+        (f"poisoned docs: {report['sweep'][0]['poisoned_n']}   "
+        f"benign docs: {report['sweep'][0]['benign_n']}"),
+        (f"RECOMMENDED untrusted_threshold_delta: {report['recommended_delta']:.2f} "
+        f"(default ships as 0.00 / opt-in)"),
     ]
     return "\n".join(lines)
 
