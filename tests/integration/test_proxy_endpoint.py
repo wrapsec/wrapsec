@@ -12,6 +12,7 @@ Run:
     pytest tests/integration/test_proxy_endpoint.py -v
 """
 
+import uuid
 from unittest.mock import AsyncMock, MagicMock, patch
 
 import httpx
@@ -805,3 +806,76 @@ class TestProxyChatCompletions:
         app.dependency_overrides = {}
 
         assert resp.status_code == 200
+
+
+# ---------------------------------------------------------------------------
+# M1 regression -- proxy audit row must be tenant-attributed AND hash-chained
+# ---------------------------------------------------------------------------
+# Uses the real client/test_db harness (not the MagicMock get_db above) so the
+# audit row actually persists and the tenant-scoped audit path can be exercised.
+# Only the provider HTTP call is mocked.
+
+@pytest.mark.asyncio
+async def test_proxy_audit_row_tenant_attributed_and_chained(client, test_db):
+    import hashlib
+
+    from sqlalchemy import select as _select
+
+    from db.models import (
+        APIKeyModel,
+        AuditLogModel,
+        DepartmentModel,
+        ProxyProviderConfigModel,
+        TenantModel,
+    )
+
+    tid, did = uuid.uuid4(), uuid.uuid4()
+    raw = "wsk_live_" + uuid.uuid4().hex
+    test_db.add(TenantModel(id=tid, slug=f"t-{tid.hex[:8]}", name="T", global_policy={}, is_active=True))
+    await test_db.commit()
+    test_db.add(DepartmentModel(id=did, tenant_id=tid, slug=f"d-{did.hex[:6]}", name="D", is_active=True))
+    await test_db.commit()
+    test_db.add(APIKeyModel(
+        id=uuid.uuid4(), key_id="key_" + uuid.uuid4().hex[:8], tenant_id=tid, dept_id=did, name="k",
+        key_hash=hashlib.sha256(raw.encode()).hexdigest(), key_type="live", is_admin=False, revoked=False,
+    ))
+    await test_db.commit()
+    test_db.add(ProxyProviderConfigModel(
+        id=uuid.uuid4(), tenant_id=str(tid), provider="openai",
+        base_url="https://api.openai.com/v1",
+        provider_api_key_enc=encrypt("sk-test-key-1234567890", settings.secret_key),
+        default_model="gpt-4o", timeout_seconds=30,
+    ))
+    await test_db.commit()
+
+    with patch("httpx.AsyncClient") as mock_cls:
+        mock_client      = AsyncMock()
+        mock_client.post = AsyncMock(return_value=_openai_response())
+        mock_cls.return_value.__aenter__ = AsyncMock(return_value=mock_client)
+        mock_cls.return_value.__aexit__  = AsyncMock(return_value=False)
+
+        resp = await client.post(
+            "/v1/chat/completions",
+            headers={"x-api-key": raw},
+            json={"model": "openai/gpt-4o", "messages": _clean_messages()},
+        )
+
+    assert resp.status_code == 200, resp.text
+    trace = resp.headers.get("x-wrapsec-trace-id")
+    assert trace
+
+    # 1. The proxy audit row is tenant/dept-attributed and participates in the
+    #    per-tenant tamper-evident hash chain (record_hash is only computed when
+    #    tenant_id is present).
+    row = (await test_db.execute(
+        _select(AuditLogModel).where(AuditLogModel.trace_id == trace)
+    )).scalar_one()
+    assert row.execution_mode == "proxy"
+    assert row.tenant_id == str(tid)
+    assert row.dept_id == str(did)
+    assert row.record_hash is not None
+
+    # 2. It is no longer invisible: the tenant-scoped audit API (same key) lists it.
+    listed = await client.get("/v1/audit/logs", headers={"x-api-key": raw})
+    assert listed.status_code == 200
+    assert trace in {i["trace_id"] for i in listed.json()["items"]}

@@ -272,6 +272,15 @@ async def _log_interaction(
     detection_scores: dict | None  = None,
     guardrail_scores: dict | None  = None,
     input_length:     int   = 0,
+    # Tenant attribution -- without these the proxy audit row is NULL-tenant, so
+    # it drops out of tenant-scoped /v1/audit/logs and out of the per-tenant
+    # tamper-evident hash chain.
+    tenant_id:        str | None = None,
+    dept_id:          str | None = None,
+    app_id:           str | None = None,
+    source:           str | None = None,
+    ip_address:       str | None = None,
+    user_agent:       str | None = None,
 ) -> None:
     try:
         # Honor data_storage_mode:
@@ -344,6 +353,17 @@ async def _log_interaction(
             "confidence":            input_confidence,
             "confidence_band":       "HIGH" if input_confidence >= 0.7 else "MEDIUM" if input_confidence >= 0.4 else "LOW",
             "input_length":          input_length,
+            "tenant_id":             tenant_id,
+            "dept_id":               dept_id,
+            "app_id":                app_id,
+            "source":                source,
+            "ip_address":            ip_address,
+            "user_agent":            user_agent,
+            "severity":              compute_severity(
+                decision       = input_decision,
+                risk_score     = risk_score,
+                primary_reason = input_reason,
+            ),
             "proxy_interaction_id":  interaction.id,
         })
 
@@ -388,6 +408,11 @@ async def proxy_chat_completions(
     trace_id   = str(TraceId.generate())
     key_id     = getattr(request.state, "key_id",    None)
     tenant_id  = getattr(request.state, "tenant_id", None)
+    dept_id    = getattr(request.state, "dept_id",    None)
+    app_id     = getattr(request.state, "app_id",     None)
+    source     = getattr(request.state, "key_name",   None) or "proxy"
+    ip_address = getattr(request.state, "ip_address", None)
+    user_agent = getattr(request.state, "user_agent", None)
 
     # -- 0. Trial key check - proxy mode not available for trial keys --
     key_type = getattr(request.state, "key_type", "live")
@@ -591,6 +616,8 @@ async def proxy_chat_completions(
         )
         await _log_interaction(
             db=db, trace_id=trace_id, key_id=key_id, user_id=None,
+            tenant_id=tenant_id, dept_id=dept_id, app_id=app_id,
+            source=source, ip_address=ip_address, user_agent=user_agent,
             input_raw=scan_input, input_sanitized=None,
             input_decision=input_decision, input_reason=input_reason,
             input_confidence=input_conf, input_threats=input_threats,
@@ -675,6 +702,8 @@ async def proxy_chat_completions(
         )
         await _log_interaction(
             db=db, trace_id=trace_id, key_id=key_id, user_id=None,
+            tenant_id=tenant_id, dept_id=dept_id, app_id=app_id,
+            source=source, ip_address=ip_address, user_agent=user_agent,
             input_raw=scan_input, input_sanitized=input_sanit,
             input_decision=input_decision, input_reason=input_reason,
             input_confidence=input_conf, input_threats=input_threats,
@@ -713,6 +742,8 @@ async def proxy_chat_completions(
         )
         await _log_interaction(
             db=db, trace_id=trace_id, key_id=key_id, user_id=None,
+            tenant_id=tenant_id, dept_id=dept_id, app_id=app_id,
+            source=source, ip_address=ip_address, user_agent=user_agent,
             input_raw=scan_input, input_sanitized=input_sanit,
             input_decision=input_decision, input_reason=input_reason,
             input_confidence=input_conf, input_threats=input_threats,
@@ -760,6 +791,8 @@ async def proxy_chat_completions(
         )
         await _log_interaction(
             db=db, trace_id=trace_id, key_id=key_id, user_id=None,
+            tenant_id=tenant_id, dept_id=dept_id, app_id=app_id,
+            source=source, ip_address=ip_address, user_agent=user_agent,
             input_raw=scan_input, input_sanitized=input_sanit,
             input_decision=input_decision, input_reason=input_reason,
             input_confidence=input_conf, input_threats=input_threats,
@@ -798,6 +831,8 @@ async def proxy_chat_completions(
 
     await _log_interaction(
         db=db, trace_id=trace_id, key_id=key_id, user_id=None,
+        tenant_id=tenant_id, dept_id=dept_id, app_id=app_id,
+        source=source, ip_address=ip_address, user_agent=user_agent,
         input_raw=scan_input, input_sanitized=input_sanit,
         input_decision=input_decision, input_reason=input_reason,
         input_confidence=input_conf, input_threats=input_threats,
