@@ -332,3 +332,38 @@ async def test_pause_webhook_cross_tenant_returns_404(auth_client, two_tenant_se
         f"/v1/admin/webhooks/{wid}",
         headers={"Authorization": f"Bearer {b['admin_token']}"},
     )
+
+
+# ── Tenant profile (H1) ──────────────────────────────────────────────────────
+# GET/PUT /v1/admin/tenant must resolve the caller's own tenant, not a fixed
+# 'default' tenant -- otherwise any tenant admin reads/writes the default
+# tenant's profile and global_policy.
+
+@pytest.mark.asyncio
+async def test_get_tenant_profile_scoped_to_caller(auth_client, two_tenant_setup):
+    a, b = two_tenant_setup["A"], two_tenant_setup["B"]
+    ra = await auth_client.get("/v1/admin/tenant", headers={"Authorization": f"Bearer {a['admin_token']}"})
+    rb = await auth_client.get("/v1/admin/tenant", headers={"Authorization": f"Bearer {b['admin_token']}"})
+    assert ra.status_code == 200 and rb.status_code == 200
+    # Each admin sees their OWN tenant, not a shared default one.
+    assert ra.json()["id"] == str(a["tenant"].id)
+    assert rb.json()["id"] == str(b["tenant"].id)
+    assert ra.json()["id"] != rb.json()["id"]
+
+
+@pytest.mark.asyncio
+async def test_update_tenant_profile_scoped_to_caller(auth_client, two_tenant_setup):
+    a, b = two_tenant_setup["A"], two_tenant_setup["B"]
+    # Tenant B's admin renames B's tenant ...
+    upd = await auth_client.put(
+        "/v1/admin/tenant",
+        json={"name": "Renamed-By-B"},
+        headers={"Authorization": f"Bearer {b['admin_token']}"},
+    )
+    assert upd.status_code == 200
+    assert upd.json()["id"] == str(b["tenant"].id)
+    assert upd.json()["name"] == "Renamed-By-B"
+    # ... and tenant A's profile is untouched (B could not reach it).
+    ra = await auth_client.get("/v1/admin/tenant", headers={"Authorization": f"Bearer {a['admin_token']}"})
+    assert ra.json()["id"] == str(a["tenant"].id)
+    assert ra.json()["name"] != "Renamed-By-B"

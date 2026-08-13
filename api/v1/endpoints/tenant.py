@@ -2,7 +2,9 @@
 # Copyright (c) 2026 WrapSec. All rights reserved.
 # WrapSec v1.0 | AI Security Gateway - https://wrapsec.com
 
-from fastapi import APIRouter, Depends
+import uuid
+
+from fastapi import APIRouter, Depends, Request
 from fastapi.responses import JSONResponse
 from pydantic import BaseModel, Field, field_validator, model_validator
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -15,6 +17,22 @@ from services.localization import validate_locale_input
 from services.time import to_iso_z
 
 router = APIRouter()
+
+
+async def _resolve_caller_tenant(repo: TenantRepository, request: Request):
+    """Resolve the caller's OWN tenant from the authenticated identity.
+
+    Every tenant-profile read/write is scoped to request.state.tenant_id -- never
+    a fixed 'default' tenant -- so a tenant admin can only ever view or modify
+    their own tenant, not a shared/other one.
+    """
+    tid = getattr(request.state, "tenant_id", None)
+    if not tid:
+        return None
+    try:
+        return await repo.get_by_id(uuid.UUID(str(tid)))
+    except (ValueError, TypeError):
+        return None
 
 
 def _format(tenant, is_admin: bool = False) -> dict:
@@ -108,16 +126,17 @@ class TenantUpdateSchema(BaseModel):
 
 @router.get("")
 async def get_tenant(
+    request:    Request,
     db:         AsyncSession = Depends(get_db),
     _principal: Principal    = Depends(get_current_principal),
 ):
     """
     Returns tenant profile. global_policy is only returned to admin principals -
     non-admins see metadata without the security policy configuration.
-    Auth: any valid principal.
+    Scoped to the caller's own tenant. Auth: any valid principal.
     """
     repo   = TenantRepository(db)
-    tenant = await repo.get_default()
+    tenant = await _resolve_caller_tenant(repo, request)
     if not tenant:
         return JSONResponse(content={"error": "No tenant found"}, status_code=404)
     return JSONResponse(content=_format(tenant, is_admin=getattr(_principal, "is_admin", False)))
@@ -126,16 +145,17 @@ async def get_tenant(
 @router.put("")
 async def update_tenant(
     body:      TenantUpdateSchema,
+    request:   Request,
     db:        AsyncSession = Depends(get_db),
     _principal: Principal   = Depends(require_admin()),
 ):
     """
     Partially updates tenant metadata: name, description, contact_email, global_policy.
-    Only fields present in the request body are updated.
-    Auth: JWT + ADMIN role required.
+    Only fields present in the request body are updated. Scoped to the caller's
+    own tenant. Auth: JWT + ADMIN role required.
     """
     repo   = TenantRepository(db)
-    tenant = await repo.get_default()
+    tenant = await _resolve_caller_tenant(repo, request)
     if not tenant:
         return JSONResponse(content={"error": "No tenant found"}, status_code=404)
 
