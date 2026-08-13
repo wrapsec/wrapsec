@@ -16,3 +16,5 @@ testcontainers[postgres]==4.13.1
 # ── Static analysis ───────────────────────────────────────────────────────────
 # Static type checking, scoped to the Python SDK (make typecheck).
 pyright==1.1.411
+# Test coverage measurement (make coverage). Config lives in .coveragerc.
+pytest-cov==7.1.0

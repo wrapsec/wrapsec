@@ -1,0 +1,28 @@
+[run]
+source =
+    api
+    services
+    engine
+    db
+    domain
+    config
+    cache
+    workers
+    security
+    errors
+    observability
+    clients
+omit =
+    */__pycache__/*
+    */tests/*
+    db/migrations/*
+
+[report]
+exclude_lines =
+    pragma: no cover
+    if TYPE_CHECKING:
+    raise NotImplementedError
+    if __name__ == .__main__.:
+    @(abc\.)?abstractmethod
+    ^\s*\.\.\.\s*$
+sort = miss

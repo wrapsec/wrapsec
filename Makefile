@@ -21,6 +21,18 @@ test-integration:
 	URL=postgresql+asyncpg://wrapsec:wrapsec@localhost:55432/wrapsec_test; \
 	DATABASE_URL=$$URL WRAPSEC_TEST_PG_URL=$$URL TESTING=true pytest tests/integration -v'
 
+# Combined unit + integration coverage over the server code (config in .coveragerc).
+# Spins a disposable PostgreSQL so the integration tier runs. Writes an HTML report.
+coverage:
+	@bash -c 'set -e; \
+	CID=$$(docker run --rm -d -e POSTGRES_USER=wrapsec -e POSTGRES_PASSWORD=wrapsec -e POSTGRES_DB=wrapsec_test -p 55432:5432 postgres:16-alpine); \
+	trap "docker rm -f $$CID >/dev/null 2>&1 || true" EXIT; \
+	for i in $$(seq 1 30); do docker exec $$CID pg_isready -U wrapsec -d wrapsec_test >/dev/null 2>&1 && break; sleep 1; done; \
+	URL=postgresql+asyncpg://wrapsec:wrapsec@localhost:55432/wrapsec_test; \
+	DATABASE_URL=$$URL WRAPSEC_TEST_PG_URL=$$URL TESTING=true coverage run -m pytest tests/unit tests/integration -q; \
+	coverage report; \
+	coverage html'
+
 # Apply pending Alembic migrations. Also runs automatically on API startup.
 migrate:
 	alembic upgrade head
