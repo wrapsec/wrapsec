@@ -38,7 +38,6 @@ dashboard/.env.local
 !.env.example
 
 # Sibling checkouts / scratch dirs not used at runtime
-aisecuritygateway-oss/
 backups/
 models/
 tmp/
