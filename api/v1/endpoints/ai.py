@@ -26,7 +26,7 @@ from domain.entities.request import (
 )
 from domain.enums import DecisionType, DetectionMode, ExecutionMode
 from domain.value_objects.severity import compute_severity
-from errors.exceptions import DebugForbiddenError, NotFoundError
+from errors.exceptions import DebugForbiddenError, NotFoundError, RateLimitError
 from services.gateway.service import GatewayService
 from services.time import to_iso_z
 from services.webhooks.emitter import emit_from_audit_background
@@ -262,7 +262,6 @@ async def ai_request(
                 limit=_settings.debug_rate_limit_per_minute,
             )
             if is_limited:
-                from errors.exceptions import RateLimitError
                 raise RateLimitError()
         except RateLimitError:
             raise
@@ -298,7 +297,6 @@ async def ai_request(
                     limit=_settings.trial_rate_limit_per_minute,
                 )
                 if is_limited:
-                    from errors.exceptions import RateLimitError
                     raise RateLimitError()
         except RateLimitError:
             raise
@@ -367,7 +365,6 @@ async def ai_request(
                     limit=_app_rate_limit,
                 )
                 if _app_limited:
-                    from errors.exceptions import RateLimitError
                     raise RateLimitError()
             except RateLimitError:
                 raise
@@ -535,7 +532,6 @@ async def ai_scan_batch(
             )
             is_limited, _, _ = await is_rate_limited(rl_id, cost=n - 1)
             if is_limited:
-                from errors.exceptions import RateLimitError
                 raise RateLimitError()
         except RateLimitError:
             raise

@@ -2,6 +2,7 @@
 # Copyright (c) 2026 WrapSec. All rights reserved.
 # WrapSec v1.0 | AI Security Gateway - https://wrapsec.com
 
+from collections.abc import AsyncGenerator
 from pathlib import Path
 
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_async_engine
@@ -41,7 +42,7 @@ AsyncSessionFactory = async_sessionmaker(
 )
 
 
-async def get_session() -> AsyncSession:
+async def get_session() -> AsyncGenerator[AsyncSession, None]:
     async with AsyncSessionFactory() as session:
         yield session
 

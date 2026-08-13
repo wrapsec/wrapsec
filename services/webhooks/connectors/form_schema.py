@@ -121,11 +121,12 @@ def connector_forms() -> list[dict]:
     form and the runtime validator agree on mandatory keys."""
     out: list[dict] = []
     for form in _FORMS:
-        required = (
-            registry.get_spec(form.connector_type).required_config
+        spec = (
+            registry.get_spec(form.connector_type)
             if form.connector_type is not None
-            else frozenset()
+            else None
         )
+        required = spec.required_config if spec is not None else frozenset()
         out.append({
             "type":  form.connector_type,
             "label": form.label,

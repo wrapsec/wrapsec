@@ -402,6 +402,8 @@ async def update_user(
 
     try:
         updated = await repo.update(user_id, data)
+        if updated is None:
+            raise NotFoundError("user", str(user_id))
         # Do NOT commit yet - session invalidation must be atomic with the update.
     except ValueError as e:
         logger.warning("user update rejected: %s", e)

@@ -335,6 +335,8 @@ async def set_application_policy(
     record = await repo.update(app_id, {
         "policy_override": body.policy_override
     })
+    if record is None:
+        raise NotFoundError("application", str(app_id))
     await db.commit()
 
     try:
