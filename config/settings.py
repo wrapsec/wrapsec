@@ -423,7 +423,7 @@ class Settings(BaseSettings):
 
 @lru_cache
 def get_settings() -> Settings:
-    settings = Settings()
+    settings = Settings()  # type: ignore[call-arg]  # required fields are populated from the environment
     settings.validate_thresholds()
     settings.validate_source_posture()
     settings.validate_secrets()

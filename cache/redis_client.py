@@ -43,7 +43,7 @@ async def ping() -> bool:
             socket_connect_timeout = 2,
             decode_responses       = True,
         )
-        result = await fresh.ping()
+        result = await fresh.ping()  # type: ignore  # async client method carries a sync-typed return stub
         await fresh.aclose()
         return result
     except Exception as e:

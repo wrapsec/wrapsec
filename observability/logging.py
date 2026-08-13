@@ -122,7 +122,7 @@ class JSONFormatter(logging.Formatter):
 
         # Add trace_id if present
         if hasattr(record, "trace_id"):
-            log_entry["trace_id"] = record.trace_id
+            log_entry["trace_id"] = record.__dict__["trace_id"]
 
         # Add extra fields - skip standard logging internals and sensitive keys
         for key, value in record.__dict__.items():

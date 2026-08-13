@@ -77,7 +77,7 @@ async def is_rate_limited(
         # Unique member prefix prevents duplicate scores from colliding in the
         # sorted set; the Lua script appends :1..:cost for weighted consumption.
         member = f"{now}:{_uuid.uuid4().hex}"
-        result = await redis.eval(
+        result = await redis.eval(  # type: ignore  # async client methods carry sync-typed return stubs
             _RATE_LIMIT_LUA, 1, key,
             str(now), str(WINDOW_SECS), str(eff_lim), member, str(cost),
         )
