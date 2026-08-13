@@ -33,7 +33,7 @@ def _serialize(item: ProxyInteractionModel, detail: bool = False) -> dict:
         "id":                    str(item.id),
         "trace_id":              item.trace_id,
         "created_at":            to_iso_z(item.created_at) if item.created_at else None,
-        "key_id":                item.key_id,
+        "key_id":                item.key_id.removeprefix("key:") if item.key_id else None,
         "user_id":               item.user_id,
         "input_decision":        item.input_decision,
         "input_primary_reason":  item.input_primary_reason,
@@ -115,7 +115,9 @@ async def get_proxy_interaction(
     if request.state.is_admin:
         # Admin: verify the interaction's key belongs to this tenant
         if item.key_id:
-            key_record = await ApiKeyRepository(db).get_by_key_id(item.key_id)
+            # Interactions store the prefixed principal id ("key:<key_id>"); resolve
+            # back to the raw key_id the api_keys table is indexed by.
+            key_record = await ApiKeyRepository(db).get_by_key_id(item.key_id.removeprefix("key:"))
             if not key_record or str(key_record.tenant_id) != request.state.tenant_id:
                 return not_found
     else:

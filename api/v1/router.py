@@ -15,6 +15,7 @@ from api.v1.endpoints import (
     health,
     keys,
     proxy,
+    proxy_interactions,
     proxy_settings,
     settings,
     setup,
@@ -39,6 +40,7 @@ router.include_router(applications.router,        prefix="/v1/admin/applications
 router.include_router(webhooks.router,            prefix="/v1/admin/webhooks",     tags=["Webhooks"])
 router.include_router(proxy_settings.router,      prefix="/v1/settings",           tags=["Proxy"])
 router.include_router(proxy.router,               prefix="/v1",                    tags=["Proxy"])
+router.include_router(proxy_interactions.router,  prefix="/v1/proxy",              tags=["Proxy"])
 
 # ── JWT Auth ───────────────────────────────────────────────────────────────────
 router.include_router(auth.router,                prefix="/v1/auth",               tags=["Auth"])

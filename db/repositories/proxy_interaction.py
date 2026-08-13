@@ -33,9 +33,12 @@ class ProxyInteractionRepository(BaseRepository):
     ) -> tuple[list[ProxyInteractionModel], int]:
         query = select(ProxyInteractionModel)
 
-        # Scope to tenant - subquery on api_keys since ProxyInteractionModel has no tenant_id
+        # Scope to tenant - subquery on api_keys since ProxyInteractionModel has no tenant_id.
+        # Interactions store the prefixed principal id ("key:<key_id>"); api_keys stores the
+        # raw key_id. Prefix the tenant keys so they match the stored format (storage is left
+        # unchanged, so the caller-scoped path below keeps matching on the prefixed id too).
         if tenant_id is not None:
-            tenant_keys = select(APIKeyModel.key_id).where(
+            tenant_keys = select("key:" + APIKeyModel.key_id).where(
                 APIKeyModel.tenant_id == tenant_id
             )
             query = query.where(ProxyInteractionModel.key_id.in_(tenant_keys))

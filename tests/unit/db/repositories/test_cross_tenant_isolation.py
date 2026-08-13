@@ -131,7 +131,10 @@ async def _seed_two_tenants(db):
         db.add(ProxyInteractionModel(
             id                   = uuid.uuid4(),
             trace_id             = f"px-{letter.lower()}-" + uuid.uuid4().hex[:8],
-            key_id               = keyid,
+            # The proxy stores the prefixed principal id ("key:<key_id>"), not the raw
+            # api_keys.key_id -- match production so the tenant-scope join is exercised
+            # the way it actually runs.
+            key_id               = f"key:{keyid}",
             input_decision       = "ALLOW",
             input_primary_reason = "clean",
             input_confidence     = 0.05,
@@ -324,8 +327,10 @@ async def test_proxy_interaction_repo_list_scoped_to_tenant(test_db):
 
     assert total_a == 1
     assert len(items_a) == 1
-    assert items_a[0].key_id == fx["A"]["key_id"]
-    assert fx["B"]["key_id"] not in {i.key_id for i in items_a}
+    # Interactions store the prefixed principal id; the repo prefixes the tenant's raw
+    # api_keys.key_id values to match.
+    assert items_a[0].key_id == f"key:{fx['A']['key_id']}"
+    assert f"key:{fx['B']['key_id']}" not in {i.key_id for i in items_a}
 
 
 # ── Proxy provider config ────────────────────────────────────────────────────
