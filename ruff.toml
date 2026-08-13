@@ -1,0 +1,13 @@
+# Ruff configuration.
+#
+# No select/extend-select is set, so the default rule set stays in effect;
+# this file only tunes it. Line length matches the formatter default (88).
+
+line-length = 88
+
+[lint]
+# B008 (function-call-in-default-argument) fires on every FastAPI route
+# handler because dependency injection is expressed as call defaults --
+# Depends(), Query(), Header(), Path(), Security(). That is the framework's
+# intended idiom, not a defect, so the rule is disabled project-wide.
+ignore = ["B008"]
