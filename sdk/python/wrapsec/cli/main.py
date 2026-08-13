@@ -30,7 +30,7 @@ if sys.platform == "win32" and hasattr(sys.stdin, "reconfigure"):
     try:
         sys.stdin.reconfigure(encoding="utf-8")
     except Exception:
-        pass
+        pass  # Best-effort stdin reconfigure; non-fatal if unsupported.
 
 
 @click.group(invoke_without_command=True)

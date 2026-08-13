@@ -6,8 +6,18 @@
 line-length = 88
 
 [lint]
-# B008 (function-call-in-default-argument) fires on every FastAPI route
-# handler because dependency injection is expressed as call defaults --
-# Depends(), Query(), Header(), Path(), Security(). That is the framework's
-# intended idiom, not a defect, so the rule is disabled project-wide.
-ignore = ["B008"]
+# Rules disabled project-wide, with rationale:
+#
+# B008 (function-call-in-default-argument): FastAPI expresses dependency
+#   injection as call defaults -- Depends(), Query(), Header(), Path(),
+#   Security(). That is the framework's intended idiom, not a defect.
+#
+# BLE001 (blind-except) / S110 (try-except-pass): WrapSec is a fail-closed
+#   security gateway, and broad `except Exception` is a deliberate, audited
+#   pattern here. Security paths fail closed (deny on error); the detection
+#   pipeline degrades gracefully to a clean result; and best-effort work
+#   (Redis rate limiting, cache, metrics, audit-event writes) fails open so it
+#   never breaks a request. Every silent swallow carries an explanatory
+#   comment. Narrowing these handlers would let an unexpected exception escape
+#   a worker or auth path -- the opposite of the fail-safe intent.
+ignore = ["B008", "BLE001", "S110"]

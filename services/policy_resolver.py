@@ -199,7 +199,7 @@ async def resolve_policy(
             from observability.metrics import SYSTEM_ERRORS
             SYSTEM_ERRORS.labels(execution_mode="unknown").inc()
         except Exception:
-            pass
+            pass  # Metrics increment is best-effort inside the fallback handler.
 
     # Decrypt any api_key_enc fields that were merged in from dept/app overrides.
     # api_key_enc is stored encrypted in policy_override; callers need plaintext api_key.

@@ -109,7 +109,7 @@ async def _resolve_pg_url() -> str | None:
         _pg_url_cache = settings.database_url
         return settings.database_url
     except Exception:
-        pass
+        pass  # Best-effort test cleanup; ignore teardown errors.
 
     # Fall through to testcontainers.
     try:
@@ -511,7 +511,7 @@ async def auth_setup():
                 TenantModel.id == tenant_id))
             await db.commit()
     except Exception:
-        pass
+        pass  # Best-effort test cleanup; ignore teardown errors.
     finally:
         await engine2.dispose()
 
@@ -692,6 +692,6 @@ async def two_tenant_setup():
                     TenantModel.id == tid))
             await db.commit()
     except Exception:
-        pass
+        pass  # Best-effort test cleanup; ignore teardown errors.
     finally:
         await engine2.dispose()

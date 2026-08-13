@@ -53,7 +53,7 @@ async def health_ready():
         tfidf_status       = "healthy" if MLDetector.is_model_loaded()       else "degraded"
         transformer_status = "healthy" if TransformerDetector.is_model_loaded() else "degraded"
     except Exception:
-        pass
+        pass  # Detector status probe is best-effort; report 'unavailable' on error.
 
     checks = {
         "database":             "ok"      if db_ok    else "unavailable",

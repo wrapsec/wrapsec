@@ -372,7 +372,7 @@ async def ai_request(
             except RateLimitError:
                 raise
             except Exception:
-                pass
+                pass  # Fail open if Redis unavailable.
 
     block_threshold    = policy["thresholds"]["block"]
     sanitize_threshold = policy["thresholds"]["sanitize"]
@@ -693,7 +693,7 @@ async def get_request(
             dept      = await dept_repo.get_by_id(uuid.UUID(record.dept_id))
             dept_name = dept.name if dept else None
         except Exception:
-            pass
+            pass  # Best-effort dept-name enrichment; leave None on lookup failure.
     if record.app_id:
         try:
             from db.repositories.application import ApplicationRepository
@@ -701,7 +701,7 @@ async def get_request(
             app      = await app_repo.get_by_id(uuid.UUID(record.app_id))
             app_name = app.name if app else None
         except Exception:
-            pass
+            pass  # Best-effort app-name enrichment; leave None on lookup failure.
 
     # Build base response
     response = {

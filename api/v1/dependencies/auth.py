@@ -171,7 +171,7 @@ def endpoint_rate_limit(limit_setting: str):
                 if cached:
                     limit = json.loads(cached).get(limit_setting)
             except Exception:
-                pass
+                pass  # Best-effort Redis cache read; fall back to DB then the .env default.
 
             # 2. DB - also warms the cache on hit
             if limit is None:
@@ -188,9 +188,9 @@ def endpoint_rate_limit(limit_setting: str):
                                     "wrapsec:settings:admin_rate_limits", 60, json.dumps(stored)
                                 )
                             except Exception:
-                                pass
+                                pass  # Best-effort Redis cache write; safe to skip on failure.
                 except Exception:
-                    pass
+                    pass  # Settings lookup is best-effort; fall back to the .env default limit.
 
         # 3. .env fallback
         if limit is None:

@@ -409,7 +409,7 @@ async def update_department(
             )
             await db.commit()
         except Exception:
-            pass
+            pass  # Audit-event write is best-effort; the change was committed above and must not fail the request on an audit-log error.
 
     return JSONResponse(content=_format(record))
 
@@ -473,7 +473,7 @@ async def update_dept_llm_override(
         )
         await db.commit()
     except Exception:
-        pass
+        pass  # Audit-event write is best-effort; the change was committed above and must not fail the request on an audit-log error.
 
     return JSONResponse(content=_format(record))
 
@@ -537,7 +537,7 @@ async def update_dept_proxy_override(
         )
         await db.commit()
     except Exception:
-        pass
+        pass  # Audit-event write is best-effort; the change was committed above and must not fail the request on an audit-log error.
 
     return JSONResponse(content=_format(record))
 

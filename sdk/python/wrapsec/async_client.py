@@ -235,7 +235,7 @@ class AsyncClient:
         try:
             response_data = resp.json()
         except Exception:
-            pass
+            pass  # Error body may not be JSON; fall through to status-based error handling.
         raise map_response_error(resp.status_code, response_data)
 
     async def batch(
@@ -408,7 +408,7 @@ class AsyncClient:
         try:
             response_data = resp.json()
         except Exception:
-            pass
+            pass  # Error body may not be JSON; fall through to status-based error handling.
         raise map_response_error(resp.status_code, response_data)
 
     async def health_config(self, timeout: int = 5) -> dict[str, Any]:

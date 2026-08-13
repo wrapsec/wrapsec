@@ -152,7 +152,7 @@ def doctor() -> None:
     try:
         checks = health_data.get("checks", {})
     except Exception:
-        pass
+        pass  # Best-effort field access; render 'no service data' on error.
 
     if not checks:
         click.echo("    no service data available")
@@ -180,7 +180,7 @@ def doctor() -> None:
     try:
         config_data = client.health_config()
     except Exception:
-        pass
+        pass  # Best-effort probe; skip config checks if the endpoint is unavailable.
 
     # ── Check 5: Active config ──────────────────────────────────────────────
     click.echo("")

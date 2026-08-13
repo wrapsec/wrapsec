@@ -115,7 +115,7 @@ class RateLimitMiddleware(BaseHTTPMiddleware):
                 from observability.metrics import record_rate_limit
                 record_rate_limit()
             except Exception:
-                pass
+                pass  # Metrics recording must never break the request.
 
             response = error_response(
                 ErrorCode.RATE_LIMIT_EXCEEDED,

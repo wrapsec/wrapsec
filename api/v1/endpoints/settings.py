@@ -529,7 +529,7 @@ async def update_admin_limits(
         redis = get_redis()
         await redis.delete(ADMIN_LIMITS_CACHE_KEY)
     except Exception:
-        pass
+        pass  # Redis cache invalidation is best-effort; the next request repopulates it.
 
     # Audit log - security controls changing must always be recorded
     try:

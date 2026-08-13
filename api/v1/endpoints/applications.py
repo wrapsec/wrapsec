@@ -246,7 +246,7 @@ async def update_application(
             )
             await db.commit()
         except Exception:
-            pass
+            pass  # Audit-event write is best-effort; the change was committed above and must not fail the request on an audit-log error.
 
     return JSONResponse(content=_format(record))
 
@@ -342,7 +342,7 @@ async def set_application_policy(
         )
         await db.commit()
     except Exception:
-        pass
+        pass  # Audit-event write is best-effort; the change was committed above and must not fail the request on an audit-log error.
 
     policy, policy_source = await resolve_policy(
         db        = db,
@@ -394,7 +394,7 @@ async def reset_application_policy(
         )
         await db.commit()
     except Exception:
-        pass
+        pass  # Audit-event write is best-effort; the change was committed above and must not fail the request on an audit-log error.
 
     return JSONResponse(content={
         "app_id":          str(app_id),
@@ -525,7 +525,7 @@ async def update_app_llm_override(
         )
         await db.commit()
     except Exception:
-        pass
+        pass  # Audit-event write is best-effort; the change was committed above and must not fail the request on an audit-log error.
 
     return JSONResponse(content=_format(record))
 
@@ -587,6 +587,6 @@ async def update_app_proxy_override(
         )
         await db.commit()
     except Exception:
-        pass
+        pass  # Audit-event write is best-effort; the change was committed above and must not fail the request on an audit-log error.
 
     return JSONResponse(content=_format(record))
