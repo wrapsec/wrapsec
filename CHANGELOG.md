@@ -2,6 +2,19 @@
 
 All notable changes to WrapSec are documented here.
 
+## [1.8.6] - 2026-08-14
+
+Multi-tenant attribution and scoping fixes surfaced by a code review.
+
+### Fixed
+- **Proxy audit attribution.** Proxy (`/v1/chat/completions`) requests now write a
+  tenant/department/application-attributed audit record, so they appear in the
+  tenant-scoped audit log and participate in the tamper-evident hash chain.
+  Previously these rows were written with no tenant and were excluded from both.
+- **Tenant profile scope.** `GET`/`PUT /v1/admin/tenant` now read and update the
+  caller's own tenant, resolved from the authenticated identity, instead of a
+  fixed default tenant.
+
 ## [1.8.5] - 2026-08-13
 
 Internal quality release: type safety, lint hardening, and a broad test-coverage
