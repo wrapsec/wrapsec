@@ -3,12 +3,13 @@
 # WrapSec v1.0 | AI Security Gateway - https://wrapsec.com
 
 import uuid
+from datetime import datetime
+from typing import Any
 
 from sqlalchemy import (
     JSON,
     Boolean,
     CheckConstraint,
-    Column,
     DateTime,
     Float,
     ForeignKey,
@@ -19,7 +20,7 @@ from sqlalchemy import (
     UniqueConstraint,
 )
 from sqlalchemy.dialects.postgresql import JSONB, UUID
-from sqlalchemy.orm import DeclarativeBase
+from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column
 
 from services.time import utc_now
 
@@ -41,33 +42,33 @@ class Base(DeclarativeBase):
 class TenantModel(Base):
     __tablename__ = "tenants"
 
-    id            = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
-    slug          = Column(String(50),  nullable=False, unique=True)
-    name          = Column(String(100), nullable=False)
-    description   = Column(Text,        nullable=True)
-    global_policy = Column(JSONVariant,        nullable=False, default=dict)
-    is_active     = Column(Boolean,     nullable=False, default=True)
-    contact_email = Column(String(100), nullable=True)
-    created_by    = Column(String(100), nullable=True)
-    created_at    = Column(DateTime(timezone=True),    nullable=False, default=utc_now)
+    id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    slug: Mapped[str] = mapped_column(String(50),  nullable=False, unique=True)
+    name: Mapped[str] = mapped_column(String(100), nullable=False)
+    description: Mapped[str | None] = mapped_column(Text,        nullable=True)
+    global_policy: Mapped[Any] = mapped_column(JSONVariant,        nullable=False, default=dict)
+    is_active: Mapped[bool] = mapped_column(Boolean,     nullable=False, default=True)
+    contact_email: Mapped[str | None] = mapped_column(String(100), nullable=True)
+    created_by: Mapped[str | None] = mapped_column(String(100), nullable=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True),    nullable=False, default=utc_now)
     # BCP-47 tag; NULL = inherit the system default. Validated against the
     # supported-locales allowlist before use (never trusted blindly).
-    locale        = Column(String(35),  nullable=True)
+    locale: Mapped[str | None] = mapped_column(String(35),  nullable=True)
 
 
 class DepartmentModel(Base):
     __tablename__ = "departments"
 
-    id              = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
-    tenant_id       = Column(UUID(as_uuid=True), ForeignKey("tenants.id"), nullable=False)
-    slug            = Column(String(50),  nullable=False)
-    name            = Column(String(100), nullable=False)
-    description     = Column(Text,        nullable=True)
-    policy_override = Column(JSONVariant,        nullable=True,  default=None)
-    is_active       = Column(Boolean,     nullable=False, default=True)
-    contact_email   = Column(String(100), nullable=True)
-    created_by      = Column(String(100), nullable=True)
-    created_at      = Column(DateTime(timezone=True),    nullable=False, default=utc_now)
+    id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    tenant_id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), ForeignKey("tenants.id"), nullable=False)
+    slug: Mapped[str] = mapped_column(String(50),  nullable=False)
+    name: Mapped[str] = mapped_column(String(100), nullable=False)
+    description: Mapped[str | None] = mapped_column(Text,        nullable=True)
+    policy_override: Mapped[Any | None] = mapped_column(JSONVariant,        nullable=True,  default=None)
+    is_active: Mapped[bool] = mapped_column(Boolean,     nullable=False, default=True)
+    contact_email: Mapped[str | None] = mapped_column(String(100), nullable=True)
+    created_by: Mapped[str | None] = mapped_column(String(100), nullable=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True),    nullable=False, default=utc_now)
 
     __table_args__ = (
         Index("ix_dept_tenant", "tenant_id"),
@@ -82,20 +83,20 @@ class DepartmentModel(Base):
 class ApplicationModel(Base):
     __tablename__ = "applications"
 
-    id                  = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
-    tenant_id           = Column(UUID(as_uuid=True), ForeignKey("tenants.id"),    nullable=False)
-    dept_id             = Column(UUID(as_uuid=True), ForeignKey("departments.id"), nullable=False)
-    slug                = Column(String(50),  nullable=False)
-    name                = Column(String(100), nullable=False)
-    description         = Column(Text,        nullable=True)
-    owner_name          = Column(String(100), nullable=True)
-    owner_email         = Column(String(100), nullable=True)
-    environment         = Column(String(20),  nullable=False, default="production")
-    metadata_           = Column("metadata",  JSONVariant, nullable=True, default=None)
-    policy_override     = Column(JSONVariant,        nullable=True,  default=None)
-    rate_limit_override = Column(JSONVariant,        nullable=True,  default=None)
-    is_active           = Column(Boolean,     nullable=False, default=True)
-    created_at          = Column(DateTime(timezone=True),    nullable=False, default=utc_now)
+    id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    tenant_id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), ForeignKey("tenants.id"),    nullable=False)
+    dept_id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), ForeignKey("departments.id"), nullable=False)
+    slug: Mapped[str] = mapped_column(String(50),  nullable=False)
+    name: Mapped[str] = mapped_column(String(100), nullable=False)
+    description: Mapped[str | None] = mapped_column(Text,        nullable=True)
+    owner_name: Mapped[str | None] = mapped_column(String(100), nullable=True)
+    owner_email: Mapped[str | None] = mapped_column(String(100), nullable=True)
+    environment: Mapped[str] = mapped_column(String(20),  nullable=False, default="production")
+    metadata_: Mapped[Any | None] = mapped_column("metadata",  JSONVariant, nullable=True, default=None)
+    policy_override: Mapped[Any | None] = mapped_column(JSONVariant,        nullable=True,  default=None)
+    rate_limit_override: Mapped[Any | None] = mapped_column(JSONVariant,        nullable=True,  default=None)
+    is_active: Mapped[bool] = mapped_column(Boolean,     nullable=False, default=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True),    nullable=False, default=utc_now)
 
     __table_args__ = (
         Index("ix_app_dept", "dept_id"),
@@ -108,52 +109,52 @@ class ApplicationModel(Base):
 class AuditLogModel(Base):
     __tablename__ = "audit_logs"
 
-    id             = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
-    trace_id       = Column(String(50),  nullable=False, unique=True, index=True)
-    decision       = Column(String(20),  nullable=False, index=True)
-    risk_score     = Column(Float,       nullable=False)
-    threats        = Column(JSONVariant,        nullable=False, default=list)
-    input_hash     = Column(String(100), nullable=False)
-    detection_mode = Column(String(20),  nullable=False)
-    execution_mode = Column(String(20),  nullable=False)
-    llm_invoked    = Column(Boolean,     nullable=False, default=False)
-    latency_ms     = Column(Float,       nullable=False)
-    detection_scores   = Column(JSONVariant,    nullable=True)
-    guardrail_scores   = Column(JSONVariant,    nullable=True)
-    key_id             = Column(String(50),  nullable=True)
-    ip_address         = Column(String(50),  nullable=True)
-    user_agent         = Column(String(255), nullable=True)
-    attribution_verified = Column(Boolean,   nullable=False, default=False)
+    id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    trace_id: Mapped[str] = mapped_column(String(50),  nullable=False, unique=True, index=True)
+    decision: Mapped[str] = mapped_column(String(20),  nullable=False, index=True)
+    risk_score: Mapped[float] = mapped_column(Float,       nullable=False)
+    threats: Mapped[Any] = mapped_column(JSONVariant,        nullable=False, default=list)
+    input_hash: Mapped[str] = mapped_column(String(100), nullable=False)
+    detection_mode: Mapped[str] = mapped_column(String(20),  nullable=False)
+    execution_mode: Mapped[str] = mapped_column(String(20),  nullable=False)
+    llm_invoked: Mapped[bool] = mapped_column(Boolean,     nullable=False, default=False)
+    latency_ms: Mapped[float] = mapped_column(Float,       nullable=False)
+    detection_scores: Mapped[Any | None] = mapped_column(JSONVariant,    nullable=True)
+    guardrail_scores: Mapped[Any | None] = mapped_column(JSONVariant,    nullable=True)
+    key_id: Mapped[str | None] = mapped_column(String(50),  nullable=True)
+    ip_address: Mapped[str | None] = mapped_column(String(50),  nullable=True)
+    user_agent: Mapped[str | None] = mapped_column(String(255), nullable=True)
+    attribution_verified: Mapped[bool] = mapped_column(Boolean,   nullable=False, default=False)
     # String columns intentionally - no ForeignKey to preserve audit history after
     # entity deletion (tenant/dept/app can be deactivated or removed without losing logs).
-    app_id         = Column(String(50),  nullable=True)
-    dept_id        = Column(String(50),  nullable=True)
-    tenant_id      = Column(String(50),  nullable=True)
-    policy_source  = Column(String(50),  nullable=True)
-    primary_reason = Column(String(50),  nullable=True)
-    confidence      = Column(Float,      nullable=True)
-    confidence_band = Column(String(10), nullable=True)
-    source         = Column(String(100), nullable=True)
-    user_id        = Column(String(100), nullable=True)
-    input_length   = Column(Integer,     nullable=True,  default=0)
-    proxy_interaction_id = Column(UUID(as_uuid=True), ForeignKey("proxy_interactions.id", ondelete="SET NULL"), nullable=True)
-    severity       = Column(String(10),  nullable=True)
-    principal_type = Column(String(20),  nullable=True,  default="api_key")
-    model_version  = Column(String(50),  nullable=True)
+    app_id: Mapped[str | None] = mapped_column(String(50),  nullable=True)
+    dept_id: Mapped[str | None] = mapped_column(String(50),  nullable=True)
+    tenant_id: Mapped[str | None] = mapped_column(String(50),  nullable=True)
+    policy_source: Mapped[str | None] = mapped_column(String(50),  nullable=True)
+    primary_reason: Mapped[str | None] = mapped_column(String(50),  nullable=True)
+    confidence: Mapped[float | None] = mapped_column(Float,      nullable=True)
+    confidence_band: Mapped[str | None] = mapped_column(String(10), nullable=True)
+    source: Mapped[str | None] = mapped_column(String(100), nullable=True)
+    user_id: Mapped[str | None] = mapped_column(String(100), nullable=True)
+    input_length: Mapped[int | None] = mapped_column(Integer,     nullable=True,  default=0)
+    proxy_interaction_id: Mapped[uuid.UUID | None] = mapped_column(UUID(as_uuid=True), ForeignKey("proxy_interactions.id", ondelete="SET NULL"), nullable=True)
+    severity: Mapped[str | None] = mapped_column(String(10),  nullable=True)
+    principal_type: Mapped[str | None] = mapped_column(String(20),  nullable=True,  default="api_key")
+    model_version: Mapped[str | None] = mapped_column(String(50),  nullable=True)
     # v1.2.0 session tracking - caller-supplied opaque identifiers.
     # Validated in api/v1/schemas/request.py (max 200, [A-Za-z0-9_.:-]).
-    session_id     = Column(String(200), nullable=True)
-    turn_index     = Column(Integer,     nullable=True)
-    run_id         = Column(String(200), nullable=True)
+    session_id: Mapped[str | None] = mapped_column(String(200), nullable=True)
+    turn_index: Mapped[int | None] = mapped_column(Integer,     nullable=True)
+    run_id: Mapped[str | None] = mapped_column(String(200), nullable=True)
     # v1.7.0 input provenance (trust boundary): where the scanned text came from.
     # NOT NULL with a server default so every row carries an explicit source and
     # the engine/audit never see NULL. Values are the InputSource enum.
-    input_source   = Column(String(32),  nullable=False, server_default="user_prompt")
+    input_source: Mapped[str] = mapped_column(String(32),  nullable=False, server_default="user_prompt")
     # v1.2.0 tamper-evident hash chain. SHA-256 hex = 64 chars.
     # Populated by the hash-chained audit writer; UPDATE blocked by trigger.
-    record_hash    = Column(String(64),  nullable=True)
-    prev_hash      = Column(String(64),  nullable=True)
-    created_at     = Column(DateTime(timezone=True),    nullable=False, default=utc_now)
+    record_hash: Mapped[str | None] = mapped_column(String(64),  nullable=True)
+    prev_hash: Mapped[str | None] = mapped_column(String(64),  nullable=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True),    nullable=False, default=utc_now)
 
     __table_args__ = (
         Index("ix_audit_logs_decision_created", "decision",   "created_at"),
@@ -174,19 +175,19 @@ class AuditLogModel(Base):
 class APIKeyModel(Base):
     __tablename__ = "api_keys"
 
-    id           = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
-    key_id       = Column(String(50),  nullable=False, unique=True, index=True)
-    tenant_id    = Column(UUID(as_uuid=True), ForeignKey("tenants.id"),    nullable=False)
-    dept_id      = Column(UUID(as_uuid=True), ForeignKey("departments.id"), nullable=True)
-    app_id       = Column(UUID(as_uuid=True), ForeignKey("applications.id"), nullable=True)
-    name         = Column(String(100), nullable=False)
-    key_hash     = Column(String(100), nullable=False, unique=True)
-    key_type     = Column(String(20),  nullable=False, default="live")
-    is_admin     = Column(Boolean,     nullable=False, default=False)
-    revoked      = Column(Boolean,     nullable=False, default=False)
-    expires_at   = Column(DateTime(timezone=True),    nullable=True)
-    last_used_at = Column(DateTime(timezone=True),    nullable=True)
-    created_at   = Column(DateTime(timezone=True),    nullable=False, default=utc_now)
+    id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    key_id: Mapped[str] = mapped_column(String(50),  nullable=False, unique=True, index=True)
+    tenant_id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), ForeignKey("tenants.id"),    nullable=False)
+    dept_id: Mapped[uuid.UUID | None] = mapped_column(UUID(as_uuid=True), ForeignKey("departments.id"), nullable=True)
+    app_id: Mapped[uuid.UUID | None] = mapped_column(UUID(as_uuid=True), ForeignKey("applications.id"), nullable=True)
+    name: Mapped[str] = mapped_column(String(100), nullable=False)
+    key_hash: Mapped[str] = mapped_column(String(100), nullable=False, unique=True)
+    key_type: Mapped[str] = mapped_column(String(20),  nullable=False, default="live")
+    is_admin: Mapped[bool] = mapped_column(Boolean,     nullable=False, default=False)
+    revoked: Mapped[bool] = mapped_column(Boolean,     nullable=False, default=False)
+    expires_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True),    nullable=True)
+    last_used_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True),    nullable=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True),    nullable=False, default=utc_now)
 
     __table_args__ = (
         # Only enforced in PostgreSQL (production). SQLite (used in tests) silently
@@ -203,54 +204,54 @@ class APIKeyModel(Base):
 class SettingsModel(Base):
     __tablename__ = "settings"
 
-    key        = Column(String(100), primary_key=True)
-    value      = Column(Text,        nullable=False)
-    updated_at = Column(DateTime(timezone=True),    nullable=False, default=utc_now, onupdate=utc_now)
+    key: Mapped[str] = mapped_column(String(100), primary_key=True)
+    value: Mapped[str] = mapped_column(Text,        nullable=False)
+    updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True),    nullable=False, default=utc_now, onupdate=utc_now)
 
 
 class ProxyProviderConfigModel(Base):
     __tablename__ = "proxy_provider_configs"
 
-    id                   = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
-    tenant_id            = Column(String(50),  nullable=False, unique=True, index=True)
-    provider             = Column(String(32),  nullable=False)
-    base_url             = Column(Text,        nullable=False)
-    provider_api_key_enc = Column(Text,        nullable=True)
-    default_model        = Column(String(128), nullable=False)
-    timeout_seconds      = Column(Integer,     nullable=False, default=60)
-    created_at           = Column(DateTime(timezone=True),    nullable=False, default=utc_now)
-    updated_at           = Column(DateTime(timezone=True),    nullable=False, default=utc_now,
+    id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    tenant_id: Mapped[str] = mapped_column(String(50),  nullable=False, unique=True, index=True)
+    provider: Mapped[str] = mapped_column(String(32),  nullable=False)
+    base_url: Mapped[str] = mapped_column(Text,        nullable=False)
+    provider_api_key_enc: Mapped[str | None] = mapped_column(Text,        nullable=True)
+    default_model: Mapped[str] = mapped_column(String(128), nullable=False)
+    timeout_seconds: Mapped[int] = mapped_column(Integer,     nullable=False, default=60)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True),    nullable=False, default=utc_now)
+    updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True),    nullable=False, default=utc_now,
                                   onupdate=utc_now)
 
 
 class ProxyInteractionModel(Base):
     __tablename__ = "proxy_interactions"
 
-    id                    = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
-    trace_id              = Column(String(64),  nullable=False, unique=True, index=True)
-    key_id                = Column(String(50),  nullable=True)
-    user_id               = Column(String(256), nullable=True)
-    input_raw             = Column(Text,        nullable=True)
-    input_sanitized       = Column(Text,        nullable=True)
-    input_decision        = Column(String(16),  nullable=False)
-    input_primary_reason  = Column(String(64),  nullable=False)
-    input_confidence      = Column(Float,       nullable=False)
-    input_threats         = Column(JSONVariant,        nullable=True,  default=list)
-    input_attack_type     = Column(String(64),  nullable=True)
-    provider              = Column(String(32),  nullable=True)
-    model                 = Column(String(128), nullable=True)
-    provider_latency_ms   = Column(Integer,     nullable=True)
-    execution_status      = Column(String(32),  nullable=False)
-    output_raw            = Column(Text,        nullable=True)
-    output_sanitized      = Column(Text,        nullable=True)
-    output_decision       = Column(String(16),  nullable=True)
-    output_primary_reason = Column(String(64),  nullable=True)
-    output_confidence     = Column(Float,       nullable=True)
-    output_threats        = Column(JSONVariant,        nullable=True,  default=list)
-    behavior_flag         = Column(String(32),  nullable=True)
-    output_flags          = Column(JSONVariant,        nullable=True)
-    total_latency_ms      = Column(Integer,     nullable=False)
-    created_at            = Column(DateTime(timezone=True),    nullable=False, default=utc_now)
+    id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    trace_id: Mapped[str] = mapped_column(String(64),  nullable=False, unique=True, index=True)
+    key_id: Mapped[str | None] = mapped_column(String(50),  nullable=True)
+    user_id: Mapped[str | None] = mapped_column(String(256), nullable=True)
+    input_raw: Mapped[str | None] = mapped_column(Text,        nullable=True)
+    input_sanitized: Mapped[str | None] = mapped_column(Text,        nullable=True)
+    input_decision: Mapped[str] = mapped_column(String(16),  nullable=False)
+    input_primary_reason: Mapped[str] = mapped_column(String(64),  nullable=False)
+    input_confidence: Mapped[float] = mapped_column(Float,       nullable=False)
+    input_threats: Mapped[Any | None] = mapped_column(JSONVariant,        nullable=True,  default=list)
+    input_attack_type: Mapped[str | None] = mapped_column(String(64),  nullable=True)
+    provider: Mapped[str | None] = mapped_column(String(32),  nullable=True)
+    model: Mapped[str | None] = mapped_column(String(128), nullable=True)
+    provider_latency_ms: Mapped[int | None] = mapped_column(Integer,     nullable=True)
+    execution_status: Mapped[str] = mapped_column(String(32),  nullable=False)
+    output_raw: Mapped[str | None] = mapped_column(Text,        nullable=True)
+    output_sanitized: Mapped[str | None] = mapped_column(Text,        nullable=True)
+    output_decision: Mapped[str | None] = mapped_column(String(16),  nullable=True)
+    output_primary_reason: Mapped[str | None] = mapped_column(String(64),  nullable=True)
+    output_confidence: Mapped[float | None] = mapped_column(Float,       nullable=True)
+    output_threats: Mapped[Any | None] = mapped_column(JSONVariant,        nullable=True,  default=list)
+    behavior_flag: Mapped[str | None] = mapped_column(String(32),  nullable=True)
+    output_flags: Mapped[Any | None] = mapped_column(JSONVariant,        nullable=True)
+    total_latency_ms: Mapped[int] = mapped_column(Integer,     nullable=False)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True),    nullable=False, default=utc_now)
 
     __table_args__ = (
         Index("ix_proxy_int_key_id",      "key_id"),
@@ -280,20 +281,20 @@ class UserModel(Base):
     """
     __tablename__ = "users"
 
-    id                    = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
-    tenant_id             = Column(UUID(as_uuid=True), ForeignKey("tenants.id"), nullable=False)
-    dept_id               = Column(UUID(as_uuid=True), ForeignKey("departments.id"), nullable=True)
-    email                 = Column(String(255), nullable=False)
-    password_hash         = Column(String(255), nullable=False)
-    role                  = Column(String(50),  nullable=False, default="DEVELOPER")
-    is_active             = Column(Boolean,     nullable=False, default=True)
-    force_password_change = Column(Boolean,     nullable=False, default=False)
-    token_version         = Column(Integer,     nullable=False, default=1)
-    created_at            = Column(DateTime(timezone=True),    nullable=False, default=utc_now)
-    last_login_at         = Column(DateTime(timezone=True),    nullable=True)
+    id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    tenant_id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), ForeignKey("tenants.id"), nullable=False)
+    dept_id: Mapped[uuid.UUID | None] = mapped_column(UUID(as_uuid=True), ForeignKey("departments.id"), nullable=True)
+    email: Mapped[str] = mapped_column(String(255), nullable=False)
+    password_hash: Mapped[str] = mapped_column(String(255), nullable=False)
+    role: Mapped[str] = mapped_column(String(50),  nullable=False, default="DEVELOPER")
+    is_active: Mapped[bool] = mapped_column(Boolean,     nullable=False, default=True)
+    force_password_change: Mapped[bool] = mapped_column(Boolean,     nullable=False, default=False)
+    token_version: Mapped[int] = mapped_column(Integer,     nullable=False, default=1)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True),    nullable=False, default=utc_now)
+    last_login_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True),    nullable=True)
     # BCP-47 tag; NULL = inherit tenant/system default. Validated against the
     # supported-locales allowlist before use (never trusted blindly).
-    locale                = Column(String(35),  nullable=True)
+    locale: Mapped[str | None] = mapped_column(String(35),  nullable=True)
 
     __table_args__ = (
         Index("ix_users_tenant",      "tenant_id"),
@@ -331,14 +332,14 @@ class RefreshTokenModel(Base):
     """
     __tablename__ = "refresh_tokens"
 
-    id            = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
-    user_id       = Column(UUID(as_uuid=True), ForeignKey("users.id", ondelete="CASCADE"),
+    id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    user_id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), ForeignKey("users.id", ondelete="CASCADE"),
                            nullable=False)
-    token_hash    = Column(String(64),  nullable=False, unique=True)
-    token_version = Column(Integer,     nullable=False, default=1)
-    expires_at    = Column(DateTime(timezone=True),    nullable=False)
-    revoked_at    = Column(DateTime(timezone=True),    nullable=True)
-    created_at    = Column(DateTime(timezone=True),    nullable=False, default=utc_now)
+    token_hash: Mapped[str] = mapped_column(String(64),  nullable=False, unique=True)
+    token_version: Mapped[int] = mapped_column(Integer,     nullable=False, default=1)
+    expires_at: Mapped[datetime] = mapped_column(DateTime(timezone=True),    nullable=False)
+    revoked_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True),    nullable=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True),    nullable=False, default=utc_now)
 
     __table_args__ = (
         Index("ix_refresh_tokens_user",    "user_id"),
@@ -368,16 +369,16 @@ class AdminEventModel(Base):
     """
     __tablename__ = "admin_events"
 
-    id             = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
-    tenant_id      = Column(UUID(as_uuid=True), ForeignKey("tenants.id"), nullable=False)
-    dept_id        = Column(UUID(as_uuid=True), nullable=True)
-    actor_user_id  = Column(UUID(as_uuid=True), ForeignKey("users.id"), nullable=False)
-    target_user_id = Column(UUID(as_uuid=True), ForeignKey("users.id"), nullable=True)
-    action         = Column(String(50),  nullable=False)
-    metadata_      = Column("metadata", JSONVariant, nullable=True)
-    ip_address     = Column(String(45),  nullable=True)
-    user_agent     = Column(String(500), nullable=True)
-    created_at     = Column(DateTime(timezone=True),    nullable=False, default=utc_now)
+    id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    tenant_id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), ForeignKey("tenants.id"), nullable=False)
+    dept_id: Mapped[uuid.UUID | None] = mapped_column(UUID(as_uuid=True), nullable=True)
+    actor_user_id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), ForeignKey("users.id"), nullable=False)
+    target_user_id: Mapped[uuid.UUID | None] = mapped_column(UUID(as_uuid=True), ForeignKey("users.id"), nullable=True)
+    action: Mapped[str] = mapped_column(String(50),  nullable=False)
+    metadata_: Mapped[Any | None] = mapped_column("metadata", JSONVariant, nullable=True)
+    ip_address: Mapped[str | None] = mapped_column(String(45),  nullable=True)
+    user_agent: Mapped[str | None] = mapped_column(String(500), nullable=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True),    nullable=False, default=utc_now)
 
     __table_args__ = (
         Index("idx_admin_events_tenant_time", "tenant_id", "created_at"),
@@ -407,15 +408,15 @@ class AuthEventModel(Base):
     """
     __tablename__ = "auth_events"
 
-    id             = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
-    tenant_id      = Column(UUID(as_uuid=True), nullable=True)
-    user_id        = Column(UUID(as_uuid=True), nullable=True)
-    action         = Column(String(50),  nullable=False)
-    success        = Column(Boolean,     nullable=False)
-    failure_reason = Column(String(50),  nullable=True)
-    ip_address     = Column(String(45),  nullable=True)
-    user_agent     = Column(String(500), nullable=True)
-    created_at     = Column(DateTime(timezone=True),    nullable=False, default=utc_now)
+    id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    tenant_id: Mapped[uuid.UUID | None] = mapped_column(UUID(as_uuid=True), nullable=True)
+    user_id: Mapped[uuid.UUID | None] = mapped_column(UUID(as_uuid=True), nullable=True)
+    action: Mapped[str] = mapped_column(String(50),  nullable=False)
+    success: Mapped[bool] = mapped_column(Boolean,     nullable=False)
+    failure_reason: Mapped[str | None] = mapped_column(String(50),  nullable=True)
+    ip_address: Mapped[str | None] = mapped_column(String(45),  nullable=True)
+    user_agent: Mapped[str | None] = mapped_column(String(500), nullable=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True),    nullable=False, default=utc_now)
 
     __table_args__ = (
         Index("idx_auth_events_tenant_time", "tenant_id", "created_at"),
@@ -450,28 +451,28 @@ class WebhookEndpointModel(Base):
     """
     __tablename__ = "webhook_endpoints"
 
-    id               = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
-    tenant_id        = Column(UUID(as_uuid=True), ForeignKey("tenants.id"), nullable=False)
-    url              = Column(Text,        nullable=False)
-    description      = Column(Text,        nullable=True)
+    id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    tenant_id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), ForeignKey("tenants.id"), nullable=False)
+    url: Mapped[str] = mapped_column(Text,        nullable=False)
+    description: Mapped[str | None] = mapped_column(Text,        nullable=True)
     # NULL = generic HMAC-signed webhook (secret_enc is a signing secret).
     # A connector slug (e.g. "splunk_hec", "datadog_logs",
     # "sentinel_logs_ingestion", "elastic_ecs") selects a SIEM connector,
     # in which case secret_enc holds that connector's ingest token/key and
     # `config` holds its per-endpoint options. See services/webhooks/connectors.
-    connector_type   = Column(Text,        nullable=True,  default=None)
-    secret_enc       = Column(Text,        nullable=False)
-    old_secrets      = Column(JSONVariant, nullable=True,  default=list)
-    event_types      = Column(JSONVariant, nullable=True,  default=None)
-    headers          = Column(JSONVariant, nullable=True,  default=None)
+    connector_type: Mapped[str | None] = mapped_column(Text,        nullable=True,  default=None)
+    secret_enc: Mapped[str] = mapped_column(Text,        nullable=False)
+    old_secrets: Mapped[Any | None] = mapped_column(JSONVariant, nullable=True,  default=list)
+    event_types: Mapped[Any | None] = mapped_column(JSONVariant, nullable=True,  default=None)
+    headers: Mapped[Any | None] = mapped_column(JSONVariant, nullable=True,  default=None)
     # Per-connector configuration (e.g. Sentinel dcr_immutable_id/stream_name,
     # Elastic index, Splunk sourcetype). NULL for generic webhooks.
-    config           = Column(JSONVariant, nullable=True,  default=None)
-    disabled         = Column(Boolean,     nullable=False, default=False)
-    first_failure_at = Column(DateTime(timezone=True),    nullable=True)
-    rate_limit       = Column(Integer,     nullable=True)
-    created_at       = Column(DateTime(timezone=True),    nullable=False, default=utc_now)
-    updated_at       = Column(DateTime(timezone=True),    nullable=True)
+    config: Mapped[Any | None] = mapped_column(JSONVariant, nullable=True,  default=None)
+    disabled: Mapped[bool] = mapped_column(Boolean,     nullable=False, default=False)
+    first_failure_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True),    nullable=True)
+    rate_limit: Mapped[int | None] = mapped_column(Integer,     nullable=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True),    nullable=False, default=utc_now)
+    updated_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True),    nullable=True)
 
     __table_args__ = (
         UniqueConstraint("tenant_id", "url", name="uq_webhook_endpoints_tenant_url"),
@@ -517,21 +518,21 @@ class WebhookDeliveryAttemptModel(Base):
     """
     __tablename__ = "webhook_delivery_attempts"
 
-    id                      = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
-    created_at              = Column(DateTime(timezone=True),           primary_key=True, nullable=False, default=utc_now)
-    endpoint_id             = Column(UUID(as_uuid=True), ForeignKey("webhook_endpoints.id"), nullable=False)
-    tenant_id               = Column(UUID(as_uuid=True), ForeignKey("tenants.id"),           nullable=False)
-    msg_id                  = Column(String(64), nullable=False)
-    url                     = Column(Text,       nullable=False)
-    event_type              = Column(String(100), nullable=False)
-    attempt_number          = Column(Integer,    nullable=False)
-    status                  = Column(String(20), nullable=False)
-    http_status_code        = Column(Integer,    nullable=True)
-    response_body_truncated = Column(Text,       nullable=True)
-    response_duration_ms    = Column(Integer,    nullable=True)
-    error_message           = Column(Text,       nullable=True)
-    next_attempt_at         = Column(DateTime(timezone=True),   nullable=True)
-    ended_at                = Column(DateTime(timezone=True),   nullable=True)
+    id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True),           primary_key=True, nullable=False, default=utc_now)
+    endpoint_id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), ForeignKey("webhook_endpoints.id"), nullable=False)
+    tenant_id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), ForeignKey("tenants.id"),           nullable=False)
+    msg_id: Mapped[str] = mapped_column(String(64), nullable=False)
+    url: Mapped[str] = mapped_column(Text,       nullable=False)
+    event_type: Mapped[str] = mapped_column(String(100), nullable=False)
+    attempt_number: Mapped[int] = mapped_column(Integer,    nullable=False)
+    status: Mapped[str] = mapped_column(String(20), nullable=False)
+    http_status_code: Mapped[int | None] = mapped_column(Integer,    nullable=True)
+    response_body_truncated: Mapped[str | None] = mapped_column(Text,       nullable=True)
+    response_duration_ms: Mapped[int | None] = mapped_column(Integer,    nullable=True)
+    error_message: Mapped[str | None] = mapped_column(Text,       nullable=True)
+    next_attempt_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True),   nullable=True)
+    ended_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True),   nullable=True)
 
     __table_args__ = (
         Index("ix_webhook_delivery_attempts_msg_id",           "msg_id"),
@@ -572,30 +573,30 @@ class EmailOutboxModel(Base):
     """
     __tablename__ = "email_outbox"
 
-    id                  = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
-    tenant_id           = Column(UUID(as_uuid=True), ForeignKey("tenants.id"), nullable=True)
+    id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    tenant_id: Mapped[uuid.UUID | None] = mapped_column(UUID(as_uuid=True), ForeignKey("tenants.id"), nullable=True)
     # Denormalized audit reference (no FK), snapshotted from the recipient user
     # at enqueue. NULL for tenant-level notifications (e.g. an admin recipient
     # has no department). Belongs to tenant_id by construction: both are copied
     # from the same user, whose dept-in-tenant is a DB invariant.
-    department_id       = Column(UUID(as_uuid=True), nullable=True)
-    user_id             = Column(UUID(as_uuid=True), nullable=True)
-    notification_type   = Column(String(64),  nullable=False)
-    recipient           = Column(String(255), nullable=False)
-    locale              = Column(String(35),  nullable=True)
-    subject             = Column(Text,        nullable=False)
-    body_text           = Column(Text,        nullable=False)
-    body_html           = Column(Text,        nullable=True)
-    status              = Column(String(20),  nullable=False, default="queued")
-    attempt_count       = Column(Integer,     nullable=False, default=0)
-    available_at        = Column(DateTime(timezone=True), nullable=False, default=utc_now)
-    created_at          = Column(DateTime(timezone=True), nullable=False, default=utc_now)
-    updated_at          = Column(DateTime(timezone=True), nullable=True)
-    sending_at          = Column(DateTime(timezone=True), nullable=True)
-    sent_at             = Column(DateTime(timezone=True), nullable=True)
-    provider_message_id = Column(String(255), nullable=True)
-    last_error          = Column(Text,        nullable=True)
-    trace_id            = Column(String(64),  nullable=True)
+    department_id: Mapped[uuid.UUID | None] = mapped_column(UUID(as_uuid=True), nullable=True)
+    user_id: Mapped[uuid.UUID | None] = mapped_column(UUID(as_uuid=True), nullable=True)
+    notification_type: Mapped[str] = mapped_column(String(64),  nullable=False)
+    recipient: Mapped[str] = mapped_column(String(255), nullable=False)
+    locale: Mapped[str | None] = mapped_column(String(35),  nullable=True)
+    subject: Mapped[str] = mapped_column(Text,        nullable=False)
+    body_text: Mapped[str] = mapped_column(Text,        nullable=False)
+    body_html: Mapped[str | None] = mapped_column(Text,        nullable=True)
+    status: Mapped[str] = mapped_column(String(20),  nullable=False, default="queued")
+    attempt_count: Mapped[int] = mapped_column(Integer,     nullable=False, default=0)
+    available_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False, default=utc_now)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False, default=utc_now)
+    updated_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    sending_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    sent_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    provider_message_id: Mapped[str | None] = mapped_column(String(255), nullable=True)
+    last_error: Mapped[str | None] = mapped_column(Text,        nullable=True)
+    trace_id: Mapped[str | None] = mapped_column(String(64),  nullable=True)
 
     __table_args__ = (
         Index("ix_email_outbox_status_available", "status", "available_at"),
