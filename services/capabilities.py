@@ -104,7 +104,7 @@ def load_plugins(app) -> None:
             register = ep.load()
             register(app)
             logger.info("loaded plugin %s", ep.name)
-        except Exception as exc:                          # noqa: BLE001
+        except Exception as exc:
             logger.error("plugin %s failed to load, continuing without it: %s", ep.name, exc)
 
     logger.info("plugins loaded: capabilities=%s", get_capabilities())

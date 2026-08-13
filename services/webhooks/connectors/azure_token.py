@@ -101,7 +101,7 @@ async def get_access_token(
 
     try:
         cached = await redis.get(key)
-    except Exception as exc:                                # noqa: BLE001
+    except Exception as exc:
         # Cache read failure must not break delivery -- fetch directly.
         logger.warning("azure token cache read failed: %s", exc)
         cached = None
@@ -120,7 +120,7 @@ async def get_access_token(
     ttl = max(1, expires_in - _EXPIRY_SKEW_S)
     try:
         await redis.set(key, token, ex=ttl)
-    except Exception as exc:                                # noqa: BLE001
+    except Exception as exc:
         logger.warning("azure token cache write failed: %s", exc)
 
     return token

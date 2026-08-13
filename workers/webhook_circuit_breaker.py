@@ -61,7 +61,7 @@ async def _acquire_lease() -> bool:
             ex = CIRCUIT_BREAKER_LEASE_TTL,
         )
         return bool(acquired)
-    except Exception as exc:                              # noqa: BLE001
+    except Exception as exc:
         logger.warning(
             "webhook circuit breaker: lease check failed: %s -- "
             "proceeding without cross-worker coordination", exc,

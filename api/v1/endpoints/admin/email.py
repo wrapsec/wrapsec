@@ -266,7 +266,8 @@ async def put_email_settings_endpoint(
             user_agent = request.headers.get("user-agent"),
         )
         await db.commit()
-    except Exception as exc:  # noqa: BLE001 - audit is best-effort, never fail the request
+    except Exception as exc:
+        # Config-audit write is best-effort; never fail the request on it.
         logger.warning("email settings config-audit failed: %s", exc)
 
     return JSONResponse(content=_settings_payload(updated))

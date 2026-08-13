@@ -287,7 +287,7 @@ async def _log_admin_event(
             user_agent    = request.headers.get("user-agent"),
         )
         await db.commit()
-    except Exception as exc:                              # noqa: BLE001
+    except Exception as exc:
         logger.warning("webhook admin_event log failed: %s", exc)
 
 

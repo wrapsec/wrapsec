@@ -175,5 +175,6 @@ async def notify_account_locked(
             )
             if row is not None:
                 await db.commit()
-    except Exception as exc:  # noqa: BLE001 - best-effort, never disrupt login
+    except Exception as exc:
+        # Notification is best-effort; never disrupt the auth flow that triggered it.
         logger.error("account_locked notification failed user_id=%s: %s", user.id, exc)
