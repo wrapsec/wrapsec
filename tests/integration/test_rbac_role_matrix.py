@@ -150,3 +150,17 @@ async def test_tenant_id_is_ignored_in_user_patch(auth_client, auth_setup):
     )
     assert resp.status_code == 200
     assert resp.json()["tenant_id"] == own_tenant  # unchanged
+
+
+# -- B1: proxy-settings reads/probe/delete require admin (match PUT) -----------
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("method,path", [
+    ("delete", "/v1/settings/proxy"),          # destructive: removes tenant proxy config
+    ("get",    "/v1/settings/proxy"),          # discloses provider/base_url/model
+    ("get",    "/v1/settings/proxy/health"),   # triggers an outbound probe
+])
+async def test_proxy_settings_reads_and_delete_require_admin(auth_client, auth_setup, method, path):
+    for role in ("dev_token", "viewer_token"):
+        resp = await auth_client.request(method.upper(), path, headers=_bearer(auth_setup[role]))
+        assert resp.status_code == 403, f"{role} {method} {path} -> {resp.status_code} (expected 403)"

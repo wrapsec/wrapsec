@@ -24,7 +24,7 @@ from pydantic import BaseModel, SecretStr, field_validator
 from sqlalchemy import CursorResult, delete, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from api.v1.dependencies.auth import get_current_principal, require_any_admin
+from api.v1.dependencies.auth import require_any_admin
 from api.v1.dependencies.db import get_db
 from config.settings import get_settings
 from db.models import ProxyProviderConfigModel
@@ -116,7 +116,7 @@ async def _get_config(tenant_id: str, db: AsyncSession) -> ProxyProviderConfigMo
 async def get_proxy_settings(
     request:    Request,
     db:         AsyncSession = Depends(get_db),
-    _principal: Principal    = Depends(get_current_principal),
+    _principal: Principal    = Depends(require_any_admin()),
 ):
     """
     Returns the proxy provider config for the current tenant.
@@ -204,7 +204,7 @@ async def put_proxy_settings(
 async def delete_proxy_settings(
     request:    Request,
     db:         AsyncSession = Depends(get_db),
-    _principal: Principal    = Depends(get_current_principal),
+    _principal: Principal    = Depends(require_any_admin()),
 ):
     """
     Removes the proxy provider config for the current tenant.
@@ -235,7 +235,7 @@ async def delete_proxy_settings(
 async def get_proxy_health(
     request:    Request,
     db:         AsyncSession = Depends(get_db),
-    _principal: Principal    = Depends(get_current_principal),
+    _principal: Principal    = Depends(require_any_admin()),
 ):
     """
     Tests live connectivity to the configured LLM provider.
