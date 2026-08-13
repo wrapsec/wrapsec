@@ -3,6 +3,7 @@
 # the line tracer drops coverage across every `await` into the DB, so async
 # route handlers show almost fully uncovered even when tests exercise them.
 concurrency = greenlet
+branch = true
 source =
     api
     services
