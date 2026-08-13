@@ -12,6 +12,7 @@ Spec reference: Section 3 (Module Boundaries - config/schema.py),
 from __future__ import annotations
 
 from dataclasses import dataclass
+from typing import Any
 
 # Keys the user is allowed to set via `wrapsec config set`
 ALLOWED_CONFIG_KEYS: frozenset[str] = frozenset({
@@ -21,7 +22,7 @@ ALLOWED_CONFIG_KEYS: frozenset[str] = frozenset({
 })
 
 # Defaults applied when no value is set anywhere in the priority chain
-DEFAULTS: dict[str, object] = {
+DEFAULTS: dict[str, Any] = {
     "base_url": "http://localhost:8000",
     "timeout":  30,
     # api_key has no default - must be set by user

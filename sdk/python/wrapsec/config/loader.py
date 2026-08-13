@@ -25,6 +25,7 @@ import logging
 import os
 import sys
 from pathlib import Path
+from typing import Any
 
 from wrapsec.config.schema import (
     ALLOWED_CONFIG_KEYS,
@@ -65,7 +66,7 @@ def _ensure_config_dir() -> None:
     get_config_dir().mkdir(parents=True, exist_ok=True)
 
 
-def _read_config_file() -> dict[str, object]:
+def _read_config_file() -> dict[str, Any]:
     """Read config file. Returns empty dict if file does not exist or is corrupt."""
     path = get_config_path()
     if not path.exists():

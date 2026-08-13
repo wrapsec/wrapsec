@@ -159,6 +159,8 @@ def scan(
             sys.exit(1)
         text = sys.stdin.read()
 
+    # After the guard above, text is a non-None str (CLI argument or stdin).
+    assert text is not None
     # Normalise and validate
     try:
         text = normalize_text(text)

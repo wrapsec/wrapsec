@@ -21,14 +21,14 @@ from wrapsec import __version__
 # ── SIGPIPE guard - Unix only ───────────────────────────────────────────────
 # Spec: Section 14.3
 if hasattr(signal, "SIGPIPE"):
-    signal.signal(signal.SIGPIPE, signal.SIG_DFL)
+    signal.signal(signal.SIGPIPE, signal.SIG_DFL)  # type: ignore[attr-defined]  # Unix-only, guarded above
 
 
 # ── Windows stdin UTF-8 ─────────────────────────────────────────────────────
 # Spec: Section 14.2
 if sys.platform == "win32" and hasattr(sys.stdin, "reconfigure"):
     try:
-        sys.stdin.reconfigure(encoding="utf-8")
+        sys.stdin.reconfigure(encoding="utf-8")  # type: ignore[attr-defined]  # guarded by hasattr above
     except Exception:
         pass  # Best-effort stdin reconfigure; non-fatal if unsupported.
 
