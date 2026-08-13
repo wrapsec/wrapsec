@@ -58,6 +58,10 @@ lint:
 format:
 	ruff format .
 
+# Static type checking, scoped to the Python SDK (config in the repo root).
+typecheck:
+	pyright
+
 clean:
 	find . -type d -name __pycache__ -exec rm -rf {} +
 	find . -type f -name "*.pyc" -delete

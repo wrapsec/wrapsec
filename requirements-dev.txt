@@ -12,3 +12,7 @@ hypothesis==6.157.0
 # WRAPSEC_TEST_PG_URL when set, so no container is spawned during a normal
 # `make up-dev` workflow. Fixture skips (does not fail) if docker is missing.
 testcontainers[postgres]==4.13.1
+
+# ── Static analysis ───────────────────────────────────────────────────────────
+# Static type checking, scoped to the Python SDK (make typecheck).
+pyright==1.1.411
