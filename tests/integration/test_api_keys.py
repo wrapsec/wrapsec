@@ -9,7 +9,7 @@ from datetime import timedelta
 
 import pytest
 
-from services.time import utc_now
+from services.time import to_iso_z, utc_now
 
 # ISO-8601 UTC with a trailing Z and millisecond precision -- the wire contract
 # every API/export/webhook timestamp must satisfy (services.time.to_iso_z).
@@ -163,6 +163,24 @@ async def test_revoke_nonexistent_key_returns_404(client, admin_jwt_headers):
     )
     assert response.status_code == 404
     assert response.json()["error"]["code"] == "NOT_FOUND"
+
+
+@pytest.mark.asyncio
+async def test_create_key_persists_expires_at(client, admin_jwt_headers, admin_key_scope):
+    """A1: a valid expires_at must be persisted, not silently dropped -- otherwise
+    the key never expires while the response claims it will."""
+    exp = to_iso_z(utc_now() + timedelta(hours=24))
+    c = await client.post(
+        "/v1/keys",
+        json={"name": "expiring", "dept_id": admin_key_scope, "expires_at": exp},
+        headers=admin_jwt_headers,
+    )
+    assert c.status_code == 201, c.text
+    stored = c.json()["expires_at"]
+    assert stored is not None                       # not dropped on create
+    kid = c.json()["key_id"]
+    g = await client.get(f"/v1/keys/{kid}", headers=admin_jwt_headers)
+    assert g.json()["expires_at"] == stored         # read back from the DB
 
 
 @pytest.mark.asyncio

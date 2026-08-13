@@ -20,7 +20,7 @@ from db.repositories.application import ApplicationRepository
 from db.repositories.department import DepartmentRepository
 from domain.entities.principal import Principal
 from errors.exceptions import NotFoundError
-from services.time import to_iso_z, utc_now
+from services.time import parse_utc_iso, to_iso_z, utc_now
 
 router = APIRouter()
 
@@ -150,17 +150,23 @@ async def create_key(
             status_code = 422,
         )
 
+    # Persist expires_at (validated to ISO-8601 by the schema). Omitting it here
+    # was silently dropping the expiry: the key was stored with NULL expires_at
+    # and never expired, while the response still advertised the requested expiry.
+    expires_at = parse_utc_iso(body.expires_at) if body.expires_at else None
+
     repo   = ApiKeyRepository(db)
     record = await repo.create({
-        "key_id":    key_id,
-        "name":      body.name,
-        "key_hash":  _hash_key(api_key),
-        "key_type":  body.key_type.value,
-        "is_admin":  False,
-        "revoked":   False,
-        "app_id":    app_id,
-        "dept_id":   dept_id,
-        "tenant_id": tenant_id,
+        "key_id":     key_id,
+        "name":       body.name,
+        "key_hash":   _hash_key(api_key),
+        "key_type":   body.key_type.value,
+        "is_admin":   False,
+        "revoked":    False,
+        "app_id":     app_id,
+        "dept_id":    dept_id,
+        "tenant_id":  tenant_id,
+        "expires_at": expires_at,
     })
     await db.commit()
 
@@ -173,7 +179,7 @@ async def create_key(
         "dept_id":    str(dept_id)   if dept_id   else None,
         "tenant_id":  str(tenant_id) if tenant_id else None,
         "created_at": to_iso_z(record.created_at),
-        "expires_at": body.expires_at,
+        "expires_at": to_iso_z(record.expires_at) if record.expires_at else None,
     }, status_code=201)
 
 
