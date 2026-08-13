@@ -140,10 +140,6 @@ def chat(
         if spinner:
             spinner.stop()
 
-    if result is None:
-        print_error("No response received from API.")
-        sys.exit(1)
-
     if json_output:
         print_json(result)
         sys.exit(0)

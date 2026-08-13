@@ -236,10 +236,6 @@ def scan(
         if spinner:
             spinner.stop()
 
-    if result is None:
-        print_error("No response received from API.")
-        sys.exit(1)
-
     exit_code = get_scan_exit_code(result)
 
     if json_output:
