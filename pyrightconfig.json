@@ -1,5 +1,5 @@
 {
-  "include": ["sdk/python/wrapsec", "config", "observability", "cache", "errors", "clients"],
+  "include": ["sdk/python/wrapsec", "config", "observability", "cache", "errors", "clients", "security"],
   "extraPaths": ["sdk/python"],
   "typeCheckingMode": "standard",
   "pythonVersion": "3.10",

@@ -68,7 +68,7 @@ def _parse_allowlist(raw: str) -> tuple[frozenset[str], tuple]:
     return frozenset(hosts), tuple(nets)
 
 
-def _is_internal_ip(ip: ipaddress._BaseAddress) -> bool:
+def _is_internal_ip(ip: ipaddress.IPv4Address | ipaddress.IPv6Address) -> bool:
     # IPv4-mapped IPv6 (::ffff:10.0.0.1) must be judged on the embedded v4.
     mapped = getattr(ip, "ipv4_mapped", None)
     if mapped is not None:
@@ -79,7 +79,7 @@ def _is_internal_ip(ip: ipaddress._BaseAddress) -> bool:
     )
 
 
-async def _resolve(host: str) -> list[ipaddress._BaseAddress]:
+async def _resolve(host: str) -> list[ipaddress.IPv4Address | ipaddress.IPv6Address]:
     loop  = asyncio.get_running_loop()
     infos = await loop.getaddrinfo(host, None, proto=socket.IPPROTO_TCP)
     return [ipaddress.ip_address(info[4][0]) for info in infos]

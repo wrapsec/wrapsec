@@ -57,4 +57,4 @@ def compute_primary_reason(
     if max_score <= 0.0:
         return "NO_THREAT_DETECTED"
 
-    return max(scores, key=scores.get)
+    return max(scores, key=lambda k: scores[k])

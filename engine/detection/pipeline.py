@@ -105,10 +105,10 @@ class DetectionPipeline:
 
             tfidf_result = (
                 results[0]
-                if not isinstance(results[0], Exception)
+                if not isinstance(results[0], BaseException)
                 else DetectionResult.clean("ml_detector")
             )
-            if isinstance(results[0], Exception):
+            if isinstance(results[0], BaseException):
                 logger.error("TF-IDF detection failed: %s", results[0])
 
             if isinstance(results[1], asyncio.TimeoutError):
@@ -117,7 +117,7 @@ class DetectionPipeline:
                     self._profile.tier2_timeout,
                 )
                 transformer_result = DetectionResult.clean("transformer_detector")
-            elif isinstance(results[1], Exception):
+            elif isinstance(results[1], BaseException):
                 logger.error("Transformer inference failed: %s", results[1])
                 transformer_result = DetectionResult.clean("transformer_detector")
             else:
