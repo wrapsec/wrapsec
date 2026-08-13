@@ -576,3 +576,232 @@ class TestProxyChatCompletions:
         if logged:
             assert logged[0].execution_status == "BLOCKED"
             assert logged[0].provider         is None
+
+    # -----------------------------------------------------------------------
+    # default_model resolution when the request omits "model"
+    # -----------------------------------------------------------------------
+
+    @pytest.mark.asyncio
+    async def test_default_model_used_when_model_omitted(self, app):
+        config               = _make_config()
+        config.default_model = "openai/gpt-4o"   # provider-prefixed so it parses
+        fake_get_db, _mock_db = _patch_config(config)
+
+        from api.v1.dependencies.db import get_db
+        app.dependency_overrides[get_db] = fake_get_db
+
+        with patch("httpx.AsyncClient") as mock_cls:
+            mock_client      = AsyncMock()
+            mock_client.post = AsyncMock(return_value=_openai_response())
+            mock_cls.return_value.__aenter__ = AsyncMock(return_value=mock_client)
+            mock_cls.return_value.__aexit__  = AsyncMock(return_value=False)
+
+            async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as client:
+                resp = await client.post(
+                    "/v1/chat/completions",
+                    headers={"x-api-key": settings.admin_api_key},
+                    json={"messages": _clean_messages()},   # no "model"
+                )
+
+        app.dependency_overrides = {}
+
+        assert resp.status_code == 200
+        assert resp.headers.get("x-wrapsec-model") == "gpt-4o"
+
+    @pytest.mark.asyncio
+    async def test_model_required_when_no_model_and_no_default(self, app):
+        config               = _make_config()
+        config.default_model = None
+        fake_get_db, _mock_db = _patch_config(config)
+
+        from api.v1.dependencies.db import get_db
+        app.dependency_overrides[get_db] = fake_get_db
+
+        async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as client:
+            resp = await client.post(
+                "/v1/chat/completions",
+                headers={"x-api-key": settings.admin_api_key},
+                json={"messages": _clean_messages()},   # no "model"
+            )
+
+        app.dependency_overrides = {}
+
+        assert resp.status_code == 400
+        assert resp.json()["error"]["code"] == "model_required"
+
+    # -----------------------------------------------------------------------
+    # No user message in the array -> 400 invalid_messages
+    # -----------------------------------------------------------------------
+
+    @pytest.mark.asyncio
+    async def test_no_user_message_returns_400(self, app):
+        config               = _make_config()
+        fake_get_db, _mock_db = _patch_config(config)
+
+        from api.v1.dependencies.db import get_db
+        app.dependency_overrides[get_db] = fake_get_db
+
+        async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as client:
+            resp = await client.post(
+                "/v1/chat/completions",
+                headers={"x-api-key": settings.admin_api_key},
+                json={"model": "openai/gpt-4o", "messages": [{"role": "system", "content": "You are helpful."}]},
+            )
+
+        app.dependency_overrides = {}
+
+        assert resp.status_code == 400
+        assert resp.json()["error"]["code"] == "invalid_messages"
+
+    # -----------------------------------------------------------------------
+    # Sampling kwargs forwarded to the provider
+    # -----------------------------------------------------------------------
+
+    @pytest.mark.asyncio
+    async def test_sampling_kwargs_accepted(self, app):
+        config               = _make_config()
+        fake_get_db, _mock_db = _patch_config(config)
+
+        from api.v1.dependencies.db import get_db
+        app.dependency_overrides[get_db] = fake_get_db
+
+        with patch("httpx.AsyncClient") as mock_cls:
+            mock_client      = AsyncMock()
+            mock_client.post = AsyncMock(return_value=_openai_response())
+            mock_cls.return_value.__aenter__ = AsyncMock(return_value=mock_client)
+            mock_cls.return_value.__aexit__  = AsyncMock(return_value=False)
+
+            async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as client:
+                resp = await client.post(
+                    "/v1/chat/completions",
+                    headers={"x-api-key": settings.admin_api_key},
+                    json={
+                        "model": "openai/gpt-4o", "messages": _clean_messages(),
+                        "temperature": 0.5, "max_tokens": 128, "top_p": 0.9,
+                    },
+                )
+
+        app.dependency_overrides = {}
+
+        assert resp.status_code == 200
+
+    # -----------------------------------------------------------------------
+    # Input SANITIZE -> sanitized messages forwarded to the provider
+    # -----------------------------------------------------------------------
+
+    @pytest.mark.asyncio
+    async def test_input_pii_sanitized_and_forwarded(self, app):
+        config               = _make_config()
+        fake_get_db, _mock_db = _patch_config(config)
+
+        from api.v1.dependencies.db import get_db
+        app.dependency_overrides[get_db] = fake_get_db
+
+        with patch("httpx.AsyncClient") as mock_cls:
+            mock_client      = AsyncMock()
+            mock_client.post = AsyncMock(return_value=_openai_response())
+            mock_cls.return_value.__aenter__ = AsyncMock(return_value=mock_client)
+            mock_cls.return_value.__aexit__  = AsyncMock(return_value=False)
+
+            async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as client:
+                resp = await client.post(
+                    "/v1/chat/completions",
+                    headers={"x-api-key": settings.admin_api_key},
+                    json={"model": "openai/gpt-4o", "messages": _pii_messages()},
+                )
+
+        app.dependency_overrides = {}
+
+        assert resp.status_code == 200
+        assert resp.headers.get("x-wrapsec-input-decision") == "SANITIZE"
+        assert resp.headers.get("x-wrapsec-input-sanitized") == "true"
+
+    # -----------------------------------------------------------------------
+    # Output SANITIZE -> PII in the model response is redacted before return
+    # -----------------------------------------------------------------------
+
+    @pytest.mark.asyncio
+    async def test_output_pii_sanitized(self, app):
+        config               = _make_config()
+        fake_get_db, _mock_db = _patch_config(config)
+
+        from api.v1.dependencies.db import get_db
+        app.dependency_overrides[get_db] = fake_get_db
+
+        # PII in the model response is redacted by OutputGuard (SANITIZE), and the
+        # sanitized content -- not the raw PII -- is what reaches the caller.
+        pii_content = "Sure, the SSN is 123-45-6789 and email is alice@example.com."
+        with patch("httpx.AsyncClient") as mock_cls:
+            mock_client      = AsyncMock()
+            mock_client.post = AsyncMock(return_value=_openai_response(content=pii_content))
+            mock_cls.return_value.__aenter__ = AsyncMock(return_value=mock_client)
+            mock_cls.return_value.__aexit__  = AsyncMock(return_value=False)
+
+            async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as client:
+                resp = await client.post(
+                    "/v1/chat/completions",
+                    headers={"x-api-key": settings.admin_api_key},
+                    json={"model": "openai/gpt-4o", "messages": _clean_messages()},
+                )
+
+        app.dependency_overrides = {}
+
+        assert resp.status_code == 200
+        assert resp.headers.get("x-wrapsec-output-decision") == "SANITIZE"
+        assert resp.headers.get("x-wrapsec-output-sanitized") == "true"
+        # Raw PII must not survive into the returned content.
+        assert "123-45-6789" not in resp.text
+
+    # -----------------------------------------------------------------------
+    # default_model without a provider prefix -> 400 invalid_model_format
+    # -----------------------------------------------------------------------
+
+    @pytest.mark.asyncio
+    async def test_default_model_without_prefix_returns_400(self, app):
+        config               = _make_config()
+        config.default_model = "gpt-4o"   # missing "provider/" prefix
+        fake_get_db, _mock_db = _patch_config(config)
+
+        from api.v1.dependencies.db import get_db
+        app.dependency_overrides[get_db] = fake_get_db
+
+        async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as client:
+            resp = await client.post(
+                "/v1/chat/completions",
+                headers={"x-api-key": settings.admin_api_key},
+                json={"messages": _clean_messages()},   # no "model" -> falls back to default
+            )
+
+        app.dependency_overrides = {}
+
+        assert resp.status_code == 400
+        assert resp.json()["error"]["code"] == "invalid_model_format"
+
+    # -----------------------------------------------------------------------
+    # Unknown X-WrapSec-Mode header is normalized to "fast"
+    # -----------------------------------------------------------------------
+
+    @pytest.mark.asyncio
+    async def test_unknown_mode_header_defaults_to_fast(self, app):
+        config               = _make_config()
+        fake_get_db, _mock_db = _patch_config(config)
+
+        from api.v1.dependencies.db import get_db
+        app.dependency_overrides[get_db] = fake_get_db
+
+        with patch("httpx.AsyncClient") as mock_cls:
+            mock_client      = AsyncMock()
+            mock_client.post = AsyncMock(return_value=_openai_response())
+            mock_cls.return_value.__aenter__ = AsyncMock(return_value=mock_client)
+            mock_cls.return_value.__aexit__  = AsyncMock(return_value=False)
+
+            async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as client:
+                resp = await client.post(
+                    "/v1/chat/completions",
+                    headers={"x-api-key": settings.admin_api_key, "X-WrapSec-Mode": "bogus"},
+                    json={"model": "openai/gpt-4o", "messages": _clean_messages()},
+                )
+
+        app.dependency_overrides = {}
+
+        assert resp.status_code == 200
