@@ -263,6 +263,6 @@ def test_hash_is_deterministic():
 
 
 def test_different_tokens_produce_different_hashes():
-    raw1, hash1 = create_refresh_token()
-    raw2, hash2 = create_refresh_token()
+    _raw1, hash1 = create_refresh_token()
+    _raw2, hash2 = create_refresh_token()
     assert hash1 != hash2

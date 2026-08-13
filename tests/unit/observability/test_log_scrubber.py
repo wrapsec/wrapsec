@@ -144,7 +144,7 @@ def test_filter_does_not_break_records_that_have_no_secret(scrubbed_logger):
 
 def test_filter_survives_broken_record(scrubbed_logger):
     """A record whose getMessage() raises must not take down the logger."""
-    log, stream = scrubbed_logger
+    log, _stream = scrubbed_logger
 
     class Bomb:
         def __str__(self) -> str:

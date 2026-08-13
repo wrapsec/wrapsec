@@ -23,7 +23,7 @@ docstring commits to:
 from __future__ import annotations
 
 import uuid
-from datetime import datetime
+from datetime import datetime, timezone
 
 import pytest
 
@@ -70,7 +70,7 @@ async def _seed_endpoint(
         event_types      = None,
         disabled         = disabled,
         first_failure_at = first_failure_at,
-        created_at       = datetime.utcnow(),
+        created_at       = datetime.now(timezone.utc),
     )
     test_db.add(ep)
     await test_db.commit()
@@ -417,7 +417,7 @@ async def test_delete_endpoint_with_delivery_history(client, admin_jwt_headers, 
 
     test_db.add(WebhookDeliveryAttemptModel(
         id             = uuid.uuid4(),
-        created_at     = datetime.utcnow(),
+        created_at     = datetime.now(timezone.utc),
         endpoint_id    = ep.id,
         tenant_id      = tenant_id,
         msg_id         = "msg_" + uuid.uuid4().hex[:12],
@@ -552,7 +552,7 @@ async def test_circuit_breaker_disabled_reads_as_auto_disabled(client, admin_jwt
     ep = await _seed_endpoint(
         test_db, tenant_id,
         disabled=True,
-        first_failure_at=datetime(2026, 7, 1, 12, 0, 0),
+        first_failure_at=datetime(2026, 7, 1, 12, 0, 0, tzinfo=timezone.utc),
     )
     r = await client.get(f"/v1/admin/webhooks/{ep.id}", headers=admin_jwt_headers)
     assert r.status_code == 200
@@ -597,7 +597,7 @@ async def test_reactivate_clears_disabled_and_timer(
     ep = await _seed_endpoint(
         test_db, tenant_id,
         disabled=True,
-        first_failure_at=datetime(2026, 7, 1, 12, 0, 0),
+        first_failure_at=datetime(2026, 7, 1, 12, 0, 0, tzinfo=timezone.utc),
     )
 
     r = await client.post(

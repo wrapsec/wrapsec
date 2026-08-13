@@ -107,9 +107,9 @@ async def test_stats_with_tz_aware_date_range_does_not_500(
     """
     # `Z` for one bound and a URL-encoded `+00:00` for the other so both
     # tz-aware ISO forms exercise the tz-strip logic in the repo/endpoint.
-    from_iso = (datetime.utcnow() - timedelta(hours=1)).isoformat() + "Z"
+    from_iso = (datetime.utcnow() - timedelta(hours=1)).isoformat() + "Z"  # noqa: DTZ003 -- naive UTC wall clock: isoformat() must omit the offset so the test appends Z/+00:00 to build the tz-aware ISO forms it exercises
     to_iso   = quote(
-        (datetime.utcnow() + timedelta(hours=1)).isoformat() + "+00:00",
+        (datetime.utcnow() + timedelta(hours=1)).isoformat() + "+00:00",  # noqa: DTZ003 -- see from_iso above
         safe="",
     )
 

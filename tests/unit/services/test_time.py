@@ -35,7 +35,7 @@ def test_utc_now_is_timezone_aware_utc():
 # --- ensure_utc -------------------------------------------------------
 
 def test_ensure_utc_treats_naive_as_utc():
-    naive = datetime(2026, 8, 2, 9, 15, 42)
+    naive = datetime(2026, 8, 2, 9, 15, 42)  # noqa: DTZ001 -- intentional naive input; verifies ensure_utc treats naive as UTC
     aware = ensure_utc(naive)
     assert aware.tzinfo is not None
     assert aware.utcoffset() == timedelta(0)
@@ -71,7 +71,7 @@ def test_to_iso_z_normalizes_offset_input():
 
 
 def test_to_iso_z_accepts_naive_as_utc():
-    value = datetime(2026, 8, 2, 9, 15, 42, 0)
+    value = datetime(2026, 8, 2, 9, 15, 42, 0)  # noqa: DTZ001 -- intentional naive input; verifies to_iso_z treats naive as UTC
     assert to_iso_z(value) == "2026-08-02T09:15:42.000Z"
 
 

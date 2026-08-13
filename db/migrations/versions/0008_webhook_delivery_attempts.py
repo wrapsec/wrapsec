@@ -48,7 +48,7 @@ Existing v1.2.x upgraders take the same ADD path.
 from __future__ import annotations
 
 from collections.abc import Sequence
-from datetime import datetime
+from datetime import datetime, timezone
 
 import sqlalchemy as sa
 from alembic import op
@@ -125,7 +125,7 @@ def _upgrade_postgres(bind) -> None:
     # Initial partitions: current + 2 months forward. Any INSERT before the
     # first covered month will fail loudly by design; there is no default
     # partition to swallow it.
-    now = datetime.utcnow()
+    now = datetime.now(timezone.utc)
     y, m = now.year, now.month
     for _ in range(_MONTHS_INITIAL):
         _create_month_partition(bind, _TABLE, y, m)

@@ -14,7 +14,7 @@ from __future__ import annotations
 import hashlib
 import json
 import uuid
-from datetime import datetime
+from datetime import datetime, timezone
 
 import pytest
 
@@ -38,7 +38,7 @@ def _sample_row() -> dict:
         "llm_invoked":    False,
         "latency_ms":     2.5,
         "input_hash":     "sha256:abc",
-        "created_at":     datetime(2026, 1, 1, 12, 0, 0),
+        "created_at":     datetime(2026, 1, 1, 12, 0, 0, tzinfo=timezone.utc),
     }
 
 
@@ -99,7 +99,7 @@ class TestCanonicalTypes:
     def test_datetime_serialised_as_iso_with_microseconds(self):
         # Timestamps are stored as TIMESTAMPTZ; the canonical form is aware-UTC
         # ISO 8601 with microseconds. A naive value is read as UTC.
-        out    = canonical_row({"created_at": datetime(2026, 7, 27, 15, 30, 45, 123456)})
+        out    = canonical_row({"created_at": datetime(2026, 7, 27, 15, 30, 45, 123456, tzinfo=timezone.utc)})
         parsed = json.loads(out)
         assert parsed["created_at"] == "2026-07-27T15:30:45.123456+00:00"
 

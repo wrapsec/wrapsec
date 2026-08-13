@@ -235,6 +235,6 @@ class TestRedactorOrdering:
 
     def test_real_ssn_still_gets_ssn_mask(self):
         from engine.guardrails.pii.redactor import PIIRedactor
-        out, types = PIIRedactor().redact("SSN 123-45-6789 on file")
+        out, _types = PIIRedactor().redact("SSN 123-45-6789 on file")
         assert "[SSN REDACTED]" in out
         assert "[ITIN REDACTED]" not in out

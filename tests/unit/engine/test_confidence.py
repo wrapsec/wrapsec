@@ -118,7 +118,7 @@ def test_pii_guardrail_triggered_uses_guardrail_confidence():
 
 
 def test_no_guardrail_uses_detector_confidence():
-    confidence, band = compute_confidence(
+    _confidence, band = compute_confidence(
         rule_score=0.85, ml_score=0.80, llm_score=0.0,
         pii_score=0.0,
         pii_guardrail_triggered=False,
@@ -212,7 +212,7 @@ def test_toxicity_sanitize_threshold_param_is_deprecated_noop():
 
 def test_pii_triggered_still_takes_priority_over_toxicity():
     """PII branch wins if both guardrails fire (order: PII then toxicity)."""
-    confidence, band = compute_confidence(
+    _confidence, band = compute_confidence(
         rule_score=0.0, ml_score=0.0, llm_score=0.0,
         pii_score=0.9,
         pii_guardrail_triggered=True,

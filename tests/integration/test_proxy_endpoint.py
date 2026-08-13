@@ -30,7 +30,7 @@ settings = get_settings()
 
 def _make_config(provider="openai"):
     """Return a mock ProxyProviderConfigModel."""
-    from datetime import datetime
+    from datetime import datetime, timezone
     config                    = MagicMock()
     config.tenant_id          = "test_tenant"
     config.provider           = provider
@@ -38,8 +38,8 @@ def _make_config(provider="openai"):
     config.provider_api_key_enc = encrypt("sk-test-key-1234567890", settings.secret_key) if provider == "openai" else None
     config.default_model      = "gpt-4o" if provider == "openai" else "llama3.2"
     config.timeout_seconds    = 30
-    config.created_at         = datetime(2025, 1, 1)
-    config.updated_at         = datetime(2025, 1, 1)
+    config.created_at         = datetime(2025, 1, 1, tzinfo=timezone.utc)
+    config.updated_at         = datetime(2025, 1, 1, tzinfo=timezone.utc)
     return config
 
 
@@ -113,7 +113,7 @@ class TestProxyChatCompletions:
     async def test_allow_end_to_end(self, app):
         """Clean input -> provider responds -> ALLOW response returned."""
         config             = _make_config()
-        fake_get_db, mock_db = _patch_config(config)
+        fake_get_db, _mock_db = _patch_config(config)
 
         from api.v1.dependencies.db import get_db
         app.dependency_overrides[get_db] = fake_get_db
@@ -150,7 +150,7 @@ class TestProxyChatCompletions:
     async def test_block_input_end_to_end(self, app):
         """Injection prompt -> BLOCK -> 400 returned, provider never called."""
         config               = _make_config()
-        fake_get_db, mock_db = _patch_config(config)
+        fake_get_db, _mock_db = _patch_config(config)
 
         from api.v1.dependencies.db import get_db
         app.dependency_overrides[get_db] = fake_get_db
@@ -188,7 +188,7 @@ class TestProxyChatCompletions:
     async def test_provider_timeout_returns_504(self, app):
         """Provider timeout -> 504, decision preserved as ALLOW."""
         config               = _make_config()
-        fake_get_db, mock_db = _patch_config(config)
+        fake_get_db, _mock_db = _patch_config(config)
 
         from api.v1.dependencies.db import get_db
         app.dependency_overrides[get_db] = fake_get_db
@@ -223,7 +223,7 @@ class TestProxyChatCompletions:
     async def test_provider_unreachable_returns_502(self, app):
         """Provider ConnectError -> 502, decision preserved as ALLOW."""
         config               = _make_config()
-        fake_get_db, mock_db = _patch_config(config)
+        fake_get_db, _mock_db = _patch_config(config)
 
         from api.v1.dependencies.db import get_db
         app.dependency_overrides[get_db] = fake_get_db
@@ -281,7 +281,7 @@ class TestProxyChatCompletions:
     async def test_invalid_model_format_returns_400(self, app):
         """model='gpt-4o' without provider prefix returns 400."""
         config               = _make_config()
-        fake_get_db, mock_db = _patch_config(config)
+        fake_get_db, _mock_db = _patch_config(config)
 
         from api.v1.dependencies.db import get_db
         app.dependency_overrides[get_db] = fake_get_db
@@ -306,7 +306,7 @@ class TestProxyChatCompletions:
     async def test_wrapsec_headers_present_on_success(self, app):
         """All X-WrapSec-* headers must be present on a successful response."""
         config               = _make_config()
-        fake_get_db, mock_db = _patch_config(config)
+        fake_get_db, _mock_db = _patch_config(config)
 
         from api.v1.dependencies.db import get_db
         app.dependency_overrides[get_db] = fake_get_db
@@ -350,7 +350,7 @@ class TestProxyChatCompletions:
     async def test_inline_meta_present_when_header_set(self, app):
         """X-WrapSec-Inline-Meta: true adds wrapsec field to response body."""
         config               = _make_config()
-        fake_get_db, mock_db = _patch_config(config)
+        fake_get_db, _mock_db = _patch_config(config)
 
         from api.v1.dependencies.db import get_db
         app.dependency_overrides[get_db] = fake_get_db
@@ -384,7 +384,7 @@ class TestProxyChatCompletions:
     async def test_inline_meta_absent_by_default(self, app):
         """wrapsec field must not appear in response body by default."""
         config               = _make_config()
-        fake_get_db, mock_db = _patch_config(config)
+        fake_get_db, _mock_db = _patch_config(config)
 
         from api.v1.dependencies.db import get_db
         app.dependency_overrides[get_db] = fake_get_db
@@ -414,7 +414,7 @@ class TestProxyChatCompletions:
     async def test_trace_id_present_in_headers(self, app):
         """Every response must include X-WrapSec-Trace-Id."""
         config               = _make_config()
-        fake_get_db, mock_db = _patch_config(config)
+        fake_get_db, _mock_db = _patch_config(config)
 
         from api.v1.dependencies.db import get_db
         app.dependency_overrides[get_db] = fake_get_db
@@ -446,7 +446,7 @@ class TestProxyChatCompletions:
     async def test_scan_all_messages_detects_injection_in_history(self, app):
         """Injection in first message detected when X-WrapSec-Scan-All-Messages: true."""
         config               = _make_config()
-        fake_get_db, mock_db = _patch_config(config)
+        fake_get_db, _mock_db = _patch_config(config)
 
         from api.v1.dependencies.db import get_db
         app.dependency_overrides[get_db] = fake_get_db
@@ -478,7 +478,7 @@ class TestProxyChatCompletions:
     async def test_scan_last_message_only_by_default(self, app):
         """Injection in first message NOT detected when scanning last message only."""
         config               = _make_config()
-        fake_get_db, mock_db = _patch_config(config)
+        fake_get_db, _mock_db = _patch_config(config)
 
         from api.v1.dependencies.db import get_db
         app.dependency_overrides[get_db] = fake_get_db

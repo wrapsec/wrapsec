@@ -86,7 +86,7 @@ async def test_dispatch_retry_requeues_and_acks():
         await webhook_delivery._dispatch_one(redis, handler, "1-0", _payload(), sem)
 
         delayed.assert_awaited_once()
-        _, kwargs = delayed.call_args
+        _, _kwargs = delayed.call_args
         args = delayed.call_args.args
         # (redis, payload, run_at_ts) -- run_at should be now + retry_in_s.
         assert args[2] == 1_300

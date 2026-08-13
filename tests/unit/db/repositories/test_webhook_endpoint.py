@@ -34,6 +34,7 @@ import pytest
 
 from db.models import TenantModel, WebhookEndpointModel
 from db.repositories.webhook_endpoint import WebhookEndpointRepository
+from services.time import ensure_utc
 
 
 async def _make_tenant(db, slug="acme"):
@@ -43,7 +44,7 @@ async def _make_tenant(db, slug="acme"):
         name          = slug.title(),
         global_policy = {},
         is_active     = True,
-        created_at    = datetime.utcnow(),
+        created_at    = datetime.now(timezone.utc),
     )
     db.add(t)
     await db.flush()
@@ -68,7 +69,7 @@ async def _make_endpoint(
         event_types      = event_types,
         disabled         = disabled,
         first_failure_at = first_failure_at,
-        created_at       = datetime.utcnow(),
+        created_at       = datetime.now(timezone.utc),
     )
     db.add(ep)
     await db.flush()
@@ -156,11 +157,13 @@ async def test_record_failure_sets_first_failure_at_when_null(test_db):
     ep  = await _make_endpoint(test_db, t.id)
     repo = WebhookEndpointRepository(test_db)
 
-    fixed_now = datetime(2026, 7, 29, 12, 0, 0)
+    fixed_now = datetime(2026, 7, 29, 12, 0, 0, tzinfo=timezone.utc)
     await repo.record_failure(endpoint_id=ep.id, now=fixed_now)
 
     await test_db.refresh(ep)
-    assert ep.first_failure_at == fixed_now
+    # SQLite drops tzinfo on readback; read the stored value as UTC (production
+    # uses timestamptz and round-trips aware -- verified in integration tests).
+    assert ensure_utc(ep.first_failure_at) == fixed_now
 
 
 @pytest.mark.asyncio
@@ -173,7 +176,7 @@ async def test_record_failure_is_idempotent_and_preserves_first_timestamp(test_d
     ep  = await _make_endpoint(test_db, t.id)
     repo = WebhookEndpointRepository(test_db)
 
-    t0 = datetime(2026, 7, 29, 12, 0, 0)
+    t0 = datetime(2026, 7, 29, 12, 0, 0, tzinfo=timezone.utc)
     t1 = t0 + timedelta(hours=1)
     t2 = t0 + timedelta(hours=50)
 
@@ -182,7 +185,7 @@ async def test_record_failure_is_idempotent_and_preserves_first_timestamp(test_d
     await repo.record_failure(endpoint_id=ep.id, now=t2)
 
     await test_db.refresh(ep)
-    assert ep.first_failure_at == t0
+    assert ensure_utc(ep.first_failure_at) == t0
 
 
 # ─── Circuit breaker: record_success ────────────────────────────────
@@ -195,11 +198,11 @@ async def test_record_success_clears_first_failure_at(test_db):
     t = await _make_tenant(test_db)
     ep = await _make_endpoint(
         test_db, t.id,
-        first_failure_at=datetime(2026, 7, 20, 12, 0, 0),
+        first_failure_at=datetime(2026, 7, 20, 12, 0, 0, tzinfo=timezone.utc),
     )
     repo = WebhookEndpointRepository(test_db)
 
-    await repo.record_success(endpoint_id=ep.id, now=datetime(2026, 7, 29, 12, 0, 0))
+    await repo.record_success(endpoint_id=ep.id, now=datetime(2026, 7, 29, 12, 0, 0, tzinfo=timezone.utc))
 
     await test_db.refresh(ep)
     assert ep.first_failure_at is None
@@ -225,7 +228,7 @@ async def test_disable_stale_flips_only_endpoints_past_grace_window(test_db):
     """This is the whole load-bearing invariant of the sweep worker:
     stale rows get disabled, healthy and inside-grace rows do not."""
     t   = await _make_tenant(test_db)
-    now = datetime(2026, 7, 29, 12, 0, 0)
+    now = datetime(2026, 7, 29, 12, 0, 0, tzinfo=timezone.utc)
 
     healthy      = await _make_endpoint(test_db, t.id, first_failure_at=None)
     fresh_fail   = await _make_endpoint(test_db, t.id, first_failure_at=now - timedelta(hours=1))
@@ -252,7 +255,7 @@ async def test_disable_stale_ignores_already_disabled_endpoints(test_db):
     """Already-disabled rows are returned by neither the select nor the
     update -- the sweep is idempotent and never double-touches them."""
     t   = await _make_tenant(test_db)
-    now = datetime(2026, 7, 29, 12, 0, 0)
+    now = datetime(2026, 7, 29, 12, 0, 0, tzinfo=timezone.utc)
 
     await _make_endpoint(
         test_db, t.id,
@@ -270,7 +273,7 @@ async def test_disable_stale_boundary_exactly_at_threshold(test_db):
     """Elapsed == threshold disables (matches should_disable semantics
     in services.webhooks.circuit_breaker)."""
     t   = await _make_tenant(test_db)
-    now = datetime(2026, 7, 29, 12, 0, 0)
+    now = datetime(2026, 7, 29, 12, 0, 0, tzinfo=timezone.utc)
     ep  = await _make_endpoint(
         test_db, t.id,
         first_failure_at=now - timedelta(hours=120),
@@ -287,7 +290,7 @@ async def test_disable_stale_boundary_exactly_at_threshold(test_db):
 @pytest.mark.asyncio
 async def test_disable_stale_returns_empty_when_nothing_matches(test_db):
     t   = await _make_tenant(test_db)
-    now = datetime(2026, 7, 29, 12, 0, 0)
+    now = datetime(2026, 7, 29, 12, 0, 0, tzinfo=timezone.utc)
     await _make_endpoint(test_db, t.id, first_failure_at=None)
     await _make_endpoint(test_db, t.id, first_failure_at=now - timedelta(hours=10))
 
@@ -457,7 +460,7 @@ async def test_update_silently_drops_protected_fields(test_db):
             "url":              "https://ok.example.com",
             "secret_enc":       "v2:injected-secret",
             "disabled":         True,
-            "first_failure_at": datetime.utcnow(),
+            "first_failure_at": datetime.now(timezone.utc),
             "tenant_id":        uuid.uuid4(),
             "old_secrets":      [{"ciphertext": "leak", "expires_at": "3000-01-01T00:00:00"}],
         },
@@ -540,7 +543,7 @@ async def test_rotate_secret_stores_old_secret_with_expiry(test_db):
     ep = await _make_endpoint(test_db, t.id, url="https://x.example.com")
     repo = WebhookEndpointRepository(test_db)
 
-    now = datetime(2026, 7, 29, 12, 0, 0)
+    now = datetime(2026, 7, 29, 12, 0, 0, tzinfo=timezone.utc)
     result = await repo.rotate_secret(
         endpoint_id    = ep.id,
         new_secret_enc = "v2:new-secret",
@@ -564,7 +567,7 @@ async def test_rotate_secret_prunes_already_expired_old_secrets(test_db):
     same call so an endpoint rotated weekly for years still has an
     O(active-grace-windows) array, not O(total-rotations)."""
     t  = await _make_tenant(test_db)
-    now = datetime(2026, 7, 29, 12, 0, 0)
+    now = datetime(2026, 7, 29, 12, 0, 0, tzinfo=timezone.utc)
     expired = {"ciphertext": "old-v1", "expires_at": (now - timedelta(hours=1)).isoformat()}
     live    = {"ciphertext": "old-v2", "expires_at": (now + timedelta(hours=10)).isoformat()}
 
@@ -575,7 +578,7 @@ async def test_rotate_secret_prunes_already_expired_old_secrets(test_db):
         secret_enc  = "current",
         old_secrets = [expired, live],
         disabled    = False,
-        created_at  = datetime.utcnow(),
+        created_at  = datetime.now(timezone.utc),
     )
     test_db.add(ep)
     await test_db.flush()
@@ -629,7 +632,7 @@ async def test_reactivate_clears_disabled_and_first_failure_at(test_db):
     would immediately re-disable the endpoint on the next tick with
     no new failures, which is opaque and infuriating."""
     t   = await _make_tenant(test_db)
-    now = datetime(2026, 7, 29, 12, 0, 0)
+    now = datetime(2026, 7, 29, 12, 0, 0, tzinfo=timezone.utc)
     ep  = await _make_endpoint(
         test_db, t.id,
         disabled=True,

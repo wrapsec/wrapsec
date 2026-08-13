@@ -107,7 +107,7 @@ def test_users_check_constraint_admits_auditor(tmp_path):
     one proves the migration ran on the SQLite path (batch_alter_table).
     """
     import uuid
-    from datetime import datetime
+    from datetime import datetime, timezone
 
     from sqlalchemy import text
 
@@ -135,7 +135,7 @@ def test_users_check_constraint_admits_auditor(tmp_path):
                     "name":   "auditor-test-tenant",
                     "slug":   "auditor-test",
                     "policy": "{}",
-                    "ts":     datetime(2026, 7, 28, 12, 0, 0),
+                    "ts":     datetime(2026, 7, 28, 12, 0, 0, tzinfo=timezone.utc),
                     "active": True,
                 },
             )
@@ -152,7 +152,7 @@ def test_users_check_constraint_admits_auditor(tmp_path):
                     "tenant": tenant_id,
                     "email":  "auditor@example.com",
                     "pw":     "hash-placeholder",
-                    "ts":     datetime(2026, 7, 28, 12, 0, 0),
+                    "ts":     datetime(2026, 7, 28, 12, 0, 0, tzinfo=timezone.utc),
                 },
             )
     finally:

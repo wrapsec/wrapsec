@@ -110,7 +110,7 @@ async def test_at_max_attempts_sets_lock():
     mock_redis, _ = _make_pipeline_mock(count_result=5)  # equals max
     with patch("services.auth.lockout.get_redis", return_value=mock_redis):
         from services.auth.lockout import record_failure
-        count, locked = await record_failure("user@example.com")
+        _count, locked = await record_failure("user@example.com")
     assert locked is True
     mock_redis.setex.assert_called_once()
 
@@ -121,7 +121,7 @@ async def test_beyond_max_extends_lock_ttl():
     mock_redis, _ = _make_pipeline_mock(count_result=10)  # beyond max
     with patch("services.auth.lockout.get_redis", return_value=mock_redis):
         from services.auth.lockout import record_failure
-        count, locked = await record_failure("user@example.com")
+        _count, locked = await record_failure("user@example.com")
     assert locked is True
     mock_redis.setex.assert_called_once()
 

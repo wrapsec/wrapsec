@@ -12,7 +12,7 @@ that the write path stitches rows together correctly.
 """
 from __future__ import annotations
 
-from datetime import datetime
+from datetime import datetime, timezone
 
 import pytest
 
@@ -34,7 +34,7 @@ def _row(trace_id: str, tenant_id: str | None, offset_sec: int = 0) -> dict:
         "llm_invoked":    False,
         "latency_ms":     1.0,
         "tenant_id":      tenant_id,
-        "created_at":     datetime(2026, 7, 27, 10, 0, offset_sec),
+        "created_at":     datetime(2026, 7, 27, 10, 0, offset_sec, tzinfo=timezone.utc),
     }
 
 
@@ -144,7 +144,7 @@ class TestPreV1_2LegacyRows:
             llm_invoked    = False,
             latency_ms     = 0.5,
             tenant_id      = "tenant_a",
-            created_at     = datetime(2026, 7, 20, 8, 0, 0),
+            created_at     = datetime(2026, 7, 20, 8, 0, 0, tzinfo=timezone.utc),
         )
         test_db.add(legacy)
         await test_db.commit()

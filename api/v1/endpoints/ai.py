@@ -293,7 +293,7 @@ async def ai_request(
             key_id = getattr(request.state, "key_id", None)
             if key_id:
                 trial_id = f"trial:key:{key_id}"
-                is_limited, remaining, reset_at = await is_rate_limited(
+                is_limited, _remaining, _reset_at = await is_rate_limited(
                     trial_id,
                     limit=_settings.trial_rate_limit_per_minute,
                 )

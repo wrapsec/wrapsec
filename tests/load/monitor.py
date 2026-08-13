@@ -27,7 +27,7 @@ import statistics
 import subprocess
 import sys
 import time
-from datetime import datetime
+from datetime import datetime, timezone
 
 try:
     import psutil
@@ -160,7 +160,7 @@ def main():
 
     try:
         while True:
-            now = datetime.now().strftime("%H:%M:%S")
+            now = datetime.now(timezone.utc).strftime("%H:%M:%S")
 
             # API process
             api_proc = find_api_process()

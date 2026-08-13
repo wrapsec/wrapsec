@@ -84,7 +84,7 @@ class TestEncryption:
 @pytest.fixture
 def mock_config():
     """A mock ProxyProviderConfigModel instance."""
-    from datetime import datetime
+    from datetime import datetime, timezone
     config = MagicMock()
     config.key_id               = "wsk_live_testkey"
     config.provider             = "openai"
@@ -92,8 +92,8 @@ def mock_config():
     config.provider_api_key_enc = encrypt("sk-openai-test1234567890", settings.secret_key)
     config.default_model        = "gpt-4o"
     config.timeout_seconds      = 60
-    config.created_at           = datetime(2025, 1, 1, 0, 0, 0)
-    config.updated_at           = datetime(2025, 1, 1, 0, 0, 0)
+    config.created_at           = datetime(2025, 1, 1, 0, 0, 0, tzinfo=timezone.utc)
+    config.updated_at           = datetime(2025, 1, 1, 0, 0, 0, tzinfo=timezone.utc)
     return config
 
 

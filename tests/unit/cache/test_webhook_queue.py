@@ -81,7 +81,7 @@ async def test_enqueue_xadds_json_payload_and_returns_stream_id():
     stream_id = await webhook_queue.enqueue(redis, _payload())
 
     assert stream_id == "1753500000000-0"
-    args, kwargs = redis.xadd.call_args
+    args, _kwargs = redis.xadd.call_args
     assert args[0] == STREAM_MAIN
     # payload field is a single JSON blob, round-trippable.
     assert set(args[1].keys()) == {"p"}

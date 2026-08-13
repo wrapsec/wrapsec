@@ -21,7 +21,7 @@ from __future__ import annotations
 
 import importlib.util
 import uuid
-from datetime import datetime
+from datetime import datetime, timezone
 from pathlib import Path
 
 import pytest
@@ -114,7 +114,7 @@ def _base_row(tenant_id: str, trace_id: str) -> dict:
         "llm_invoked":    False,
         "latency_ms":     1.0,
         "tenant_id":      tenant_id,
-        "created_at":     datetime(2026, 7, 28, 12, 0, 0),
+        "created_at":     datetime(2026, 7, 28, 12, 0, 0, tzinfo=timezone.utc),
     }
 
 
