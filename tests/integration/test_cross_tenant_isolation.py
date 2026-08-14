@@ -266,6 +266,34 @@ async def test_audit_logs_scoped_to_own_tenant(auth_client, two_tenant_setup):
     assert b["audit_trace"] not in trace_ids
 
 
+# ── Settings (tenant_settings) ───────────────────────────────────────────────
+
+@pytest.mark.asyncio
+async def test_settings_scoped_to_own_tenant(auth_client, two_tenant_setup):
+    """A tenant admin's settings change (tenant_settings, D5) is invisible to
+    another tenant -- proving the two-table split isolates per tenant."""
+    a, b = two_tenant_setup["A"], two_tenant_setup["B"]
+
+    ra = await auth_client.put(
+        "/v1/settings/thresholds",
+        json={"block_threshold": 0.91, "sanitize_threshold": 0.11},
+        headers={"Authorization": f"Bearer {a['admin_token']}"},
+    )
+    assert ra.status_code == 200
+
+    # A sees its own value ...
+    ga = await auth_client.get(
+        "/v1/settings/thresholds", headers={"Authorization": f"Bearer {a['admin_token']}"}
+    )
+    assert ga.json()["block_threshold"] == 0.91
+    # ... B does not (still the system default, never A's value).
+    gb = await auth_client.get(
+        "/v1/settings/thresholds", headers={"Authorization": f"Bearer {b['admin_token']}"}
+    )
+    assert gb.status_code == 200
+    assert gb.json()["block_threshold"] != 0.91
+
+
 # ── Nonexistent-ID sanity check ──────────────────────────────────────────────
 
 @pytest.mark.asyncio
