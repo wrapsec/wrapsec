@@ -319,6 +319,56 @@ async def _get_db_session():
         return None, AsyncSessionFactory()
 
 
+async def _tenant_suspended(tenant_id: str | None) -> bool:
+    """
+    True when the tenant is not active (suspend enforcement). Read-through cache
+    (auth:tenant:{id}, short TTL) then DB. FAIL OPEN: any lookup error returns
+    False (allow), so a Redis/DB outage degrades enforcement but never blocks
+    traffic - consistent with the rest of the auth path's availability posture.
+    """
+    if not tenant_id:
+        return False
+
+    if not _TESTING:
+        try:
+            from cache.redis_client import get_redis
+            cached = await get_redis().get(keyspace.auth_tenant(tenant_id))
+            if cached is not None:
+                status = cached.decode() if isinstance(cached, bytes) else cached
+                return status != "active"
+        except Exception as e:
+            logger.debug("tenant status cache read failed tenant=%s error=%s", tenant_id, e)
+
+    try:
+        from db.repositories.tenant import TenantRepository
+        engine, session_ctx = await _get_db_session()
+        async with session_ctx as session:
+            tenant = await TenantRepository(session).get_by_id(UUID(str(tenant_id)))
+        if engine:
+            await engine.dispose()
+        # Unknown tenant is not blocked here (other guards handle it); only an
+        # explicit non-active status suspends.
+        status = tenant.status if tenant else "active"
+        if not _TESTING:
+            try:
+                from cache.redis_client import get_redis
+                await get_redis().set(keyspace.auth_tenant(tenant_id), status, ex=60)
+            except Exception:
+                pass  # best-effort cache write
+        return status != "active"
+    except Exception as e:
+        logger.warning("tenant status lookup failed open tenant=%s error=%s", tenant_id, e)
+        return False
+
+
+def _tenant_suspended_response(request: Request) -> Response:
+    return error_response(
+        ErrorCode.TENANT_SUSPENDED,
+        trace_id=getattr(request.state, "trace_id", "") or "",
+        message="This tenant is suspended. Contact your platform operator.",
+    )
+
+
 class AuthMiddleware(BaseHTTPMiddleware):
     """
     Dual-identity auth middleware - API key and JWT coexist.
@@ -385,6 +435,8 @@ class AuthMiddleware(BaseHTTPMiddleware):
                 request.state.tenant_id      = str(key_record.tenant_id) if key_record.tenant_id else None
                 request.state.user_id        = None
                 request.state.user_role      = None
+                if await _tenant_suspended(request.state.tenant_id):
+                    return _tenant_suspended_response(request)
                 return await call_next(request)
             else:
                 return _unauthorized(request, "invalid_api_key")
@@ -546,6 +598,10 @@ class AuthMiddleware(BaseHTTPMiddleware):
         request.state.app_id         = None
         request.state.user_id        = str(user.id)
         request.state.user_role      = membership["role"]
+
+        # Step 5b - suspend enforcement: a suspended tenant's users are blocked.
+        if await _tenant_suspended(token_tenant):
+            return _tenant_suspended_response(request)
 
         # Step 6 - force_password_change enforcement
         if user.force_password_change and request.url.path not in FORCE_CHANGE_ALLOWED:

@@ -118,6 +118,16 @@ async def _set_status(tenant_id: uuid.UUID, status: str, operator: Principal, db
     if tenant is None:
         raise NotFoundError("tenant", str(tenant_id))
     await db.commit()
+
+    # Invalidate the cached lifecycle status so suspend enforcement sees the
+    # change immediately rather than after the short TTL.
+    try:
+        from cache import keyspace
+        from cache.redis_client import get_redis
+        await get_redis().delete(keyspace.auth_tenant(str(tenant_id)))
+    except Exception:
+        pass  # best-effort; the cache entry expires on its own TTL otherwise
+
     logger.info("platform_event TENANT_%s operator=%s tenant_id=%s",
                 status.upper(), operator.id, tenant_id)
     return JSONResponse(content=_format(tenant))

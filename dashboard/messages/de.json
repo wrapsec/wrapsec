@@ -118,6 +118,7 @@
     "INVALID_TOKEN": "Ihre Sitzung ist nicht mehr gültig. Bitte melden Sie sich erneut an.",
     "SESSION_INVALIDATED": "Ihre Sitzung ist nicht mehr gültig. Bitte melden Sie sich erneut an.",
     "PASSWORD_CHANGE_REQUIRED": "Sie müssen Ihr Passwort ändern, bevor Sie auf diese Ressource zugreifen können.",
+    "TENANT_SUSPENDED": "Dieser Mandant ist gesperrt. Wenden Sie sich an Ihren Plattformbetreiber.",
     "INVALID_PASSWORD": "Das aktuelle Passwort ist falsch.",
     "CANNOT_DEACTIVATE_SELF": "Sie können Ihr eigenes Konto nicht deaktivieren.",
     "LAST_ADMIN": "Sie können den letzten aktiven Administrator weder herabstufen noch deaktivieren. Erstellen Sie zuerst einen weiteren Administrator.",

@@ -61,6 +61,7 @@ class ErrorCode(str, Enum):
     INVALID_TOKEN            = "INVALID_TOKEN"
     SESSION_INVALIDATED      = "SESSION_INVALIDATED"
     PASSWORD_CHANGE_REQUIRED = "PASSWORD_CHANGE_REQUIRED"
+    TENANT_SUSPENDED         = "TENANT_SUSPENDED"
 
     INVALID_PASSWORD         = "INVALID_PASSWORD"
 
@@ -122,6 +123,7 @@ _ERROR_SPEC: dict[ErrorCode, tuple[int, ErrorSeverity]] = {
     ErrorCode.INVALID_TOKEN:            (401, ErrorSeverity.WARNING),
     ErrorCode.SESSION_INVALIDATED:      (401, ErrorSeverity.WARNING),
     ErrorCode.PASSWORD_CHANGE_REQUIRED: (403, ErrorSeverity.WARNING),
+    ErrorCode.TENANT_SUSPENDED:         (403, ErrorSeverity.WARNING),
     ErrorCode.INVALID_PASSWORD:         (401, ErrorSeverity.WARNING),
     # State conflicts, not RBAC-permission denials (the admin has the permission);
     # 409 = the requested state transition conflicts with the current system state.

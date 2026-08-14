@@ -26,6 +26,7 @@
     "errors.RATE_LIMIT_EXCEEDED": "Too many requests. Please retry after {retry_after} seconds.",
     "errors.SESSION_INVALIDATED": "Your session is no longer valid. Please sign in again.",
     "errors.STREAM_NOT_SUPPORTED": "Streaming is only available in proxy execution mode.",
+    "errors.TENANT_SUSPENDED": "This tenant is suspended. Contact your platform operator.",
     "errors.UNAUTHORIZED": "Authentication is required.",
     "errors.VALIDATION_ERROR": "The submitted data is invalid.",
     "forms.errors.INVALID_EMAIL": "{field} must be a valid email address.",

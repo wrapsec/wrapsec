@@ -103,6 +103,28 @@ async def test_bootstrap_unknown_tenant_404(client):
 
 
 @pytest.mark.asyncio
+async def test_suspend_blocks_tenant_users_then_reactivate_restores(client, auth_setup):
+    """Suspend enforcement (1.6): once a tenant is suspended, its users are rejected
+    with 403 TENANT_SUSPENDED; reactivation restores access. The platform operator
+    (admin key) is never blocked, so it can always reverse a suspension."""
+    tid = str(auth_setup["tenant"].id)
+    hdr = {"Authorization": f"Bearer {auth_setup['admin_token']}"}
+
+    assert (await client.get("/v1/admin/tenant", headers=hdr)).status_code == 200
+
+    s = await client.post(f"/v1/admin/tenants/{tid}/suspend", headers=_op())
+    assert s.status_code == 200
+
+    r = await client.get("/v1/admin/tenant", headers=hdr)
+    assert r.status_code == 403
+    assert r.json()["error"]["code"] == "TENANT_SUSPENDED"
+
+    ra = await client.post(f"/v1/admin/tenants/{tid}/reactivate", headers=_op())
+    assert ra.status_code == 200
+    assert (await client.get("/v1/admin/tenant", headers=hdr)).status_code == 200
+
+
+@pytest.mark.asyncio
 async def test_tenant_admin_is_not_platform_operator(client, auth_setup):
     """A tenant ADMIN JWT holds authority only within their tenant, never the
     control plane -- provisioning endpoints reject them (403)."""

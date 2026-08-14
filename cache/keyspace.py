@@ -32,6 +32,12 @@ def auth_user(user_id: object) -> str:
     return f"auth:user:{user_id}"
 
 
+def auth_tenant(tenant_id: object) -> str:
+    """Cached tenant lifecycle status for suspend enforcement (short TTL).
+    Invalidated when a platform operator suspends/reactivates the tenant."""
+    return f"auth:tenant:{tenant_id}"
+
+
 def auth_failed(email: str) -> str:
     """Failed-login counter for an account (fixed window)."""
     return f"auth:failed:{email}"
