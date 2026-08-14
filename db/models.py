@@ -46,8 +46,12 @@ class TenantModel(Base):
     slug: Mapped[str] = mapped_column(String(50),  nullable=False, unique=True)
     name: Mapped[str] = mapped_column(String(100), nullable=False)
     description: Mapped[str | None] = mapped_column(Text,        nullable=True)
-    global_policy: Mapped[Any] = mapped_column(JSONVariant,        nullable=False, default=dict)
-    is_active: Mapped[bool] = mapped_column(Boolean,     nullable=False, default=True)
+    # Lifecycle (D4): status is authoritative. suspended_at records the last
+    # suspension; plan is opaque to core (a plugin interprets it) - its existence
+    # is the point. Replaces the old is_active flag and the dead global_policy blob.
+    status: Mapped[str] = mapped_column(String(16),  nullable=False, default="active")
+    suspended_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True),    nullable=True)
+    plan: Mapped[str | None] = mapped_column(String(50),  nullable=True)
     contact_email: Mapped[str | None] = mapped_column(String(100), nullable=True)
     created_by: Mapped[str | None] = mapped_column(String(100), nullable=True)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True),    nullable=False, default=utc_now)

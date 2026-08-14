@@ -29,8 +29,7 @@ from db.models import APIKeyModel, DepartmentModel, ProxyInteractionModel, Tenan
 
 async def _seed_tenant(db):
     tid = uuid.uuid4()
-    db.add(TenantModel(id=tid, slug=f"t-{tid.hex[:8]}", name="T",
-                       global_policy={}, is_active=True))
+    db.add(TenantModel(id=tid, slug=f"t-{tid.hex[:8]}", name="T"))
     await db.commit()
     return tid
 

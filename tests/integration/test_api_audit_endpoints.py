@@ -152,7 +152,7 @@ async def test_export_empty_returns_header_only(client, admin_headers):
 async def test_logs_enriches_dept_and_app_names(client, admin_headers, test_db):
     from db.models import ApplicationModel, DepartmentModel, TenantModel
     tid, did, aid = uuid.uuid4(), uuid.uuid4(), uuid.uuid4()
-    test_db.add(TenantModel(id=tid, slug=f"t-{tid.hex[:8]}", name="T", global_policy={}, is_active=True))
+    test_db.add(TenantModel(id=tid, slug=f"t-{tid.hex[:8]}", name="T"))
     await test_db.commit()
     test_db.add(DepartmentModel(id=did, tenant_id=tid, slug=f"d-{did.hex[:6]}", name="Eng", is_active=True))
     await test_db.commit()

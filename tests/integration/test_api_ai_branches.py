@@ -30,7 +30,7 @@ async def _seed_key(test_db, *, key_type="live", with_app=False,
     prefix = "wsk_trial_" if key_type == "trial" else "wsk_live_"
     raw = prefix + uuid.uuid4().hex
 
-    test_db.add(TenantModel(id=tid, slug=f"t-{tid.hex[:8]}", name="T", global_policy={}, is_active=True))
+    test_db.add(TenantModel(id=tid, slug=f"t-{tid.hex[:8]}", name="T"))
     await test_db.commit()
     test_db.add(DepartmentModel(id=did, tenant_id=tid, slug=f"d-{did.hex[:6]}", name="Eng",
                                 is_active=True, policy_override=dept_policy_override))
@@ -133,7 +133,7 @@ async def test_proxy_mode_requires_llm_layer_422(client, test_db):
 async def test_get_request_enriches_dept_and_app_names(client, admin_headers, test_db):
     from db.models import ApplicationModel, DepartmentModel, TenantModel
     tid, did, aid = uuid.uuid4(), uuid.uuid4(), uuid.uuid4()
-    test_db.add(TenantModel(id=tid, slug=f"t-{tid.hex[:8]}", name="T", global_policy={}, is_active=True))
+    test_db.add(TenantModel(id=tid, slug=f"t-{tid.hex[:8]}", name="T"))
     await test_db.commit()
     test_db.add(DepartmentModel(id=did, tenant_id=tid, slug=f"d-{did.hex[:6]}", name="Eng", is_active=True))
     await test_db.commit()

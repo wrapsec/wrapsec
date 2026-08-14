@@ -57,7 +57,7 @@ async def email_seeder():
                 if await db.get(TenantModel, tenant_id) is None:
                     db.add(TenantModel(
                         id=tenant_id, slug=f"seed-{tenant_id.hex[:10]}", name="Seed",
-                        global_policy={}, is_active=True,
+                        
                     ))
                     created_tenants.append(tenant_id)
                     await db.flush()

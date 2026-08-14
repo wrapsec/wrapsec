@@ -84,7 +84,7 @@ async def test_create_application_unknown_dept_404(client, admin_jwt_headers):
 async def test_create_application_cross_tenant_dept_404(client, admin_jwt_headers, test_db):
     from db.models import TenantModel
     other = uuid.uuid4()
-    test_db.add(TenantModel(id=other, slug=f"t-{other.hex[:8]}", name="O", global_policy={}, is_active=True))
+    test_db.add(TenantModel(id=other, slug=f"t-{other.hex[:8]}", name="O"))
     await test_db.commit()
     did = await _make_dept(test_db, other)          # dept under a foreign tenant
     r = await client.post(BASE, json={"dept_id": did, "slug": "x", "name": "X"}, headers=admin_jwt_headers)

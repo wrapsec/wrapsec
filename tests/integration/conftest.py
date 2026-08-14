@@ -263,8 +263,7 @@ async def _postgres_db_setup():
                     id            = uuid.uuid4(),
                     slug          = "default",
                     name          = "Default",
-                    global_policy = {},
-                    is_active     = True,
+                    
                 ))
                 await db.commit()
     except Exception as exc:
@@ -435,8 +434,7 @@ async def auth_setup():
 
     try:
         async with sf() as db:
-            db.add(TenantModel(id=tenant_id, slug=slug, name="Test Tenant",
-                               global_policy={}, is_active=True))
+            db.add(TenantModel(id=tenant_id, slug=slug, name="Test Tenant"))
             await db.commit()
 
             db.add(DepartmentModel(id=dept_id, tenant_id=tenant_id,
@@ -591,8 +589,7 @@ async def two_tenant_setup():
                     id=tid,
                     slug=f"tenant-{letter.lower()}-{uuid.uuid4().hex[:6]}",
                     name=f"Tenant {letter}",
-                    global_policy={},
-                    is_active=True,
+                    
                 ))
                 await db.commit()
 

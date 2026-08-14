@@ -6,7 +6,7 @@ import uuid
 
 from fastapi import APIRouter, Depends, Request
 from fastapi.responses import JSONResponse
-from pydantic import BaseModel, Field, field_validator, model_validator
+from pydantic import BaseModel, Field, field_validator
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from api.v1.dependencies.auth import get_current_principal, require_admin
@@ -36,82 +36,22 @@ async def _resolve_caller_tenant(repo: TenantRepository, request: Request):
 
 
 def _format(tenant, is_admin: bool = False) -> dict:
-    result = {
+    return {
         "id":            str(tenant.id),
         "slug":          tenant.slug,
         "name":          tenant.name,
         "description":   tenant.description,
         "contact_email": tenant.contact_email,
-        "is_active":     tenant.is_active,
+        "status":        tenant.status,
         "created_at":    to_iso_z(tenant.created_at),
         "locale":        tenant.locale,
     }
-    if is_admin:
-        result["global_policy"] = tenant.global_policy
-    return result
-
-
-# ── Policy schema - mirrors system_defaults() in policy_resolver.py ──────────
-# All fields optional - only provided keys are merged into the active policy.
-# extra="forbid" rejects unknown keys, preventing injection of arbitrary fields.
-
-class _ThresholdsPolicy(BaseModel):
-    model_config = {"extra": "forbid"}
-    block:    float | None = Field(None, gt=0.0, le=1.0)
-    sanitize: float | None = Field(None, ge=0.0, lt=1.0)
-
-    @model_validator(mode="after")
-    def block_gt_sanitize(self) -> "_ThresholdsPolicy":
-        if self.block is not None and self.sanitize is not None and self.block <= self.sanitize:
-            raise ValueError("block must be greater than sanitize")
-        return self
-
-
-class _DetectionPolicy(BaseModel):
-    model_config = {"extra": "forbid"}
-    rule_enabled: bool | None = None
-    ml_enabled:   bool | None = None
-    llm_enabled:  bool | None = None
-
-
-class _PiiPolicy(BaseModel):
-    model_config = {"extra": "forbid"}
-    enabled:            bool  | None = None
-    block_threshold:    float | None = Field(None, gt=0.0, le=1.0)
-    sanitize_threshold: float | None = Field(None, ge=0.0, lt=1.0)
-
-
-class _ToxicityPolicy(BaseModel):
-    model_config = {"extra": "forbid"}
-    enabled:            bool  | None = None
-    block_threshold:    float | None = Field(None, gt=0.0, le=1.0)
-    sanitize_threshold: float | None = Field(None, ge=0.0, lt=1.0)
-
-
-class _GuardrailsPolicy(BaseModel):
-    model_config = {"extra": "forbid"}
-    pii:      _PiiPolicy      | None = None
-    toxicity: _ToxicityPolicy | None = None
-
-
-class _RateLimitPolicy(BaseModel):
-    model_config = {"extra": "forbid"}
-    per_minute: int | None = Field(None, ge=1, le=10000)
-
-
-class GlobalPolicySchema(BaseModel):
-    model_config = {"extra": "forbid"}
-    thresholds: _ThresholdsPolicy  | None = None
-    detection:  _DetectionPolicy   | None = None
-    guardrails: _GuardrailsPolicy  | None = None
-    rate_limit: _RateLimitPolicy   | None = None
 
 
 class TenantUpdateSchema(BaseModel):
     name:          str                | None = None
     description:   str                | None = None
     contact_email: str                | None = None
-    global_policy: GlobalPolicySchema | None = None
     # Tenant default locale (BCP-47). Validated against the supported-locales
     # allowlist; an unsupported value is rejected 422 INVALID_ENUM. max_length
     # mirrors the tenants.locale VARCHAR(35) column and caps an oversized string
@@ -131,8 +71,7 @@ async def get_tenant(
     _principal: Principal    = Depends(get_current_principal),
 ):
     """
-    Returns tenant profile. global_policy is only returned to admin principals -
-    non-admins see metadata without the security policy configuration.
+    Returns the caller's tenant profile (metadata + lifecycle status).
     Scoped to the caller's own tenant. Auth: any valid principal.
     """
     repo   = TenantRepository(db)
@@ -150,7 +89,7 @@ async def update_tenant(
     _principal: Principal   = Depends(require_admin()),
 ):
     """
-    Partially updates tenant metadata: name, description, contact_email, global_policy.
+    Partially updates tenant metadata: name, description, contact_email, locale.
     Only fields present in the request body are updated. Scoped to the caller's
     own tenant. Auth: JWT + ADMIN role required.
     """
@@ -163,8 +102,6 @@ async def update_tenant(
     if body.description   is not None: tenant.description   = body.description
     if body.contact_email is not None: tenant.contact_email = body.contact_email
     if body.locale        is not None: tenant.locale        = body.locale
-    if body.global_policy is not None:
-        tenant.global_policy = body.global_policy.model_dump(exclude_none=True)
 
     await db.commit()
     await db.refresh(tenant)

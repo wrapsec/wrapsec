@@ -42,8 +42,7 @@ async def _make_tenant(db, slug="acme"):
         id            = uuid.uuid4(),
         slug          = slug,
         name          = slug.title(),
-        global_policy = {},
-        is_active     = True,
+        
         created_at    = datetime.now(timezone.utc),
     )
     db.add(t)

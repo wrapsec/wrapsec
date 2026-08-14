@@ -55,8 +55,7 @@ class _FakeHTTPClient:
 
 async def _seed_endpoint(db) -> WebhookEndpointModel:
     tenant_id = uuid.uuid4()
-    db.add(TenantModel(id=tenant_id, slug=f"t-{tenant_id.hex[:8]}", name="T",
-                       global_policy={}, is_active=True))
+    db.add(TenantModel(id=tenant_id, slug=f"t-{tenant_id.hex[:8]}", name="T"))
     ep = WebhookEndpointModel(
         id=uuid.uuid4(), tenant_id=tenant_id, url="https://recv.example/hook",
         secret_enc=encrypt("sk_secret", get_settings().secret_key),

@@ -69,8 +69,7 @@ async def _seed_two_tenants(db):
             id            = tid,
             slug          = f"tenant-{letter.lower()}-{uuid.uuid4().hex[:6]}",
             name          = f"Tenant {letter}",
-            global_policy = {},
-            is_active     = True,
+            
         ))
         db.add(DepartmentModel(
             id        = did,

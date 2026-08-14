@@ -56,8 +56,7 @@ async def _seed_endpoint(
             id            = tenant_id,
             slug          = f"seed-{tenant_id.hex[:8]}",
             name          = "Seed Tenant",
-            global_policy = {},
-            is_active     = True,
+            
         ))
         await test_db.flush()
     ep = WebhookEndpointModel(

@@ -56,8 +56,6 @@ async def seed_default_tenant() -> None:
                     slug          = "default",
                     name          = "Default",
                     description   = "Default tenant",
-                    global_policy = {},
-                    is_active     = True,
                 ))
                 await db.commit()
                 logger.info("seed default tenant created")

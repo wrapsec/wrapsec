@@ -34,7 +34,7 @@ pytestmark = pytest.mark.asyncio
 async def _make_user(db, *, email, user_locale=None, tenant_locale=None):
     tenant = TenantModel(
         id=uuid.uuid4(), slug=f"t-{uuid.uuid4().hex[:10]}", name="T",
-        global_policy={}, is_active=True, locale=tenant_locale,
+         locale=tenant_locale,
     )
     db.add(tenant)
     await db.flush()
@@ -145,7 +145,7 @@ async def test_account_locked_is_best_effort_and_never_raises(pg_db):
 async def test_department_id_snapshotted_from_user(pg_db):
     tenant = TenantModel(
         id=uuid.uuid4(), slug=f"t-{uuid.uuid4().hex[:10]}", name="T",
-        global_policy={}, is_active=True,
+        
     )
     pg_db.add(tenant)
     await pg_db.flush()

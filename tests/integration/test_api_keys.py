@@ -26,8 +26,7 @@ async def _seed_api_key(test_db, *, expires_at):
     did = uuid.uuid4()
     raw = "wsk_live_" + uuid.uuid4().hex
 
-    test_db.add(TenantModel(id=tid, slug=f"t-{tid.hex[:8]}", name="T",
-                            global_policy={}, is_active=True))
+    test_db.add(TenantModel(id=tid, slug=f"t-{tid.hex[:8]}", name="T"))
     await test_db.commit()
     test_db.add(DepartmentModel(id=did, tenant_id=tid, slug="d", name="D",
                                 is_active=True))
@@ -173,7 +172,7 @@ async def test_key_reads_are_dept_scoped_for_non_admin(client, test_db):
 
     tid = uuid.uuid4()
     dept_a, dept_b = uuid.uuid4(), uuid.uuid4()
-    test_db.add(TenantModel(id=tid, slug=f"t-{tid.hex[:8]}", name="T", global_policy={}, is_active=True))
+    test_db.add(TenantModel(id=tid, slug=f"t-{tid.hex[:8]}", name="T"))
     await test_db.commit()
     for d in (dept_a, dept_b):
         test_db.add(DepartmentModel(id=d, tenant_id=tid, slug=f"d-{d.hex[:6]}", name="D", is_active=True))
@@ -266,8 +265,7 @@ async def _seed_key(test_db, *, tenant_id=None, expires_at=None, revoked=False):
     tid = tenant_id or uuid.uuid4()
     did = uuid.uuid4()
     if tenant_id is None:
-        test_db.add(TenantModel(id=tid, slug=f"t-{tid.hex[:8]}", name="T",
-                                global_policy={}, is_active=True))
+        test_db.add(TenantModel(id=tid, slug=f"t-{tid.hex[:8]}", name="T"))
         await test_db.commit()
     test_db.add(DepartmentModel(id=did, tenant_id=tid, slug=f"d-{did.hex[:6]}",
                                 name="D", is_active=True))
@@ -308,7 +306,7 @@ async def test_create_key_cross_tenant_app_id_404(client, admin_jwt_headers, tes
     # let an admin mint a key scoped into someone else's tenant.
     from db.models import TenantModel
     other = uuid.uuid4()
-    test_db.add(TenantModel(id=other, slug=f"t-{other.hex[:8]}", name="O", global_policy={}, is_active=True))
+    test_db.add(TenantModel(id=other, slug=f"t-{other.hex[:8]}", name="O"))
     await test_db.commit()
     _, aid = await _make_app(test_db, other)
     r = await client.post("/v1/keys", json={"name": "x", "app_id": aid}, headers=admin_jwt_headers)

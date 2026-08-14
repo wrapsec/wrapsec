@@ -878,7 +878,7 @@ async def test_proxy_audit_row_tenant_attributed_and_chained(client, test_db):
 
     tid, did = uuid.uuid4(), uuid.uuid4()
     raw = "wsk_live_" + uuid.uuid4().hex
-    test_db.add(TenantModel(id=tid, slug=f"t-{tid.hex[:8]}", name="T", global_policy={}, is_active=True))
+    test_db.add(TenantModel(id=tid, slug=f"t-{tid.hex[:8]}", name="T"))
     await test_db.commit()
     test_db.add(DepartmentModel(id=did, tenant_id=tid, slug=f"d-{did.hex[:6]}", name="D", is_active=True))
     await test_db.commit()
