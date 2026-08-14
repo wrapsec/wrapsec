@@ -209,6 +209,35 @@ class SettingsModel(Base):
     updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True),    nullable=False, default=utc_now, onupdate=utc_now)
 
 
+class TenantSettingsModel(Base):
+    """
+    Per-tenant configuration (D5/D1 two-table split). Replaces the single global
+    `settings` table: the same key can hold a different value per tenant, so one
+    tenant's thresholds/LLM/rate-limit config never leaks into another. Resolution
+    layers this between platform_settings and dept/app overrides.
+    """
+    __tablename__ = "tenant_settings"
+
+    tenant_id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), ForeignKey("tenants.id"), primary_key=True)
+    key: Mapped[str] = mapped_column(String(100), primary_key=True)
+    value: Mapped[str] = mapped_column(Text,        nullable=False)
+    updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True),    nullable=False, default=utc_now, onupdate=utc_now)
+
+
+class PlatformSettingsModel(Base):
+    """
+    Platform / control-plane configuration (D5/D1). Its own table so ownership and
+    DB grants are separable from tenant data. NEVER holds per-tenant entitlements
+    (those are tenant_settings rows). Read as a layer beneath tenant_settings in
+    policy resolution; written only through a platform-operator endpoint.
+    """
+    __tablename__ = "platform_settings"
+
+    key: Mapped[str] = mapped_column(String(100), primary_key=True)
+    value: Mapped[str] = mapped_column(Text,        nullable=False)
+    updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True),    nullable=False, default=utc_now, onupdate=utc_now)
+
+
 class ProxyProviderConfigModel(Base):
     __tablename__ = "proxy_provider_configs"
 
