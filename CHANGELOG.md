@@ -2,6 +2,22 @@
 
 All notable changes to WrapSec are documented here.
 
+## [Unreleased]
+
+Multi-tenant SaaS baseline (identity + memberships, settings split, tenant
+lifecycle, tenant isolation) and the open-core plugin seams. Full notes are
+written when this version is cut; the operationally significant item is called
+out now:
+
+### Changed
+- **BREAKING (operational): encrypted provider secrets use a new wire format.**
+  Stored provider API keys (LLM, proxy, and department/application policy
+  overrides) are now written as `<key_id>:<payload>` and decryption dispatches on
+  the key id. Values written in the previous format can no longer be decrypted and
+  must be re-entered once via the dashboard; new installs are unaffected. The key
+  id is the seam that lets a future per-tenant or KMS-held key be introduced with
+  no re-encryption campaign.
+
 ## [1.8.8] - 2026-08-14
 
 Reliability and delivery-guarantee hardening (second review pass), plus a small
