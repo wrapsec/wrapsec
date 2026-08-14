@@ -60,11 +60,30 @@ def test_xff_trusted_when_peer_in_trusted_cidr():
         assert get_client_ip(req) == "203.0.113.5"
 
 
-def test_xff_takes_first_hop_only():
-    """Multi-hop XFF chain: only the first (leftmost) address is used."""
+def test_spoofed_leftmost_xff_is_not_honored():
+    """B3: a reverse proxy APPENDS the real peer, so the rightmost entry is
+    authoritative. A client-forged leftmost value must be ignored."""
     with _patch_trusted("10.0.0.1"):
-        req = _make_request("10.0.0.1", "203.0.113.5, 10.0.0.9, 172.16.1.2")
+        # client forged "1.2.3.4"; the trusted proxy appended the real peer.
+        req = _make_request("10.0.0.1", "1.2.3.4, 8.8.8.8")
+        assert get_client_ip(req) == "8.8.8.8"
+
+
+def test_rightmost_untrusted_hop_selected_through_proxy_chain():
+    """Multiple trusted-proxy hops: skip trusted entries from the right and
+    return the first untrusted address (the real client)."""
+    with _patch_trusted("10.0.0.0/8"):
+        # client(203.0.113.5) -> proxyA(10.0.0.9) -> proxyB(10.0.0.1) -> server
+        req = _make_request("10.0.0.1", "203.0.113.5, 10.0.0.9")
         assert get_client_ip(req) == "203.0.113.5"
+
+
+def test_all_trusted_chain_falls_back_to_peer():
+    """If every forwarded entry is a trusted proxy, fall back to the direct peer
+    rather than trusting a proxy IP as the client."""
+    with _patch_trusted("10.0.0.0/8"):
+        req = _make_request("10.0.0.1", "10.0.0.5, 10.0.0.9")
+        assert get_client_ip(req) == "10.0.0.1"
 
 
 def test_multiple_trusted_entries():

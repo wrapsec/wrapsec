@@ -79,11 +79,18 @@ def get_client_ip(request: Request) -> str:
     direct connection IP is listed in TRUSTED_PROXY_IPS. Without a trusted
     proxy guard, any client can set x-forwarded-for to spoof their IP in
     audit logs and bypass IP-based controls.
+
+    A reverse proxy APPENDS the real peer IP to whatever the client sent, so the
+    trustworthy value is the RIGHTMOST entry (added by our proxy), not the
+    leftmost (client-controlled). We walk the chain right-to-left, skipping
+    further trusted-proxy hops, and return the first non-trusted address. Taking
+    [0] would let a client set `X-Forwarded-For: 1.2.3.4` and spoof its recorded
+    IP even behind a correctly-configured trusted proxy.
     """
     direct_ip = (request.client.host if request.client else None) or "unknown"
-    forwarded  = request.headers.get("x-forwarded-for", "").split(",")[0].strip()
+    chain     = [p.strip() for p in request.headers.get("x-forwarded-for", "").split(",") if p.strip()]
 
-    if not forwarded:
+    if not chain:
         return direct_ip
 
     trusted_raw = get_settings().trusted_proxy_ips
@@ -92,12 +99,30 @@ def get_client_ip(request: Request) -> str:
 
     try:
         addr = ipaddress.ip_address(direct_ip)
-        nets = _parse_trusted_proxy_nets(trusted_raw)
-        if any(addr in net for net in nets):
-            return forwarded
     except ValueError:
-        pass
+        return direct_ip
 
+    nets = _parse_trusted_proxy_nets(trusted_raw)
+    if not any(addr in net for net in nets):
+        # Direct peer is not a trusted proxy: the header is unverified, ignore it.
+        return direct_ip
+
+    def _is_trusted(ip_str: str) -> bool:
+        try:
+            return any(ipaddress.ip_address(ip_str) in net for net in nets)
+        except ValueError:
+            return False
+
+    for candidate in reversed(chain):
+        if _is_trusted(candidate):
+            continue  # another trusted-proxy hop -- keep walking left
+        try:
+            ipaddress.ip_address(candidate)   # only trust a well-formed address
+        except ValueError:
+            return direct_ip
+        return candidate
+
+    # Entire chain is trusted proxies -- fall back to the direct peer.
     return direct_ip
 
 
