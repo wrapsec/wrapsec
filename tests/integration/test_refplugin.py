@@ -325,3 +325,57 @@ async def test_policy_layer_registration_seam(auth_setup):
     finally:
         pl._LAYERS[:] = before
         await engine.dispose()
+
+
+# ── Plugin settings/entitlement namespace seam (increment 2 / 2.11) ──────────
+
+@pytest.mark.asyncio
+async def test_plugin_settings_namespace_seam(two_tenant_setup):
+    """Seam for 2.11 (open-core P4): the 1.3 settings substrate doubles as the
+    per-tenant entitlement store. A plugin writes 'plugin:<name>:<key>' rows
+    (opting in via allow_plugin_namespace=True); the core write path refuses that
+    prefix; and the rows are tenant-scoped like all settings, so tenant B never
+    sees tenant A's entitlement. No separate entitlement table in core."""
+    from sqlalchemy import delete as sa_delete
+    from sqlalchemy.ext.asyncio import (
+        AsyncSession,
+        async_sessionmaker,
+        create_async_engine,
+    )
+    from sqlalchemy.pool import NullPool
+
+    from config.settings import get_settings
+    from db.models import TenantSettingsModel
+    from db.repositories.settings import TenantSettingsRepository, plugin_settings_key
+
+    a, b   = two_tenant_setup["A"], two_tenant_setup["B"]
+    tid_a  = a["tenant"].id
+    tid_b  = b["tenant"].id
+    ent    = plugin_settings_key("refplugin", "entitlement")
+    assert ent == "plugin:refplugin:entitlement"
+
+    engine = create_async_engine(get_settings().database_url, poolclass=NullPool)
+    sf     = async_sessionmaker(bind=engine, class_=AsyncSession, expire_on_commit=False)
+    try:
+        async with sf() as db:
+            repo = TenantSettingsRepository(db)
+
+            # Core write path refuses the reserved plugin namespace.
+            with pytest.raises(ValueError):
+                await repo.set(tid_a, ent, {"tier": "pro"})
+
+            # A plugin opts in explicitly and writes tenant A's entitlement.
+            await repo.set(tid_a, ent, {"tier": "pro"}, allow_plugin_namespace=True)
+            await db.commit()
+
+        async with sf() as db:
+            repo = TenantSettingsRepository(db)
+            assert await repo.get(tid_a, ent) == {"tier": "pro"}   # A sees its own
+            assert await repo.get(tid_b, ent) is None              # B is isolated
+    finally:
+        async with sf() as db:
+            await db.execute(
+                sa_delete(TenantSettingsModel).where(TenantSettingsModel.key == ent)
+            )
+            await db.commit()
+        await engine.dispose()
