@@ -2,6 +2,30 @@
 
 All notable changes to WrapSec are documented here.
 
+## [1.8.8] - 2026-08-14
+
+Reliability and delivery-guarantee hardening (second review pass), plus a small
+open-core plugin seam.
+
+### Added
+- **Plugin connector registration.** `register_connector` lets an installed
+  plugin register a SIEM connector through a public seam instead of reaching into
+  private registry state.
+
+### Fixed
+- **Webhook delivery no longer silently loses events on a worker crash.** A
+  restarted worker drains its own pending (delivered-but-unacked) entries, and an
+  XAUTOCLAIM pass reclaims a dead replica's entries after a visibility timeout, so
+  security events bound for SIEMs are re-delivered rather than stranded.
+- **Login no longer 500s during a Redis outage.** The account-lockout calls fail
+  open on Redis errors, consistent with the other Redis dependencies in the login
+  flow; valid logins still succeed and invalid ones still return 401.
+- **User department ownership is enforced.** Creating or updating a user with a
+  department from another tenant is rejected, and the single-record audit trace
+  lookup filters by tenant as well as department.
+- **Webhook update can clear optional fields.** An explicit null now clears
+  description / event_types (the required URL is never cleared).
+
 ## [1.8.7] - 2026-08-14
 
 Security-review hardening. Fixes from an independent code review, spanning
