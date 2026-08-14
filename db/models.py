@@ -321,6 +321,58 @@ class UserModel(Base):
     )
 
 
+class MembershipModel(Base):
+    """
+    Membership of a user (identity) in a tenant, carrying that user's role and
+    departmental scope WITHIN that tenant (D2 Option B).
+
+    A single human (one UserModel row, globally-unique email) may hold a
+    membership in more than one tenant, with an independent role/dept in each.
+    The access token is minted from ONE membership (its tenant_id + role); the
+    request path reads tenant_id/role from the token, never from this table
+    directly on the hot path.
+
+    Uniqueness: one membership per (user_id, tenant_id) -- a user cannot hold two
+    roles in the same tenant.
+
+    Role/dept invariant (ck_memberships_dept_required, mirrors the historical
+    per-user rule): role = ADMIN -> dept_id MUST be NULL; role = AUDITOR ->
+    dept_id may be NULL (tenant-wide) or set (department-scoped); role IN
+    (DEVELOPER, VIEWER) -> dept_id MUST NOT be NULL. dept_id must belong to the
+    same tenant -- validated in MembershipRepository.create/update().
+
+    Expand phase (C1a): this table is populated by the 0015 backfill (one
+    membership per existing user) and coexists with users.tenant_id/dept_id/role
+    until the contract phase (C1c) drops those columns.
+    """
+    __tablename__ = "memberships"
+
+    id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    user_id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), ForeignKey("users.id", ondelete="CASCADE"), nullable=False)
+    tenant_id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), ForeignKey("tenants.id"),                nullable=False)
+    dept_id: Mapped[uuid.UUID | None] = mapped_column(UUID(as_uuid=True), ForeignKey("departments.id"),           nullable=True)
+    role: Mapped[str] = mapped_column(String(50),  nullable=False, default="DEVELOPER")
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True),    nullable=False, default=utc_now)
+
+    __table_args__ = (
+        UniqueConstraint("user_id", "tenant_id", name="uq_memberships_user_tenant"),
+        Index("ix_memberships_user",        "user_id"),
+        Index("ix_memberships_tenant",      "tenant_id"),
+        Index("ix_memberships_tenant_role", "tenant_id", "role"),
+        Index("ix_memberships_dept",        "dept_id"),
+        CheckConstraint(
+            "role IN ('ADMIN', 'DEVELOPER', 'VIEWER', 'AUDITOR')",
+            name="ck_memberships_role",
+        ),
+        CheckConstraint(
+            "(role = 'ADMIN' AND dept_id IS NULL) OR "
+            "(role = 'AUDITOR') OR "
+            "(role IN ('DEVELOPER', 'VIEWER') AND dept_id IS NOT NULL)",
+            name="ck_memberships_dept_required",
+        ),
+    )
+
+
 class RefreshTokenModel(Base):
     """
     Opaque refresh tokens for JWT session management.
