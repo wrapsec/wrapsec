@@ -201,6 +201,12 @@ async def list_keys(
     now  = utc_now()
     keys = [k for k in keys if k.expires_at is None or k.expires_at > now]
 
+    # C1: a non-admin principal sees only its own department's keys, not every
+    # key across the tenant. Admins (no dept scope) see all tenant keys.
+    if not request.state.is_admin and request.state.dept_id:
+        own_dept = str(request.state.dept_id)
+        keys = [k for k in keys if k.dept_id and str(k.dept_id) == own_dept]
+
     # Enrich with department and application names
     dept_repo  = DepartmentRepository(db)
     app_repo   = ApplicationRepository(db)
@@ -249,6 +255,10 @@ async def get_key(
     repo   = ApiKeyRepository(db)
     record = await repo.get_by_key_id(key_id)
     if not record or str(record.tenant_id) != request.state.tenant_id:
+        raise NotFoundError("key", key_id)
+    # C1: non-admin principals are confined to their own department's keys.
+    if (not request.state.is_admin and request.state.dept_id
+            and str(record.dept_id) != str(request.state.dept_id)):
         raise NotFoundError("key", key_id)
 
     return JSONResponse(content={

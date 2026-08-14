@@ -166,6 +166,45 @@ async def test_revoke_nonexistent_key_returns_404(client, admin_jwt_headers):
 
 
 @pytest.mark.asyncio
+async def test_key_reads_are_dept_scoped_for_non_admin(client, test_db):
+    """C1: a non-admin, dept-scoped principal sees only its own department's keys,
+    and cannot read another department's key metadata."""
+    from db.models import APIKeyModel, DepartmentModel, TenantModel
+
+    tid = uuid.uuid4()
+    dept_a, dept_b = uuid.uuid4(), uuid.uuid4()
+    test_db.add(TenantModel(id=tid, slug=f"t-{tid.hex[:8]}", name="T", global_policy={}, is_active=True))
+    await test_db.commit()
+    for d in (dept_a, dept_b):
+        test_db.add(DepartmentModel(id=d, tenant_id=tid, slug=f"d-{d.hex[:6]}", name="D", is_active=True))
+    await test_db.commit()
+
+    def _seed(dept, raw):
+        kid = "key_" + uuid.uuid4().hex[:8]
+        test_db.add(APIKeyModel(
+            id=uuid.uuid4(), key_id=kid, tenant_id=tid, dept_id=dept, name="k",
+            key_hash=hashlib.sha256(raw.encode()).hexdigest(),
+            key_type="live", is_admin=False, revoked=False,
+        ))
+        return kid
+
+    caller_raw = "wsk_live_" + uuid.uuid4().hex
+    _seed(dept_a, caller_raw)                                  # the dept-A caller
+    a_key = _seed(dept_a, "wsk_live_" + uuid.uuid4().hex)      # peer in dept A
+    b_key = _seed(dept_b, "wsk_live_" + uuid.uuid4().hex)      # key in dept B
+    await test_db.commit()
+
+    hdr = {"x-api-key": caller_raw}
+    listed = await client.get("/v1/keys", headers=hdr)
+    assert listed.status_code == 200
+    assert {k["dept_id"] for k in listed.json()["keys"]} == {str(dept_a)}   # own dept only
+    assert b_key not in {k["key_id"] for k in listed.json()["keys"]}
+
+    assert (await client.get(f"/v1/keys/{b_key}", headers=hdr)).status_code == 404  # cross-dept hidden
+    assert (await client.get(f"/v1/keys/{a_key}", headers=hdr)).status_code == 200  # own dept visible
+
+
+@pytest.mark.asyncio
 async def test_create_key_persists_expires_at(client, admin_jwt_headers, admin_key_scope):
     """A1: a valid expires_at must be persisted, not silently dropped -- otherwise
     the key never expires while the response claims it will."""
