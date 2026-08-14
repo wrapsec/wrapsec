@@ -110,6 +110,22 @@ _REGISTRY: dict[str, ConnectorSpec] = {spec.connector_type: spec for spec in _SP
 KNOWN_CONNECTOR_TYPES: frozenset[str] = frozenset(_REGISTRY)
 
 
+def register_connector(spec: ConnectorSpec) -> None:
+    """Register a connector spec at runtime.
+
+    This is the plugin seam: a plugin's register() adds a SIEM connector through
+    this public function instead of mutating the private _REGISTRY. Additive and
+    non-shadowing -- raises if the slug is already registered so a plugin cannot
+    silently replace a core connector. Refreshes KNOWN_CONNECTOR_TYPES so the
+    admin-API create-time validation recognizes the new slug.
+    """
+    if spec.connector_type in _REGISTRY:
+        raise ValueError(f"connector_type already registered: {spec.connector_type!r}")
+    _REGISTRY[spec.connector_type] = spec
+    global KNOWN_CONNECTOR_TYPES
+    KNOWN_CONNECTOR_TYPES = frozenset(_REGISTRY)
+
+
 def get_spec(connector_type: str | None) -> ConnectorSpec | None:
     """
     Resolve a connector_type to its spec.
