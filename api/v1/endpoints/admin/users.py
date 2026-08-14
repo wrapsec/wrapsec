@@ -14,6 +14,7 @@ from api.v1.dependencies.auth import endpoint_rate_limit, require_admin
 from api.v1.dependencies.db import get_db
 from api.v1.middleware.auth import get_client_ip
 from db.repositories.admin_event import AdminEventRepository
+from db.repositories.membership import MembershipRepository
 from db.repositories.user import UserRepository
 from domain.entities.principal import Principal
 from domain.enums import AdminEventAction
@@ -207,14 +208,22 @@ async def create_user(
             raise NotFoundError("department", body.dept_id)
 
     try:
+        _tenant_uuid = uuid.UUID(str(principal.tenant_id))
+        _dept_uuid   = uuid.UUID(body.dept_id) if body.dept_id else None
         user = await repo.create({
-            "tenant_id":             uuid.UUID(str(principal.tenant_id)),
+            "tenant_id":             _tenant_uuid,
             "email":                 email,
             "password_hash":         hash_password(body.password),
             "role":                  body.role,
-            "dept_id":               uuid.UUID(body.dept_id) if body.dept_id else None,
+            "dept_id":               _dept_uuid,
             "force_password_change": True,
         })
+        await repo.flush()  # assign user.id before the membership FK references it
+        # Identity migrate phase: mirror role/dept onto the membership so it stays
+        # in lockstep with the user row while both sources coexist.
+        await MembershipRepository(db).upsert_for_user(
+            user_id=user.id, tenant_id=_tenant_uuid, role=body.role, dept_id=_dept_uuid,
+        )
         await db.commit()
     except ValueError as e:
         logger.warning("user create rejected: %s", e)
@@ -415,6 +424,15 @@ async def update_user(
         updated = await repo.update(user_id, data)
         if updated is None:
             raise NotFoundError("user", str(user_id))
+        # Identity migrate phase: mirror the final role/dept onto the membership so
+        # it stays in lockstep with the user row. Only when role/dept actually
+        # change (is_active-only updates leave authz untouched).
+        if "role" in data or "dept_id" in data:
+            await repo.flush()
+            await MembershipRepository(db).upsert_for_user(
+                user_id=user_id, tenant_id=tenant_id,
+                role=updated.role, dept_id=updated.dept_id,
+            )
         # Do NOT commit yet - session invalidation must be atomic with the update.
     except ValueError as e:
         logger.warning("user update rejected: %s", e)

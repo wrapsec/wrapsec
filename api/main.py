@@ -114,7 +114,7 @@ async def bootstrap_admin() -> None:
                 logger.error("bootstrap admin_password_too_weak: %s - skipping", e)
                 return
 
-            await user_repo.create({
+            user = await user_repo.create({
                 "tenant_id":             tenant.id,
                 "dept_id":               None,
                 "email":                 email,
@@ -122,6 +122,12 @@ async def bootstrap_admin() -> None:
                 "role":                  "ADMIN",
                 "force_password_change": True,
             })
+            await user_repo.flush()  # assign user.id before the membership FK
+            # Identity migrate phase: create the matching ADMIN membership.
+            from db.repositories.membership import MembershipRepository
+            await MembershipRepository(db).upsert_for_user(
+                user_id=user.id, tenant_id=tenant.id, role="ADMIN", dept_id=None,
+            )
             await db.commit()
 
             logger.info("bootstrap admin_created email=%s force_password_change=True", email)

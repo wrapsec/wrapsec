@@ -105,6 +105,35 @@ async def test_unique_membership_per_user_tenant(pg_db):
 
 
 @pytest.mark.asyncio
+async def test_upsert_creates_then_updates_in_lockstep(pg_db):
+    """upsert_for_user creates the membership, then a second call updates it."""
+    tenant_id, dept_id, user_id = await _seed_tenant_dept_user(pg_db, role="ADMIN", with_dept=False)
+    try:
+        repo = MembershipRepository(pg_db)
+        m1 = await repo.upsert_for_user(user_id, tenant_id, role="ADMIN", dept_id=None)
+        await pg_db.flush()
+        assert m1.role == "ADMIN" and m1.dept_id is None
+
+        # add a dept so we can move the membership to DEVELOPER in that dept
+        new_dept = uuid.uuid4()
+        pg_db.add(DepartmentModel(id=new_dept, tenant_id=tenant_id,
+                                  slug=f"d-{new_dept.hex[:8]}", name="D2"))
+        await pg_db.flush()
+
+        m2 = await repo.upsert_for_user(user_id, tenant_id, role="DEVELOPER", dept_id=new_dept)
+        await pg_db.flush()
+        assert m2.id == m1.id  # same row updated, not a new membership
+        assert m2.role == "DEVELOPER" and m2.dept_id == new_dept
+
+        rows = (await pg_db.execute(
+            sa.select(MembershipModel).where(MembershipModel.user_id == user_id)
+        )).scalars().all()
+        assert len(rows) == 1
+    finally:
+        await _cleanup(pg_db, tenant_id)
+
+
+@pytest.mark.asyncio
 async def test_backfill_maps_user_to_membership_idempotently(pg_db):
     """The 0015 backfill INSERT: one membership per user, re-run creates no dup."""
     tenant_id, dept_id, user_id = await _seed_tenant_dept_user(pg_db, role="DEVELOPER")

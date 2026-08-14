@@ -64,15 +64,7 @@ class MembershipRepository(BaseRepository):
         role    = data.get("role", "DEVELOPER")
         dept_id = data.get("dept_id")
 
-        if role not in _VALID_ROLES:
-            raise ValueError(
-                f"Invalid role '{role}'. Must be ADMIN, DEVELOPER, VIEWER, or AUDITOR."
-            )
-        if role == "ADMIN" and dept_id:
-            raise ValueError("ADMIN memberships must not have a dept_id.")
-        if role in ("DEVELOPER", "VIEWER") and not dept_id:
-            raise ValueError(f"dept_id is required for role '{role}'.")
-
+        self._validate_role_dept(role, dept_id)
         if dept_id:
             await self._verify_dept_belongs_to_tenant(
                 dept_id   = dept_id,
@@ -83,6 +75,32 @@ class MembershipRepository(BaseRepository):
         self.session.add(membership)
         return membership
 
+    async def upsert_for_user(
+        self, user_id: UUID, tenant_id: UUID, role: str, dept_id: UUID | None
+    ) -> MembershipModel:
+        """
+        Creates the (user, tenant) membership or updates its role/dept to match.
+
+        Transitional helper for the identity migrate phase: user-write paths call
+        this so the membership stays in lockstep with the user row while both
+        sources coexist. Same validation as create(). Flush-only.
+        """
+        self._validate_role_dept(role, dept_id)
+        if dept_id:
+            await self._verify_dept_belongs_to_tenant(dept_id, tenant_id)
+
+        existing = await self.get_by_user_and_tenant(user_id, tenant_id)
+        if existing is None:
+            membership = MembershipModel(
+                user_id=user_id, tenant_id=tenant_id, role=role, dept_id=dept_id
+            )
+            self.session.add(membership)
+            return membership
+
+        existing.role    = role
+        existing.dept_id = dept_id
+        return existing
+
     async def count_active_for_tenant(self, tenant_id: UUID) -> int:
         """Count of memberships in a tenant. Used by provisioning/bootstrap checks."""
         result = await self.session.execute(
@@ -91,6 +109,18 @@ class MembershipRepository(BaseRepository):
         return result.scalar_one() or 0
 
     # -- Private helpers --------------------------------------------------------
+
+    @staticmethod
+    def _validate_role_dept(role: str, dept_id: UUID | None) -> None:
+        """Role allowlist + role/dept invariant (mirrors ck_memberships_dept_required)."""
+        if role not in _VALID_ROLES:
+            raise ValueError(
+                f"Invalid role '{role}'. Must be ADMIN, DEVELOPER, VIEWER, or AUDITOR."
+            )
+        if role == "ADMIN" and dept_id:
+            raise ValueError("ADMIN memberships must not have a dept_id.")
+        if role in ("DEVELOPER", "VIEWER") and not dept_id:
+            raise ValueError(f"dept_id is required for role '{role}'.")
 
     async def _verify_dept_belongs_to_tenant(
         self, dept_id: UUID, tenant_id: UUID

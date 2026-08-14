@@ -125,7 +125,7 @@ async def complete_setup(body: SetupRequest, db: AsyncSession = Depends(get_db))
 
     email = normalize_email(str(body.email))
 
-    await user_repo.create({
+    user = await user_repo.create({
         "tenant_id":             tenant.id,
         "dept_id":               None,
         "email":                 email,
@@ -133,6 +133,12 @@ async def complete_setup(body: SetupRequest, db: AsyncSession = Depends(get_db))
         "role":                  "ADMIN",
         "force_password_change": False,
     })
+    await user_repo.flush()  # assign user.id before the membership FK references it
+    # Identity migrate phase: create the matching ADMIN membership in lockstep.
+    from db.repositories.membership import MembershipRepository
+    await MembershipRepository(db).upsert_for_user(
+        user_id=user.id, tenant_id=tenant.id, role="ADMIN", dept_id=None,
+    )
     await db.commit()
 
     # Cache immediately - all future status checks are Redis-only
