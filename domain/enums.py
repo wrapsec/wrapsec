@@ -140,6 +140,7 @@ class AuthFailureReason(str, Enum):
     EXPIRED             = "expired"
     REFRESH_FAILED      = "refresh_failed"
     SESSION_INVALIDATED = "session_invalidated"
+    NO_MEMBERSHIP       = "no_membership"
 
 
 class LogoutReason(str, Enum):

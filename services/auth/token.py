@@ -15,7 +15,7 @@ from config.settings import get_settings
 from services.time import utc_now
 
 if TYPE_CHECKING:
-    from db.models import UserModel
+    from db.models import MembershipModel, UserModel
 
 logger = logging.getLogger("wrapsec.auth")
 
@@ -25,17 +25,26 @@ ACCESS_TOKEN_AUDIENCE = "wrapsec-dashboard"
 # Must match exactly on token creation and validation.
 
 
-def create_access_token(user: "UserModel") -> str:
+def create_access_token(
+    user: "UserModel", membership: "MembershipModel | None" = None
+) -> str:
     """
-    Creates a short-lived JWT access token for a dashboard user.
+    Creates a short-lived JWT access token scoped to one membership.
+
+    Identity model D2 Option B: the authz claims (tenant_id, role, dept_id) come
+    from the MEMBERSHIP the session is scoped to; identity claims (sub, ver) come
+    from the user. When `membership` is omitted the claims fall back to the user
+    row -- a transitional path for callers (and tests) not yet membership-aware,
+    valid only while users.tenant_id/role/dept_id still mirror the membership.
 
     Claims and their purposes:
         sub        - user UUID string (JWT subject - standard claim)
         jti        - opaque token id: enables per-token revocation via Redis blacklist
         type       - "access": rejects refresh tokens used as access tokens
         ver        - user.token_version: detects session invalidation
-        role       - user.role: used by RBAC dependencies (require_role)
-        tenant_id  - security boundary: cross-validated against DB in middleware
+        role       - membership role: used by RBAC dependencies (require_role)
+        tenant_id  - security boundary: the membership's tenant; the middleware
+                     confirms the user still holds a membership in it
         dept_id    - isolation boundary: None for ADMIN, str UUID for others
         aud        - ACCESS_TOKEN_AUDIENCE: cross-service token reuse prevention
         iat        - issued-at (standard JWT)
@@ -48,14 +57,16 @@ def create_access_token(user: "UserModel") -> str:
     _settings = get_settings()
     now     = utc_now()
     expires = now + timedelta(minutes=_settings.jwt_access_token_expire_minutes)
+
+    src = membership if membership is not None else user
     payload = {
         "sub":       str(user.id),
         "jti":       secrets.token_urlsafe(16),
         "type":      "access",
         "ver":       user.token_version,
-        "role":      user.role,
-        "tenant_id": str(user.tenant_id),
-        "dept_id":   str(user.dept_id) if user.dept_id else None,
+        "role":      src.role,
+        "tenant_id": str(src.tenant_id),
+        "dept_id":   str(src.dept_id) if src.dept_id else None,
         "aud":       ACCESS_TOKEN_AUDIENCE,
         "iat":       now,
         "exp":       expires,

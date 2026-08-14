@@ -445,12 +445,16 @@ async def auth_setup():
             await db.commit()
 
             repo = UserRepository(db)
+            from db.repositories.membership import MembershipRepository
+            mem_repo = MembershipRepository(db)
 
             u = await repo.create({
                 "tenant_id": tenant_id, "dept_id": None,
                 "email": admin_email, "password_hash": password_hash,
                 "role": "ADMIN", "force_password_change": False,
             })
+            await db.flush()
+            await mem_repo.upsert_for_user(u.id, tenant_id, "ADMIN", None)
             await db.commit()
             admin_db_id = u.id
 
@@ -459,6 +463,8 @@ async def auth_setup():
                 "email": dev_email, "password_hash": password_hash,
                 "role": "DEVELOPER", "force_password_change": False,
             })
+            await db.flush()
+            await mem_repo.upsert_for_user(u.id, tenant_id, "DEVELOPER", dept_id)
             await db.commit()
             dev_db_id = u.id
 
@@ -467,6 +473,8 @@ async def auth_setup():
                 "email": viewer_email, "password_hash": password_hash,
                 "role": "VIEWER", "force_password_change": False,
             })
+            await db.flush()
+            await mem_repo.upsert_for_user(u.id, tenant_id, "VIEWER", dept_id)
             await db.commit()
             viewer_db_id = u.id
 
@@ -618,6 +626,9 @@ async def two_tenant_setup():
                     "email": email, "password_hash": hash_password("TestPass1!"),
                     "role": "ADMIN", "force_password_change": False,
                 })
+                await db.flush()
+                from db.repositories.membership import MembershipRepository
+                await MembershipRepository(db).upsert_for_user(u.id, tid, "ADMIN", None)
                 await db.commit()
 
                 db.add(AuditLogModel(

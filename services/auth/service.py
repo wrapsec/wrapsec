@@ -16,7 +16,7 @@ from config.settings import get_settings as _get_settings
 from services.time import ensure_utc, utc_now
 
 if TYPE_CHECKING:
-    from db.models import UserModel
+    from db.models import MembershipModel, UserModel
 
 logger = logging.getLogger("wrapsec.auth")
 
@@ -31,6 +31,20 @@ _auth_event_sf     = async_sessionmaker(bind=_auth_event_engine, class_=AsyncSes
 
 def _utcnow() -> datetime:
     return utc_now()
+
+
+async def _resolve_active_membership(db: AsyncSession, user_id: UUID):
+    """
+    Returns the membership the session is scoped to, or None if the user holds
+    none (callers fail closed -- no membership means no tenant/authz context).
+
+    At N=1 a user has exactly one membership. Until the post-auth tenant switcher
+    lands, the oldest membership is the deterministic default active one.
+    """
+    from db.repositories.membership import MembershipRepository
+
+    memberships = await MembershipRepository(db).list_for_user(user_id)
+    return memberships[0] if memberships else None
 
 
 def _to_db(dt: datetime) -> datetime:
@@ -89,6 +103,7 @@ class LoginResult:
     expires_in:            int
     force_password_change: bool
     user:                  "UserModel"
+    membership:            "MembershipModel"
 
 
 @dataclass
@@ -97,6 +112,7 @@ class RefreshResult:
     refresh_token: str
     expires_in:    int
     user:          "UserModel"
+    membership:    "MembershipModel"
 
 
 class AuthService:
@@ -239,10 +255,25 @@ class AuthService:
             )
             raise AccountDisabledException()
 
+        # Resolve the membership this session is scoped to. Fail closed: a user
+        # with no membership has no tenant/authz context, so no token is minted.
+        active_membership = await _resolve_active_membership(db, user.id)
+        if active_membership is None:
+            logger.error("auth_event LOGIN_FAILED email=%s reason=no_membership", email)
+            await _log_auth_event(
+                action         = "login_failed",
+                success        = False,
+                user_id        = user.id,
+                failure_reason = "no_membership",
+                ip_address     = ip_address,
+                user_agent     = user_agent,
+            )
+            raise AuthenticationError()
+
         await _safe_clear_failures()
 
         user_repo             = UserRepository(db)
-        access_token          = create_access_token(user)
+        access_token          = create_access_token(user, active_membership)
         refresh_raw, ref_hash = create_refresh_token()
         expires_at            = _utcnow() + timedelta(days=_settings.jwt_refresh_token_expire_days)
 
@@ -258,12 +289,12 @@ class AuthService:
 
         logger.info(
             "auth_event LOGIN_SUCCESS user_id=%s email=%s role=%s tenant_id=%s",
-            user.id, user.email, user.role, user.tenant_id,
+            user.id, user.email, active_membership.role, active_membership.tenant_id,
         )
         await _log_auth_event(
             action     = "login_success",
             success    = True,
-            tenant_id  = user.tenant_id,
+            tenant_id  = active_membership.tenant_id,
             user_id    = user.id,
             ip_address = ip_address,
             user_agent = user_agent,
@@ -275,6 +306,7 @@ class AuthService:
             expires_in            = _settings.jwt_access_token_expire_minutes * 60,
             force_password_change = user.force_password_change,
             user                  = user,
+            membership            = active_membership,
         )
 
     async def refresh(self, refresh_token_raw: str, db: AsyncSession) -> RefreshResult:
@@ -348,7 +380,21 @@ class AuthService:
             )
             raise SessionInvalidatedException()
 
-        new_access        = create_access_token(user)
+        # Re-mint scoped to the user's active membership. Fail closed on none.
+        active_membership = await _resolve_active_membership(db, user.id)
+        if active_membership is None:
+            await rt_repo.revoke(token_hash)
+            await db.commit()
+            logger.warning("auth_event TOKEN_REFRESH_FAILED user_id=%s reason=no_membership", user.id)
+            await _log_auth_event(
+                action         = "token_refresh_failed",
+                success        = False,
+                user_id        = user.id,
+                failure_reason = "no_membership",
+            )
+            raise InvalidTokenException("User has no membership")
+
+        new_access        = create_access_token(user, active_membership)
         new_raw, new_hash = create_refresh_token()
         expires_at        = _utcnow() + timedelta(days=_settings.jwt_refresh_token_expire_days)
 
@@ -365,7 +411,7 @@ class AuthService:
         await _log_auth_event(
             action    = "token_refresh_success",
             success   = True,
-            tenant_id = user.tenant_id,
+            tenant_id = active_membership.tenant_id,
             user_id   = user.id,
         )
 
@@ -374,6 +420,7 @@ class AuthService:
             refresh_token = new_raw,
             expires_in    = _settings.jwt_access_token_expire_minutes * 60,
             user          = user,
+            membership    = active_membership,
         )
 
     async def logout(
