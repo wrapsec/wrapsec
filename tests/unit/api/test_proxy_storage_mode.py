@@ -101,8 +101,11 @@ async def test_default_falls_back_to_masked_when_missing():
     assert obj.output_sanitized == "here is the <REDACTED>"
 
 
-async def test_unknown_mode_falls_back_to_full():
-    """Unrecognized modes should not silently drop data - keep as-is for backwards compat."""
+async def test_unknown_mode_fails_closed_to_masked():
+    """B5: an unrecognized mode must fail CLOSED (mask) -- never store raw
+    prompt/response. Only an explicit 'full' opts into plaintext retention."""
     obj = await _run_log("gibberish")
-    assert obj.input_raw       == "hello secret password"
-    assert obj.input_sanitized == "hello secret <REDACTED>"
+    assert obj.input_raw        is None
+    assert obj.output_raw       is None
+    assert obj.input_sanitized  == "hello secret <REDACTED>"
+    assert obj.output_sanitized == "here is the <REDACTED>"
