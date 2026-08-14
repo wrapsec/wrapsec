@@ -124,12 +124,18 @@ class AuthService:
         db:         AsyncSession,
         ip_address: str | None = None,
         user_agent: str | None = None,
+        method:     str        = "password",
     ) -> LoginResult:
         """
         Full login flow.
 
         ip_address and user_agent are optional - passed from the request for
         auth_events logging. Login succeeds regardless of their presence.
+
+        method selects the identity backend from the AuthProvider registry
+        (default "password"). SSO/OIDC/SAML plugins register additional methods;
+        a future SSO endpoint passes method=<name>. An unknown method is treated
+        as an authentication failure (it never leaks which methods exist).
 
         auth_events logging is non-blocking: uses _log_auth_event() which
         opens a separate NullPool session. Failures are swallowed.
@@ -150,7 +156,7 @@ class AuthService:
             record_failure,
         )
         from services.auth.password import normalize_email
-        from services.auth.providers import PasswordAuthProvider
+        from services.auth.providers.registry import get_auth_provider
         from services.auth.token import create_access_token, create_refresh_token
 
         _settings = get_settings()
@@ -189,11 +195,16 @@ class AuthService:
             )
             raise AccountLockedException(retry_after=remaining)
 
-        # B4: credential verification is delegated to an AuthProvider so
-        # SSO/OIDC/SAML backends can plug in without changing this method.
-        # PasswordAuthProvider owns email normalisation, DB lookup, password
-        # verify, dummy-verify timing equalisation, and transparent rehash.
-        provider = PasswordAuthProvider()
+        # B4/2.8: credential verification is delegated to an AuthProvider
+        # resolved from the registry by method, so SSO/OIDC/SAML backends plug in
+        # without changing this method. The default "password" provider owns email
+        # normalisation, DB lookup, password verify, dummy-verify timing
+        # equalisation, and transparent rehash. An unknown method fails closed as
+        # a generic authentication error (no enumeration of available methods).
+        provider = get_auth_provider(method)
+        if provider is None:
+            logger.warning("auth_event LOGIN_UNKNOWN_METHOD method=%s email=%s", method, email)
+            raise AuthenticationError("Invalid credentials")
         outcome  = await provider.authenticate(
             credentials = {"email": email, "password": password},
             db          = db,

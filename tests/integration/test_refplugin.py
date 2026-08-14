@@ -186,3 +186,94 @@ def test_connector_registration_seam(monkeypatch):
     finally:
         reg._REGISTRY.pop("refsink", None)
         reg.KNOWN_CONNECTOR_TYPES = frozenset(reg._REGISTRY)
+
+
+# ── AuthProvider seam (increment 2 / 2.8): a plugin identity backend ─────────
+
+@pytest.mark.asyncio
+async def test_auth_provider_registration_seam(auth_setup):
+    """Seam built for 2.8 (open-core P4): a plugin registers an AuthProvider under
+    a NEW method name through the public register_auth_provider, and
+    AuthService.login(method=...) routes to it -- proven end to end against a real
+    seeded user. Mirrors the connector seam exactly (register -> resolve ->
+    non-shadowing) and then exercises the full login path.
+
+    The ref provider delegates to the core password backend: it proves ROUTING
+    without introducing a new credential type or any auth weakness -- a plugin
+    provider is never a backdoor."""
+    from sqlalchemy.ext.asyncio import (
+        AsyncSession,
+        async_sessionmaker,
+        create_async_engine,
+    )
+    from sqlalchemy.pool import NullPool
+
+    import services.auth.providers.registry as areg
+    from config.settings import get_settings
+    from errors.exceptions import AuthenticationError
+    from services.auth.providers import (
+        PasswordAuthProvider,
+        available_auth_providers,
+        get_auth_provider,
+        is_known,
+        register_auth_provider,
+    )
+    from services.auth.providers.base import AuthProvider
+    from services.auth.service import AuthService
+
+    class RefAuthProvider(AuthProvider):
+        @property
+        def name(self):
+            return "refauth"
+
+        async def authenticate(self, credentials, db):
+            return await PasswordAuthProvider().authenticate(credentials, db)
+
+    class _ShadowPassword(AuthProvider):
+        # A plugin trying to hijack the built-in backend -- must be refused.
+        @property
+        def name(self):
+            return "password"
+
+        async def authenticate(self, credentials, db):
+            raise AssertionError("a shadowing provider must never run")
+
+    assert is_known("refauth") is False
+    register_auth_provider(RefAuthProvider())
+    try:
+        # Registration is visible through the public surface.
+        assert isinstance(get_auth_provider("refauth"), RefAuthProvider)
+        assert "refauth" in available_auth_providers()
+        assert "password" in available_auth_providers()   # built-in always present
+
+        # Non-shadowing: re-registering the same name, or trying to overwrite the
+        # built-in "password" backend, both raise -- no auth-bypass foot-gun.
+        with pytest.raises(ValueError):
+            register_auth_provider(RefAuthProvider())
+        with pytest.raises(ValueError):
+            register_auth_provider(_ShadowPassword())
+
+        # End to end: login routes THROUGH the plugin method to a real session.
+        email  = auth_setup["admin_user"].email
+        engine = create_async_engine(get_settings().database_url, poolclass=NullPool)
+        sf     = async_sessionmaker(bind=engine, class_=AsyncSession, expire_on_commit=False)
+        try:
+            async with sf() as db:
+                result = await AuthService().login(
+                    email=email, password="TestPass1!", db=db, method="refauth",
+                )
+            assert result.access_token
+            assert result.user.email == email
+
+            # An unknown method fails closed as a generic auth error (never leaks
+            # which methods exist, never falls back to a default backend).
+            async with sf() as db:
+                with pytest.raises(AuthenticationError):
+                    await AuthService().login(
+                        email=email, password="TestPass1!", db=db,
+                        method="does-not-exist",
+                    )
+        finally:
+            await engine.dispose()
+    finally:
+        areg._PROVIDERS.pop("refauth", None)
