@@ -646,6 +646,7 @@ async def two_tenant_setup():
                     id=uuid.uuid4(),
                     trace_id=proxy_trace,
                     key_id=keyid,
+                    tenant_id=tid, dept_id=did, app_id=aid,
                     input_decision="ALLOW",
                     input_primary_reason="clean",
                     input_confidence=0.05,

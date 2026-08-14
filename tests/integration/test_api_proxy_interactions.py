@@ -56,10 +56,22 @@ async def _seed_api_key(db, tenant_id=None):
 
 async def _seed_interaction(db, *, key_id, trace_id=None, execution_status="completed"):
     """Seed a proxy interaction. key_id is the stored (prefixed) principal id, or None
-    for a system record."""
+    for a system record. Attribution (tenant/dept/app) is derived from the seeded key,
+    mirroring production _log_interaction which stores it directly on the row."""
     trace_id = trace_id or ("tr-" + uuid.uuid4().hex[:12])
+    tenant_id = dept_id = app_id = None
+    if key_id:
+        from sqlalchemy import select
+
+        from db.models import APIKeyModel
+        rec = (await db.execute(
+            select(APIKeyModel).where(APIKeyModel.key_id == key_id.removeprefix("key:"))
+        )).scalar_one_or_none()
+        if rec:
+            tenant_id, dept_id, app_id = rec.tenant_id, rec.dept_id, rec.app_id
     db.add(ProxyInteractionModel(
         id=uuid.uuid4(), trace_id=trace_id, key_id=key_id,
+        tenant_id=tenant_id, dept_id=dept_id, app_id=app_id,
         input_decision="ALLOW", input_primary_reason="NO_THREAT_DETECTED",
         input_confidence=0.0, execution_status=execution_status, total_latency_ms=42,
         input_raw="RAW_IN", input_sanitized="SAN_IN",
@@ -232,3 +244,25 @@ async def test_admin_detail_includes_raw_and_cross_tenant_404(client, test_db, a
 
     r_other = await client.get(f"/v1/proxy/interactions/{other}", headers=_bearer(auth_setup["admin_token"]))
     assert r_other.status_code == 404              # cross-tenant not exposed
+
+
+@pytest.mark.asyncio
+async def test_admin_detail_survives_deleted_key(client, test_db, auth_setup):
+    """M5: interaction history stays visible after its key is deleted. The tenant
+    check reads the stored tenant_id, not a live api_keys join, so revoked/removed
+    keys no longer erase their own history (the old join returned 404)."""
+    from sqlalchemy import delete as sa_delete
+
+    from db.models import APIKeyModel
+
+    tenant = auth_setup["tenant"].id
+    _, key_id, _ = await _seed_api_key(test_db, tenant)
+    trace = await _seed_interaction(test_db, key_id=f"key:{key_id}")
+
+    # Delete the key entirely -- harder than a revoke; the old join would find nothing.
+    await test_db.execute(sa_delete(APIKeyModel).where(APIKeyModel.key_id == key_id))
+    await test_db.commit()
+
+    r = await client.get(f"/v1/proxy/interactions/{trace}", headers=_bearer(auth_setup["admin_token"]))
+    assert r.status_code == 200, r.text
+    assert r.json()["input_raw"] == "RAW_IN"

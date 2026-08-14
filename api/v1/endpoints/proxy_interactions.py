@@ -19,7 +19,6 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from api.v1.dependencies.auth import get_current_principal
 from api.v1.dependencies.db import get_db
 from db.models import ProxyInteractionModel
-from db.repositories.api_key import ApiKeyRepository
 from db.repositories.proxy_interaction import ProxyInteractionRepository
 from domain.entities.principal import Principal
 from services.time import to_iso_z
@@ -113,13 +112,11 @@ async def get_proxy_interaction(
         return not_found
 
     if request.state.is_admin:
-        # Admin: verify the interaction's key belongs to this tenant
-        if item.key_id:
-            # Interactions store the prefixed principal id ("key:<key_id>"); resolve
-            # back to the raw key_id the api_keys table is indexed by.
-            key_record = await ApiKeyRepository(db).get_by_key_id(item.key_id.removeprefix("key:"))
-            if not key_record or str(key_record.tenant_id) != request.state.tenant_id:
-                return not_found
+        # Admin: the interaction must belong to this tenant. Check the stored
+        # tenant_id directly (M5) - no api_keys resolution, so a revoked/deleted
+        # key does not hide its own history.
+        if not item.tenant_id or str(item.tenant_id) != request.state.tenant_id:
+            return not_found
     else:
         # Non-admin: must own the interaction. Interactions with no key_id are
         # system/admin records - never accessible to non-admin callers.

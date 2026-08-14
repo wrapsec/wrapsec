@@ -251,6 +251,13 @@ class ProxyInteractionModel(Base):
     id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
     trace_id: Mapped[str] = mapped_column(String(64),  nullable=False, unique=True, index=True)
     key_id: Mapped[str | None] = mapped_column(String(50),  nullable=True)
+    # Tenant attribution stored directly on the row (M5): scoping no longer joins
+    # api_keys, so a revoked/deleted key does not erase its interaction history.
+    # Nullable so pre-attribution rows survive; every new row is populated from the
+    # authenticated principal in _log_interaction.
+    tenant_id: Mapped[uuid.UUID | None] = mapped_column(UUID(as_uuid=True), ForeignKey("tenants.id"), nullable=True)
+    dept_id: Mapped[uuid.UUID | None] = mapped_column(UUID(as_uuid=True), ForeignKey("departments.id"), nullable=True)
+    app_id: Mapped[uuid.UUID | None] = mapped_column(UUID(as_uuid=True), ForeignKey("applications.id"), nullable=True)
     user_id: Mapped[str | None] = mapped_column(String(256), nullable=True)
     input_raw: Mapped[str | None] = mapped_column(Text,        nullable=True)
     input_sanitized: Mapped[str | None] = mapped_column(Text,        nullable=True)
@@ -275,11 +282,12 @@ class ProxyInteractionModel(Base):
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True),    nullable=False, default=utc_now)
 
     __table_args__ = (
-        Index("ix_proxy_int_key_id",      "key_id"),
-        Index("ix_proxy_key_time",        "key_id",  "created_at"),
-        Index("ix_proxy_int_created",     "created_at"),
-        Index("ix_proxy_int_exec_status", "execution_status"),
-        Index("ix_proxy_int_attack_type", "input_attack_type"),
+        Index("ix_proxy_int_key_id",       "key_id"),
+        Index("ix_proxy_key_time",         "key_id",  "created_at"),
+        Index("ix_proxy_int_created",      "created_at"),
+        Index("ix_proxy_int_exec_status",  "execution_status"),
+        Index("ix_proxy_int_attack_type",  "input_attack_type"),
+        Index("ix_proxy_int_tenant_time",  "tenant_id", "created_at"),
     )
 
 

@@ -39,6 +39,7 @@ Response headers added to every response:
 import copy
 import logging
 import time
+import uuid
 
 import httpx
 from fastapi import APIRouter, BackgroundTasks, Depends, Request
@@ -322,6 +323,9 @@ async def _log_interaction(
         interaction = ProxyInteractionModel(
             trace_id              = trace_id,
             key_id                = key_id,
+            tenant_id             = uuid.UUID(tenant_id) if tenant_id else None,
+            dept_id               = uuid.UUID(dept_id)   if dept_id   else None,
+            app_id                = uuid.UUID(app_id)    if app_id    else None,
             user_id               = user_id,
             input_raw             = stored_input_raw,
             input_sanitized       = stored_input_sanitized,

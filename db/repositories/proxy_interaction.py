@@ -6,7 +6,7 @@ import uuid as _uuid
 
 from sqlalchemy import desc, func, select
 
-from db.models import APIKeyModel, ProxyInteractionModel
+from db.models import ProxyInteractionModel
 from db.repositories.base import BaseRepository
 
 
@@ -33,15 +33,10 @@ class ProxyInteractionRepository(BaseRepository):
     ) -> tuple[list[ProxyInteractionModel], int]:
         query = select(ProxyInteractionModel)
 
-        # Scope to tenant - subquery on api_keys since ProxyInteractionModel has no tenant_id.
-        # Interactions store the prefixed principal id ("key:<key_id>"); api_keys stores the
-        # raw key_id. Prefix the tenant keys so they match the stored format (storage is left
-        # unchanged, so the caller-scoped path below keeps matching on the prefixed id too).
+        # Scope to tenant via the stored tenant_id column (M5): no api_keys join, so
+        # a revoked/deleted key never drops its interaction history from the tenant view.
         if tenant_id is not None:
-            tenant_keys = select("key:" + APIKeyModel.key_id).where(
-                APIKeyModel.tenant_id == tenant_id
-            )
-            query = query.where(ProxyInteractionModel.key_id.in_(tenant_keys))
+            query = query.where(ProxyInteractionModel.tenant_id == tenant_id)
 
         if key_id:
             query = query.where(ProxyInteractionModel.key_id == key_id)

@@ -132,10 +132,12 @@ async def _seed_two_tenants(db):
         db.add(ProxyInteractionModel(
             id                   = uuid.uuid4(),
             trace_id             = f"px-{letter.lower()}-" + uuid.uuid4().hex[:8],
-            # The proxy stores the prefixed principal id ("key:<key_id>"), not the raw
-            # api_keys.key_id -- match production so the tenant-scope join is exercised
-            # the way it actually runs.
             key_id               = f"key:{keyid}",
+            # Tenant attribution is stored on the row (M5); scoping filters this
+            # column directly rather than joining api_keys.
+            tenant_id            = tid,
+            dept_id              = did,
+            app_id               = aid,
             input_decision       = "ALLOW",
             input_primary_reason = "clean",
             input_confidence     = 0.05,
