@@ -141,77 +141,75 @@ async def run_retention_cleanup() -> None:
         )
 
 
-async def _resolve_audit_retention() -> int:
+async def _resolve_audit_retention(session, tenant_id) -> int:
     """
-    Read audit retention from DB settings (same as manual script).
-    Falls back to config if DB is unavailable.
+    Audit retention (days) for one tenant: tenant_settings -> platform_settings ->
+    env default. A lookup error degrades to the env default rather than skipping
+    cleanup for that tenant.
     """
+    from config.settings import get_settings
+    from db.repositories.settings import (
+        PlatformSettingsRepository,
+        TenantSettingsRepository,
+    )
     try:
-        from config.settings import get_settings
-        from db.repositories.settings import TenantSettingsRepository
-        from db.repositories.tenant import TenantRepository
-        from db.session import AsyncSessionFactory
-        cfg = get_settings()
-
-        async with AsyncSessionFactory() as session:
-            # v1 is single-tenant: apply the default tenant's retention. Applying
-            # each tenant's own retention (iterate all tenants) is a Phase 2 item.
-            tenant = await TenantRepository(session).get_default()
-            if tenant is not None:
-                stored = await TenantSettingsRepository(session).get(tenant.id, "audit_retention")
-                if stored and "retention_days" in stored:
-                    days = int(stored["retention_days"])
-                    logger.debug(f"Retention worker: audit retention from DB: {days} days")
-                    return days
-
-        return cfg.audit_retention_days
-
+        stored = await TenantSettingsRepository(session).get(tenant_id, "audit_retention")
+        if stored and "retention_days" in stored:
+            return int(stored["retention_days"])
+        platform = await PlatformSettingsRepository(session).get("audit_retention")
+        if platform and "retention_days" in platform:
+            return int(platform["retention_days"])
     except Exception as e:
-        from config.settings import get_settings
-        cfg = get_settings()
-        logger.warning(
-            f"Retention worker: could not read audit retention from DB: {e} "
-            f"- using config default ({cfg.audit_retention_days} days)"
-        )
-        return cfg.audit_retention_days
+        logger.warning("Retention worker: retention lookup failed for tenant %s: %s", tenant_id, e)
+    return get_settings().audit_retention_days
 
 
 async def _cleanup_audit_logs() -> int:
     """
-    Delete audit_logs rows older than the configured retention period.
-    Returns count of rows deleted.
+    Delete audit_logs older than EACH tenant's retention window (per-tenant, 2.1 --
+    enabled by the tenant_id columns). Rows with no tenant attribution are cleaned
+    with the deployment default. Returns total rows deleted. DELETE is permitted by
+    the audit immutability trigger, which blocks UPDATE only.
     """
     from sqlalchemy import text
 
+    from config.settings import get_settings
+    from db.repositories.tenant import TenantRepository
     from db.session import AsyncSessionFactory
 
-    retention_days = await _resolve_audit_retention()
-    if retention_days < 1:
-        logger.error(f"Retention worker: invalid retention_days={retention_days} - must be >= 1, skipping audit cleanup")
-        return 0
+    delete_scoped = text(
+        "DELETE FROM audit_logs WHERE tenant_id = :tid "
+        "AND created_at < NOW() - INTERVAL '1 day' * :days"
+    )
+    delete_orphan = text(
+        "DELETE FROM audit_logs WHERE tenant_id IS NULL "
+        "AND created_at < NOW() - INTERVAL '1 day' * :days"
+    )
 
-    count_query  = text("SELECT COUNT(*) FROM audit_logs WHERE created_at < NOW() - INTERVAL '1 day' * :days")
-    delete_query = text("DELETE FROM audit_logs WHERE created_at < NOW() - INTERVAL '1 day' * :days")
-
+    total = 0
     async with AsyncSessionFactory() as session:
-        result = await session.execute(count_query, {"days": retention_days})
-        count  = result.scalar() or 0
+        tenants = await TenantRepository(session).list_all()
+        for tenant in tenants:
+            days = await _resolve_audit_retention(session, tenant.id)
+            if days < 1:
+                logger.error("Retention worker: invalid retention_days=%d for tenant %s - skipping",
+                             days, tenant.id)
+                continue
+            res = await session.execute(delete_scoped, {"tid": str(tenant.id), "days": days})
+            total += res.rowcount or 0
 
-        if count == 0:
-            logger.info(
-                f"Retention worker: audit_logs - nothing to delete "
-                f"(retention: {retention_days} days)"
-            )
-            return 0
+        # Un-attributed rows (no tenant_id) use the deployment default so nothing
+        # is orphaned from cleanup by the per-tenant iteration.
+        env_days = get_settings().audit_retention_days
+        if env_days >= 1:
+            res = await session.execute(delete_orphan, {"days": env_days})
+            total += res.rowcount or 0
 
-        await session.execute(delete_query, {"days": retention_days})
         await session.commit()
 
-        logger.info(
-            f"Retention worker: audit_logs - deleted {count} rows "
-            f"older than {retention_days} days"
-        )
-        return count
+    logger.info("Retention worker: audit_logs - deleted %d rows across %d tenants (+orphans)",
+                total, len(tenants))
+    return total
 
 
 async def _cleanup_proxy_interactions() -> int:
