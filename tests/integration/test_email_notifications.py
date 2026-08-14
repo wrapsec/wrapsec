@@ -43,6 +43,9 @@ async def _make_user(db, *, email, user_locale=None, tenant_locale=None):
         password_hash="x", role="ADMIN", locale=user_locale,
     )
     db.add(user)
+    await db.flush()
+    from db.repositories.membership import MembershipRepository
+    await MembershipRepository(db).upsert_for_user(user.id, tenant.id, "ADMIN", None)
     await db.commit()
     return user
 
@@ -156,6 +159,9 @@ async def test_department_id_snapshotted_from_user(pg_db):
         email=f"dev-{uuid.uuid4().hex[:6]}@x.com", password_hash="x", role="DEVELOPER",
     )
     pg_db.add(user)
+    await pg_db.flush()
+    from db.repositories.membership import MembershipRepository
+    await MembershipRepository(pg_db).upsert_for_user(user.id, tenant.id, "DEVELOPER", dept.id)
     await pg_db.commit()
 
     await notify_password_changed(pg_db, user)

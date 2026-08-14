@@ -103,7 +103,8 @@ async def bootstrap_admin() -> None:
                 return
 
             user_repo = UserRepository(db)
-            if await user_repo.count_by_tenant(tenant.id) > 0:
+            from db.repositories.membership import MembershipRepository
+            if await MembershipRepository(db).count_in_tenant(tenant.id) > 0:
                 return  # Users already exist - skip silently
 
             email = normalize_email(_settings.admin_email)

@@ -219,10 +219,11 @@ class AuthService:
                     "attempt=%d is_now_locked=%s",
                     email, reason, count, locked,
                 )
+                _matched_mem = await _resolve_active_membership(db, matched.id)
                 await _log_auth_event(
                     action         = "login_failed",
                     success        = False,
-                    tenant_id      = matched.tenant_id,
+                    tenant_id      = _matched_mem.tenant_id if _matched_mem else None,
                     user_id        = matched.id,
                     failure_reason = reason,
                     ip_address     = ip_address,
@@ -244,10 +245,11 @@ class AuthService:
 
         if not user.is_active:
             logger.warning("auth_event LOGIN_FAILED email=%s reason=account_inactive", email)
+            _inactive_mem = await _resolve_active_membership(db, user.id)
             await _log_auth_event(
                 action         = "login_failed",
                 success        = False,
-                tenant_id      = user.tenant_id,
+                tenant_id      = _inactive_mem.tenant_id if _inactive_mem else None,
                 user_id        = user.id,
                 failure_reason = "account_inactive",
                 ip_address     = ip_address,
@@ -371,10 +373,11 @@ class AuthService:
                 "token_ver=%d user_ver=%d",
                 user.id, token_rec.token_version, user.token_version,
             )
+            _inv_mem = await _resolve_active_membership(db, user.id)
             await _log_auth_event(
                 action         = "token_refresh_failed",
                 success        = False,
-                tenant_id      = user.tenant_id,
+                tenant_id      = _inv_mem.tenant_id if _inv_mem else None,
                 user_id        = user.id,
                 failure_reason = "session_invalidated",
             )

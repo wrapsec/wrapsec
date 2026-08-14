@@ -141,11 +141,14 @@ async def admin_jwt_headers():
             token_version         = 1,
         )
         db.add(user)
+        await db.flush()
+        from db.repositories.membership import MembershipRepository
+        membership = await MembershipRepository(db).upsert_for_user(
+            test_user_id, tenant_id, "ADMIN", None
+        )
         await db.commit()
-        await db.refresh(user)
-
-    # Generate real signed JWT directly
-    token = create_access_token(user)
+        # Generate real signed JWT scoped to the membership (session still open).
+        token = create_access_token(user, membership)
 
     yield {"Authorization": f"Bearer {token}"}
 

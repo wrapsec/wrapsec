@@ -41,13 +41,24 @@ from services.time import to_iso_z, utc_now
 logger = logging.getLogger("wrapsec.email")
 
 
-async def _resolve_user_locale(db: AsyncSession, user: UserModel) -> str:
-    """Effective locale for a user: User -> Tenant -> System -> English."""
+async def _resolve_user_context(db: AsyncSession, user: UserModel):
+    """
+    (tenant_id, dept_id, locale) for a user, sourced from their membership
+    (identity D2 Option B). At N=1 a user has one membership; the oldest is the
+    default. Locale precedence: User -> Tenant -> System -> English. tenant_id
+    may be None for a user with no membership (outbox tenant_id is nullable).
+    """
+    from db.repositories.membership import MembershipRepository
+
+    mems      = await MembershipRepository(db).list_for_user(user.id)
+    tenant_id = mems[0].tenant_id if mems else None
+    dept_id   = mems[0].dept_id   if mems else None
+
     tenant_locale = None
-    if user.tenant_id is not None:
-        tenant = await TenantRepository(db).get_by_id(user.tenant_id)
+    if tenant_id is not None:
+        tenant = await TenantRepository(db).get_by_id(tenant_id)
         tenant_locale = tenant.locale if tenant else None
-    return resolve_locale(user.locale, tenant_locale)
+    return tenant_id, dept_id, resolve_locale(user.locale, tenant_locale)
 
 
 def _event_time() -> str:
@@ -58,15 +69,15 @@ async def notify_password_changed(
     db: AsyncSession, user: UserModel, *, trace_id: str | None = None
 ) -> None:
     """Enqueue a password-changed confirmation on the caller's session."""
-    locale = await _resolve_user_locale(db, user)
+    tenant_id, dept_id, locale = await _resolve_user_context(db, user)
     await EmailService().queue(
         db,
         notification_type = NotificationType.PASSWORD_CHANGED,
         recipient         = user.email,
         locale            = locale,
         context           = {"display_name": user.email, "event_time": _event_time()},
-        tenant_id         = user.tenant_id,
-        department_id     = user.dept_id,
+        tenant_id         = tenant_id,
+        department_id     = dept_id,
         user_id           = user.id,
         trace_id          = trace_id,
     )
@@ -76,15 +87,15 @@ async def notify_admin_password_reset(
     db: AsyncSession, user: UserModel, *, trace_id: str | None = None
 ) -> None:
     """Enqueue an admin-password-reset notice on the caller's session."""
-    locale = await _resolve_user_locale(db, user)
+    tenant_id, dept_id, locale = await _resolve_user_context(db, user)
     await EmailService().queue(
         db,
         notification_type = NotificationType.PASSWORD_RESET_BY_ADMIN,
         recipient         = user.email,
         locale            = locale,
         context           = {"display_name": user.email, "event_time": _event_time()},
-        tenant_id         = user.tenant_id,
-        department_id     = user.dept_id,
+        tenant_id         = tenant_id,
+        department_id     = dept_id,
         user_id           = user.id,
         trace_id          = trace_id,
     )
@@ -94,15 +105,15 @@ async def notify_account_deactivated(
     db: AsyncSession, user: UserModel, *, trace_id: str | None = None
 ) -> None:
     """Enqueue an account-deactivated notice on the caller's session."""
-    locale = await _resolve_user_locale(db, user)
+    tenant_id, dept_id, locale = await _resolve_user_context(db, user)
     await EmailService().queue(
         db,
         notification_type = NotificationType.ACCOUNT_DEACTIVATED,
         recipient         = user.email,
         locale            = locale,
         context           = {"display_name": user.email, "event_time": _event_time()},
-        tenant_id         = user.tenant_id,
-        department_id     = user.dept_id,
+        tenant_id         = tenant_id,
+        department_id     = dept_id,
         user_id           = user.id,
         trace_id          = trace_id,
     )
@@ -112,15 +123,15 @@ async def notify_account_reactivated(
     db: AsyncSession, user: UserModel, *, trace_id: str | None = None
 ) -> None:
     """Enqueue an account-reactivated notice on the caller's session."""
-    locale = await _resolve_user_locale(db, user)
+    tenant_id, dept_id, locale = await _resolve_user_context(db, user)
     await EmailService().queue(
         db,
         notification_type = NotificationType.ACCOUNT_REACTIVATED,
         recipient         = user.email,
         locale            = locale,
         context           = {"display_name": user.email, "event_time": _event_time()},
-        tenant_id         = user.tenant_id,
-        department_id     = user.dept_id,
+        tenant_id         = tenant_id,
+        department_id     = dept_id,
         user_id           = user.id,
         trace_id          = trace_id,
     )
@@ -130,15 +141,15 @@ async def notify_role_changed(
     db: AsyncSession, user: UserModel, *, new_role: str, trace_id: str | None = None
 ) -> None:
     """Enqueue a role-changed notice (includes the new role) on the caller's session."""
-    locale = await _resolve_user_locale(db, user)
+    tenant_id, dept_id, locale = await _resolve_user_context(db, user)
     await EmailService().queue(
         db,
         notification_type = NotificationType.ROLE_CHANGED,
         recipient         = user.email,
         locale            = locale,
         context           = {"display_name": user.email, "event_time": _event_time(), "new_role": new_role},
-        tenant_id         = user.tenant_id,
-        department_id     = user.dept_id,
+        tenant_id         = tenant_id,
+        department_id     = dept_id,
         user_id           = user.id,
         trace_id          = trace_id,
     )
@@ -157,7 +168,7 @@ async def notify_account_locked(
     lockout_minutes = max(1, round(lockout_seconds / 60))
     try:
         async with AsyncSessionFactory() as db:
-            locale = await _resolve_user_locale(db, user)
+            tenant_id, dept_id, locale = await _resolve_user_context(db, user)
             row = await EmailService().queue(
                 db,
                 notification_type = NotificationType.ACCOUNT_LOCKED,
@@ -168,8 +179,8 @@ async def notify_account_locked(
                     "event_time":      _event_time(),
                     "lockout_minutes": str(lockout_minutes),
                 },
-                tenant_id     = user.tenant_id,
-                department_id = user.dept_id,
+                tenant_id     = tenant_id,
+                department_id = dept_id,
                 user_id       = user.id,
                 trace_id      = trace_id,
             )

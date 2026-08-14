@@ -6,7 +6,7 @@ from uuid import UUID
 
 from sqlalchemy import func, select
 
-from db.models import DepartmentModel, MembershipModel
+from db.models import DepartmentModel, MembershipModel, UserModel
 from db.repositories.base import BaseRepository
 
 _VALID_ROLES = ("ADMIN", "DEVELOPER", "VIEWER", "AUDITOR")
@@ -101,10 +101,67 @@ class MembershipRepository(BaseRepository):
         existing.dept_id = dept_id
         return existing
 
-    async def count_active_for_tenant(self, tenant_id: UUID) -> int:
+    async def count_in_tenant(self, tenant_id: UUID) -> int:
         """Count of memberships in a tenant. Used by provisioning/bootstrap checks."""
         result = await self.session.execute(
             select(func.count()).where(MembershipModel.tenant_id == tenant_id)
+        )
+        return result.scalar_one() or 0
+
+    async def list_in_tenant(
+        self,
+        tenant_id: UUID,
+        role:      str  | None = None,
+        is_active: bool | None = None,
+        limit:     int  = 50,
+        offset:    int  = 0,
+    ) -> tuple[list[tuple[MembershipModel, UserModel]], int]:
+        """
+        Memberships in a tenant joined to their user, as (membership, user) pairs.
+        Filters: role on the membership, is_active on the user. Newest user first.
+        Returns (rows, total).
+        """
+        query = (
+            select(MembershipModel, UserModel)
+            .join(UserModel, UserModel.id == MembershipModel.user_id)
+            .where(MembershipModel.tenant_id == tenant_id)
+        )
+        if role is not None:
+            query = query.where(MembershipModel.role == role)
+        if is_active is not None:
+            query = query.where(UserModel.is_active == is_active)
+
+        total = await self.session.scalar(
+            select(func.count()).select_from(query.subquery())
+        ) or 0
+
+        query = query.order_by(UserModel.created_at.desc()).offset(offset).limit(limit)
+        rows  = (await self.session.execute(query)).all()
+        return [(m, u) for m, u in rows], total
+
+    async def count_active_admins_for_update(
+        self, tenant_id: UUID, lock_user_id: UUID
+    ) -> int:
+        """
+        Locks the target user's membership row in this tenant (SELECT FOR UPDATE),
+        then counts ADMIN memberships whose user is active. The row lock serializes
+        concurrent last-admin checks so two requests cannot both pass.
+        """
+        await self.session.execute(
+            select(MembershipModel.id).where(
+                MembershipModel.user_id   == lock_user_id,
+                MembershipModel.tenant_id == tenant_id,
+            ).with_for_update()
+        )
+        result = await self.session.execute(
+            select(func.count())
+            .select_from(MembershipModel)
+            .join(UserModel, UserModel.id == MembershipModel.user_id)
+            .where(
+                MembershipModel.tenant_id == tenant_id,
+                MembershipModel.role      == "ADMIN",
+                UserModel.is_active       == True,
+            )
         )
         return result.scalar_one() or 0
 

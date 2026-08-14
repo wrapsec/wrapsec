@@ -35,13 +35,14 @@ logger = logging.getLogger("wrapsec.admin.users")
 
 # ── Formatters ─────────────────────────────────────────────────────────────────
 
-def _format(user) -> dict:
+def _format(user, membership) -> dict:
+    """Identity fields from the user; authz (role/dept/tenant) from the membership."""
     return {
         "id":                    str(user.id),
         "email":                 user.email,
-        "role":                  user.role,
-        "dept_id":               str(user.dept_id)   if user.dept_id   else None,
-        "tenant_id":             str(user.tenant_id) if user.tenant_id else None,
+        "role":                  membership.role,
+        "dept_id":               str(membership.dept_id) if membership.dept_id else None,
+        "tenant_id":             str(membership.tenant_id),
         "is_active":             user.is_active,
         "force_password_change": user.force_password_change,
         "created_at":            to_iso_z(user.created_at),
@@ -219,9 +220,9 @@ async def create_user(
             "force_password_change": True,
         })
         await repo.flush()  # assign user.id before the membership FK references it
-        # Identity migrate phase: mirror role/dept onto the membership so it stays
-        # in lockstep with the user row while both sources coexist.
-        await MembershipRepository(db).upsert_for_user(
+        # The membership is the authz record (role/dept in this tenant); the user
+        # row still mirrors it until the contract phase drops those columns.
+        membership = await MembershipRepository(db).upsert_for_user(
             user_id=user.id, tenant_id=_tenant_uuid, role=body.role, dept_id=_dept_uuid,
         )
         await db.commit()
@@ -248,7 +249,7 @@ async def create_user(
         user_agent     = ua,
     )
 
-    return JSONResponse(status_code=201, content=_format(user))
+    return JSONResponse(status_code=201, content=_format(user, membership))
 
 
 @router.get("")
@@ -267,8 +268,7 @@ async def list_users(
 
     Auth: JWT + ADMIN role required.
     """
-    repo = UserRepository(db)
-    users, total = await repo.list_by_tenant(
+    rows, total = await MembershipRepository(db).list_in_tenant(
         tenant_id = uuid.UUID(str(principal.tenant_id)),
         role      = role,
         is_active = is_active,
@@ -278,7 +278,7 @@ async def list_users(
 
     return JSONResponse(content={
         "total": total,
-        "users": [_format(u) for u in users],
+        "users": [_format(u, m) for (m, u) in rows],
     })
 
 
@@ -294,13 +294,18 @@ async def get_user(
 
     Auth: JWT + ADMIN role required.
     """
-    repo = UserRepository(db)
-    user = await repo.get_by_id(user_id)
-
-    if not user or str(user.tenant_id) != principal.tenant_id:
+    user       = await UserRepository(db).get_by_id(user_id)
+    membership = (
+        await MembershipRepository(db).get_by_user_and_tenant(
+            user_id, uuid.UUID(str(principal.tenant_id))
+        )
+        if user else None
+    )
+    # A user "belongs to" the tenant iff they hold a membership in it.
+    if not user or membership is None:
         raise NotFoundError("user", str(user_id))
 
-    return JSONResponse(content=_format(user))
+    return JSONResponse(content=_format(user, membership))
 
 
 @router.patch("/{user_id}")
@@ -335,16 +340,18 @@ async def update_user(
     actor_id  = uuid.UUID(str(principal.id).replace("user:", ""))
     tenant_id = uuid.UUID(str(principal.tenant_id))
 
-    repo = UserRepository(db)
-    user = await repo.get_by_id(user_id)
+    repo     = UserRepository(db)
+    mem_repo = MembershipRepository(db)
+    user       = await repo.get_by_id(user_id)
+    membership = await mem_repo.get_by_user_and_tenant(user_id, tenant_id) if user else None
 
-    if not user or str(user.tenant_id) != principal.tenant_id:
+    if not user or membership is None:
         raise NotFoundError("user", str(user_id))
 
     data = body.model_dump(exclude_unset=True)
 
     if not data:
-        return JSONResponse(content=_format(user))
+        return JSONResponse(content=_format(user, membership))
 
     # Self-deactivation guard
     if data.get("is_active") is False and str(user.id) == str(actor_id):
@@ -356,9 +363,9 @@ async def update_user(
             trace_id=getattr(request.state, "trace_id", "") or "",
         )
 
-    # Compute final state for validation
-    final_role    = data.get("role",    user.role)
-    final_dept_id = data.get("dept_id", str(user.dept_id) if user.dept_id else None)
+    # Compute final state for validation (authz comes from the membership)
+    final_role    = data.get("role",    membership.role)
+    final_dept_id = data.get("dept_id", str(membership.dept_id) if membership.dept_id else None)
 
     # Handle explicit dept_id = None in payload (allowed for ADMIN role change)
     if "dept_id" in data:
@@ -386,11 +393,11 @@ async def update_user(
     new_role      = data.get("role")
     new_is_active = data.get("is_active")
 
-    is_demoting_admin     = (user.role == "ADMIN" and new_role is not None and new_role != "ADMIN")
-    is_deactivating_admin = (user.role == "ADMIN" and new_is_active is False)
+    is_demoting_admin     = (membership.role == "ADMIN" and new_role is not None and new_role != "ADMIN")
+    is_deactivating_admin = (membership.role == "ADMIN" and new_is_active is False)
 
     if is_demoting_admin or is_deactivating_admin:
-        active_admins = await repo.count_active_admins_for_update(tenant_id, user_id)
+        active_admins = await mem_repo.count_active_admins_for_update(tenant_id, user_id)
         if active_admins <= 1:
             logger.info(
                 "last-admin guard blocked actor=%s target=%s tenant=%s",
@@ -416,22 +423,23 @@ async def update_user(
         if not _dept or str(_dept.tenant_id) != str(principal.tenant_id):
             raise NotFoundError("department", str(data["dept_id"]))
 
-    # Capture old values for audit metadata before update
-    old_role    = user.role
-    old_dept_id = str(user.dept_id) if user.dept_id else None
+    # Capture old values for audit metadata before update (from the membership)
+    old_role    = membership.role
+    old_dept_id = str(membership.dept_id) if membership.dept_id else None
 
     try:
         updated = await repo.update(user_id, data)
         if updated is None:
             raise NotFoundError("user", str(user_id))
-        # Identity migrate phase: mirror the final role/dept onto the membership so
-        # it stays in lockstep with the user row. Only when role/dept actually
-        # change (is_active-only updates leave authz untouched).
+        # Authz writes land on the membership (role/dept); the user row still
+        # mirrors them until the contract phase drops those columns. Only when
+        # role/dept actually change (is_active-only updates leave authz untouched).
         if "role" in data or "dept_id" in data:
             await repo.flush()
-            await MembershipRepository(db).upsert_for_user(
+            _final_dept_uuid = uuid.UUID(final_dept_id) if final_dept_id else None
+            membership = await mem_repo.upsert_for_user(
                 user_id=user_id, tenant_id=tenant_id,
-                role=updated.role, dept_id=updated.dept_id,
+                role=final_role, dept_id=_final_dept_uuid,
             )
         # Do NOT commit yet - session invalidation must be atomic with the update.
     except ValueError as e:
@@ -471,7 +479,7 @@ async def update_user(
 
     # Admin event logging - one event per change type, post-commit, best-effort
     target_uuid = user_id
-    post_dept_id = updated.dept_id  # post-update value for dept_id rows
+    post_dept_id = membership.dept_id  # post-update dept from the membership
 
     if new_role is not None and new_role != old_role:
         await _log_admin_event(
@@ -528,7 +536,7 @@ async def update_user(
             user_agent     = ua,
         )
 
-    return JSONResponse(content=_format(updated))
+    return JSONResponse(content=_format(updated, membership))
 
 
 @router.post("/{user_id}/reset-password")
@@ -551,10 +559,11 @@ async def reset_password(
     actor_id  = uuid.UUID(str(principal.id).replace("user:", ""))
     tenant_id = uuid.UUID(str(principal.tenant_id))
 
-    repo = UserRepository(db)
-    user = await repo.get_by_id(user_id)
+    repo       = UserRepository(db)
+    user       = await repo.get_by_id(user_id)
+    membership = await MembershipRepository(db).get_by_user_and_tenant(user_id, tenant_id) if user else None
 
-    if not user or str(user.tenant_id) != principal.tenant_id:
+    if not user or membership is None:
         raise NotFoundError("user", str(user_id))
 
     try:
@@ -586,7 +595,7 @@ async def reset_password(
         tenant_id      = tenant_id,
         actor_user_id  = actor_id,
         action         = AdminEventAction.PASSWORD_RESET,
-        dept_id        = user.dept_id,
+        dept_id        = membership.dept_id,
         target_user_id = user_id,
         ip_address     = ip,
         user_agent     = ua,

@@ -83,7 +83,8 @@ async def setup_status(db: AsyncSession = Depends(get_db)):
         return SetupStatusResponse(initialized=False)
 
     try:
-        count = await asyncio.wait_for(UserRepository(db).count_by_tenant(tenant.id), timeout=5.0)
+        from db.repositories.membership import MembershipRepository
+        count = await asyncio.wait_for(MembershipRepository(db).count_in_tenant(tenant.id), timeout=5.0)
     except asyncio.TimeoutError:
         logger.warning("setup DB user count timed out - returning not initialized")
         return SetupStatusResponse(initialized=False)
@@ -120,7 +121,8 @@ async def complete_setup(body: SetupRequest, db: AsyncSession = Depends(get_db))
         await db.execute(text("SELECT pg_advisory_xact_lock(hashtext('wrapsec:setup:first_admin'))"))
 
     user_repo = UserRepository(db)
-    if await user_repo.count_by_tenant(tenant.id) > 0:
+    from db.repositories.membership import MembershipRepository
+    if await MembershipRepository(db).count_in_tenant(tenant.id) > 0:
         raise HTTPException(status_code=404)
 
     email = normalize_email(str(body.email))
