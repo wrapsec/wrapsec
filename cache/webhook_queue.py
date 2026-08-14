@@ -11,10 +11,12 @@ Three Redis keys back the delivery pipeline:
     wrapsec:webhooks:delayed   ZSET     - scheduled retries (score = unix seconds)
     wrapsec:webhooks:dlq       XSTREAM  - permanently failed messages
 
-A single consumer group `webhook_workers` reads from the main stream.
-Every worker process joins with a unique consumer name (hostname:pid)
-so Redis can reassign pending messages when a worker dies -- the PEL
-(pending entries list) tracks which consumer holds which unacked entry.
+A single consumer group `webhook_workers` reads from the main stream. Each
+worker joins with a STABLE consumer name per replica so a restart can drain its
+own pending entries (read_own_pending, XREADGROUP id "0"); a dead replica's
+entries are recovered by another worker via claim_stale (XAUTOCLAIM after the
+visibility timeout). The PEL (pending entries list) tracks which consumer holds
+which unacked entry.
 
 The delayed sorted set is a scheduled-retry buffer. When a delivery
 fails and the retry schedule says "try again in 5 minutes", the
@@ -150,6 +152,31 @@ async def promote_delayed(
     return len(due)
 
 
+async def _decode_entries(
+    redis:   Redis,
+    entries: list,
+) -> list[tuple[str, dict[str, Any]]]:
+    """Decode a flat list of (stream_id, fields) into (stream_id, payload).
+
+    A missing payload field is a producer bug: skip it WITHOUT acking so it stays
+    visible in the PEL for triage rather than being silently dropped. A malformed
+    JSON blob IS acked out -- the payload itself is broken, so looping on it or a
+    DLQ push is useless.
+    """
+    out: list[tuple[str, dict[str, Any]]] = []
+    for stream_id, fields in entries:
+        raw = fields.get(_PAYLOAD_FIELD) if fields else None
+        if raw is None:
+            continue
+        try:
+            payload = json.loads(raw)
+        except json.JSONDecodeError:
+            await redis.xack(STREAM_MAIN, CONSUMER_GROUP, stream_id)
+            continue
+        out.append((stream_id, payload))
+    return out
+
+
 async def read(
     redis:    Redis,
     consumer: str,
@@ -157,12 +184,13 @@ async def read(
     block_ms: int  = 5000,
 ) -> list[tuple[str, dict[str, Any]]]:
     """
-    XREADGROUP a batch of ready messages for this consumer.
+    XREADGROUP a batch of NEW ready messages (id ">") for this consumer.
 
-    Returns a list of (stream_id, payload) tuples. Empty list on timeout
-    or when the stream is idle. Callers must XACK each stream_id they
-    finish processing (via `ack`) or the message stays in the PEL and
-    will be re-delivered by XCLAIM after visibility timeout.
+    Returns a list of (stream_id, payload) tuples. Empty list on timeout or when
+    the stream is idle. Callers must XACK each stream_id they finish (via `ack`)
+    or the message stays in this consumer's PEL and is recovered later by
+    `read_own_pending` (on this consumer's restart) or `claim_stale` (by another
+    consumer after the visibility timeout).
     """
     resp = await redis.xreadgroup(
         groupname = CONSUMER_GROUP,
@@ -173,22 +201,61 @@ async def read(
     )
     if not resp:
         return []
+    entries = [e for _stream, es in resp for e in es]
+    return await _decode_entries(redis, entries)
 
-    out: list[tuple[str, dict[str, Any]]] = []
-    for _stream, entries in resp:
-        for stream_id, fields in entries:
-            raw = fields.get(_PAYLOAD_FIELD)
-            if raw is None:
-                continue
-            try:
-                payload = json.loads(raw)
-            except json.JSONDecodeError:
-                # Malformed entry -- ack it out so it does not loop forever;
-                # a DLQ push is not useful because the payload itself is broken.
-                await redis.xack(STREAM_MAIN, CONSUMER_GROUP, stream_id)
-                continue
-            out.append((stream_id, payload))
-    return out
+
+async def read_own_pending(
+    redis:    Redis,
+    consumer: str,
+    count:    int = 100,
+) -> list[tuple[str, dict[str, Any]]]:
+    """
+    XREADGROUP with id "0" returns THIS consumer's already-delivered but unacked
+    entries (its PEL) -- the ones stranded when the process was cancelled or
+    crashed mid-delivery on a previous run.
+
+    Call once at startup with a STABLE consumer name so a restarted replica
+    reclaims exactly its own in-flight entries (the shutdown-cancel loss path).
+    """
+    resp = await redis.xreadgroup(
+        groupname    = CONSUMER_GROUP,
+        consumername = consumer,
+        streams      = {STREAM_MAIN: "0"},
+        count        = count,
+    )
+    if not resp:
+        return []
+    entries = [e for _stream, es in resp for e in es]
+    return await _decode_entries(redis, entries)
+
+
+async def claim_stale(
+    redis:       Redis,
+    consumer:    str,
+    min_idle_ms: int,
+    count:       int = 100,
+) -> list[tuple[str, dict[str, Any]]]:
+    """
+    XAUTOCLAIM entries idle longer than `min_idle_ms` into `consumer` and return
+    them for processing. This is how a DEAD replica's pending entries are
+    recovered (its consumer name never comes back, so read_own_pending cannot).
+
+    `min_idle_ms` MUST exceed the worst-case single-delivery duration (provider
+    HTTP timeout), or a slow-but-alive consumer's in-flight entry gets reclaimed
+    here and delivered twice.
+    """
+    resp = await redis.xautoclaim(
+        name          = STREAM_MAIN,
+        groupname     = CONSUMER_GROUP,
+        consumername  = consumer,
+        min_idle_time = min_idle_ms,
+        start_id      = "0-0",
+        count         = count,
+    )
+    # redis-py returns (next_cursor, claimed_entries[, deleted_ids]).
+    claimed = resp[1] if isinstance(resp, (list, tuple)) and len(resp) >= 2 else []
+    return await _decode_entries(redis, claimed)
 
 
 async def ack(redis: Redis, stream_id: str) -> None:

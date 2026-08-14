@@ -76,12 +76,17 @@ DeliveryHandler = Callable[[dict], Awaitable[DeliveryOutcome]]
 
 def default_consumer_name() -> str:
     """
-    Consumer name uniquely identifying this worker process in the Redis
-    consumer group. `hostname:pid` is stable per-process and distinct across
-    replicas, which is what XCLAIM needs to reassign a dead worker's pending
-    entries.
+    Consumer name identifying this worker in the Redis consumer group.
+
+    A STABLE name per replica (env WRAPSEC_WEBHOOK_CONSUMER, else hostname:pid)
+    matters: on restart the same name lets the process re-read its OWN pending
+    entries (read_own_pending) that a mid-delivery crash/cancel stranded.
+    `hostname:pid` changes across restarts, so a pod that keeps its identity
+    (a StatefulSet replica ordinal, say) should set the env var; otherwise those
+    entries are recovered only later by another worker via XAUTOCLAIM.
     """
-    return f"{socket.gethostname()}:{os.getpid()}"
+    override = os.getenv("WRAPSEC_WEBHOOK_CONSUMER")
+    return override if override else f"{socket.gethostname()}:{os.getpid()}"
 
 
 async def _dispatch_one(
@@ -138,13 +143,14 @@ def _now_ts() -> int:
 
 
 async def run(
-    redis:            Redis,
-    handler:          DeliveryHandler,
-    consumer:         str | None = None,
-    stop_event:       asyncio.Event | None = None,
-    concurrency:      int = 8,
-    batch:            int = 10,
-    poll_block_ms:    int = 5000,
+    redis:             Redis,
+    handler:           DeliveryHandler,
+    consumer:          str | None = None,
+    stop_event:        asyncio.Event | None = None,
+    concurrency:       int = 8,
+    batch:             int = 10,
+    poll_block_ms:     int = 5000,
+    claim_min_idle_ms: int = 60000,
 ) -> None:
     """
     Worker main loop. Runs until `stop_event` is set (or forever if None).
@@ -153,6 +159,12 @@ async def run(
     asyncio.Event you can .set() on shutdown. The loop returns cleanly after
     the current batch drains -- in-flight handlers are awaited via the
     semaphore before return so no delivery is orphaned mid-flight.
+
+    Crash recovery (H1): at startup this consumer drains its OWN pending entries
+    (stranded by a previous mid-delivery crash/cancel), and each iteration runs an
+    XAUTOCLAIM pass to reclaim entries a DEAD replica left idle longer than
+    `claim_min_idle_ms`. That timeout must exceed the worst-case single delivery
+    so a slow-but-alive worker's in-flight entry is never reclaimed (double send).
     """
     if consumer is None:
         consumer = default_consumer_name()
@@ -164,7 +176,23 @@ async def run(
     sem     = asyncio.Semaphore(concurrency)
     in_flight: set[asyncio.Task] = set()
 
+    def _spawn(stream_id: str, payload: dict) -> None:
+        task = asyncio.create_task(_dispatch_one(redis, handler, stream_id, payload, sem))
+        in_flight.add(task)
+        task.add_done_callback(in_flight.discard)
+
     logger.info("webhook worker started: consumer=%s concurrency=%d", consumer, concurrency)
+
+    # Startup recovery: reclaim THIS consumer's own PEL -- entries delivered but
+    # not acked before the previous process exited. Needs the stable consumer name.
+    try:
+        recovered = await webhook_queue.read_own_pending(redis, consumer)
+        if recovered:
+            logger.info("webhook worker recovering %d own-PEL entries at startup", len(recovered))
+        for stream_id, payload in recovered:
+            _spawn(stream_id, payload)
+    except Exception:
+        logger.exception("own-PEL startup drain failed")
 
     try:
         while not stop_event.is_set():
@@ -174,6 +202,16 @@ async def run(
                 await webhook_queue.promote_delayed(redis)
             except Exception:
                 logger.exception("promote_delayed failed")
+
+            # Reclaim entries stranded by a DEAD replica (idle > visibility
+            # timeout) so they are re-delivered instead of lost forever.
+            try:
+                for stream_id, payload in await webhook_queue.claim_stale(
+                    redis, consumer, claim_min_idle_ms,
+                ):
+                    _spawn(stream_id, payload)
+            except Exception:
+                logger.exception("claim_stale (XAUTOCLAIM) failed")
 
             try:
                 entries = await webhook_queue.read(
@@ -188,11 +226,7 @@ async def run(
                 continue
 
             for stream_id, payload in entries:
-                task = asyncio.create_task(
-                    _dispatch_one(redis, handler, stream_id, payload, sem)
-                )
-                in_flight.add(task)
-                task.add_done_callback(in_flight.discard)
+                _spawn(stream_id, payload)
 
     finally:
         # Drain: wait for currently-running handlers before returning so we

@@ -168,6 +168,10 @@ async def lifespan(app: FastAPI):
                 handler     = _wh_handler,
                 stop_event  = _wh_stop,
                 concurrency = _settings.webhook_delivery_concurrency,
+                # XAUTOCLAIM visibility timeout must exceed the worst-case single
+                # delivery so a slow-but-alive worker is never reclaimed (double
+                # send). Keep it at >= 2x the delivery HTTP timeout, floor 60s.
+                claim_min_idle_ms = max(60_000, _settings.webhook_delivery_timeout_seconds * 2000),
             ))
 
         # Outbox email delivery worker (v1.8.3). Postgres polling loop that

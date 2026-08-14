@@ -43,12 +43,20 @@ def _payload(**overrides):
 # ─── default_consumer_name ───────────────────────────────────────────────
 
 def test_default_consumer_name_shape():
-    """hostname:pid so XCLAIM can reassign a dead worker's PEL entries."""
+    """Default is hostname:pid; a stable per-replica name lets a restart drain
+    its own PEL (recovery is proven end-to-end in test_webhook_queue_recovery)."""
     name = default_consumer_name()
     assert ":" in name
     host, pid = name.rsplit(":", 1)
     assert host
     assert pid.isdigit()
+
+
+def test_default_consumer_name_env_override(monkeypatch):
+    """A replica with a stable identity sets WRAPSEC_WEBHOOK_CONSUMER so its own
+    PEL is recoverable across restarts."""
+    monkeypatch.setenv("WRAPSEC_WEBHOOK_CONSUMER", "replica-0")
+    assert default_consumer_name() == "replica-0"
 
 
 # ─── _dispatch_one: success / retry / dlq ────────────────────────────────
