@@ -22,7 +22,7 @@ from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_asyn
 from sqlalchemy.pool import NullPool
 
 from config.settings import get_settings
-from db.models import EmailOutboxModel, SettingsModel, TenantModel, UserModel
+from db.models import EmailOutboxModel, TenantModel, UserModel
 from db.repositories.email_outbox import EmailOutboxRepository
 from services.auth.token import create_access_token
 from services.time import utc_now
@@ -89,13 +89,14 @@ async def email_seeder():
 
 @pytest_asyncio.fixture
 async def reset_email_settings():
-    """email_settings is a single global row; delete it on teardown so a
+    """email_settings is a single platform-level row; delete it on teardown so a
     mutating test cannot leak (e.g. notifications=off) into other tests."""
     yield
+    from db.models import PlatformSettingsModel
     engine, sf = _sf()
     try:
         async with sf() as db:
-            await db.execute(sa_delete(SettingsModel).where(SettingsModel.key == "email_settings"))
+            await db.execute(sa_delete(PlatformSettingsModel).where(PlatformSettingsModel.key == "email_settings"))
             await db.commit()
     finally:
         await engine.dispose()

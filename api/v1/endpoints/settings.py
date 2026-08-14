@@ -15,11 +15,56 @@ from api.v1.middleware.auth import get_client_ip
 from cache.redis_client import get_redis
 from config.settings import get_settings
 from db.repositories.admin_event import AdminEventRepository
-from db.repositories.settings import SettingsRepository
+from db.repositories.settings import TenantSettingsRepository
 from domain.enums import AdminEventAction
 from security.encryption import decrypt, encrypt, mask
 from security.url_validator import validate_llm_base_url
 from services.time import to_iso_z, utc_now
+
+
+async def _resolve_tenant(db, principal) -> uuid.UUID:
+    """
+    The tenant scope for a settings read/write. Uses the principal's tenant when it
+    is a concrete tenant; a cross-tenant admin principal (the admin key) carries no
+    specific tenant and resolves to the default tenant (v1 single-tenant).
+    """
+    tid = getattr(principal, "tenant_id", None)
+    try:
+        return uuid.UUID(str(tid))
+    except (ValueError, TypeError):
+        from db.repositories.tenant import TenantRepository
+        tenant = await TenantRepository(db).get_default()
+        if tenant is None:
+            from errors.exceptions import WrapSecError
+            raise WrapSecError(
+                code="SYSTEM_ERROR",
+                message="No tenant context available for settings.",
+                status_code=500,
+            ) from None
+        return tenant.id
+
+
+class _BoundTenantSettings:
+    """A TenantSettingsRepository whose tenant is resolved from the principal on
+    first use, so the per-endpoint get(key)/set(key, value) call sites stay
+    tenant-scoped without threading tenant_id through each one (D5 split)."""
+
+    def __init__(self, db, principal):
+        self._repo      = TenantSettingsRepository(db)
+        self._db        = db
+        self._principal = principal
+        self._tid: uuid.UUID | None = None
+
+    async def _tenant(self) -> uuid.UUID:
+        if self._tid is None:
+            self._tid = await _resolve_tenant(self._db, self._principal)
+        return self._tid
+
+    async def get(self, key: str):
+        return await self._repo.get(await self._tenant(), key)
+
+    async def set(self, key: str, value: dict):
+        return await self._repo.set(await self._tenant(), key, value)
 
 router = APIRouter()
 
@@ -80,7 +125,7 @@ async def get_thresholds(
     Returns the active block and sanitize thresholds.
     Source is 'database' if thresholds have been explicitly set, 'environment' if using defaults.
     """
-    repo   = SettingsRepository(db)
+    repo   = _BoundTenantSettings(db, _principal)
     stored = await repo.get(THRESHOLD_KEY)
     return JSONResponse(content=stored or _default_thresholds())
 
@@ -96,7 +141,7 @@ async def update_thresholds(
     Validation enforces: block_threshold > sanitize_threshold, both in (0.0, 1.0].
     Auth: JWT + ADMIN role required.
     """
-    repo    = SettingsRepository(db)
+    repo    = _BoundTenantSettings(db, _principal)
     current = await repo.get(THRESHOLD_KEY) or _default_thresholds()
 
     if body.block_threshold is not None:
@@ -136,7 +181,7 @@ async def get_layers(
     _principal = Depends(get_current_principal),
 ):
     """Returns the active detection layer configuration (rule, ML, LLM enabled flags)."""
-    repo   = SettingsRepository(db)
+    repo   = _BoundTenantSettings(db, _principal)
     stored = await repo.get(LAYERS_KEY)
     return JSONResponse(content=stored or DEFAULT_LAYERS)
 
@@ -152,7 +197,7 @@ async def update_layers(
     Note: proxy mode requires llm_enabled=true - disabling LLM will block proxy requests.
     Auth: JWT + ADMIN role required.
     """
-    repo    = SettingsRepository(db)
+    repo    = _BoundTenantSettings(db, _principal)
     current = await repo.get(LAYERS_KEY) or DEFAULT_LAYERS.copy()
 
     if body.rule_enabled is not None:
@@ -219,7 +264,7 @@ async def get_llm_settings(
     _principal = Depends(get_current_principal),
 ):
     """Returns the active LLM layer configuration. api_key is masked in the response - never plaintext."""
-    repo    = SettingsRepository(db)
+    repo    = _BoundTenantSettings(db, _principal)
     stored  = await repo.get(LLM_KEY)
     payload = dict(stored) if stored else _default_llm()
 
@@ -249,7 +294,7 @@ async def update_llm_settings(
     Supported providers: ollama, openai, custom.
     Auth: JWT + ADMIN role required.
     """
-    repo    = SettingsRepository(db)
+    repo    = _BoundTenantSettings(db, _principal)
     current = await repo.get(LLM_KEY) or _default_llm()
 
     if body.provider    is not None: current["provider"]    = body.provider
@@ -313,7 +358,7 @@ async def get_retention_settings(
     Returns the audit log retention period in days.
     Source is 'database' if explicitly set via PUT, 'environment' if using the default.
     """
-    repo    = SettingsRepository(db)
+    repo    = _BoundTenantSettings(db, _principal)
     stored  = await repo.get(RETENTION_KEY)
     _s      = get_settings()
     days    = stored.get("retention_days", _s.audit_retention_days) if stored else _s.audit_retention_days
@@ -333,7 +378,7 @@ async def update_retention_settings(
     Updates the audit log retention period. Valid range: 7-3650 days (7 days to 10 years).
     Auth: JWT + ADMIN role required.
     """
-    repo = SettingsRepository(db)
+    repo = _BoundTenantSettings(db, _principal)
     await repo.set(RETENTION_KEY, {"retention_days": body.retention_days})
     await db.commit()
     return JSONResponse(content={
@@ -381,7 +426,7 @@ async def get_rate_limit_settings(
     Source is 'database' if explicitly set, 'environment' if using default.
     This is the actual enforced value - not the global_policy default.
     """
-    repo   = SettingsRepository(db)
+    repo   = _BoundTenantSettings(db, _principal)
     stored = await repo.get(RATE_LIMIT_KEY)
     if stored:
         return JSONResponse(content={
@@ -406,7 +451,7 @@ async def update_rate_limit_settings(
     Does not require server restart.
     Trial key limit is configured via TRIAL_RATE_LIMIT_PER_MINUTE in .env.
     """
-    repo    = SettingsRepository(db)
+    repo    = _BoundTenantSettings(db, _principal)
     current = await repo.get(RATE_LIMIT_KEY) or _default_rate_limit()
 
     if body.per_minute is not None:
@@ -486,7 +531,7 @@ async def get_admin_limits(
     Source is 'database' if explicitly set via PUT, 'environment' if using defaults.
     Auth: any valid principal.
     """
-    repo   = SettingsRepository(db)
+    repo   = _BoundTenantSettings(db, _principal)
     stored = await repo.get(ADMIN_LIMITS_KEY)
     if stored:
         return JSONResponse(content={**stored, "source": "database"})
@@ -498,7 +543,7 @@ async def update_admin_limits(
     body:      AdminLimitsUpdateSchema,
     request:   Request,
     db:        AsyncSession = Depends(get_db),
-    principal  = Depends(require_admin()),
+    _principal  = Depends(require_admin()),
 ):
     """
     Updates admin write and/or audit export rate limits. Merges with existing values.
@@ -510,7 +555,7 @@ async def update_admin_limits(
 
     Auth: JWT + ADMIN role required.
     """
-    repo    = SettingsRepository(db)
+    repo    = _BoundTenantSettings(db, _principal)
     current = await repo.get(ADMIN_LIMITS_KEY) or _default_admin_limits()
 
     old_values = dict(current)
@@ -526,7 +571,7 @@ async def update_admin_limits(
     # Invalidate Redis cache - new limits take effect on next request
     try:
         redis = get_redis()
-        await redis.delete(ADMIN_LIMITS_CACHE_KEY)
+        await redis.delete(f"{ADMIN_LIMITS_CACHE_KEY}:{await _resolve_tenant(db, _principal)}")
     except Exception:
         pass  # Redis cache invalidation is best-effort; the next request repopulates it.
 
@@ -534,8 +579,8 @@ async def update_admin_limits(
     try:
         ip        = get_client_ip(request)
         ua        = request.headers.get("user-agent")
-        actor_id  = uuid.UUID(str(principal.id).replace("user:", ""))
-        tenant_id = uuid.UUID(str(principal.tenant_id))
+        actor_id  = uuid.UUID(str(_principal.id).replace("user:", ""))
+        tenant_id = uuid.UUID(str(_principal.tenant_id))
 
         event_repo = AdminEventRepository(db)
         await event_repo.insert(

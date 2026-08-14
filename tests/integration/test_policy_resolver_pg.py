@@ -20,7 +20,7 @@ import pytest
 
 from config.settings import get_settings
 from db.models import ApplicationModel, DepartmentModel, TenantModel
-from db.repositories.settings import SettingsRepository
+from db.repositories.settings import TenantSettingsRepository
 from security.encryption import encrypt
 from services.policy_resolver import resolve_policy
 
@@ -56,14 +56,15 @@ async def _app(db, tenant_id, dept_id, *, policy_override=None, rate_limit_overr
 
 @pytest.mark.asyncio
 async def test_global_db_settings_override_system_defaults(pg_db):
-    repo = SettingsRepository(pg_db)
-    await repo.set("policy_thresholds", {"block_threshold": 0.8, "sanitize_threshold": 0.3})
-    await repo.set("detection_layers", {"rule_enabled": False, "ml_enabled": True, "llm_enabled": False})
-    await repo.set("llm_settings", {"provider": "openai", "model": "gpt-4o", "llm_trigger": 0.15})
-    await repo.set("rate_limit", {"per_minute": 120})
+    tid  = await _tenant(pg_db)
+    repo = TenantSettingsRepository(pg_db)
+    await repo.set(tid, "policy_thresholds", {"block_threshold": 0.8, "sanitize_threshold": 0.3})
+    await repo.set(tid, "detection_layers", {"rule_enabled": False, "ml_enabled": True, "llm_enabled": False})
+    await repo.set(tid, "llm_settings", {"provider": "openai", "model": "gpt-4o", "llm_trigger": 0.15})
+    await repo.set(tid, "rate_limit", {"per_minute": 120})
     await pg_db.commit()
 
-    policy, source = await resolve_policy(pg_db)
+    policy, source = await resolve_policy(pg_db, tenant_id=str(tid))
 
     assert policy["thresholds"]["block"] == 0.8
     assert policy["thresholds"]["sanitize"] == 0.3
@@ -157,12 +158,13 @@ async def test_api_key_enc_decryption_failure_raises(pg_db):
 async def test_invalid_thresholds_revert_to_system_defaults(pg_db):
     # block <= sanitize is invalid; the resolver must revert both to the settings
     # defaults rather than ship an inconsistent policy.
-    repo = SettingsRepository(pg_db)
-    await repo.set("policy_thresholds", {"block_threshold": 0.3, "sanitize_threshold": 0.5})
+    tid  = await _tenant(pg_db)
+    repo = TenantSettingsRepository(pg_db)
+    await repo.set(tid, "policy_thresholds", {"block_threshold": 0.3, "sanitize_threshold": 0.5})
     await pg_db.commit()
 
     s = get_settings()
-    policy, _ = await resolve_policy(pg_db)
+    policy, _ = await resolve_policy(pg_db, tenant_id=str(tid))
 
     assert policy["thresholds"]["block"] == s.block_threshold
     assert policy["thresholds"]["sanitize"] == s.sanitize_threshold

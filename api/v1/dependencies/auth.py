@@ -163,30 +163,35 @@ def endpoint_rate_limit(limit_setting: str):
 
         limit = None
 
-        if os.getenv("TESTING") != "true":
-            # 1. Redis cache
+        # admin_rate_limits is per-tenant (this dependency runs post-auth, so the
+        # tenant is known). Cache key and DB read are both tenant-scoped so one
+        # tenant's admin limits never serve another (I3).
+        _tid = getattr(request.state, "tenant_id", None)
+        if os.getenv("TESTING") != "true" and _tid:
+            import uuid as _uuid
+            _tid_uuid  = _uuid.UUID(str(_tid))
+            _cache_key = f"wrapsec:settings:admin_rate_limits:{_tid}"
+            # 1. Redis cache (tenant-scoped)
             try:
                 from cache.redis_client import get_redis
-                cached = await get_redis().get("wrapsec:settings:admin_rate_limits")
+                cached = await get_redis().get(_cache_key)
                 if cached:
                     limit = json.loads(cached).get(limit_setting)
             except Exception:
                 pass  # Best-effort Redis cache read; fall back to DB then the .env default.
 
-            # 2. DB - also warms the cache on hit
+            # 2. DB (tenant_settings) - also warms the cache on hit
             if limit is None:
                 try:
-                    from db.repositories.settings import SettingsRepository
+                    from db.repositories.settings import TenantSettingsRepository
                     from db.session import AsyncSessionFactory
                     async with AsyncSessionFactory() as session:
-                        stored = await SettingsRepository(session).get("admin_rate_limits")
+                        stored = await TenantSettingsRepository(session).get(_tid_uuid, "admin_rate_limits")
                         if stored and limit_setting in stored:
                             limit = stored[limit_setting]
                             try:
                                 from cache.redis_client import get_redis
-                                await get_redis().setex(
-                                    "wrapsec:settings:admin_rate_limits", 60, json.dumps(stored)
-                                )
+                                await get_redis().setex(_cache_key, 60, json.dumps(stored))
                             except Exception:
                                 pass  # Best-effort Redis cache write; safe to skip on failure.
                 except Exception:

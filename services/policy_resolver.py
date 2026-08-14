@@ -123,13 +123,28 @@ async def resolve_policy(
     app_override    = None
 
     try:
-        # Load DB settings (global thresholds + layers override system defaults)
-        from db.repositories.settings import SettingsRepository
-        settings_repo     = SettingsRepository(db)
-        stored_thresholds = await settings_repo.get("policy_thresholds") or {}
-        stored_layers     = await settings_repo.get("detection_layers")  or {}
-        stored_llm        = await settings_repo.get("llm_settings")      or {}
-        stored_rate_limit = await settings_repo.get("rate_limit")        or {}
+        # Load DB settings layered env-default -> platform_settings -> tenant_settings
+        # (D5 two-table split). Tenant values override platform defaults per key;
+        # both override the system defaults applied below.
+        from db.repositories.settings import (
+            PlatformSettingsRepository,
+            TenantSettingsRepository,
+        )
+        platform_repo = PlatformSettingsRepository(db)
+        tenant_repo   = TenantSettingsRepository(db)
+        tid           = uuid.UUID(str(tenant_id)) if tenant_id else None
+
+        async def _layered(key: str) -> dict:
+            base = await platform_repo.get(key) or {}
+            if tid is not None:
+                override = await tenant_repo.get(tid, key) or {}
+                return {**base, **override}
+            return base
+
+        stored_thresholds = await _layered("policy_thresholds")
+        stored_layers     = await _layered("detection_layers")
+        stored_llm        = await _layered("llm_settings")
+        stored_rate_limit = await _layered("rate_limit")
 
         # Apply global DB settings as tenant-level defaults
         if stored_thresholds:

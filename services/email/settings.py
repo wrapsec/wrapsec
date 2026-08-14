@@ -32,7 +32,7 @@ from dataclasses import dataclass
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from config.settings import get_settings
-from db.repositories.settings import SettingsRepository
+from db.repositories.settings import PlatformSettingsRepository
 from services.webhooks.retry_schedule import MAX_ATTEMPTS, RETRY_SCHEDULE_SECONDS
 
 logger = logging.getLogger("wrapsec.email")
@@ -94,7 +94,7 @@ def _coerce(raw: dict | None) -> EmailSettings:
 
 async def get_email_settings(db: AsyncSession) -> EmailSettings:
     """Effective settings: stored values merged over defaults."""
-    raw = await SettingsRepository(db).get(SETTINGS_KEY)
+    raw = await PlatformSettingsRepository(db).get(SETTINGS_KEY)
     return _coerce(raw)
 
 
@@ -126,7 +126,7 @@ async def set_email_settings(
         max_attempts          = max_attempts,
         retention_days        = retention_days,
     )
-    await SettingsRepository(db).set(SETTINGS_KEY, {
+    await PlatformSettingsRepository(db).set(SETTINGS_KEY, {
         "notifications_enabled": notifications_enabled,
         "max_attempts":          max_attempts,
         "retention_days":        retention_days,

@@ -84,14 +84,16 @@ async def health_config(
     Useful for deployment verification and debugging.
     Does not expose API keys or secrets.
     """
-    from db.repositories.settings import SettingsRepository
+    from api.v1.endpoints.settings import _resolve_tenant
+    from db.repositories.settings import TenantSettingsRepository
 
     _settings         = get_settings()
-    repo              = SettingsRepository(db)
-    stored_thresholds = await repo.get("policy_thresholds") or {}
-    stored_layers     = await repo.get("detection_layers")  or {}
-    stored_llm        = await repo.get("llm_settings")      or {}
-    stored_rate_limit = await repo.get("rate_limit")        or {}
+    _tid              = await _resolve_tenant(db, _principal)
+    repo              = TenantSettingsRepository(db)
+    stored_thresholds = await repo.get(_tid, "policy_thresholds") or {}
+    stored_layers     = await repo.get(_tid, "detection_layers")  or {}
+    stored_llm        = await repo.get(_tid, "llm_settings")      or {}
+    stored_rate_limit = await repo.get(_tid, "rate_limit")        or {}
 
     return {
         "version": _settings.app_version,

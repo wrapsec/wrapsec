@@ -148,17 +148,21 @@ async def _resolve_audit_retention() -> int:
     """
     try:
         from config.settings import get_settings
-        from db.repositories.settings import SettingsRepository
+        from db.repositories.settings import TenantSettingsRepository
+        from db.repositories.tenant import TenantRepository
         from db.session import AsyncSessionFactory
         cfg = get_settings()
 
         async with AsyncSessionFactory() as session:
-            repo   = SettingsRepository(session)
-            stored = await repo.get("audit_retention")
-            if stored and "retention_days" in stored:
-                days = int(stored["retention_days"])
-                logger.debug(f"Retention worker: audit retention from DB: {days} days")
-                return days
+            # v1 is single-tenant: apply the default tenant's retention. Applying
+            # each tenant's own retention (iterate all tenants) is a Phase 2 item.
+            tenant = await TenantRepository(session).get_default()
+            if tenant is not None:
+                stored = await TenantSettingsRepository(session).get(tenant.id, "audit_retention")
+                if stored and "retention_days" in stored:
+                    days = int(stored["retention_days"])
+                    logger.debug(f"Retention worker: audit retention from DB: {days} days")
+                    return days
 
         return cfg.audit_retention_days
 

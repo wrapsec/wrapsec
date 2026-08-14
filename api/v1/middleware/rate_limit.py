@@ -46,11 +46,14 @@ async def _get_live_rate_limit() -> int:
         if cached:
             return int(json.loads(cached).get("per_minute", _settings.rate_limit_per_minute))
 
-        # Cache miss - read from DB
-        from db.repositories.settings import SettingsRepository
+        # Cache miss - read from DB. This is the pre-auth, per-IP/key DoS ceiling
+        # applied before the tenant is known, so it is a PLATFORM (deployment-wide)
+        # setting, not per-tenant. Per-tenant limits are enforced post-auth by the
+        # resolved policy (tenant_settings, via resolve_policy).
+        from db.repositories.settings import PlatformSettingsRepository
         from db.session import AsyncSessionFactory
         async with AsyncSessionFactory() as session:
-            repo   = SettingsRepository(session)
+            repo   = PlatformSettingsRepository(session)
             stored = await repo.get("rate_limit")
             if stored and "per_minute" in stored:
                 limit = int(stored["per_minute"])
