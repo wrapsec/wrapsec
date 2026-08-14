@@ -173,11 +173,13 @@ async def main():
         logger.info(f"Using audit retention from CLI: {audit_retention} days")
     else:
         try:
-            from db.repositories.settings import SettingsRepository
+            from db.repositories.settings import TenantSettingsRepository
+            from db.repositories.tenant import TenantRepository
             from db.session import AsyncSessionFactory
             async with AsyncSessionFactory() as session:
-                repo   = SettingsRepository(session)
-                stored = await repo.get("audit_retention")
+                # v1 single-tenant: the default tenant's retention (per-tenant is Phase 2).
+                tenant = await TenantRepository(session).get_default()
+                stored = await TenantSettingsRepository(session).get(tenant.id, "audit_retention") if tenant else None
                 if stored and "retention_days" in stored:
                     audit_retention = stored["retention_days"]
                     logger.info(f"Using audit retention from DB: {audit_retention} days")

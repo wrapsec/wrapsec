@@ -8,7 +8,7 @@ from uuid import UUID
 
 from sqlalchemy import select
 
-from db.models import PlatformSettingsModel, SettingsModel, TenantSettingsModel
+from db.models import PlatformSettingsModel, TenantSettingsModel
 from db.repositories.base import BaseRepository
 from services.time import utc_now
 
@@ -24,44 +24,6 @@ def _loads(value) -> dict | None:
     except json.JSONDecodeError as e:
         logger.error("settings: malformed JSON value error=%s", e)
         return None
-
-
-class SettingsRepository(BaseRepository):
-
-    async def get(self, key: str) -> dict | None:
-        result = await self.session.execute(
-            select(SettingsModel).where(SettingsModel.key == key)
-        )
-        record = result.scalar_one_or_none()
-        if not record:
-            return None
-        # Guard against non-string values (e.g. MagicMock in tests)
-        if not isinstance(record.value, (str, bytes, bytearray)):
-            return None
-        try:
-            return json.loads(record.value)
-        except json.JSONDecodeError as e:
-            logger.error("SettingsRepository.get: malformed JSON for key=%s error=%s", key, e)
-            return None
-
-    async def set(self, key: str, value: dict) -> SettingsModel:
-        result = await self.session.execute(
-            select(SettingsModel).where(SettingsModel.key == key)
-        )
-        record = result.scalar_one_or_none()
-
-        if record:
-            record.value      = json.dumps(value)
-            record.updated_at = utc_now()
-        else:
-            record = SettingsModel(
-                key   = key,
-                value = json.dumps(value),
-            )
-            self.session.add(record)
-
-        await self.flush()
-        return record
 
 
 class TenantSettingsRepository(BaseRepository):

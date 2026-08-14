@@ -8,16 +8,22 @@ async def get_llm_settings_from_db() -> dict:
         import os
         if os.getenv("TESTING") == "true":
             return {}
-        from db.repositories.settings import SettingsRepository
+        from db.repositories.settings import TenantSettingsRepository
+        from db.repositories.tenant import TenantRepository
         from db.session import AsyncSessionFactory
         from security.encryption import decrypt
         async with AsyncSessionFactory() as session:
-            repo    = SettingsRepository(session)
-            stored  = await repo.get("llm_settings")
+            # v1 single-tenant: the default tenant's LLM config. (Per-tenant LLM
+            # config via the resolved policy is a later refinement.)
+            tenant = await TenantRepository(session).get_default()
+            if tenant is None:
+                return {}
+            repo    = TenantSettingsRepository(session)
+            stored  = await repo.get(tenant.id, "llm_settings")
             result  = dict(stored) if stored else {}
 
             # Decrypt and inject API key if stored
-            enc_record = await repo.get("llm_api_key_enc")
+            enc_record = await repo.get(tenant.id, "llm_api_key_enc")
             if enc_record and enc_record.get("enc"):
                 try:
                     result["api_key"] = decrypt(enc_record["enc"], get_settings().secret_key)

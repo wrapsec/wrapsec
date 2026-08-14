@@ -107,9 +107,14 @@ def upgrade() -> None:
             )
 
     # 2) settings.value (JSON/JSONB) where key = 'llm_api_key_enc' ------------
-    rows = bind.execute(sa.text(
-        "SELECT key, value FROM settings WHERE key = 'llm_api_key_enc'"
-    )).fetchall()
+    # The legacy global settings table was dropped in the settings-split contract
+    # phase; on a fresh model-driven baseline it never exists, so skip cleanly.
+    if "settings" not in set(sa.inspect(bind).get_table_names()):
+        rows = []
+    else:
+        rows = bind.execute(sa.text(
+            "SELECT key, value FROM settings WHERE key = 'llm_api_key_enc'"
+        )).fetchall()
     for key, value in rows:
         if not isinstance(value, dict):
             continue

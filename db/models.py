@@ -201,14 +201,6 @@ class APIKeyModel(Base):
     )
 
 
-class SettingsModel(Base):
-    __tablename__ = "settings"
-
-    key: Mapped[str] = mapped_column(String(100), primary_key=True)
-    value: Mapped[str] = mapped_column(Text,        nullable=False)
-    updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True),    nullable=False, default=utc_now, onupdate=utc_now)
-
-
 class TenantSettingsModel(Base):
     """
     Per-tenant configuration (D5/D1 two-table split). Replaces the single global

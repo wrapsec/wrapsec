@@ -78,36 +78,6 @@ async def test_platform_settings_get_set(pg_db):
         await pg_db.commit()
 
 
-@pytest.mark.asyncio
-async def test_backfill_copies_legacy_settings_to_default_tenant(pg_db):
-    """0017 backfill: legacy settings rows land in tenant_settings under default."""
-    # Ensure a default tenant exists (the conftest seeds one; create if missing).
-    default_tid = (await pg_db.execute(
-        sa.text("SELECT id FROM tenants WHERE slug = 'default' LIMIT 1")
-    )).scalar()
-    if default_tid is None:
-        default_tid = uuid.uuid4()
-        pg_db.add(TenantModel(id=default_tid, slug="default", name="Default"))
-        await pg_db.flush()
-
-    key = f"legacy-{uuid.uuid4().hex[:8]}"
-    await pg_db.execute(
-        sa.text("INSERT INTO settings (key, value, updated_at) VALUES (:k, :v, now())")
-        .bindparams(k=key, v='{"per_minute": 42}')
-    )
-    # Mirrors the INSERT in 0017, scoped to this test's key.
-    await pg_db.execute(
-        sa.text(
-            "INSERT INTO tenant_settings (tenant_id, key, value, updated_at) "
-            "SELECT :tid, key, value, updated_at FROM settings WHERE key = :k "
-            "ON CONFLICT (tenant_id, key) DO NOTHING"
-        ).bindparams(tid=default_tid, k=key)
-    )
-    await pg_db.commit()
-    try:
-        got = await TenantSettingsRepository(pg_db).get(default_tid, key)
-        assert got == {"per_minute": 42}
-    finally:
-        await pg_db.execute(sa.delete(TenantSettingsModel).where(TenantSettingsModel.key == key))
-        await pg_db.execute(sa.text("DELETE FROM settings WHERE key = :k").bindparams(k=key))
-        await pg_db.commit()
+# The 0017 backfill (legacy `settings` -> tenant_settings) was validated while the
+# settings table existed; the 0018 contract migration has since dropped it, so that
+# backfill can no longer be exercised against the current schema.
