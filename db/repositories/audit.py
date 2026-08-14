@@ -67,18 +67,24 @@ class AuditRepository(BaseRepository):
 
     async def get_by_trace_id_scoped(
         self,
-        trace_id: str,
-        dept_id:  str,
+        trace_id:  str,
+        dept_id:   str,
+        tenant_id: str,
     ) -> AuditLogModel | None:
         """
-        Dept-scoped trace_id lookup. Returns None if the record exists
-        but belongs to a different department - caller treats as 404.
-        Used by all non-admin key requests to prevent cross-dept leakage.
+        Dept-scoped trace_id lookup. Returns None if the record exists but belongs
+        to a different department OR a different tenant - caller treats as 404.
+
+        The tenant predicate closes M4: a user carrying a foreign tenant's dept_id
+        (e.g. an ADMIN who created them with a dept from another tenant) must not
+        resolve that tenant's audit rows by trace_id. dept_id alone is not a
+        tenant boundary.
         """
         result = await self.session.execute(
             select(AuditLogModel).where(
-                AuditLogModel.trace_id == trace_id,
-                AuditLogModel.dept_id  == dept_id,
+                AuditLogModel.trace_id  == trace_id,
+                AuditLogModel.dept_id   == dept_id,
+                AuditLogModel.tenant_id == tenant_id,
             )
         )
         return result.scalar_one_or_none()

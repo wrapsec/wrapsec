@@ -217,3 +217,39 @@ async def test_reset_password_nonexistent_404(auth_client, auth_setup):
         headers=_admin(auth_setup),
     )
     assert r.status_code == 404
+
+
+# ── M4: dept tenant-ownership on create/update ───────────────────────────────
+
+@pytest.mark.asyncio
+async def test_create_user_rejects_cross_tenant_dept(auth_client, two_tenant_setup):
+    """M4: creating a user with a department from ANOTHER tenant must 404 -- the
+    FK guarantees the dept exists, not that it belongs to the caller's tenant."""
+    a, b = two_tenant_setup["A"], two_tenant_setup["B"]
+    r = await auth_client.post(
+        "/v1/admin/users",
+        json={"email": _email(), "password": "ValidPass123!", "role": "DEVELOPER",
+              "dept_id": str(b["dept"].id)},
+        headers={"Authorization": f"Bearer {a['admin_token']}"},
+    )
+    assert r.status_code == 404
+
+
+@pytest.mark.asyncio
+async def test_update_user_rejects_cross_tenant_dept(auth_client, two_tenant_setup):
+    a, b = two_tenant_setup["A"], two_tenant_setup["B"]
+    ah = {"Authorization": f"Bearer {a['admin_token']}"}
+    c = await auth_client.post(
+        "/v1/admin/users",
+        json={"email": _email(), "password": "ValidPass123!", "role": "DEVELOPER",
+              "dept_id": str(a["dept"].id)},
+        headers=ah,
+    )
+    assert c.status_code == 201, c.text
+    uid = c.json()["id"]
+    r = await auth_client.patch(
+        f"/v1/admin/users/{uid}",
+        json={"dept_id": str(b["dept"].id)},   # move to another tenant's dept
+        headers=ah,
+    )
+    assert r.status_code == 404

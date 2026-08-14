@@ -193,3 +193,29 @@ async def test_stats_dept_scope_filters_aggregates(pg_client, pg_db, admin_heade
     assert stats_b["total"]       == 2
     assert stats_b["allow_count"] == 2
     assert stats_b["block_count"] == 0
+
+
+@pytest.mark.asyncio
+async def test_get_by_trace_id_scoped_enforces_tenant(pg_db):
+    """M4: the dept-scoped trace lookup must also filter by tenant, so a caller in
+    tenant A carrying a dept_id that matches a row owned by tenant B cannot read
+    that row. dept_id alone is not a tenant boundary."""
+    from db.repositories.audit import AuditRepository
+
+    dept   = str(uuid.uuid4())
+    ten_a  = str(uuid.uuid4())
+    ten_b  = str(uuid.uuid4())
+    trace  = "tr-" + uuid.uuid4().hex[:12]
+    pg_db.add(AuditLogModel(
+        id=uuid.uuid4(), trace_id=trace, decision="ALLOW", risk_score=0.1, threats=[],
+        input_hash="h", detection_mode="standard", execution_mode="scan",
+        llm_invoked=False, latency_ms=1.0, dept_id=dept, tenant_id=ten_b,
+    ))
+    await pg_db.commit()
+
+    repo = AuditRepository(pg_db)
+    # Same dept, WRONG tenant -> not visible.
+    assert await repo.get_by_trace_id_scoped(trace, dept, ten_a) is None
+    # Same dept, OWNING tenant -> visible.
+    got = await repo.get_by_trace_id_scoped(trace, dept, ten_b)
+    assert got is not None and got.trace_id == trace

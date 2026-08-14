@@ -193,12 +193,18 @@ async def create_user(
 
     if body.dept_id:
         try:
-            uuid.UUID(body.dept_id)
+            _dept_uuid = uuid.UUID(body.dept_id)
         except ValueError:
             return JSONResponse(
                 status_code=400,
                 content={"error": {"code": "INVALID_REQUEST", "message": "dept_id must be a valid UUID."}},
             )
+        # M4: the department must belong to the caller's tenant. The FK guarantees
+        # the dept exists, not that it is yours; mirror keys.py app/dept resolution.
+        from db.repositories.department import DepartmentRepository
+        _dept = await DepartmentRepository(db).get_by_id(_dept_uuid)
+        if not _dept or str(_dept.tenant_id) != str(principal.tenant_id):
+            raise NotFoundError("department", body.dept_id)
 
     try:
         user = await repo.create({
@@ -395,6 +401,11 @@ async def update_user(
                 status_code=400,
                 content={"error": {"code": "INVALID_REQUEST", "message": "dept_id must be a valid UUID."}},
             )
+        # M4: the department must belong to the caller's tenant (mirror keys.py).
+        from db.repositories.department import DepartmentRepository
+        _dept = await DepartmentRepository(db).get_by_id(data["dept_id"])
+        if not _dept or str(_dept.tenant_id) != str(principal.tenant_id):
+            raise NotFoundError("department", str(data["dept_id"]))
 
     # Capture old values for audit metadata before update
     old_role    = user.role

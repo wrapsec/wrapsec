@@ -73,5 +73,5 @@ async def get_scoped_audit_record(
     if is_admin:
         return await repo.get_by_trace_id_tenant_scoped(trace_id, tenant_id)
     if dept_id:
-        return await repo.get_by_trace_id_scoped(trace_id, dept_id)
+        return await repo.get_by_trace_id_scoped(trace_id, dept_id, tenant_id)
     return await repo.get_by_trace_id_tenant_scoped(trace_id, tenant_id)

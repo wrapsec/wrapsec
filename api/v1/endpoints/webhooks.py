@@ -439,7 +439,13 @@ async def update_webhook(
     if body.url is not None:
         await _reject_bad_egress(body.url)
 
-    data = {k: v for k, v in body.model_dump().items() if v is not None}
+    # exclude_unset so an explicitly-set null clears the field (L2: description /
+    # event_types / config were previously un-clearable because the old filter
+    # dropped every None). url is required for a live endpoint and is never
+    # cleared -- an explicit null for it is ignored.
+    data = body.model_dump(exclude_unset=True)
+    if data.get("url") is None:
+        data.pop("url", None)
     ep   = await repo.update(endpoint_id=endpoint_id, data=data)
     if ep is None:
         raise NotFoundError("webhook_endpoint", str(endpoint_id))

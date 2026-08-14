@@ -643,3 +643,25 @@ async def test_unauthenticated_request_rejected(client):
         assert resp.status_code in (401, 403), (
             f"{method.upper()} {path} without auth returned {resp.status_code}"
         )
+
+
+@pytest.mark.asyncio
+async def test_update_webhook_clears_description_via_null(client, admin_jwt_headers):
+    """L2: an explicit null on update clears a nullable field. The old
+    drop-all-None filter made description/event_types un-clearable."""
+    c = await client.post(
+        "/v1/admin/webhooks",
+        json={"url": "https://example.com/hook", "description": "to be cleared"},
+        headers=admin_jwt_headers,
+    )
+    assert c.status_code == 201, c.text
+    wid = c.json()["id"]
+    assert c.json()["description"] == "to be cleared"
+    u = await client.put(
+        f"/v1/admin/webhooks/{wid}",
+        json={"description": None},
+        headers=admin_jwt_headers,
+    )
+    assert u.status_code == 200, u.text
+    g = await client.get(f"/v1/admin/webhooks/{wid}", headers=admin_jwt_headers)
+    assert g.json()["description"] is None

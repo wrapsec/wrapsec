@@ -20,9 +20,10 @@ logger = logging.getLogger("wrapsec.auth")
 #
 # TTL behavior:
 #   Failure counter key:
-#       TTL set on FIRST failure only (fixed window).
-#       NOT reset on subsequent failures - window expires naturally.
-#       After TTL expires: key deleted by Redis -> fresh window starts.
+#       TTL refreshed on EVERY failure (sliding window) - see record_failure.
+#       Each failure extends the window; it expires only after a full
+#       lockout_duration of inactivity, after which Redis deletes the key and a
+#       fresh window starts.
 #
 #   Lock key:
 #       Uses SETEX on every failure >= MAX_ATTEMPTS.
