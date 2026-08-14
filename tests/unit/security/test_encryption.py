@@ -93,16 +93,16 @@ def test_ciphertext_uses_v2_envelope_prefix():
     still needs migrating.
     """
     ct = encrypt("sk-abc123", SECRET)
-    assert ct.startswith("v2:")
+    assert ct.startswith("primary:")
 
 
 def test_ciphertext_body_is_valid_base64():
     """
-    The body after the 'v2:' marker is base64. Any bug that produces raw
+    The body after the 'primary:' key id is base64. Any bug that produces raw
     bytes would break psycopg TEXT-column inserts.
     """
     ct   = encrypt("sk-abc123", SECRET)
-    body = ct[len("v2:"):]
+    body = ct[len("primary:"):]
     # Must decode without error - proves valid base64.
     base64.b64decode(body.encode("utf-8"))
 
@@ -114,7 +114,7 @@ def test_v2_ciphertext_carries_wrapped_dek_plus_gcm_frame():
     """
     from security.kek import DerivedSecretKEK
     ct   = encrypt("hi", SECRET)
-    raw  = base64.b64decode(ct[len("v2:"):].encode("utf-8"))
+    raw  = base64.b64decode(ct[len("primary:"):].encode("utf-8"))
     assert len(raw) >= DerivedSecretKEK.WRAPPED_LEN + 12 + 16
 
 
@@ -148,11 +148,11 @@ def test_decrypt_wrong_key_error_message_is_generic():
 
 def _v2_body_bytes(ct: str) -> bytearray:
     """Helper: base64-decode the body of a v2 ciphertext into a mutable buffer."""
-    return bytearray(base64.b64decode(ct[len("v2:"):].encode("utf-8")))
+    return bytearray(base64.b64decode(ct[len("primary:"):].encode("utf-8")))
 
 
 def _reassemble_v2(raw: bytes) -> str:
-    return "v2:" + base64.b64encode(bytes(raw)).decode("utf-8")
+    return "primary:" + base64.b64encode(bytes(raw)).decode("utf-8")
 
 
 def test_decrypt_tampered_ciphertext_raises():
@@ -226,47 +226,6 @@ def test_decrypt_too_short_input_raises_valueerror():
         decrypt(short, SECRET)
 
 
-# ── v1 backward compat ──────────────────────────────────────────────────────
-
-def _make_v1_ciphertext(plaintext: str, secret_key: str) -> str:
-    """
-    Reproduce the pre-v1.1.0 single-key AES-GCM format so we can prove
-    decrypt() still reads rows written before B3.
-    """
-    import hashlib
-    import os
-
-    from cryptography.hazmat.primitives.ciphers.aead import AESGCM
-    key = hashlib.pbkdf2_hmac(
-        "sha256",
-        secret_key.encode("utf-8"),
-        b"wrapsec-proxy-enc-salt-v1",
-        iterations=100_000,
-        dklen=32,
-    )
-    nonce = os.urandom(12)
-    ct    = AESGCM(key).encrypt(nonce, plaintext.encode("utf-8"), None)
-    return base64.b64encode(nonce + ct).decode("utf-8")
-
-
-def test_decrypt_reads_legacy_v1_ciphertext():
-    """
-    Provider keys written before v1.1.0 have no 'v2:' marker. decrypt()
-    must still return the plaintext so existing installs keep working
-    while the Alembic re-encrypt migration hasn't landed yet.
-    """
-    v1 = _make_v1_ciphertext("sk-legacy-key-1234", SECRET)
-    assert not v1.startswith("v2:")
-    assert decrypt(v1, SECRET) == "sk-legacy-key-1234"
-
-
-def test_decrypt_v1_wrong_key_raises():
-    """Legacy path must also raise on wrong key, not return garbage."""
-    v1 = _make_v1_ciphertext("sk-legacy", SECRET)
-    with pytest.raises(ValueError):
-        decrypt(v1, secret_key="c" * 32)
-
-
 # ── mask() ───────────────────────────────────────────────────────────────────
 
 def test_mask_hides_middle_of_secret():
@@ -300,3 +259,17 @@ def test_mask_boundary_at_nine_chars():
     """
     masked = mask("123456789")
     assert masked == "1234...6789"
+
+
+def test_decrypt_unknown_key_id_raises():
+    """A value with an unrecognized key id is rejected -- the dispatch seam refuses
+    to reinterpret it (no silent legacy fallback)."""
+    ct = encrypt("sk-secret", SECRET)
+    forged = "kms-eu:" + ct.split(":", 1)[1]
+    with pytest.raises(ValueError):
+        decrypt(forged, SECRET)
+
+
+def test_decrypt_missing_key_id_raises():
+    with pytest.raises(ValueError):
+        decrypt("no-colon-here-base64ish", SECRET)

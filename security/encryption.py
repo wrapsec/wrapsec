@@ -5,23 +5,20 @@
 """
 AES-256-GCM envelope encryption for sensitive values stored in the database.
 
-v1.0.x used a single AES key derived from SECRET_KEY to encrypt every
-value directly ("v1 format"). v1.1.0 introduces envelope encryption
-(B3): every ciphertext carries its own random Data Encryption Key (DEK),
-wrapped by a Key Encryption Key (KEK). The KEK is currently derived
-from SECRET_KEY (see security.kek.DerivedSecretKEK) but the abstraction
-lets v1.5+ swap in AWS KMS, GCP KMS, or HashiCorp Vault without any
-call-site change.
+Every ciphertext carries its own random Data Encryption Key (DEK), wrapped by a
+Key Encryption Key (KEK). The KEK is currently derived from SECRET_KEY (see
+security.kek.DerivedSecretKEK); the abstraction lets a KMS/HSM or per-tenant KEK
+arrive later without any call-site change.
 
-Wire format:
-  v2:  b"v2" || wrapped_dek(60) || nonce(12) || ciphertext || tag(16)
-       whole payload base64-encoded, with a leading "v2:" ASCII marker
-       so the format is greppable in the DB.
-  v1:  base64(nonce(12) || ciphertext || tag(16))     -- legacy, still readable
+Wire format (single, final -- D3):
+    "<key_id>:" + base64(wrapped_dek || nonce || ciphertext || tag)
 
-New writes always emit v2. Reads auto-detect by prefix, so existing
-provider keys keep working through the transition. Alembic migration
-0002 re-encrypts existing v1 rows into v2 on upgrade.
+key_id is "primary" (the SECRET_KEY-derived KEK). decrypt() dispatches on key_id
+and raises ValueError on an unknown id -- THAT is the seam: a future per-tenant or
+KMS KEK registers a new key_id and decrypt() routes to it, with no re-encryption
+campaign and no format flag day. There is deliberately no legacy v1/v2 decode
+branch: this is a greenfield with no pre-existing ciphertexts, so a value that does
+not carry a recognized key_id is treated as corrupt, not silently reinterpreted.
 """
 
 from __future__ import annotations
@@ -38,14 +35,16 @@ from security.kek import DerivedSecretKEK
 _NONCE_LEN = 12
 _TAG_LEN   = 16
 _DEK_LEN   = 32
-_V2_PREFIX = "v2:"
+
+# The one key id emitted today. New key ids (per-tenant, KMS) are added here and
+# routed in decrypt(); the wire format never changes.
+_PRIMARY_KEY_ID = "primary"
 
 
 def encrypt(plaintext: str, secret_key: str) -> str:
     """
-    Envelope-encrypt a plaintext string. Returns a v2-format ciphertext:
-    a "v2:" prefix followed by a base64 blob containing the wrapped DEK
-    and the AES-256-GCM ciphertext. Safe to store in the database.
+    Envelope-encrypt a plaintext string. Returns "<key_id>:<base64 payload>" with
+    key_id="primary". Safe to store in the database.
     """
     kek         = DerivedSecretKEK(secret_key)
     dek         = os.urandom(_DEK_LEN)
@@ -55,31 +54,34 @@ def encrypt(plaintext: str, secret_key: str) -> str:
     ct    = AESGCM(dek).encrypt(nonce, plaintext.encode("utf-8"), None)
 
     payload = wrapped_dek + nonce + ct
-    return _V2_PREFIX + base64.b64encode(payload).decode("utf-8")
+    return _PRIMARY_KEY_ID + ":" + base64.b64encode(payload).decode("utf-8")
 
 
 def decrypt(encrypted: str, secret_key: str) -> str:
     """
-    Decrypt a value produced by encrypt() (v2) or the pre-v1.1.0 direct
-    scheme (v1). Raises ValueError on wrong key, tampered ciphertext, or
+    Decrypt a value produced by encrypt(). Dispatches on the leading key_id.
+    Raises ValueError on an unknown key_id, wrong key, tampered ciphertext, or
     malformed input -- callers rely on that single exception type.
     """
+    key_id, sep, b64_payload = encrypted.partition(":")
+    if not sep:
+        raise ValueError("Decryption failed: value carries no key id.")
+    if key_id != _PRIMARY_KEY_ID:
+        raise ValueError(f"Decryption failed: unknown key id '{key_id}'.")
     try:
-        if encrypted.startswith(_V2_PREFIX):
-            return _decrypt_v2(encrypted[len(_V2_PREFIX):], secret_key)
-        return _decrypt_v1(encrypted, secret_key)
+        return _decrypt_primary(b64_payload, secret_key)
     except (InvalidTag, ValueError, binascii.Error) as exc:
         raise ValueError(
             "Decryption failed: data may be corrupt or key may have changed."
         ) from exc
 
 
-def _decrypt_v2(b64_payload: str, secret_key: str) -> str:
+def _decrypt_primary(b64_payload: str, secret_key: str) -> str:
     raw = base64.b64decode(b64_payload.encode("utf-8"))
     kek = DerivedSecretKEK(secret_key)
     wrapped_len = kek.wrapped_length
     if len(raw) < wrapped_len + _NONCE_LEN + _TAG_LEN:
-        raise ValueError("v2 ciphertext too short")
+        raise ValueError("ciphertext too short")
 
     wrapped_dek = raw[:wrapped_len]
     nonce       = raw[wrapped_len : wrapped_len + _NONCE_LEN]
@@ -87,24 +89,6 @@ def _decrypt_v2(b64_payload: str, secret_key: str) -> str:
 
     dek = kek.unwrap(wrapped_dek)
     return AESGCM(dek).decrypt(nonce, ct, None).decode("utf-8")
-
-
-def _decrypt_v1(encrypted: str, secret_key: str) -> str:
-    """Legacy path: single-key AES-GCM. Kept so pre-v1.1.0 rows still read."""
-    import hashlib
-    raw   = base64.b64decode(encrypted.encode("utf-8"))
-    if len(raw) < _NONCE_LEN + _TAG_LEN:
-        raise ValueError("v1 ciphertext too short")
-    nonce = raw[:_NONCE_LEN]
-    ct    = raw[_NONCE_LEN:]
-    key   = hashlib.pbkdf2_hmac(
-        "sha256",
-        secret_key.encode("utf-8"),
-        b"wrapsec-proxy-enc-salt-v1",
-        iterations=100_000,
-        dklen=32,
-    )
-    return AESGCM(key).decrypt(nonce, ct, None).decode("utf-8")
 
 
 def mask(plaintext: str) -> str:
