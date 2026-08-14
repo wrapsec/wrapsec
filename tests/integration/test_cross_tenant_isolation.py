@@ -395,3 +395,89 @@ async def test_update_tenant_profile_scoped_to_caller(auth_client, two_tenant_se
     ra = await auth_client.get("/v1/admin/tenant", headers={"Authorization": f"Bearer {a['admin_token']}"})
     assert ra.json()["id"] == str(a["tenant"].id)
     assert ra.json()["name"] != "Renamed-By-B"
+
+
+# ── The multi-membership edge (D2 Option B's reason to exist) ─────────────────
+
+def _bearer(token: str) -> dict:
+    return {"Authorization": f"Bearer {token}"}
+
+
+def _token(user_id, tenant_id, role, dept_id) -> str:
+    """Mint an access token for one user scoped to one membership. The middleware
+    re-reads role/dept from the DB membership, so these claims only select which
+    membership the session is for."""
+    from unittest.mock import MagicMock
+
+    from services.auth.token import create_access_token
+    u = MagicMock(); u.id = user_id; u.token_version = 1
+    m = MagicMock(); m.tenant_id = tenant_id; m.role = role; m.dept_id = dept_id
+    return create_access_token(u, m)
+
+
+@pytest.mark.asyncio
+async def test_one_user_two_memberships_is_token_scoped_with_independent_roles(
+    auth_client, two_tenant_setup
+):
+    """The sharpest edge of D2 Option B: ONE human holding memberships in both
+    tenants. A token is scoped to a single membership -- it sees only that tenant,
+    and its role is that membership's role. ADMIN in A must not confer admin in B,
+    and neither token can reach the other tenant's data. (Everything else tested
+    uses different humans per tenant -- the pre-membership threat model.)"""
+    from sqlalchemy.ext.asyncio import (
+        AsyncSession,
+        async_sessionmaker,
+        create_async_engine,
+    )
+    from sqlalchemy.pool import NullPool
+
+    from config.settings import get_settings
+    from db.repositories.membership import MembershipRepository
+
+    settings = get_settings()
+    a, b = two_tenant_setup["A"], two_tenant_setup["B"]
+    user_id  = a["admin_user"].id     # already ADMIN in tenant A (fixture)
+    tenant_a = a["tenant"].id
+    tenant_b = b["tenant"].id
+    dept_b   = b["dept"].id
+
+    # Give A's admin a SECOND membership: VIEWER in tenant B.
+    engine = create_async_engine(settings.database_url, poolclass=NullPool)
+    sf = async_sessionmaker(bind=engine, class_=AsyncSession, expire_on_commit=False)
+    try:
+        async with sf() as db:
+            await MembershipRepository(db).upsert_for_user(user_id, tenant_b, "VIEWER", dept_b)
+            await db.commit()
+
+        token_a = _token(user_id, tenant_a, "ADMIN",  None)    # session in A
+        token_b = _token(user_id, tenant_b, "VIEWER", dept_b)  # session in B
+
+        # 1) Same human, two tokens -> two different tenant profiles.
+        pa = await auth_client.get("/v1/admin/tenant", headers=_bearer(token_a))
+        pb = await auth_client.get("/v1/admin/tenant", headers=_bearer(token_b))
+        assert pa.status_code == 200 and pb.status_code == 200
+        assert pa.json()["id"] == str(tenant_a)
+        assert pb.json()["id"] == str(tenant_b)
+
+        # 2) A token cannot reach the OTHER tenant's resources (either direction),
+        #    even though the same user is a member of both.
+        assert (await auth_client.get(f"/v1/keys/{b['api_key_id']}", headers=_bearer(token_a))).status_code == 404
+        assert (await auth_client.get(f"/v1/keys/{a['api_key_id']}", headers=_bearer(token_b))).status_code == 404
+
+        # 3) List data is scoped to the token's tenant, not the user's union.
+        la = await auth_client.get("/v1/audit/logs", headers=_bearer(token_a))
+        traces_a = {i["trace_id"] for i in la.json().get("items", [])}
+        assert a["audit_trace"] in traces_a and b["audit_trace"] not in traces_a
+
+        # 4) Role independence: ADMIN in A does NOT confer admin in B. Acting in B
+        #    is only possible with the B token, which carries VIEWER -> admin write
+        #    is forbidden ...
+        thresholds = {"block_threshold": 0.8, "sanitize_threshold": 0.2}
+        rb = await auth_client.put("/v1/settings/thresholds", json=thresholds, headers=_bearer(token_b))
+        assert rb.status_code == 403
+        # ... while the same human's A token (ADMIN in A) may admin A.
+        ra = await auth_client.put("/v1/settings/thresholds", json=thresholds, headers=_bearer(token_a))
+        assert ra.status_code == 200
+    finally:
+        # The extra B-membership cascades when the fixture deletes the user by id.
+        await engine.dispose()
