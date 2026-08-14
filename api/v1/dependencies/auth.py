@@ -135,6 +135,25 @@ def require_any_admin():
     return _dependency
 
 
+def require_platform_operator():
+    """
+    Gate for cross-tenant (control-plane) authority: tenant provisioning, suspend,
+    reactivate. Today this is the admin API key sentinel (key:admin); real
+    platform-operator identities replace it later -- this is the single swap point.
+    A tenant ADMIN user is NOT a platform operator (they hold authority only within
+    their own tenant).
+
+    Usage:
+        principal: Principal = Depends(require_platform_operator())
+    """
+    async def _dependency(request: Request) -> Principal:
+        principal = _get_principal_from_state(request)
+        if getattr(request.state, "key_id", None) != "key:admin":
+            raise ForbiddenError("Platform-operator access required.")
+        return principal
+    return _dependency
+
+
 def endpoint_rate_limit(limit_setting: str):
     """
     Dependency factory - per-identity sliding-window rate limit.

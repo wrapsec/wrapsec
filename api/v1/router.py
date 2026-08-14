@@ -23,6 +23,7 @@ from api.v1.endpoints import (
     webhooks,
 )
 from api.v1.endpoints.admin import email as admin_email
+from api.v1.endpoints.admin import tenants as admin_tenants
 from api.v1.endpoints.admin import users
 
 router = APIRouter()
@@ -46,6 +47,7 @@ router.include_router(proxy_interactions.router,  prefix="/v1/proxy",           
 router.include_router(auth.router,                prefix="/v1/auth",               tags=["Auth"])
 router.include_router(users.router,               prefix="/v1/admin/users",        tags=["Users"])
 router.include_router(admin_email.router,          prefix="/v1/admin/email",        tags=["Email Audit"])
+router.include_router(admin_tenants.router,        prefix="/v1/admin/tenants",      tags=["Platform"])
 
 # ── First-run setup ────────────────────────────────────────────────────────────
 router.include_router(setup.router,               prefix="/v1/setup",              tags=["Setup"])

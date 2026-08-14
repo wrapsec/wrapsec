@@ -45,18 +45,15 @@ async def seed_default_tenant() -> None:
     import logging
     logger = logging.getLogger("wrapsec.seed")
     try:
-        from db.models import TenantModel
         from db.repositories.tenant import TenantRepository
         from db.session import AsyncSessionFactory
         async with AsyncSessionFactory() as db:
             repo   = TenantRepository(db)
             tenant = await repo.get_default()
             if not tenant:
-                db.add(TenantModel(
-                    slug          = "default",
-                    name          = "Default",
-                    description   = "Default tenant",
-                ))
+                # Same create path platform-operator provisioning uses, so the
+                # default tenant is structurally identical to any provisioned one.
+                await repo.create(slug="default", name="Default", description="Default tenant")
                 await db.commit()
                 logger.info("seed default tenant created")
     except Exception as e:
