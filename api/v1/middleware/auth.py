@@ -246,37 +246,63 @@ async def _get_user_cached(user_uuid: UUID, user_id_str: str):
         except Exception as e:
             logger.debug("auth user cache read failed user_id=%s error=%s", user_id_str, e)
 
-    # Cache miss or test mode - DB lookup
+    # Cache miss or test mode - DB lookup. Loads identity plus the user's
+    # memberships (the authz source under D2 Option B): a map keyed by tenant_id.
+    from db.repositories.membership import MembershipRepository
     from db.repositories.user import UserRepository
     try:
         engine, session_ctx = await _get_db_session()
         async with session_ctx as session:
             user = await UserRepository(session).get_by_id(user_uuid)
+            memberships: dict = {}
+            if user is not None:
+                mems = await MembershipRepository(session).list_for_user(user.id)
+                memberships = {
+                    str(m.tenant_id): {
+                        "role":    m.role,
+                        "dept_id": str(m.dept_id) if m.dept_id else None,
+                    }
+                    for m in mems
+                }
+                # Transitional fallback (removed in the contract phase): a user
+                # with no membership row is synthesized from the legacy user
+                # columns so sessions keep working while both sources coexist.
+                # Looked up by the token's tenant below, so a cross-tenant token
+                # is still rejected (the synthesized entry is the user's own tenant).
+                if not memberships and getattr(user, "tenant_id", None):
+                    memberships = {
+                        str(user.tenant_id): {
+                            "role":    user.role,
+                            "dept_id": str(user.dept_id) if user.dept_id else None,
+                        }
+                    }
         if engine:
             await engine.dispose()
     except Exception as e:
         logger.error("auth JWT db_lookup_failed user_id=%s error=%s", user_id_str, e)
         return _USER_DB_ERROR
 
+    if user is None:
+        return None
+
+    payload = {
+        "id":                    str(user.id),
+        "is_active":             user.is_active,
+        "force_password_change": user.force_password_change,
+        "token_version":         user.token_version,
+        "email":                 user.email,
+        "memberships":           memberships,
+    }
+
     # Write to cache (production only - skip in tests)
-    if user and not _TESTING:
+    if not _TESTING:
         try:
             from cache.redis_client import get_redis
-            payload = {
-                "id":                    str(user.id),
-                "is_active":             user.is_active,
-                "tenant_id":             str(user.tenant_id) if user.tenant_id else None,
-                "dept_id":               str(user.dept_id)   if user.dept_id   else None,
-                "role":                  user.role,
-                "force_password_change": user.force_password_change,
-                "token_version":         user.token_version,
-                "email":                 user.email,
-            }
             await get_redis().set(cache_key, json.dumps(payload), ex=_USER_CACHE_TTL)
         except Exception as e:
             logger.debug("auth user cache write failed user_id=%s error=%s", user_id_str, e)
 
-    return user  # None if not found, ORM object if found
+    return SimpleNamespace(**payload)
 
 
 async def _get_db_session():
@@ -481,25 +507,24 @@ class AuthMiddleware(BaseHTTPMiddleware):
                            user_id_str, request.url.path)
             return _unauthorized(request, "account_disabled")
 
-        # Step 2d - tenant_id present
-        if not user.tenant_id:
-            logger.error("auth JWT user_missing_tenant user_id=%s path=%s",
-                         user_id_str, request.url.path)
-            return _unauthorized(request, "invalid_token")
-
-        # Step 3 - cross-validate tenant_id
-        if str(user.tenant_id) != payload.get("tenant_id"):
+        # Step 3 - resolve the membership the token is scoped to (D2 Option B).
+        # The user must hold a membership in the token's tenant; role/dept are
+        # sourced from it, so a token can never carry authz the DB no longer
+        # grants. A token whose tenant the user is not a member of is rejected -
+        # this is the cross-tenant boundary that the old user.tenant_id check was.
+        token_tenant = payload.get("tenant_id")
+        memberships  = getattr(user, "memberships", None) or {}
+        membership   = memberships.get(token_tenant)
+        if membership is None:
             logger.error(
-                "auth JWT tenant_mismatch user_id=%s "
-                "token_tenant=%s db_tenant=%s path=%s",
-                user_id_str, payload.get("tenant_id"),
-                str(user.tenant_id), request.url.path,
+                "auth JWT no_membership_for_tenant user_id=%s token_tenant=%s path=%s",
+                user_id_str, token_tenant, request.url.path,
             )
             return _unauthorized(request, "invalid_token")
 
         # Step 3b - dept_id mismatch log (warning only)
         token_dept = payload.get("dept_id")
-        db_dept    = str(user.dept_id) if user.dept_id else None
+        db_dept    = membership["dept_id"]
         if token_dept != db_dept:
             logger.warning(
                 "auth_event JWT_DEPT_MISMATCH user_id=%s token_dept=%s db_dept=%s",
@@ -521,17 +546,18 @@ class AuthMiddleware(BaseHTTPMiddleware):
                 trace_id=getattr(request.state, "trace_id", "") or "",
             )
 
-        # Step 5 - populate request.state from DB values
+        # Step 5 - populate request.state: identity from the user, authz from the
+        # resolved membership (role/dept/tenant).
         request.state.principal_type = "user"
         request.state.key_id         = f"user:{user.id}"
         request.state.key_name       = user.email
         request.state.key_type       = "live"
-        request.state.is_admin       = (user.role == "ADMIN")
-        request.state.dept_id        = str(user.dept_id)   if user.dept_id   else None
-        request.state.tenant_id      = str(user.tenant_id)
+        request.state.is_admin       = (membership["role"] == "ADMIN")
+        request.state.dept_id        = membership["dept_id"]
+        request.state.tenant_id      = token_tenant
         request.state.app_id         = None
         request.state.user_id        = str(user.id)
-        request.state.user_role      = user.role
+        request.state.user_role      = membership["role"]
 
         # Step 6 - force_password_change enforcement
         if user.force_password_change and request.url.path not in FORCE_CHANGE_ALLOWED:
