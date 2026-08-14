@@ -3,10 +3,12 @@
 # WrapSec v1.0 | AI Security Gateway - https://wrapsec.com
 
 import uuid
+from datetime import timedelta
 
-from fastapi import APIRouter, Depends, Request
+from fastapi import APIRouter, Depends, Query, Request
 from fastapi.responses import JSONResponse
 from pydantic import BaseModel, Field, field_validator
+from sqlalchemy import text
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from api.v1.dependencies.auth import get_current_principal, require_admin
@@ -14,7 +16,7 @@ from api.v1.dependencies.db import get_db
 from db.repositories.tenant import TenantRepository
 from domain.entities.principal import Principal
 from services.localization import validate_locale_input
-from services.time import to_iso_z
+from services.time import parse_utc_iso, to_iso_z, utc_now
 
 router = APIRouter()
 
@@ -106,3 +108,64 @@ async def update_tenant(
     await db.commit()
     await db.refresh(tenant)
     return JSONResponse(content=_format(tenant, is_admin=True))
+
+@router.get("/usage")
+async def tenant_usage(
+    request:    Request,
+    from_:      str | None   = Query(None, alias="from"),
+    to:         str | None   = Query(None, alias="to"),
+    db:         AsyncSession  = Depends(get_db),
+    _principal: Principal     = Depends(get_current_principal),
+):
+    """
+    Tenant-scoped usage aggregate over audit_logs: scan/proxy request counts and
+    blocked/sanitized decisions, totalled and broken down by day, for the caller's
+    tenant. The metering contract for a future billing plugin, proven while cheap --
+    it rests on every request path (scan/batch/proxy/cache-hit) writing an audit row.
+    Window is [from, to); defaults to the last 30 days. Scoped to request.state.tenant_id.
+    """
+    tid = getattr(request.state, "tenant_id", None)
+    if not tid:
+        return JSONResponse(status_code=404, content={"error": "No tenant found"})
+
+    try:
+        end   = parse_utc_iso(to) if to else utc_now()
+        start = parse_utc_iso(from_) if from_ else end - timedelta(days=30)
+    except (ValueError, TypeError):
+        return JSONResponse(status_code=400, content={
+            "error": {"code": "INVALID_REQUEST", "message": "from/to must be ISO-8601 timestamps."}})
+    if start >= end:
+        return JSONResponse(status_code=400, content={
+            "error": {"code": "INVALID_REQUEST", "message": "'from' must be before 'to'."}})
+
+    rows = (await db.execute(text(
+        "SELECT date_trunc('day', created_at) AS day, execution_mode AS mode, "
+        "       decision AS decision, COUNT(*) AS n "
+        "FROM audit_logs "
+        "WHERE tenant_id = :tid AND created_at >= :start AND created_at < :end "
+        "GROUP BY day, execution_mode, decision"
+    ), {"tid": str(tid), "start": start, "end": end})).all()
+
+    by_day: dict[str, dict] = {}
+    totals = {"scan": 0, "proxy": 0, "blocked": 0, "sanitized": 0, "total": 0}
+    for day, mode, decision, n in rows:
+        key    = to_iso_z(day)[:10]
+        bucket = by_day.setdefault(
+            key, {"day": key, "scan": 0, "proxy": 0, "blocked": 0, "sanitized": 0, "total": 0})
+        n = int(n)
+        bucket["total"] += n; totals["total"] += n
+        if mode == "proxy":
+            bucket["proxy"] += n; totals["proxy"] += n
+        else:
+            bucket["scan"] += n;  totals["scan"] += n
+        if decision == "BLOCK":
+            bucket["blocked"] += n; totals["blocked"] += n
+        elif decision == "SANITIZE":
+            bucket["sanitized"] += n; totals["sanitized"] += n
+
+    return JSONResponse(content={
+        "from":   to_iso_z(start),
+        "to":     to_iso_z(end),
+        "totals": totals,
+        "by_day": [by_day[k] for k in sorted(by_day)],
+    })

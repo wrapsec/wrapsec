@@ -78,8 +78,9 @@ TENANT_SCOPED = {
     "/v1/admin/webhooks/{endpoint_id}/test",
     # Email audit
     "/v1/admin/email", "/v1/admin/email/{email_id}", "/v1/admin/email/summary",
-    # Own tenant profile
+    # Own tenant profile + usage aggregate
     "/v1/admin/tenant",
+    "/v1/admin/tenant/usage",
     # Audit
     "/v1/audit/logs", "/v1/audit/analytics", "/v1/audit/attribution",
     "/v1/audit/by-source", "/v1/audit/export", "/v1/audit/stats",
