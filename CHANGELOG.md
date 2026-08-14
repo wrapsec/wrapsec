@@ -2,6 +2,40 @@
 
 All notable changes to WrapSec are documented here.
 
+## [1.8.7] - 2026-08-14
+
+Security-review hardening. Fixes from an independent code review, spanning
+credential lifecycle, authorization consistency, audit completeness, and input
+trust boundaries. No breaking changes.
+
+### Fixed
+- **API key expiry is enforced.** `POST /v1/keys` now persists `expires_at`; it
+  was silently dropped, so keys created "to expire" never did.
+- **Proxy-settings authorization.** GET, DELETE, and the health probe on
+  `/v1/settings/proxy` now require admin, matching PUT. A non-admin could
+  previously read the provider config, probe it, or delete it.
+- **Cache hits are audited.** Semantic-cache hits now write a tenant-attributed,
+  hash-chained audit record, so repeated allowed prompts no longer vanish from
+  the audit trail and stats.
+- **Client IP attribution.** `X-Forwarded-For` is resolved from the rightmost
+  untrusted hop (the one a trusted proxy appended), not the client-controlled
+  leftmost value, closing an IP-spoofing gap behind a trusted proxy.
+- **Fail-closed data retention.** An unrecognized `data_storage_mode` now masks
+  and never stores raw prompt/response; only an explicit `full` opts into
+  plaintext retention.
+- **Newline-safe proxy sanitization.** Scan-all sanitization redacts each user
+  message independently instead of splitting a joined blob, which corrupted
+  message boundaries when a message contained a newline.
+- **Department-scoped key visibility.** Non-admin principals now see and read
+  only their own department's API keys, not every key in the tenant.
+- **Consistent SSRF validation.** The generic department/application
+  `policy_override` now validates embedded `base_url`s, matching the dedicated
+  policy PATCH endpoints.
+- **First-run setup race.** First-admin creation is serialized with an advisory
+  lock, so two concurrent unauthenticated requests cannot each create an admin.
+- **Metrics endpoint** fails closed with 401 when neither a metrics token nor an
+  admin key is configured.
+
 ## [1.8.6] - 2026-08-14
 
 Multi-tenant attribution and scoping fixes surfaced by a code review.
