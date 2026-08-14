@@ -9,7 +9,7 @@ from fastapi.responses import JSONResponse
 from pydantic import BaseModel, SecretStr, field_validator, model_validator
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from api.v1.dependencies.auth import get_current_principal, require_admin
+from api.v1.dependencies.auth import require_admin, require_permission
 from api.v1.dependencies.db import get_db
 from api.v1.middleware.auth import get_client_ip
 from cache.redis_client import get_redis
@@ -119,7 +119,7 @@ class LayersUpdateSchema(BaseModel):
 @router.get("/thresholds")
 async def get_thresholds(
     db:        AsyncSession = Depends(get_db),
-    _principal = Depends(get_current_principal),
+    _principal = Depends(require_permission("settings:read")),
 ):
     """
     Returns the active block and sanitize thresholds.
@@ -178,7 +178,7 @@ async def update_thresholds(
 @router.get("/layers")
 async def get_layers(
     db:        AsyncSession = Depends(get_db),
-    _principal = Depends(get_current_principal),
+    _principal = Depends(require_permission("settings:read")),
 ):
     """Returns the active detection layer configuration (rule, ML, LLM enabled flags)."""
     repo   = _BoundTenantSettings(db, _principal)
@@ -261,7 +261,7 @@ class LLMSettingsSchema(BaseModel):
 @router.get("/llm")
 async def get_llm_settings(
     db:        AsyncSession = Depends(get_db),
-    _principal = Depends(get_current_principal),
+    _principal = Depends(require_permission("settings:read")),
 ):
     """Returns the active LLM layer configuration. api_key is masked in the response - never plaintext."""
     repo    = _BoundTenantSettings(db, _principal)
@@ -352,7 +352,7 @@ class RetentionSettingsSchema(BaseModel):
 @router.get("/retention")
 async def get_retention_settings(
     db:        AsyncSession = Depends(get_db),
-    _principal = Depends(get_current_principal),
+    _principal = Depends(require_permission("settings:read")),
 ):
     """
     Returns the audit log retention period in days.
@@ -419,7 +419,7 @@ class RateLimitUpdateSchema(BaseModel):
 @router.get("/rate_limit")
 async def get_rate_limit_settings(
     db:        AsyncSession = Depends(get_db),
-    _principal = Depends(get_current_principal),
+    _principal = Depends(require_permission("settings:read")),
 ):
     """
     Returns the current global rate limit.
@@ -476,7 +476,7 @@ async def update_rate_limit_settings(
 
 @router.get("/storage")
 async def get_storage_settings(
-    _principal = Depends(get_current_principal),
+    _principal = Depends(require_permission("settings:read")),
 ):
     """
     Returns the current data storage mode and proxy retention period.
@@ -524,7 +524,7 @@ class AdminLimitsUpdateSchema(BaseModel):
 @router.get("/admin_limits")
 async def get_admin_limits(
     db:         AsyncSession = Depends(get_db),
-    _principal  = Depends(get_current_principal),
+    _principal  = Depends(require_permission("settings:read")),
 ):
     """
     Returns the active admin operation rate limits.

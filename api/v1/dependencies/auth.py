@@ -135,6 +135,29 @@ def require_any_admin():
     return _dependency
 
 
+def require_permission(permission: str, *, allow_trial: bool = False):
+    """
+    FastAPI dependency factory - requires the principal to hold `permission`
+    (ROLE_PERMISSIONS wildcard match). Trial keys are denied by default: they are
+    probationary and must not read calibration data (thresholds/layer status).
+
+    This is what turns ROLE_PERMISSIONS from scaffolding into a load-bearing check,
+    applied one endpoint family at a time. ADMIN holds "*"; DEVELOPER and AUDITOR
+    hold "settings:read"; VIEWER does not.
+
+    Usage:
+        principal: Principal = Depends(require_permission("settings:read"))
+    """
+    async def _dependency(request: Request) -> Principal:
+        principal = _get_principal_from_state(request)
+        if not allow_trial and getattr(request.state, "key_type", None) == "trial":
+            raise ForbiddenError("Trial keys cannot access this resource.")
+        if not principal.has_permission(permission):
+            raise ForbiddenError(f"Insufficient permissions. Required: {permission}.")
+        return principal
+    return _dependency
+
+
 def require_platform_operator():
     """
     Gate for cross-tenant (control-plane) authority: tenant provisioning, suspend,
