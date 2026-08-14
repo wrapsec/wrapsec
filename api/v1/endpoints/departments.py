@@ -25,7 +25,7 @@ from domain.entities.principal import Principal
 from domain.enums import AdminEventAction
 from errors.exceptions import ConflictError, NotFoundError, ValidationError
 from security.encryption import decrypt, encrypt, mask
-from security.url_validator import validate_llm_base_url
+from security.url_validator import validate_llm_base_url, validate_policy_override_urls
 from services.slug import is_reserved_slug, slugify
 from services.time import to_iso_z
 
@@ -192,6 +192,13 @@ async def create_department(
 
     if is_reserved_slug(body.slug):
         raise ValidationError(f"slug '{body.slug}' is reserved")
+
+    # C2: SSRF-validate any base_url in the generic policy_override, matching the
+    # dedicated /policy/llm and /policy/proxy PATCH endpoints.
+    try:
+        validate_policy_override_urls(body.policy_override)
+    except ValueError as e:
+        raise ValidationError(str(e)) from None
 
     repo = DepartmentRepository(db)
     if await repo.get_by_slug(tenant_id, body.slug):
@@ -393,6 +400,11 @@ async def update_department(
     # Use exclude_unset=True so explicitly set null values (e.g. policy_override=null)
     # are included - filtering "if v is not None" would silently drop them
     data = body.model_dump(exclude_unset=True)
+    if "policy_override" in data:
+        try:
+            validate_policy_override_urls(data["policy_override"])
+        except ValueError as e:
+            raise ValidationError(str(e)) from None
     record = await repo.update(uuid.UUID(dept_id), data)
     if not record:
         raise NotFoundError("department", dept_id)

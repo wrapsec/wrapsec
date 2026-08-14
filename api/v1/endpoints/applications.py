@@ -22,7 +22,7 @@ from domain.entities.principal import Principal
 from domain.enums import AdminEventAction
 from errors.exceptions import ConflictError, NotFoundError, ValidationError
 from security.encryption import decrypt, encrypt, mask
-from security.url_validator import validate_llm_base_url
+from security.url_validator import validate_llm_base_url, validate_policy_override_urls
 from services.policy_resolver import resolve_policy
 from services.slug import is_reserved_slug, slugify
 from services.time import to_iso_z
@@ -144,6 +144,13 @@ async def create_application(
     if is_reserved_slug(body.slug):
         raise ValidationError(f"slug '{body.slug}' is reserved")
 
+    # C2: SSRF-validate any base_url in the generic policy_override, matching the
+    # dedicated /policy/llm and /policy/proxy PATCH endpoints.
+    try:
+        validate_policy_override_urls(body.policy_override)
+    except ValueError as e:
+        raise ValidationError(str(e)) from None
+
     # Validate department belongs to authenticated tenant
     dept_repo = DepartmentRepository(db)
     dept      = await dept_repo.get_by_id(uuid.UUID(body.dept_id))
@@ -228,6 +235,11 @@ async def update_application(
     if not existing or str(existing.tenant_id) != request.state.tenant_id:
         raise NotFoundError("application", str(app_id))
     data = {k: v for k, v in body.model_dump().items() if v is not None}
+    if "policy_override" in data:
+        try:
+            validate_policy_override_urls(data["policy_override"])
+        except ValueError as e:
+            raise ValidationError(str(e)) from None
     if "metadata" in data:
         data["metadata_"] = data.pop("metadata")
     record = await repo.update(app_id, data)

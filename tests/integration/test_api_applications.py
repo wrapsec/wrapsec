@@ -254,6 +254,21 @@ async def test_get_application_policy_no_override(client, admin_jwt_headers, tes
 
 
 @pytest.mark.asyncio
+async def test_application_policy_override_ssrf_base_url_rejected(client, admin_jwt_headers, test_db):
+    # C2: SSRF-validate base_urls in the generic policy_override on update.
+    tid = _admin_tenant_id(admin_jwt_headers)
+    did = await _make_dept(test_db, tid)
+    aid = await _create_app(client, admin_jwt_headers, did, slug="ssrf-app")
+    r = await client.put(
+        f"{BASE}/{aid}",
+        json={"policy_override": {"llm": {"base_url": "http://169.254.169.254/"}}},
+        headers=admin_jwt_headers,
+    )
+    assert r.status_code == 400
+    assert r.json()["error"]["code"] == "INVALID_REQUEST"
+
+
+@pytest.mark.asyncio
 async def test_set_application_policy_resolves_override(client, admin_jwt_headers, test_db):
     tid = _admin_tenant_id(admin_jwt_headers)
     did = await _make_dept(test_db, tid)

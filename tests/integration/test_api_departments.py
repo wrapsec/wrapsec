@@ -164,6 +164,32 @@ async def test_department_policy_with_override(client, admin_jwt_headers, test_d
 
 
 @pytest.mark.asyncio
+async def test_department_policy_override_ssrf_base_url_rejected(client, admin_jwt_headers, test_db):
+    # C2: the generic policy_override PUT must SSRF-validate embedded base_urls,
+    # like the dedicated /policy/llm and /policy/proxy PATCH endpoints.
+    tid = _admin_tenant_id(admin_jwt_headers)
+    did = await _seed_dept(test_db, tid)
+    r = await client.put(
+        f"{BASE}/{did}",
+        json={"policy_override": {"llm": {"base_url": "http://169.254.169.254/latest"}}},
+        headers=admin_jwt_headers,
+    )
+    assert r.status_code == 400
+    assert r.json()["error"]["code"] == "INVALID_REQUEST"
+
+
+@pytest.mark.asyncio
+async def test_create_department_ssrf_base_url_rejected(client, admin_jwt_headers):
+    r = await client.post(
+        BASE,
+        json={"slug": "ssrf-dept", "name": "X",
+              "policy_override": {"proxy_provider": {"base_url": "http://10.0.0.1/v1"}}},
+        headers=admin_jwt_headers,
+    )
+    assert r.status_code == 400
+
+
+@pytest.mark.asyncio
 async def test_department_policy_without_override(client, admin_jwt_headers):
     did = await _create_dept(client, admin_jwt_headers, slug="no-override")
     r = await client.get(f"{BASE}/{did}/policy", headers=admin_jwt_headers)

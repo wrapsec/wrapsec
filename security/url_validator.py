@@ -73,3 +73,20 @@ def validate_llm_base_url(v: str) -> str:
     if is_ssrf_target(v):
         raise ValueError("base_url must not target private or internal addresses")
     return v
+
+
+def validate_policy_override_urls(override: dict | None) -> None:
+    """SSRF-validate any base_url embedded in a policy_override's llm /
+    proxy_provider sections.
+
+    The dedicated /policy/llm and /policy/proxy PATCH endpoints validate base_url,
+    but the generic policy_override on department/application create+update stores
+    the dict verbatim. Call this there so both write paths enforce the same guard.
+    Raises ValueError on rejection.
+    """
+    if not isinstance(override, dict):
+        return
+    for section in ("llm", "proxy_provider"):
+        sub = override.get(section)
+        if isinstance(sub, dict) and sub.get("base_url"):
+            validate_llm_base_url(sub["base_url"])
