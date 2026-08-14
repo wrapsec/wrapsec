@@ -216,8 +216,11 @@ async def login(
     # Effective locale for the session (User -> Tenant -> System -> English), so
     # the BFF can set the wrapsec_locale cookie next-intl reads. Resolution stays
     # here in WrapSec, not on the frontend.
+    # Authz view comes from the membership the session is scoped to; locale
+    # preference stays on the user (identity).
     from db.repositories.tenant import TenantRepository
-    _tenant = await TenantRepository(db).get_by_id(result.user.tenant_id) if result.user.tenant_id else None
+    _mem    = result.membership
+    _tenant = await TenantRepository(db).get_by_id(_mem.tenant_id)
     _resolved_locale = resolve_locale(result.user.locale, _tenant.locale if _tenant else None)
 
     response = JSONResponse(
@@ -231,9 +234,9 @@ async def login(
             "user": {
                 "id":        str(result.user.id),
                 "email":     result.user.email,
-                "role":      result.user.role,
-                "dept_id":   str(result.user.dept_id)   if result.user.dept_id   else None,
-                "tenant_id": str(result.user.tenant_id) if result.user.tenant_id else None,
+                "role":      _mem.role,
+                "dept_id":   str(_mem.dept_id) if _mem.dept_id else None,
+                "tenant_id": str(_mem.tenant_id),
             },
         },
     )
@@ -287,7 +290,7 @@ async def refresh(
     # propagates to a live session without re-login (User -> Tenant -> System ->
     # English). The BFF updates wrapsec_locale from this.
     from db.repositories.tenant import TenantRepository
-    _tenant = await TenantRepository(db).get_by_id(result.user.tenant_id) if result.user.tenant_id else None
+    _tenant = await TenantRepository(db).get_by_id(result.membership.tenant_id)
     _resolved_locale = resolve_locale(result.user.locale, _tenant.locale if _tenant else None)
 
     response = JSONResponse(
@@ -382,20 +385,25 @@ async def _blacklist_current_access_token(request: Request) -> None:
     await blacklist_jti(jti, ttl)
 
 
-async def _me_payload(db: AsyncSession, user) -> dict:
+async def _me_payload(db: AsyncSession, user, principal: Principal) -> dict:
     """Profile response, including the stored locale preference and the effective
     (resolved) locale. resolved_locale applies the User -> Tenant -> System ->
-    English precedence, validating each candidate against the allowlist."""
+    English precedence, validating each candidate against the allowlist.
+
+    Authz view (role/dept/tenant) comes from the principal -- the membership the
+    session is scoped to -- not the user row."""
+    import uuid as _uuid
+
     from db.repositories.tenant import TenantRepository
 
-    tenant        = await TenantRepository(db).get_by_id(user.tenant_id) if user.tenant_id else None
+    tenant        = await TenantRepository(db).get_by_id(_uuid.UUID(principal.tenant_id))
     tenant_locale = tenant.locale if tenant else None
     return {
         "id":                    str(user.id),
         "email":                 user.email,
-        "role":                  user.role,
-        "dept_id":               str(user.dept_id)   if user.dept_id   else None,
-        "tenant_id":             str(user.tenant_id) if user.tenant_id else None,
+        "role":                  principal.roles[0] if principal.roles else None,
+        "dept_id":               principal.dept_id,
+        "tenant_id":             principal.tenant_id,
         "is_active":             user.is_active,
         "force_password_change": user.force_password_change,
         "last_login_at":         to_iso_z(user.last_login_at) if user.last_login_at else None,
@@ -448,7 +456,7 @@ async def me(
             params={"resource": "User"},
         )
 
-    return JSONResponse(status_code=200, content=await _me_payload(db, user))
+    return JSONResponse(status_code=200, content=await _me_payload(db, user, principal))
 
 
 @router.patch("/me")
@@ -491,7 +499,7 @@ async def update_me(
                 params={"resource": "User"},
             )
 
-    return JSONResponse(status_code=200, content=await _me_payload(db, user))
+    return JSONResponse(status_code=200, content=await _me_payload(db, user, principal))
 
 
 @router.post("/change-password")
