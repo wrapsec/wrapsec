@@ -467,7 +467,7 @@ async def test_rotate_key_grace_out_of_bounds_422(client, admin_jwt_headers, adm
 
 @pytest.mark.asyncio
 async def test_rotate_revoked_key_404(client, admin_jwt_headers, admin_key_scope):
-    # A revoked key cannot be rotated. The lookup (get_by_key_id) filters
+    # A revoked key cannot be rotated. The lookup (get_active_by_key_id) filters
     # revoked == False, so a revoked key resolves to None and the endpoint 404s
     # before reaching its KEY_REVOKED branch (that branch is therefore
     # unreachable via this path). 404 also avoids confirming the key existed.

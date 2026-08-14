@@ -18,7 +18,14 @@ class ApiKeyRepository(BaseRepository):
         await self.flush()
         return record
 
-    async def get_by_key_id(self, key_id: str) -> APIKeyModel | None:
+    async def get_active_by_key_id(self, key_id: str) -> APIKeyModel | None:
+        """
+        Resolve a NON-revoked key by its key_id. The name makes the revoked filter
+        explicit at every call site: auth-adjacent and mutation paths must use this
+        so a revoked key can never be re-activated or re-authenticated. A
+        history/admin view that must show revoked keys should add a separate
+        unfiltered lookup deliberately -- do not relax this one.
+        """
         result = await self.session.execute(
             select(APIKeyModel).where(
                 APIKeyModel.key_id  == key_id,
@@ -49,7 +56,7 @@ class ApiKeyRepository(BaseRepository):
         return list(result.scalars().all())
 
     async def revoke(self, key_id: str) -> APIKeyModel | None:
-        record = await self.get_by_key_id(key_id)
+        record = await self.get_active_by_key_id(key_id)
         if not record:
             return None
         record.revoked = True

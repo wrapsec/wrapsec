@@ -253,7 +253,7 @@ async def get_key(
 ):
     """Returns full metadata for a single key by key_id. 404 if not found."""
     repo   = ApiKeyRepository(db)
-    record = await repo.get_by_key_id(key_id)
+    record = await repo.get_active_by_key_id(key_id)
     if not record or str(record.tenant_id) != request.state.tenant_id:
         raise NotFoundError("key", key_id)
     # C1: non-admin principals are confined to their own department's keys.
@@ -288,7 +288,7 @@ async def update_key(
 ):
     """Renames an API key. Does not rotate the key secret. Auth: JWT + ADMIN required."""
     repo   = ApiKeyRepository(db)
-    record = await repo.get_by_key_id(key_id)
+    record = await repo.get_active_by_key_id(key_id)
     if not record or str(record.tenant_id) != request.state.tenant_id:
         raise NotFoundError("key", key_id)
 
@@ -314,7 +314,7 @@ async def delete_key(
     Auth: JWT + ADMIN role required.
     """
     repo   = ApiKeyRepository(db)
-    record = await repo.get_by_key_id(key_id)
+    record = await repo.get_active_by_key_id(key_id)
     if not record or str(record.tenant_id) != request.state.tenant_id:
         raise NotFoundError("key", key_id)
 
@@ -354,9 +354,9 @@ async def rotate_key(
     Returns the new key secret - shown once, store securely.
     """
     repo   = ApiKeyRepository(db)
-    # get_by_key_id only returns non-revoked keys, so a revoked key resolves to
+    # get_active_by_key_id only returns non-revoked keys, so a revoked key resolves to
     # None and 404s here - no separate revoked-key branch is reachable.
-    record = await repo.get_by_key_id(key_id)
+    record = await repo.get_active_by_key_id(key_id)
     if not record or str(record.tenant_id) != request.state.tenant_id:
         raise NotFoundError("key", key_id)
 
