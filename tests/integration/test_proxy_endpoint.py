@@ -926,3 +926,15 @@ async def test_proxy_audit_row_tenant_attributed_and_chained(client, test_db):
     listed = await client.get("/v1/audit/logs", headers={"x-api-key": raw})
     assert listed.status_code == 200
     assert trace in {i["trace_id"] for i in listed.json()["items"]}
+
+@pytest.mark.asyncio
+async def test_proxy_rejects_dashboard_jwt(auth_client, auth_setup):
+    """2.3 (M5 pt3): the proxy is API-key-only. A dashboard (JWT) session is
+    rejected with 403 PROXY_REQUIRES_API_KEY, before any provider is contacted."""
+    resp = await auth_client.post(
+        "/v1/chat/completions",
+        json={"model": "openai/gpt-4o", "messages": [{"role": "user", "content": "hi"}]},
+        headers={"Authorization": f"Bearer {auth_setup['admin_token']}"},
+    )
+    assert resp.status_code == 403
+    assert resp.json()["error"]["code"] == "PROXY_REQUIRES_API_KEY"

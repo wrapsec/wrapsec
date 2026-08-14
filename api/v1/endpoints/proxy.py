@@ -65,6 +65,8 @@ from engine.proxy.router import (
     resolve_provider,
     resolve_provider_from_dict,
 )
+from errors.catalog import ErrorCode
+from errors.response import error_response as _catalog_error_response
 from observability.metrics import record_proxy_request, record_request
 from services.gateway.service import GatewayService
 from services.policy_resolver import resolve_policy
@@ -420,8 +422,17 @@ async def proxy_chat_completions(
      13. Return OpenAI-compatible response with WrapSec response headers.
 
     All execution paths write to audit_logs. X-WrapSec-* headers are always included.
-    Auth: any valid live API key (trial keys are rejected).
+    Auth: a valid live API key only (trial keys and dashboard sessions are rejected).
     """
+    # 2.3 (M5 pt3): the proxy is API-key-only, matching the docstring. A dashboard
+    # (JWT/user) principal is rejected here. If a playground is ever wanted it must
+    # opt in ADMIN/DEVELOPER JWT deliberately -- never VIEWER by accident.
+    if getattr(request.state, "principal_type", None) == "user":
+        return _catalog_error_response(
+            ErrorCode.PROXY_REQUIRES_API_KEY,
+            trace_id=getattr(request.state, "trace_id", "") or "",
+        )
+
     wall_start = time.monotonic()
     trace_id   = str(TraceId.generate())
     key_id     = getattr(request.state, "key_id",    None)

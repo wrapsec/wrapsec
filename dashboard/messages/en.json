@@ -119,6 +119,7 @@
     "SESSION_INVALIDATED": "Your session is no longer valid. Please sign in again.",
     "PASSWORD_CHANGE_REQUIRED": "You must change your password before accessing this resource.",
     "TENANT_SUSPENDED": "This tenant is suspended. Contact your platform operator.",
+    "PROXY_REQUIRES_API_KEY": "The proxy endpoint requires a WrapSec API key, not a dashboard session.",
     "INVALID_PASSWORD": "Current password is incorrect.",
     "CANNOT_DEACTIVATE_SELF": "You cannot deactivate your own account.",
     "LAST_ADMIN": "You cannot demote or deactivate the last active administrator. Create another administrator first.",

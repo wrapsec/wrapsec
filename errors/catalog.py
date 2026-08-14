@@ -62,6 +62,7 @@ class ErrorCode(str, Enum):
     SESSION_INVALIDATED      = "SESSION_INVALIDATED"
     PASSWORD_CHANGE_REQUIRED = "PASSWORD_CHANGE_REQUIRED"
     TENANT_SUSPENDED         = "TENANT_SUSPENDED"
+    PROXY_REQUIRES_API_KEY   = "PROXY_REQUIRES_API_KEY"
 
     INVALID_PASSWORD         = "INVALID_PASSWORD"
 
@@ -124,6 +125,7 @@ _ERROR_SPEC: dict[ErrorCode, tuple[int, ErrorSeverity]] = {
     ErrorCode.SESSION_INVALIDATED:      (401, ErrorSeverity.WARNING),
     ErrorCode.PASSWORD_CHANGE_REQUIRED: (403, ErrorSeverity.WARNING),
     ErrorCode.TENANT_SUSPENDED:         (403, ErrorSeverity.WARNING),
+    ErrorCode.PROXY_REQUIRES_API_KEY:   (403, ErrorSeverity.WARNING),
     ErrorCode.INVALID_PASSWORD:         (401, ErrorSeverity.WARNING),
     # State conflicts, not RBAC-permission denials (the admin has the permission);
     # 409 = the requested state transition conflicts with the current system state.

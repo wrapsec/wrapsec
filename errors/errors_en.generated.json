@@ -23,6 +23,7 @@
     "errors.MODEL_REQUIRED": "A model is required when proxy execution is enabled.",
     "errors.NOT_FOUND": "{resource} not found.",
     "errors.PASSWORD_CHANGE_REQUIRED": "You must change your password before accessing this resource.",
+    "errors.PROXY_REQUIRES_API_KEY": "The proxy endpoint requires a WrapSec API key, not a dashboard session.",
     "errors.RATE_LIMIT_EXCEEDED": "Too many requests. Please retry after {retry_after} seconds.",
     "errors.SESSION_INVALIDATED": "Your session is no longer valid. Please sign in again.",
     "errors.STREAM_NOT_SUPPORTED": "Streaming is only available in proxy execution mode.",
