@@ -140,8 +140,33 @@ class AuthService:
         _settings = get_settings()
         email     = normalize_email(email)
 
-        if await is_locked(email):
-            remaining = await get_lockout_remaining(email)
+        # Lockout state lives in Redis. Fail OPEN on any Redis error -- exactly
+        # like the login IP rate limit, jti blacklist, and user cache in this same
+        # flow -- so a Redis outage degrades brute-force protection but never turns
+        # a valid login into a 500 (M1).
+        async def _safe_is_locked() -> int | None:
+            try:
+                if await is_locked(email):
+                    return await get_lockout_remaining(email)
+            except Exception as exc:  # fail open on any lockout-store error
+                logger.warning("lockout check failed open (redis unavailable?): %s", exc)
+            return None
+
+        async def _safe_record_failure() -> tuple[int, bool]:
+            try:
+                return await record_failure(email)
+            except Exception as exc:  # fail open on any lockout-store error
+                logger.warning("lockout record failed open (redis unavailable?): %s", exc)
+                return 0, False
+
+        async def _safe_clear_failures() -> None:
+            try:
+                await clear_failures(email)
+            except Exception as exc:  # fail open on any lockout-store error
+                logger.warning("lockout clear failed open (redis unavailable?): %s", exc)
+
+        remaining = await _safe_is_locked()
+        if remaining is not None:
             logger.warning(
                 "auth_event LOGIN_LOCKED email=%s remaining_secs=%d",
                 email, remaining,
@@ -162,7 +187,7 @@ class AuthService:
             reason = outcome.failure_reason or "invalid_credentials"
             matched = outcome.resolved_user
             if matched is None:
-                await record_failure(email)
+                await _safe_record_failure()
                 logger.warning("auth_event LOGIN_FAILED email=%s reason=%s", email, reason)
                 await _log_auth_event(
                     action         = "login_failed",
@@ -172,7 +197,7 @@ class AuthService:
                     user_agent     = user_agent,
                 )
             else:
-                count, locked = await record_failure(email)
+                count, locked = await _safe_record_failure()
                 logger.warning(
                     "auth_event LOGIN_FAILED email=%s reason=%s "
                     "attempt=%d is_now_locked=%s",
@@ -214,7 +239,7 @@ class AuthService:
             )
             raise AccountDisabledException()
 
-        await clear_failures(email)
+        await _safe_clear_failures()
 
         user_repo             = UserRepository(db)
         access_token          = create_access_token(user)

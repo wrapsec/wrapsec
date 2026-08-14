@@ -659,3 +659,22 @@ async def test_admin_create_user_sets_force_password_change(auth_client, auth_se
             await db.commit()
     finally:
         await engine.dispose()
+
+
+@pytest.mark.asyncio
+async def test_login_fails_open_when_lockout_store_unavailable(auth_client, auth_setup):
+    """M1: a Redis outage in the lockout store must NOT turn a login into a 500.
+    Valid credentials still succeed; invalid ones still return 401 -- lockout is
+    skipped (fail open), consistent with the other Redis calls in the flow."""
+    from unittest.mock import AsyncMock, patch
+
+    email = auth_setup["admin_user"].email
+    down  = ConnectionError("redis unavailable")
+    with patch("services.auth.lockout.is_locked",       AsyncMock(side_effect=down)), \
+         patch("services.auth.lockout.record_failure",  AsyncMock(side_effect=down)), \
+         patch("services.auth.lockout.clear_failures",  AsyncMock(side_effect=down)):
+        ok  = await auth_client.post("/v1/auth/login", json={"email": email, "password": "TestPass1!"})
+        bad = await auth_client.post("/v1/auth/login", json={"email": email, "password": "wrong-password"})
+
+    assert ok.status_code == 200, ok.text     # valid creds succeed despite lockout store down
+    assert bad.status_code == 401             # invalid creds -> 401, never 500
