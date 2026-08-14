@@ -109,10 +109,13 @@ async def _make_auditor(tenant_id) -> str:
     try:
         async with sf() as db:
             db.add(UserModel(
-                id=uid, tenant_id=tenant_id, dept_id=None,
+                id=uid,
                 email=f"auditor-{uuid.uuid4().hex[:6]}@test.com", password_hash="x",
-                role="AUDITOR", token_version=1,
+                token_version=1,
             ))
+            await db.flush()
+            from db.repositories.membership import MembershipRepository
+            await MembershipRepository(db).upsert_for_user(uid, tenant_id, "AUDITOR", None)
             await db.commit()
     finally:
         await engine.dispose()
@@ -416,9 +419,12 @@ async def test_notifications_off_skips_enqueue(auth_client, auth_setup, reset_em
         async with sf() as db:
             uid = uuid.uuid4()
             db.add(UserModel(
-                id=uid, tenant_id=tenant_id, dept_id=None,
-                email=f"off-{uuid.uuid4().hex[:6]}@x.com", password_hash="x", role="ADMIN",
+                id=uid,
+                email=f"off-{uuid.uuid4().hex[:6]}@x.com", password_hash="x",
             ))
+            await db.flush()
+            from db.repositories.membership import MembershipRepository
+            await MembershipRepository(db).upsert_for_user(uid, tenant_id, "ADMIN", None)
             await db.commit()
             user = await db.get(UserModel, uid)
             await notify_password_changed(db, user)

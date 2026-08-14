@@ -199,16 +199,17 @@ async def test_force_password_change_blocks_other_endpoints(auth_client, auth_se
         repo  = UserRepository(db)
         email = normalize_email(f"forced-{uuid.uuid4().hex[:6]}@test.com")
         user  = await repo.create({
-            "tenant_id":             tenant.id,
-            "dept_id":               dept.id,
             "email":                 email,
             "password_hash":         hash_password("TestPass1!"),
-            "role":                  "DEVELOPER",
             "force_password_change": True,
         })
+        await db.flush()
+        from db.repositories.membership import MembershipRepository
+        membership = await MembershipRepository(db).upsert_for_user(
+            user.id, tenant.id, "DEVELOPER", dept.id
+        )
         await db.commit()
-        await db.refresh(user)
-        token   = create_access_token(user)
+        token   = create_access_token(user, membership)
         user_id = user.id
 
     response = await auth_client.get(
@@ -246,16 +247,17 @@ async def test_force_password_change_allows_me(auth_client, auth_setup):
         repo  = UserRepository(db)
         email = normalize_email(f"forced2-{uuid.uuid4().hex[:6]}@test.com")
         user  = await repo.create({
-            "tenant_id":             tenant.id,
-            "dept_id":               dept.id,
             "email":                 email,
             "password_hash":         hash_password("TestPass1!"),
-            "role":                  "DEVELOPER",
             "force_password_change": True,
         })
+        await db.flush()
+        from db.repositories.membership import MembershipRepository
+        membership = await MembershipRepository(db).upsert_for_user(
+            user.id, tenant.id, "DEVELOPER", dept.id
+        )
         await db.commit()
-        await db.refresh(user)
-        token   = create_access_token(user)
+        token   = create_access_token(user, membership)
         user_id = user.id
 
     response = await auth_client.get(

@@ -128,15 +128,12 @@ async def complete_setup(body: SetupRequest, db: AsyncSession = Depends(get_db))
     email = normalize_email(str(body.email))
 
     user = await user_repo.create({
-        "tenant_id":             tenant.id,
-        "dept_id":               None,
         "email":                 email,
         "password_hash":         hash_password(body.password),
-        "role":                  "ADMIN",
         "force_password_change": False,
     })
     await user_repo.flush()  # assign user.id before the membership FK references it
-    # Identity migrate phase: create the matching ADMIN membership in lockstep.
+    # The first admin's authz is its ADMIN membership in this tenant.
     from db.repositories.membership import MembershipRepository
     await MembershipRepository(db).upsert_for_user(
         user_id=user.id, tenant_id=tenant.id, role="ADMIN", dept_id=None,

@@ -32,16 +32,22 @@ async def _seed_tenant_dept_user(session, *, role="DEVELOPER", with_dept=True):
                                     slug=f"d-{dept_id.hex[:8]}", name="D"))
         await session.flush()
     session.add(UserModel(
-        id=user_id, tenant_id=tenant_id, dept_id=dept_id,
-        email=f"{user_id.hex[:8]}@example.com", password_hash="x", role=role,
+        id=user_id,
+        email=f"{user_id.hex[:8]}@example.com", password_hash="x",
     ))
     await session.flush()
     return tenant_id, dept_id, user_id
 
 
 async def _cleanup(session, tenant_id):
+    # Delete users linked to this tenant via membership first (memberships cascade
+    # on the user delete); then any orphan rows, dept, and tenant.
+    user_ids = (await session.execute(
+        sa.select(MembershipModel.user_id).where(MembershipModel.tenant_id == tenant_id)
+    )).scalars().all()
+    if user_ids:
+        await session.execute(sa.delete(UserModel).where(UserModel.id.in_(user_ids)))
     await session.execute(sa.delete(MembershipModel).where(MembershipModel.tenant_id == tenant_id))
-    await session.execute(sa.delete(UserModel).where(UserModel.tenant_id == tenant_id))
     await session.execute(sa.delete(DepartmentModel).where(DepartmentModel.tenant_id == tenant_id))
     await session.execute(sa.delete(TenantModel).where(TenantModel.id == tenant_id))
     await session.commit()
@@ -107,7 +113,7 @@ async def test_unique_membership_per_user_tenant(pg_db):
 @pytest.mark.asyncio
 async def test_upsert_creates_then_updates_in_lockstep(pg_db):
     """upsert_for_user creates the membership, then a second call updates it."""
-    tenant_id, dept_id, user_id = await _seed_tenant_dept_user(pg_db, role="ADMIN", with_dept=False)
+    tenant_id, _dept_id, user_id = await _seed_tenant_dept_user(pg_db, role="ADMIN", with_dept=False)
     try:
         repo = MembershipRepository(pg_db)
         m1 = await repo.upsert_for_user(user_id, tenant_id, role="ADMIN", dept_id=None)
@@ -133,32 +139,6 @@ async def test_upsert_creates_then_updates_in_lockstep(pg_db):
         await _cleanup(pg_db, tenant_id)
 
 
-@pytest.mark.asyncio
-async def test_backfill_maps_user_to_membership_idempotently(pg_db):
-    """The 0015 backfill INSERT: one membership per user, re-run creates no dup."""
-    tenant_id, dept_id, user_id = await _seed_tenant_dept_user(pg_db, role="DEVELOPER")
-    # Mirrors the INSERT in db/migrations/versions/0015_memberships.py. Scoped to
-    # this test's user so it never touches unrelated rows in a shared PG.
-    backfill = sa.text("""
-        INSERT INTO memberships (id, user_id, tenant_id, dept_id, role, created_at)
-        SELECT gen_random_uuid(), u.id, u.tenant_id, u.dept_id, u.role, u.created_at
-        FROM users u
-        WHERE u.id = :uid AND NOT EXISTS (
-            SELECT 1 FROM memberships m
-            WHERE m.user_id = u.id AND m.tenant_id = u.tenant_id
-        )
-    """)
-    try:
-        await pg_db.execute(backfill, {"uid": user_id})
-        await pg_db.execute(backfill, {"uid": user_id})  # idempotent re-run
-        await pg_db.commit()
-
-        rows = (await pg_db.execute(
-            sa.select(MembershipModel).where(MembershipModel.user_id == user_id)
-        )).scalars().all()
-        assert len(rows) == 1
-        assert rows[0].tenant_id == tenant_id
-        assert rows[0].dept_id   == dept_id
-        assert rows[0].role      == "DEVELOPER"
-    finally:
-        await _cleanup(pg_db, tenant_id)
+# The 0015 backfill (users.tenant_id/role -> memberships) was validated while
+# those columns existed; the 0016 contract migration has since dropped them, so
+# that backfill can no longer be exercised against the current schema.

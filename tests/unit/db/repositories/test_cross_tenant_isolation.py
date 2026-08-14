@@ -30,6 +30,7 @@ from db.models import (
     ApplicationModel,
     AuditLogModel,
     DepartmentModel,
+    MembershipModel,
     ProxyInteractionModel,
     ProxyProviderConfigModel,
     TenantModel,
@@ -38,8 +39,8 @@ from db.models import (
 from db.repositories.api_key import ApiKeyRepository
 from db.repositories.application import ApplicationRepository
 from db.repositories.audit import AuditRepository
+from db.repositories.membership import MembershipRepository
 from db.repositories.proxy_interaction import ProxyInteractionRepository
-from db.repositories.user import UserRepository
 
 # ── Seed helpers ──────────────────────────────────────────────────────────────
 
@@ -100,14 +101,14 @@ async def _seed_two_tenants(db):
         ))
         db.add(UserModel(
             id                    = uid,
-            tenant_id             = tid,
-            dept_id               = did,
             email                 = normalize_email(f"user-{letter.lower()}-{uuid.uuid4().hex[:6]}@t.com"),
             password_hash         = hash_password("TestPass1!"),
-            role                  = "DEVELOPER",
             is_active             = True,
             force_password_change = False,
             token_version         = 1,
+        ))
+        db.add(MembershipModel(
+            id=uuid.uuid4(), user_id=uid, tenant_id=tid, dept_id=did, role="DEVELOPER",
         ))
         db.add(AuditLogModel(
             id             = uuid.uuid4(),
@@ -165,29 +166,30 @@ async def _seed_two_tenants(db):
 # ── Users ─────────────────────────────────────────────────────────────────────
 
 @pytest.mark.asyncio
-async def test_user_repo_list_by_tenant_isolated(test_db):
+async def test_membership_list_in_tenant_isolated(test_db):
     fx   = await _seed_two_tenants(test_db)
-    repo = UserRepository(test_db)
+    repo = MembershipRepository(test_db)
 
-    users_a, total_a = await repo.list_by_tenant(fx["A"]["tenant_id"])
+    rows_a, total_a = await repo.list_in_tenant(fx["A"]["tenant_id"])
 
     assert total_a == 1
-    assert len(users_a) == 1
-    assert users_a[0].tenant_id == fx["A"]["tenant_id"]
+    assert len(rows_a) == 1
+    m_a, _u_a = rows_a[0]
+    assert m_a.tenant_id == fx["A"]["tenant_id"]
     # Belt-and-braces: verify no leak of B's user id into A's result
     b_user_ids = {fx["B"]["user_id"]}
-    assert not b_user_ids.intersection({u.id for u in users_a})
+    assert not b_user_ids.intersection({u.id for (_m, u) in rows_a})
 
 
 @pytest.mark.asyncio
-async def test_user_repo_count_by_tenant_isolated(test_db):
+async def test_membership_count_in_tenant_isolated(test_db):
     fx   = await _seed_two_tenants(test_db)
-    repo = UserRepository(test_db)
+    repo = MembershipRepository(test_db)
 
-    assert await repo.count_by_tenant(fx["A"]["tenant_id"]) == 1
-    assert await repo.count_by_tenant(fx["B"]["tenant_id"]) == 1
+    assert await repo.count_in_tenant(fx["A"]["tenant_id"]) == 1
+    assert await repo.count_in_tenant(fx["B"]["tenant_id"]) == 1
     # Random unrelated tenant returns zero, not the combined count
-    assert await repo.count_by_tenant(uuid.uuid4()) == 0
+    assert await repo.count_in_tenant(uuid.uuid4()) == 0
 
 
 # ── Applications ──────────────────────────────────────────────────────────────

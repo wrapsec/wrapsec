@@ -35,13 +35,14 @@ async def _clear_setup_cache() -> None:
 async def _reset_default_tenant(test_db, tid: uuid.UUID) -> None:
     """Return the default tenant to its pristine zero-user state (FK-safe) and
     clear the Redis initialized flag."""
+    from db.models import MembershipModel
     user_ids = (await test_db.execute(
-        select(UserModel.id).where(UserModel.tenant_id == tid)
+        select(MembershipModel.user_id).where(MembershipModel.tenant_id == tid)
     )).scalars().all()
     if user_ids:
         await test_db.execute(delete(RefreshTokenModel).where(RefreshTokenModel.user_id.in_(user_ids)))
         await test_db.execute(delete(AdminEventModel).where(AdminEventModel.tenant_id == tid))
-        await test_db.execute(delete(UserModel).where(UserModel.tenant_id == tid))
+        await test_db.execute(delete(UserModel).where(UserModel.id.in_(user_ids)))
         await test_db.commit()
     await _clear_setup_cache()
 

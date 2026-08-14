@@ -511,8 +511,9 @@ async def auth_setup():
                 from sqlalchemy import delete as sa_delete
                 await db.execute(sa_delete(RefreshTokenModel).where(
                     RefreshTokenModel.user_id.in_(ids)))
+                # memberships cascade on user delete (FK ON DELETE CASCADE)
                 await db.execute(sa_delete(UserModel).where(
-                    UserModel.tenant_id == tenant_id))
+                    UserModel.id.in_(ids)))
             await db.execute(sa_delete(DepartmentModel).where(
                 DepartmentModel.id == dept_id))
             await db.execute(sa_delete(TenantModel).where(
@@ -691,8 +692,9 @@ async def two_tenant_setup():
                     AuditLogModel.tenant_id == str(tid)))
                 await db.execute(sa_delete(APIKeyModel).where(
                     APIKeyModel.tenant_id == tid))
+                # memberships cascade on user delete (FK ON DELETE CASCADE)
                 await db.execute(sa_delete(UserModel).where(
-                    UserModel.tenant_id == tid))
+                    UserModel.id.in_(user_ids)))
                 await db.execute(sa_delete(ApplicationModel).where(
                     ApplicationModel.tenant_id == tid))
                 await db.execute(sa_delete(DepartmentModel).where(

@@ -116,15 +116,12 @@ async def bootstrap_admin() -> None:
                 return
 
             user = await user_repo.create({
-                "tenant_id":             tenant.id,
-                "dept_id":               None,
                 "email":                 email,
                 "password_hash":         hash_password(_settings.admin_password),
-                "role":                  "ADMIN",
                 "force_password_change": True,
             })
             await user_repo.flush()  # assign user.id before the membership FK
-            # Identity migrate phase: create the matching ADMIN membership.
+            # The bootstrap admin's authz is its ADMIN membership.
             from db.repositories.membership import MembershipRepository
             await MembershipRepository(db).upsert_for_user(
                 user_id=user.id, tenant_id=tenant.id, role="ADMIN", dept_id=None,

@@ -264,29 +264,25 @@ class ProxyInteractionModel(Base):
 
 class UserModel(Base):
     """
-    Dashboard users - human operators authenticating via JWT.
-    API key users (applications/services) are in APIKeyModel and do not have rows here.
+    Dashboard users - human operators authenticating via JWT. Identity only
+    (D2 Option B): a user row carries credentials and account state. Tenant,
+    role, and departmental scope live on MembershipModel, so one human (one row)
+    may hold roles in multiple tenants. API key users (applications/services) are
+    in APIKeyModel and do not have rows here.
 
-    Tenant boundary: tenant_id NOT NULL - enforced at DB level (Layer 1).
-    dept_id NULL valid ONLY for ADMIN - enforced by ck_users_dept_required_v2 (both directions):
-        role = ADMIN     -> dept_id MUST be NULL
-        role != ADMIN    -> dept_id MUST NOT be NULL
-    dept_id must belong to same tenant - validated in UserRepository.create/update().
+    Email uniqueness: case-insensitive and GLOBAL via ux_users_email_lower
+    (LOWER(email)) index. Always stored lowercase - normalize_email() must be
+    called before every write.
 
-    Email uniqueness: case-insensitive via ux_users_email_lower (LOWER(email)) index.
-    Always stored lowercase - normalize_email() must be called before every write.
-
-    token_version: incremented by logout_all_sessions() to immediately invalidate all JWTs.
-    Triggered by: password change, role change, dept change, deactivation, admin reset.
+    token_version: incremented by logout_all_sessions() to immediately invalidate
+    all JWTs. Triggered by: password change, role change, dept change (on the
+    membership), deactivation, admin reset.
     """
     __tablename__ = "users"
 
     id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
-    tenant_id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), ForeignKey("tenants.id"), nullable=False)
-    dept_id: Mapped[uuid.UUID | None] = mapped_column(UUID(as_uuid=True), ForeignKey("departments.id"), nullable=True)
     email: Mapped[str] = mapped_column(String(255), nullable=False)
     password_hash: Mapped[str] = mapped_column(String(255), nullable=False)
-    role: Mapped[str] = mapped_column(String(50),  nullable=False, default="DEVELOPER")
     is_active: Mapped[bool] = mapped_column(Boolean,     nullable=False, default=True)
     force_password_change: Mapped[bool] = mapped_column(Boolean,     nullable=False, default=False)
     token_version: Mapped[int] = mapped_column(Integer,     nullable=False, default=1)
@@ -295,30 +291,6 @@ class UserModel(Base):
     # BCP-47 tag; NULL = inherit tenant/system default. Validated against the
     # supported-locales allowlist before use (never trusted blindly).
     locale: Mapped[str | None] = mapped_column(String(35),  nullable=True)
-
-    __table_args__ = (
-        Index("ix_users_tenant",      "tenant_id"),
-        Index("ix_users_dept",        "dept_id"),
-        Index("ix_users_role",        "role"),
-        Index("ix_users_role_active", "role", "is_active"),
-        CheckConstraint(
-            "role IN ('ADMIN', 'DEVELOPER', 'VIEWER', 'AUDITOR')",
-            name="ck_users_role",
-        ),
-        # Updated by migration 0005_add_auditor_role:
-        #   role = ADMIN                       -> dept_id MUST be NULL
-        #   role = AUDITOR                     -> dept_id may be NULL (tenant-wide)
-        #                                         or set (department-scoped)
-        #   role IN (DEVELOPER, VIEWER)        -> dept_id MUST NOT be NULL
-        # AUDITOR scoping is flexible: attach at tenant-wide (NULL dept_id)
-        # or narrower (single department).
-        CheckConstraint(
-            "(role = 'ADMIN' AND dept_id IS NULL) OR "
-            "(role = 'AUDITOR') OR "
-            "(role IN ('DEVELOPER', 'VIEWER') AND dept_id IS NOT NULL)",
-            name="ck_users_dept_required_v2",
-        ),
-    )
 
 
 class MembershipModel(Base):

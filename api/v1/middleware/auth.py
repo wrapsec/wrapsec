@@ -264,18 +264,6 @@ async def _get_user_cached(user_uuid: UUID, user_id_str: str):
                     }
                     for m in mems
                 }
-                # Transitional fallback (removed in the contract phase): a user
-                # with no membership row is synthesized from the legacy user
-                # columns so sessions keep working while both sources coexist.
-                # Looked up by the token's tenant below, so a cross-tenant token
-                # is still rejected (the synthesized entry is the user's own tenant).
-                if not memberships and getattr(user, "tenant_id", None):
-                    memberships = {
-                        str(user.tenant_id): {
-                            "role":    user.role,
-                            "dept_id": str(user.dept_id) if user.dept_id else None,
-                        }
-                    }
         if engine:
             await engine.dispose()
     except Exception as e:

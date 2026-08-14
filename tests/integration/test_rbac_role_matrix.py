@@ -50,10 +50,13 @@ async def _make_user_token(tenant_id, role: str, *, dept_id=None) -> tuple[uuid.
     try:
         async with sf() as db:
             db.add(UserModel(
-                id=uid, tenant_id=tenant_id, dept_id=dept_id,
+                id=uid,
                 email=f"{role.lower()}-{uuid.uuid4().hex[:6]}@test.com",
-                password_hash="x", role=role, token_version=1,
+                password_hash="x", token_version=1,
             ))
+            await db.flush()
+            from db.repositories.membership import MembershipRepository
+            await MembershipRepository(db).upsert_for_user(uid, tenant_id, role, dept_id)
             await db.commit()
     finally:
         await engine.dispose()

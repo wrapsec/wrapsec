@@ -76,6 +76,12 @@ _OLD_DEPT_CHECK = (
 
 def upgrade() -> None:
     bind = op.get_bind()
+    # On an identity-only baseline (users.role dropped by the 0016 contract
+    # migration, or a fresh create_all from the current model), there is no role
+    # column to constrain: this historical migration is a clean no-op.
+    import sqlalchemy as sa
+    if "role" not in {c["name"] for c in sa.inspect(bind).get_columns("users")}:
+        return
     if bind.dialect.name == "postgresql":
         op.execute("ALTER TABLE users DROP CONSTRAINT IF EXISTS ck_users_role;")
         op.execute(
@@ -100,6 +106,9 @@ def upgrade() -> None:
 
 def downgrade() -> None:
     bind = op.get_bind()
+    import sqlalchemy as sa
+    if "role" not in {c["name"] for c in sa.inspect(bind).get_columns("users")}:
+        return
     if bind.dialect.name == "postgresql":
         op.execute("ALTER TABLE users DROP CONSTRAINT IF EXISTS ck_users_role;")
         op.execute(

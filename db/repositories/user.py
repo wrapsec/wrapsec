@@ -6,12 +6,17 @@ from uuid import UUID
 
 from sqlalchemy import func, select, update
 
-from db.models import DepartmentModel, UserModel
+from db.models import UserModel
 from db.repositories.base import BaseRepository
 from services.time import utc_now
 
 
 class UserRepository(BaseRepository):
+    """
+    User identity (D2 Option B). A user row carries credentials and account state
+    only -- tenant, role, and departmental scope live on MembershipRepository.
+    Email is globally unique (ux_users_email_lower).
+    """
 
     async def get_by_email(self, email: str) -> UserModel | None:
         """
@@ -37,65 +42,34 @@ class UserRepository(BaseRepository):
 
     async def create(self, data: dict) -> UserModel:
         """
-        Creates a new user.
+        Creates a user identity.
 
-        Required keys: tenant_id (UUID), email (pre-normalized), password_hash, role
-        Optional keys: dept_id (UUID), force_password_change (bool)
+        Required keys: email (pre-normalized), password_hash
+        Optional keys: force_password_change (bool)
 
-        Validations performed before insert:
-        1. role must be in (ADMIN, DEVELOPER, VIEWER, AUDITOR) - raises ValueError otherwise
-        2. dept_id required if role IN (DEVELOPER, VIEWER); ADMIN forbids it;
-           AUDITOR permits either (tenant-wide or dept-scoped) - raises ValueError
-           if the required/forbidden rule is violated
-        3. dept_id tenant integrity check: if dept_id is provided, verifies that
-           the department belongs to the same tenant as the user.
-           Raises ValueError if dept does not belong to tenant.
-           Prevents cross-tenant data linkage via bad input.
+        Role and departmental scope are NOT set here -- the caller creates the
+        matching membership (MembershipRepository) in the same transaction.
         """
-        role    = data.get("role", "DEVELOPER")
-        dept_id = data.get("dept_id")
-
-        if role not in ("ADMIN", "DEVELOPER", "VIEWER", "AUDITOR"):
-            raise ValueError(
-                f"Invalid role '{role}'. Must be ADMIN, DEVELOPER, VIEWER, or AUDITOR."
-            )
-
-        if role == "ADMIN" and dept_id:
-            raise ValueError("ADMIN users must not have a dept_id.")
-
-        if role in ("DEVELOPER", "VIEWER") and not dept_id:
-            raise ValueError(f"dept_id is required for role '{role}'.")
-
-        if dept_id:
-            await self._verify_dept_belongs_to_tenant(
-                dept_id   = dept_id,
-                tenant_id = data["tenant_id"],
-            )
-
-        user = UserModel(**data)
+        user = UserModel(
+            email                 = data["email"],
+            password_hash         = data["password_hash"],
+            force_password_change = data.get("force_password_change", False),
+        )
         self.session.add(user)
         return user
 
     async def update(self, user_id: UUID, data: dict) -> UserModel | None:
         """
-        Updates user fields. Only keys present in data are updated (exclude_unset pattern).
+        Updates account state. Only keys present in data are updated.
 
-        If dept_id is being changed, performs the same tenant integrity check as create():
-        verifies the new dept belongs to the same tenant as the user.
+        Authz (role/dept) is not updatable here -- it lives on the membership.
         """
         user = await self.get_by_id(user_id)
         if not user:
             return None
 
-        if "dept_id" in data and data["dept_id"] is not None:
-            await self._verify_dept_belongs_to_tenant(
-                dept_id   = data["dept_id"],
-                tenant_id = user.tenant_id,
-            )
-
         _UPDATABLE = frozenset({
-            "role", "dept_id", "is_active", "force_password_change", "password_hash",
-            "locale",
+            "is_active", "force_password_change", "password_hash", "locale",
         })
         for key, value in data.items():
             if key not in _UPDATABLE:
@@ -103,61 +77,6 @@ class UserRepository(BaseRepository):
             setattr(user, key, value)
 
         return user
-
-    async def list_by_tenant(
-        self,
-        tenant_id: UUID,
-        dept_id:   UUID | None = None,
-        role:      str  | None = None,
-        is_active: bool | None = None,
-        limit:     int  = 50,
-        offset:    int  = 0,
-    ) -> tuple[list[UserModel], int]:
-        """Returns (users, total_count)."""
-        query = select(UserModel).where(UserModel.tenant_id == tenant_id)
-
-        if dept_id is not None:
-            query = query.where(UserModel.dept_id == dept_id)
-        if role is not None:
-            query = query.where(UserModel.role == role)
-        if is_active is not None:
-            query = query.where(UserModel.is_active == is_active)
-
-        count_query = select(func.count()).select_from(query.subquery())
-        total       = await self.session.scalar(count_query) or 0
-
-        query  = query.order_by(UserModel.created_at.desc()).offset(offset).limit(limit)
-        result = await self.session.execute(query)
-        users  = list(result.scalars().all())
-
-        return users, total
-
-    async def count_by_tenant(self, tenant_id: UUID) -> int:
-        """Returns total user count for a tenant. Used by bootstrap to check if any users exist."""
-        result = await self.session.execute(
-            select(func.count()).where(UserModel.tenant_id == tenant_id)
-        )
-        return result.scalar_one() or 0
-
-    async def count_active_admins_for_update(self, tenant_id: UUID, lock_user_id: UUID) -> int:
-        """
-        Locks the target user row (SELECT FOR UPDATE) then counts active admins.
-        The row lock prevents concurrent requests from both passing the last-admin
-        check simultaneously - the second request blocks until the first commits.
-        Used exclusively by last-admin protection before role change or deactivation.
-        """
-        # Lock the row being modified - blocks concurrent updates to this user
-        await self.session.execute(
-            select(UserModel).where(UserModel.id == lock_user_id).with_for_update()
-        )
-        result = await self.session.execute(
-            select(func.count()).where(
-                UserModel.tenant_id == tenant_id,
-                UserModel.role      == "ADMIN",
-                UserModel.is_active == True,
-            )
-        )
-        return result.scalar_one() or 0
 
     async def increment_token_version(self, user_id: UUID) -> int:
         """
@@ -185,28 +104,3 @@ class UserRepository(BaseRepository):
             .where(UserModel.id == user_id)
             .values(last_login_at=utc_now())
         )
-
-    # ── Private helpers ────────────────────────────────────────────────────────
-
-    async def _verify_dept_belongs_to_tenant(
-        self,
-        dept_id:   UUID,
-        tenant_id: UUID,
-    ) -> None:
-        """
-        Verifies that a department belongs to the specified tenant.
-        Raises ValueError if the department does not exist under that tenant.
-        Called on every create/update that sets dept_id - prevents cross-tenant
-        data linkage even if the DB-level composite FK is not yet enforced.
-        """
-        result = await self.session.execute(
-            select(DepartmentModel.id).where(
-                DepartmentModel.id        == dept_id,
-                DepartmentModel.tenant_id == tenant_id,
-            )
-        )
-        if result.scalar_one_or_none() is None:
-            raise ValueError(
-                f"Department {dept_id} does not belong to tenant {tenant_id}. "
-                "Cannot assign user to a department from a different tenant."
-            )

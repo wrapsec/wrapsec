@@ -33,9 +33,10 @@ def create_access_token(
 
     Identity model D2 Option B: the authz claims (tenant_id, role, dept_id) come
     from the MEMBERSHIP the session is scoped to; identity claims (sub, ver) come
-    from the user. When `membership` is omitted the claims fall back to the user
-    row -- a transitional path for callers (and tests) not yet membership-aware,
-    valid only while users.tenant_id/role/dept_id still mirror the membership.
+    from the user. Production always passes a membership. When it is omitted the
+    claims are read off `user` itself (role/tenant_id/dept_id) -- used only by unit
+    tests that pass a lightweight user double carrying those attributes (the real
+    UserModel no longer has them).
 
     Claims and their purposes:
         sub        - user UUID string (JWT subject - standard claim)

@@ -131,11 +131,8 @@ async def admin_jwt_headers():
     async with sf() as db:
         user = UserModel(
             id                    = test_user_id,
-            tenant_id             = tenant_id,
-            dept_id               = None,
             email                 = test_email,
             password_hash         = hash_password("TestAdmin1!"),
-            role                  = "ADMIN",
             is_active             = True,
             force_password_change = False,
             token_version         = 1,
@@ -216,36 +213,36 @@ async def auth_setup():
         await db.flush()
 
         admin_user = UserModel(
-            id=admin_id, tenant_id=tenant_id, dept_id=None,
+            id=admin_id,
             email=normalize_email(f"admin-{run_id}@rbac-test.com"),
             password_hash=hash_password("TestPass1!"),
-            role="ADMIN", is_active=True,
-            force_password_change=False, token_version=1,
+            is_active=True, force_password_change=False, token_version=1,
         )
         dev_user = UserModel(
-            id=dev_id, tenant_id=tenant_id, dept_id=dept_id,
+            id=dev_id,
             email=normalize_email(f"dev-{run_id}@rbac-test.com"),
             password_hash=hash_password("TestPass1!"),
-            role="DEVELOPER", is_active=True,
-            force_password_change=False, token_version=1,
+            is_active=True, force_password_change=False, token_version=1,
         )
         viewer_user = UserModel(
-            id=viewer_id, tenant_id=tenant_id, dept_id=dept_id,
+            id=viewer_id,
             email=normalize_email(f"viewer-{run_id}@rbac-test.com"),
             password_hash=hash_password("TestPass1!"),
-            role="VIEWER", is_active=True,
-            force_password_change=False, token_version=1,
+            is_active=True, force_password_change=False, token_version=1,
         )
         db.add_all([admin_user, dev_user, viewer_user])
+        await db.flush()
+        from db.repositories.membership import MembershipRepository
+        mem_repo   = MembershipRepository(db)
+        admin_mem  = await mem_repo.upsert_for_user(admin_id,  tenant_id, "ADMIN",     None)
+        dev_mem    = await mem_repo.upsert_for_user(dev_id,    tenant_id, "DEVELOPER", dept_id)
+        viewer_mem = await mem_repo.upsert_for_user(viewer_id, tenant_id, "VIEWER",    dept_id)
         await db.commit()
-        await db.refresh(admin_user)
-        await db.refresh(dev_user)
-        await db.refresh(viewer_user)
         await db.refresh(dept)
 
-    admin_token  = create_access_token(admin_user)
-    dev_token    = create_access_token(dev_user)
-    viewer_token = create_access_token(viewer_user)
+        admin_token  = create_access_token(admin_user,  admin_mem)
+        dev_token    = create_access_token(dev_user,    dev_mem)
+        viewer_token = create_access_token(viewer_user, viewer_mem)
 
     yield {
         "tenant":       tenant,

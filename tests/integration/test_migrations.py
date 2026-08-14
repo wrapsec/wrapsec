@@ -99,66 +99,6 @@ def test_head_revision_advances_to_json_to_jsonb(tmp_path):
     assert row[0] != "0001_baseline"
 
 
-def test_users_check_constraint_admits_auditor(tmp_path):
-    """
-    Migration 0005 rewrites ck_users_role and ck_users_dept_required_v2 so
-    a row with role='AUDITOR' and either NULL or set dept_id is accepted.
-    An INSERT that would violate the old constraint but satisfy the new
-    one proves the migration ran on the SQLite path (batch_alter_table).
-    """
-    import uuid
-    from datetime import datetime, timezone
-
-    from sqlalchemy import text
-
-    db_file   = tmp_path / "migrated.db"
-    async_url = f"sqlite+aiosqlite:///{db_file}"
-    sync_url  = f"sqlite:///{db_file}"
-
-    cfg = _alembic_config(async_url)
-    command.upgrade(cfg, "head")
-
-    tenant_id = str(uuid.uuid4())
-    user_id   = str(uuid.uuid4())
-
-    engine = create_engine(sync_url)
-    try:
-        with engine.begin() as conn:
-            conn.execute(
-                text(
-                    "INSERT INTO tenants "
-                    "(id, name, slug, global_policy, created_at, is_active) "
-                    "VALUES (:id, :name, :slug, :policy, :ts, :active)"
-                ),
-                {
-                    "id":     tenant_id,
-                    "name":   "auditor-test-tenant",
-                    "slug":   "auditor-test",
-                    "policy": "{}",
-                    "ts":     datetime(2026, 7, 28, 12, 0, 0, tzinfo=timezone.utc),
-                    "active": True,
-                },
-            )
-            conn.execute(
-                text(
-                    "INSERT INTO users "
-                    "(id, tenant_id, dept_id, email, password_hash, role, "
-                    " is_active, force_password_change, token_version, created_at) "
-                    "VALUES (:id, :tenant, NULL, :email, :pw, 'AUDITOR', "
-                    " 1, 0, 1, :ts)"
-                ),
-                {
-                    "id":     user_id,
-                    "tenant": tenant_id,
-                    "email":  "auditor@example.com",
-                    "pw":     "hash-placeholder",
-                    "ts":     datetime(2026, 7, 28, 12, 0, 0, tzinfo=timezone.utc),
-                },
-            )
-    finally:
-        engine.dispose()
-
-
 def test_audit_logs_has_v1_2_session_and_hash_columns(tmp_path):
     """
     v1.2.0 adds session_id/turn_index/run_id (caller-supplied tracking)

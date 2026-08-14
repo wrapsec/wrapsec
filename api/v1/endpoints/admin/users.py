@@ -212,16 +212,12 @@ async def create_user(
         _tenant_uuid = uuid.UUID(str(principal.tenant_id))
         _dept_uuid   = uuid.UUID(body.dept_id) if body.dept_id else None
         user = await repo.create({
-            "tenant_id":             _tenant_uuid,
             "email":                 email,
             "password_hash":         hash_password(body.password),
-            "role":                  body.role,
-            "dept_id":               _dept_uuid,
             "force_password_change": True,
         })
         await repo.flush()  # assign user.id before the membership FK references it
-        # The membership is the authz record (role/dept in this tenant); the user
-        # row still mirrors it until the contract phase drops those columns.
+        # The membership is the authz record: role/dept in this tenant.
         membership = await MembershipRepository(db).upsert_for_user(
             user_id=user.id, tenant_id=_tenant_uuid, role=body.role, dept_id=_dept_uuid,
         )
@@ -428,12 +424,13 @@ async def update_user(
     old_dept_id = str(membership.dept_id) if membership.dept_id else None
 
     try:
-        updated = await repo.update(user_id, data)
+        # Only account state (is_active) lands on the user row; role/dept are
+        # authz and live on the membership.
+        updated = await repo.update(user_id, {k: v for k, v in data.items() if k == "is_active"})
         if updated is None:
             raise NotFoundError("user", str(user_id))
-        # Authz writes land on the membership (role/dept); the user row still
-        # mirrors them until the contract phase drops those columns. Only when
-        # role/dept actually change (is_active-only updates leave authz untouched).
+        # Authz writes land on the membership. Only when role/dept actually change
+        # (is_active-only updates leave authz untouched).
         if "role" in data or "dept_id" in data:
             await repo.flush()
             _final_dept_uuid = uuid.UUID(final_dept_id) if final_dept_id else None
