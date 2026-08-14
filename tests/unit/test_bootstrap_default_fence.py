@@ -32,6 +32,11 @@ _ALLOWLIST = {
     "api/v1/endpoints/setup.py": "first-run /setup flow (pre-tenant)",
     "api/v1/middleware/auth.py": "admin-key sentinel -> default tenant (the one mapping)",
     "api/v1/endpoints/settings.py": "tenant-less admin-key principal falls back to default",
+    # Detector LLM config fallback: tenant-less today because the request path
+    # feeds detectors resolved-policy settings (resolve_policy), leaving this a
+    # background-only default. WHEN A SECOND TENANT GOES LIVE: confirm every
+    # detector invocation on the request path still receives resolved-policy
+    # settings, so this stays a fallback and never the steady-state source.
     "clients/__init__.py":       "deployment-level detector LLM config (no per-request tenant)",
 }
 
