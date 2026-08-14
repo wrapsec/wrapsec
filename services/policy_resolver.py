@@ -216,6 +216,18 @@ async def resolve_policy(
         except Exception:
             pass  # Metrics increment is best-effort inside the fallback handler.
 
+    # Plugin policy layers (2.9): a final ceiling applied after core resolution,
+    # so a plan/entitlement layer can clamp even an app override. OSS registers
+    # none, so this is skipped entirely and the resolved policy is byte-identical
+    # to before the hook existed. Fail-open lives inside apply_policy_layers.
+    from services.policy_layers import registered_policy_layers
+    if registered_policy_layers():
+        from services.policy_layers import PolicyContext, apply_policy_layers
+        policy = await apply_policy_layers(
+            policy,
+            PolicyContext(db=db, tenant_id=tenant_id, dept_id=dept_id, app_id=app_id),
+        )
+
     # Decrypt any api_key_enc fields that were merged in from dept/app overrides.
     # api_key_enc is stored encrypted in policy_override; callers need plaintext api_key.
     for section in ("llm", "proxy_provider"):

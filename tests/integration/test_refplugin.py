@@ -277,3 +277,51 @@ async def test_auth_provider_registration_seam(auth_setup):
             await engine.dispose()
     finally:
         areg._PROVIDERS.pop("refauth", None)
+
+
+# ── Policy-layer seam (increment 2 / 2.9): a plugin plan ceiling ─────────────
+
+@pytest.mark.asyncio
+async def test_policy_layer_registration_seam(auth_setup):
+    """Seam built for 2.9 (open-core P4): a plugin registers a policy layer that
+    runs as a FINAL CEILING after core resolution, and resolve_policy threads the
+    resolved policy through it -- proven end to end against a real tenant. Here
+    the layer clamps rate_limit by a 'plan' (a billing plugin would read
+    tenants.plan via ctx). Without the layer the same call is unchanged, which is
+    the OSS invariant: no layer registered -> byte-identical resolution."""
+    from sqlalchemy.ext.asyncio import (
+        AsyncSession,
+        async_sessionmaker,
+        create_async_engine,
+    )
+    from sqlalchemy.pool import NullPool
+
+    import services.policy_layers as pl
+    from config.settings import get_settings
+    from services.policy_layers import register_policy_layer
+    from services.policy_resolver import resolve_policy
+
+    tid    = str(auth_setup["tenant"].id)
+    engine = create_async_engine(get_settings().database_url, poolclass=NullPool)
+    sf     = async_sessionmaker(bind=engine, class_=AsyncSession, expire_on_commit=False)
+    before = list(pl._LAYERS)
+    try:
+        # OSS baseline: no layer registered -> core default rate limit.
+        async with sf() as db:
+            baseline, _ = await resolve_policy(db, tenant_id=tid)
+        assert baseline["rate_limit"]["per_minute"] == 60
+
+        async def free_plan_ceiling(policy, ctx):
+            # A billing plugin resolves ctx.tenant_id -> plan via ctx.db here.
+            assert ctx.tenant_id == tid
+            capped = min(policy["rate_limit"]["per_minute"], 5)
+            return {**policy, "rate_limit": {**policy["rate_limit"], "per_minute": capped}}
+
+        register_policy_layer(free_plan_ceiling)
+
+        async with sf() as db:
+            capped, _ = await resolve_policy(db, tenant_id=tid)
+        assert capped["rate_limit"]["per_minute"] == 5   # ceiling applied last
+    finally:
+        pl._LAYERS[:] = before
+        await engine.dispose()
