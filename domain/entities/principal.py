@@ -5,12 +5,8 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
-from typing import TYPE_CHECKING
 
 from domain.enums import PrincipalType
-
-if TYPE_CHECKING:
-    from db.models import APIKeyModel, UserModel
 
 # ── Role -> permission strings ──────────────────────────────────────────────────
 #
@@ -84,64 +80,3 @@ class Principal:
             if all(a == b or b == "*" for a, b in zip(parts, p_parts)):
                 return True
         return False
-
-
-# ── Builder functions ──────────────────────────────────────────────────────────
-
-def build_principal_from_user(user: UserModel) -> Principal:
-    """
-    Builds Principal from UserModel after DB load.
-    Called by JWT middleware path in api/v1/middleware/auth.py.
-
-    Raises ValueError (NOT assert) if tenant_id is None.
-    Using ValueError instead of assert: Python assert can be disabled
-    with -O flag and must never be used for security checks.
-
-    UUID/string boundary: DB returns UUID objects - cast to str here.
-    All downstream code (request.state, JWT, logs) uses string tenant_id.
-    """
-    if not user.tenant_id:
-        raise ValueError(
-            f"User {user.id} has no tenant_id - cannot build Principal. "
-            "This is a data integrity issue - investigate immediately."
-        )
-    return Principal(
-        id          = str(user.id),
-        type        = PrincipalType.USER,
-        tenant_id   = str(user.tenant_id),
-        dept_id     = str(user.dept_id) if user.dept_id else None,
-        roles       = [user.role],
-        permissions = ROLE_PERMISSIONS.get(user.role, []),
-        is_admin    = (user.role == "ADMIN"),
-        email       = user.email,
-    )
-
-
-def build_principal_from_api_key(key: APIKeyModel) -> Principal:
-    """
-    Builds Principal from APIKeyModel after DB load.
-    Called by API key middleware path for non-admin application keys.
-
-    The hardcoded admin key (wrapsec_admin_key) is NEVER in the api_keys
-    table and is handled separately by _authenticate_admin_key() in middleware,
-    which fetches the default tenant from DB directly.
-    This function is NEVER called for the admin key.
-
-    All DB rows in api_keys are non-admin application keys - all must have
-    tenant_id after the NOT NULL migration in add_users.sql.
-    Raises ValueError (NOT assert) if tenant_id is missing.
-    """
-    if not key.tenant_id:
-        raise ValueError(
-            f"API key {key.key_id} has no tenant_id - cannot build Principal. "
-            "Run migration add_users.sql to enforce NOT NULL on api_keys.tenant_id."
-        )
-    return Principal(
-        id          = key.key_id,   # prefixed to "key:{key_id}" at request.state level in middleware
-        type        = PrincipalType.API_KEY,
-        tenant_id   = str(key.tenant_id),
-        dept_id     = str(key.dept_id) if key.dept_id else None,
-        roles       = ["DEVELOPER"],
-        permissions = ROLE_PERMISSIONS.get("DEVELOPER", []),
-        is_admin    = False,
-    )
