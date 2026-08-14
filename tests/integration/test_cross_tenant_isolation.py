@@ -450,7 +450,15 @@ async def test_one_user_two_memberships_is_token_scoped_with_independent_roles(
             await db.commit()
 
         token_a = _token(user_id, tenant_a, "ADMIN",  None)    # session in A
-        token_b = _token(user_id, tenant_b, "VIEWER", dept_b)  # session in B
+        # The B token carries a FORGED role claim (ADMIN) even though the DB
+        # membership is VIEWER. Deliberate: if the middleware ever trusted the
+        # token's role instead of re-reading the DB membership, assertion 4 would
+        # wrongly pass. Forging it pins the actual security property -- the claim
+        # only SELECTS the membership; the DB grants the authz.
+        token_b = _token(user_id, tenant_b, "ADMIN", None)     # session in B (role claim lies)
+        # A tenant the user holds NO membership in -- the cross-tenant boundary
+        # itself (middleware rejects: no membership for the token's tenant).
+        token_none = _token(user_id, uuid.uuid4(), "ADMIN", None)
 
         # 1) Same human, two tokens -> two different tenant profiles.
         pa = await auth_client.get("/v1/admin/tenant", headers=_bearer(token_a))
@@ -469,15 +477,23 @@ async def test_one_user_two_memberships_is_token_scoped_with_independent_roles(
         traces_a = {i["trace_id"] for i in la.json().get("items", [])}
         assert a["audit_trace"] in traces_a and b["audit_trace"] not in traces_a
 
-        # 4) Role independence: ADMIN in A does NOT confer admin in B. Acting in B
-        #    is only possible with the B token, which carries VIEWER -> admin write
-        #    is forbidden ...
+        # 4) Role independence, FORGED-CLAIM proof: token_b's role claim says ADMIN
+        #    but the DB membership is VIEWER. The admin write must still be 403 --
+        #    proving authz comes from the DB membership, not the token claim. (A
+        #    regression that trusted the claim would turn this 403 into a 200.)
         thresholds = {"block_threshold": 0.8, "sanitize_threshold": 0.2}
         rb = await auth_client.put("/v1/settings/thresholds", json=thresholds, headers=_bearer(token_b))
         assert rb.status_code == 403
-        # ... while the same human's A token (ADMIN in A) may admin A.
+        # ... while the same human's A token (genuine ADMIN in A) may admin A.
         ra = await auth_client.put("/v1/settings/thresholds", json=thresholds, headers=_bearer(token_a))
         assert ra.status_code == 200
+
+        # 5) The boundary itself: a token whose tenant the user is not a member of
+        #    is rejected outright (401), not merely scoped away from data. This is
+        #    the middleware's no-membership-for-tenant check -- the cross-tenant
+        #    boundary that the whole membership model rests on.
+        rn = await auth_client.get("/v1/admin/tenant", headers=_bearer(token_none))
+        assert rn.status_code == 401
     finally:
         # The extra B-membership cascades when the fixture deletes the user by id.
         await engine.dispose()
