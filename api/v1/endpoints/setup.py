@@ -7,6 +7,7 @@ import logging
 
 from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel, EmailStr, field_validator
+from sqlalchemy import text
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from api.v1.dependencies.db import get_db
@@ -108,6 +109,15 @@ async def complete_setup(body: SetupRequest, db: AsyncSession = Depends(get_db))
     # Return 404 for all failure cases - never reveal system state to unauthenticated callers
     if not tenant:
         raise HTTPException(status_code=404)
+
+    # Serialize concurrent first-run attempts. Without this, two unauthenticated
+    # requests in the first-boot window could both pass the "no users yet" check
+    # and each create an ADMIN. The transaction-scoped advisory lock releases on
+    # the commit/rollback below (PostgreSQL only; the check-and-create still runs
+    # on other backends, just without the extra guard).
+    bind = db.bind
+    if bind is not None and bind.dialect.name == "postgresql":
+        await db.execute(text("SELECT pg_advisory_xact_lock(hashtext('wrapsec:setup:first_admin'))"))
 
     user_repo = UserRepository(db)
     if await user_repo.count_by_tenant(tenant.id) > 0:

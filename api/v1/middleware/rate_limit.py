@@ -80,10 +80,11 @@ class RateLimitMiddleware(BaseHTTPMiddleware):
         if not get_settings().rate_limit_enabled:
             return await call_next(request)
 
-        # Rate limit per API key - more precise than per IP
-        # Falls back to IP if no key (e.g. unauthenticated requests)
+        # Rate limit per API key when one is presented, else per client IP.
+        # This middleware runs BEFORE auth, so request.state.key_id is not yet
+        # populated -- we bucket on the raw x-api-key header (hashed, never
+        # stored) and fall back to the client IP for JWT/anonymous requests.
         api_key = request.headers.get("x-api-key", "")
-        key_id  = getattr(request.state, "key_id", None)
 
         # get_client_ip trusts x-forwarded-for only when the peer IP is in
         # TRUSTED_PROXY_IPS. Behind nginx, the peer is 127.0.0.1 and all
@@ -92,10 +93,7 @@ class RateLimitMiddleware(BaseHTTPMiddleware):
         from api.v1.middleware.auth import get_client_ip
         client_ip = get_client_ip(request)
 
-        # Use key_id if available, else hash of api_key, else IP
-        if key_id:
-            rate_limit_id = f"key:{key_id}"
-        elif api_key:
+        if api_key:
             rate_limit_id = f"key:{hashlib.sha256(api_key.encode()).hexdigest()[:16]}"
         else:
             rate_limit_id = f"ip:{client_ip}"

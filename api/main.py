@@ -296,7 +296,9 @@ async def metrics(request: Request):
     expected    = _s.metrics_token or _s.admin_api_key
     auth_header = request.headers.get("authorization", "")
     token       = auth_header.removeprefix("Bearer ").strip()
-    if not token or not hmac.compare_digest(token, expected):
+    # Fail closed if no secret is configured (both unset): never expose metrics,
+    # and never call compare_digest with an empty/None expected value.
+    if not expected or not token or not hmac.compare_digest(token, expected):
         logger.warning(
             "metrics auth failed ip=%s token_present=%s",
             request.client.host if request.client else "unknown",
