@@ -58,6 +58,7 @@ from domain.enums import DetectionMode, ExecutionMode
 from domain.value_objects.severity import compute_severity
 from domain.value_objects.trace_id import TraceId
 from engine.guardrails.output_guard import OutputGuard
+from engine.guardrails.pii.redactor import PIIRedactor
 from engine.proxy.router import (
     parse_model_string,
     resolve_provider,
@@ -74,6 +75,7 @@ logger = logging.getLogger("wrapsec.proxy")
 
 _gateway      = GatewayService()
 _output_guard = OutputGuard()
+_pii_redactor = PIIRedactor()
 
 # Execution status constants
 STATUS_SUCCESS        = "SUCCESS"
@@ -182,10 +184,15 @@ def _apply_sanitization(
         return messages
 
     if scan_all:
-        # Split sanitized text back and reassign to each user message in order
-        parts = sanitized.split("\n", len(user_indices) - 1)
-        for idx, msg_idx in enumerate(user_indices):
-            messages[msg_idx]["content"] = parts[idx] if idx < len(parts) else ""
+        # Re-redact each user message independently rather than splitting the
+        # joined sanitized blob by "\n". If any user message itself contains a
+        # newline, the segment count no longer matches the message count and
+        # content is remapped across the wrong messages. The redactor is
+        # stateless and identical to the one the gateway used, so per-message
+        # redaction reproduces the joint scan's redaction for each message.
+        for msg_idx in user_indices:
+            redacted, _ = _pii_redactor.redact(messages[msg_idx].get("content", ""))
+            messages[msg_idx]["content"] = redacted
     else:
         # Replace only the last user message
         messages[user_indices[-1]]["content"] = sanitized
