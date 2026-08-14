@@ -74,7 +74,7 @@ async def setup_status(db: AsyncSession = Depends(get_db)):
 
     # Cache miss - check DB
     try:
-        tenant = await asyncio.wait_for(TenantRepository(db).get_default(), timeout=5.0)
+        tenant = await asyncio.wait_for(TenantRepository(db).get_bootstrap_default(), timeout=5.0)
     except asyncio.TimeoutError:
         logger.warning("setup DB status check timed out - returning not initialized")
         return SetupStatusResponse(initialized=False)
@@ -105,7 +105,7 @@ async def complete_setup(body: SetupRequest, db: AsyncSession = Depends(get_db))
     Returns 404 once initialized - indistinguishable from a missing route.
     Public endpoint - accessible without any API key or JWT.
     """
-    tenant = await TenantRepository(db).get_default()
+    tenant = await TenantRepository(db).get_bootstrap_default()
 
     # Return 404 for all failure cases - never reveal system state to unauthenticated callers
     if not tenant:

@@ -49,7 +49,7 @@ async def seed_default_tenant() -> None:
         from db.session import AsyncSessionFactory
         async with AsyncSessionFactory() as db:
             repo   = TenantRepository(db)
-            tenant = await repo.get_default()
+            tenant = await repo.get_bootstrap_default()
             if not tenant:
                 # Same create path platform-operator provisioning uses, so the
                 # default tenant is structurally identical to any provisioned one.
@@ -92,7 +92,7 @@ async def bootstrap_admin() -> None:
         )
 
         async with AsyncSessionFactory() as db:
-            tenant = await TenantRepository(db).get_default()
+            tenant = await TenantRepository(db).get_bootstrap_default()
             if not tenant:
                 logger.error("bootstrap no_default_tenant - skipping admin creation")
                 return

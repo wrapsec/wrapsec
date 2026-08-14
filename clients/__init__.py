@@ -15,7 +15,7 @@ async def get_llm_settings_from_db() -> dict:
         async with AsyncSessionFactory() as session:
             # v1 single-tenant: the default tenant's LLM config. (Per-tenant LLM
             # config via the resolved policy is a later refinement.)
-            tenant = await TenantRepository(session).get_default()
+            tenant = await TenantRepository(session).get_bootstrap_default()
             if tenant is None:
                 return {}
             repo    = TenantSettingsRepository(session)

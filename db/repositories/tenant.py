@@ -47,7 +47,16 @@ class TenantRepository(BaseRepository):
         tenant.suspended_at = utc_now() if status == "suspended" else None
         return tenant
 
-    async def get_default(self) -> TenantModel | None:
+    async def get_bootstrap_default(self) -> TenantModel | None:
+        """Resolve the deployment's "default" tenant.
+
+        FENCED: legitimate ONLY for bootstrap, setup, admin-key auth, and
+        deployment-level config that has no per-request tenant. EVERYWHERE else
+        the tenant comes from the authenticated identity (request.state.tenant_id
+        / principal), never from here -- calling this on a tenant-scoped request
+        path collapses tenant isolation. The allowlist of callers is asserted by
+        tests/unit/test_bootstrap_default_fence.py, so a new caller fails CI.
+        """
         result = await self.session.execute(
             select(TenantModel).where(
                 TenantModel.slug   == "default",

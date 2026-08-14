@@ -236,7 +236,7 @@ async def _postgres_db_setup():
     """
     Creates all tables in PostgreSQL and seeds the default tenant.
     Required for admin_jwt_headers and auth_setup fixtures which call
-    TenantRepository.get_default() and assert a slug='default' tenant exists.
+    TenantRepository.get_bootstrap_default() and assert a slug='default' tenant exists.
     Runs once before any integration test in the session.
 
     Fail-graceful: if settings.database_url is unreachable, prints a warning

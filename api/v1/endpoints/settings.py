@@ -24,16 +24,20 @@ from services.time import to_iso_z, utc_now
 
 async def _resolve_tenant(db, principal) -> uuid.UUID:
     """
-    The tenant scope for a settings read/write. Uses the principal's tenant when it
-    is a concrete tenant; a cross-tenant admin principal (the admin key) carries no
-    specific tenant and resolves to the default tenant (v1 single-tenant).
+    The tenant scope for a settings read/write. A JWT principal carries its own
+    concrete tenant and is used directly. The cross-tenant admin key carries no
+    tenant (in test mode the middleware leaves it None by design), so it -- and
+    only it -- falls back to the deployment default tenant. get_bootstrap_default
+    is fenced (see db/repositories/tenant.py) and this call site is on the
+    fence allowlist precisely because it is the tenant-less admin-key case, not a
+    tenant-scoped path.
     """
     tid = getattr(principal, "tenant_id", None)
     try:
         return uuid.UUID(str(tid))
     except (ValueError, TypeError):
         from db.repositories.tenant import TenantRepository
-        tenant = await TenantRepository(db).get_default()
+        tenant = await TenantRepository(db).get_bootstrap_default()
         if tenant is None:
             from errors.exceptions import WrapSecError
             raise WrapSecError(

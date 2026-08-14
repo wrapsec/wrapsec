@@ -6,8 +6,12 @@
 WrapSec - Background Retention Worker
 workers/tasks.py
 
-Runs the same cleanup logic as scripts/cleanup_audit_logs.py but
-automatically on a configurable schedule using APScheduler.
+Automatic audit/proxy retention on a configurable schedule using APScheduler.
+This worker is AUTHORITATIVE for retention: it resolves the window PER TENANT
+(tenant_settings -> platform_settings -> env) and deletes each tenant's rows
+against its own window, plus an orphan pass for un-attributed rows. The manual
+runner scripts/cleanup_audit_logs.py delegates to these same functions, so the
+two share one implementation (single source of truth).
 
 Schedule (configurable via .env):
   RETENTION_WORKER_HOUR   = 2   (run at 2 AM UTC daily)
@@ -20,8 +24,7 @@ Design decisions:
   - APScheduler AsyncIOScheduler - integrates cleanly with FastAPI/asyncio
   - Fail-safe: exceptions are caught and logged, never crash the API
   - Idempotent: safe to run multiple times - only deletes/nulls eligible rows
-  - Same logic as scripts/cleanup_audit_logs.py - single source of truth
-  - Reads retention settings from DB (same as manual script) for consistency
+  - Per-tenant retention windows resolved from the DB (tenant/platform/env)
 """
 
 import logging

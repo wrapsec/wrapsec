@@ -458,7 +458,7 @@ class AuthMiddleware(BaseHTTPMiddleware):
                 from db.repositories.tenant import TenantRepository
                 from db.session import AsyncSessionFactory
                 async with AsyncSessionFactory() as session:
-                    tenant = await TenantRepository(session).get_default()
+                    tenant = await TenantRepository(session).get_bootstrap_default()
                 if tenant:
                     tenant_id = str(tenant.id)
                 else:

@@ -124,7 +124,7 @@ async def admin_jwt_headers():
     sf = _pg_session_factory()
 
     async with sf() as db:
-        tenant = await TenantRepository(db).get_default()
+        tenant = await TenantRepository(db).get_bootstrap_default()
         assert tenant is not None, "No default tenant found"
         tenant_id = tenant.id
 
@@ -198,7 +198,7 @@ async def auth_setup():
 
     # Use existing default tenant
     async with sf() as db:
-        tenant = await TenantRepository(db).get_default()
+        tenant = await TenantRepository(db).get_bootstrap_default()
         assert tenant is not None, "No default tenant found in DB"
         tenant_id = tenant.id
 
