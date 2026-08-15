@@ -6,7 +6,7 @@
 import { useEffect, useState } from "react"
 import { useTranslations } from "next-intl"
 import Link from "next/link"
-import { RequestDetail } from "@/lib/types"
+import { RequestDetail, Decision } from "@/lib/types"
 import { getRequest } from "@/lib/api"
 import { DecisionBadge, ThreatBadge, SourceBadge, SeverityBadge } from "@/components/ui/Badge"
 import { CopyButton } from "@/components/ui/CopyButton"
@@ -57,7 +57,7 @@ function DecisionChip({ label, decision }: { label: string; decision: string | n
     <div className="flex flex-col gap-1">
       <p className="text-[11px] text-slate-400">{label}</p>
       {decision
-        ? <DecisionBadge decision={decision as any} size="sm" />
+        ? <DecisionBadge decision={decision as Decision} size="sm" />
         : <span className="text-xs text-slate-300">--</span>}
     </div>
   )
@@ -390,7 +390,7 @@ export function RequestDetailModal({ traceId, onClose }: RequestDetailModalProps
               {detail.proxy?.output_decision && detail.proxy.output_decision !== detail.decision && (
                 <>
                   <span className="text-[11px] text-slate-400">-&gt;</span>
-                  <DecisionBadge decision={detail.proxy.output_decision as any} />
+                  <DecisionBadge decision={detail.proxy.output_decision as Decision} />
                 </>
               )}
             </div>

@@ -3,6 +3,8 @@
 // WrapSec v1.0 | AI Security Gateway - https://wrapsec.com
 // ── Decision types ────────────────────────────────────────────
 export type Decision = "BLOCK" | "SANITIZE" | "ALLOW"
+
+export type Role = "ADMIN" | "DEVELOPER" | "VIEWER" | "AUDITOR"
 export type DetectionMode = "fast" | "full"
 export type ExecutionMode = "scan_only" | "proxy"
 export type ThreatCategory =
@@ -423,7 +425,7 @@ export interface ProxyHealthResult {
 export interface DashboardUser {
   id:                    string
   email:                 string
-  role:                  "ADMIN" | "DEVELOPER" | "VIEWER" | "AUDITOR"
+  role:                  Role
   dept_id:               string | null
   tenant_id:             string
   is_active:             boolean

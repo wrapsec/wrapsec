@@ -42,7 +42,7 @@ export function ProxySettingsForm({ config, onUpdated }: ProxySettingsFormProps)
   const [health,         setHealth]         = useState<ProxyHealthResult | null>(null)
 
   const handleProviderChange = (p: string) => {
-    setProvider(p as any)
+    setProvider(p as ProxyProviderConfig["provider"])
     setHealth(null)
     if (p === "ollama") {
       setBaseUrl("http://localhost:11434")

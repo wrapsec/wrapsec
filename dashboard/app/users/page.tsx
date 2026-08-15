@@ -18,7 +18,7 @@ import {
   getDepartments,
 } from "@/lib/api"
 import { errorMessage } from "@/lib/apiError"
-import type { DashboardUser } from "@/lib/types"
+import type { DashboardUser, Role } from "@/lib/types"
 
 // Role identifiers are stable machine codes (never localized); rendered verbatim.
 const ROLES = ["ADMIN", "DEVELOPER", "AUDITOR", "VIEWER"] as const
@@ -92,7 +92,7 @@ function CreateUserModal({
   const tb = useTranslations("common.buttons")
   const [email,    setEmail]    = useState("")
   const [password, setPassword] = useState("")
-  const [role,     setRole]     = useState("DEVELOPER")
+  const [role,     setRole]     = useState<Role>("DEVELOPER")
   const [deptId,   setDeptId]   = useState(depts[0]?.id ?? "")
   const [saving,   setSaving]   = useState(false)
   const [error,    setError]    = useState<string | null>(null)
@@ -110,7 +110,7 @@ function CreateUserModal({
       await createUser({
         email,
         password,
-        role:    role as any,
+        role:    role,
         dept_id: omitDept ? undefined : deptId,
       })
       onCreated()
@@ -156,7 +156,7 @@ function CreateUserModal({
             />
           </Field>
           <Field label={t("role")}>
-            <select value={role} onChange={e => setRole(e.target.value)} className={selectCls}>
+            <select value={role} onChange={e => setRole(e.target.value as Role)} className={selectCls}>
               {ROLES.map(r => <option key={r} value={r}>{r}</option>)}
             </select>
           </Field>
@@ -247,7 +247,7 @@ function EditUserModal({
     setSaving(true)
     try {
       await updateUser(user.id, {
-        role:    role as any,
+        role:    role,
         dept_id: nullifyDept ? null : deptId,
       })
       onSaved()
@@ -310,7 +310,7 @@ function EditUserModal({
 
         <div className="space-y-3">
           <Field label={t("role")}>
-            <select value={role} onChange={e => setRole(e.target.value as any)} className={selectCls}>
+            <select value={role} onChange={e => setRole(e.target.value as Role)} className={selectCls}>
               {ROLES.map(r => <option key={r} value={r}>{r}</option>)}
             </select>
           </Field>

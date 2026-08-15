@@ -7,6 +7,7 @@ import { Suspense, useState } from "react"
 import { useTranslations } from "next-intl"
 import { useErrorMessage } from "@/hooks/useErrorMessage"
 import { errorMessage } from "@/lib/apiError"
+import type { Decision, ThreatCategory, ExecutionMode } from "@/lib/types"
 import { swrKeys } from "@/lib/swrKeys"
 import useSWR from "swr"
 import { Shell } from "@/components/layout/Shell"
@@ -69,9 +70,9 @@ function RequestsPageInner() {
     ["audit-logs", values.trace_id, decision, threat, mode, deptId, from, to, sortBy, sortOrder, offset],
     () => getAuditLogs({
       trace_id:        values.trace_id || undefined,
-      decision:        (decision as any) || undefined,
-      threat_category: (threat as any) || undefined,
-      execution_mode:  (mode as any) || undefined,
+      decision:        (decision as Decision) || undefined,
+      threat_category: (threat as ThreatCategory) || undefined,
+      execution_mode:  (mode as ExecutionMode) || undefined,
       dept_id:         deptId || undefined,
       from:            from && isValidDateRange ? withStart(from) : undefined,
       to:              to && isValidDateRange ? withEnd(to) : undefined,
