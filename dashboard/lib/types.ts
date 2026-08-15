@@ -344,17 +344,38 @@ export interface DeptProxyOverride {
   api_key_masked?:  string | null
 }
 
+/**
+ * A policy-override document (department or application scope, and the payload of
+ * setApplicationPolicy). Mirrors the backend policy_override shape: only the
+ * fields an operator overrides are present; anything absent inherits.
+ */
+export interface PolicyOverride {
+  thresholds?:     { block?: number; sanitize?: number }
+  llm?:            DeptLLMOverride
+  proxy_provider?: DeptProxyOverride
+}
+
+/**
+ * The effective policy after resolution (system defaults -> tenant/platform
+ * settings -> department -> application), as returned by the *-policy endpoints.
+ * Shape mirrors the backend resolve_policy output; the dashboard reads
+ * thresholds today, the rest is carried for faithfulness.
+ */
+export interface ResolvedPolicy {
+  thresholds?: { block?: number; sanitize?: number }
+  detection?:  { rule_enabled?: boolean; ml_enabled?: boolean; llm_enabled?: boolean; llm_trigger?: number }
+  guardrails?: { pii?: { enabled?: boolean; block_threshold?: number; sanitize_threshold?: number } }
+  llm?:        { provider?: string; model?: string; base_url?: string; timeout?: number }
+  rate_limit?: { per_minute?: number }
+}
+
 export interface Department {
   id:              string
   tenant_id:       string
   slug:            string
   name:            string
   description:     string | null
-  policy_override: {
-    thresholds?:      { block?: number; sanitize?: number }
-    llm?:             DeptLLMOverride
-    proxy_provider?:  DeptProxyOverride
-  } | null
+  policy_override: PolicyOverride | null
   contact_email:   string | null
   is_active:       boolean
   application_count?: number
@@ -372,12 +393,8 @@ export interface Application {
   owner_name:          string | null
   owner_email:         string | null
   environment:         string
-  metadata:            Record<string, any> | null
-  policy_override:     {
-    thresholds?:     { block?: number; sanitize?: number }
-    llm?:            DeptLLMOverride
-    proxy_provider?: DeptProxyOverride
-  } | null
+  metadata:            Record<string, unknown> | null
+  policy_override:     PolicyOverride | null
   rate_limit_override: number | null
   is_active:           boolean
   created_at:          string

@@ -20,6 +20,8 @@ import {
   RequestFilters,
   Department,
   Application,
+  PolicyOverride,
+  ResolvedPolicy,
   ProxyProviderConfig,
   ProxyHealthResult,
   DashboardUser,
@@ -591,20 +593,20 @@ export async function getApplicationPolicy(id: string) {
     dept_id:         string
     policy_source:   string
     override_set:    boolean
-    policy_override: Record<string, any> | null
-    resolved_policy: Record<string, any>
+    policy_override: PolicyOverride | null
+    resolved_policy: ResolvedPolicy
   }>(`/v1/admin/applications/${id}/policy`)
 }
 
 export async function setApplicationPolicy(
   id:              string,
-  policy_override: Record<string, any> | null
+  policy_override: PolicyOverride | null
 ) {
   return request<{
     app_id:          string
-    policy_override: Record<string, any> | null
+    policy_override: PolicyOverride | null
     policy_source:   string
-    resolved_policy: Record<string, any>
+    resolved_policy: ResolvedPolicy
     updated:         boolean
   }>(`/v1/admin/applications/${id}/policy`, {
     method: "PUT",
@@ -652,7 +654,7 @@ export async function getTenant() {
     slug:          string
     name:          string
     description:   string | null
-    global_policy?: Record<string, any>
+    global_policy?: Record<string, unknown>
     contact_email: string | null
     is_active:     boolean
     created_at:    string
@@ -663,13 +665,13 @@ export async function updateTenant(data: {
   name?:          string
   description?:   string
   contact_email?: string
-  global_policy?: Record<string, any>
+  global_policy?: Record<string, unknown>
 }) {
   return request<{
     id:            string
     name:          string
     description:   string | null
-    global_policy?: Record<string, any>
+    global_policy?: Record<string, unknown>
     contact_email: string | null
   }>("/v1/admin/tenant", {
     method: "PUT",
