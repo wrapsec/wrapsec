@@ -27,6 +27,7 @@ import {
   ProxyHealthResult,
   DashboardUser,
   DashboardUsersResponse,
+  TenantProfile,
   WebhookEndpoint,
   WebhookEndpointCreated,
   ConnectorTypeSchema,
@@ -644,16 +645,7 @@ export async function updateAppProxyOverride(
 
 // ── Tenant ────────────────────────────────────────────────────
 export async function getTenant() {
-  return request<{
-    id:            string
-    slug:          string
-    name:          string
-    description:   string | null
-    global_policy?: Record<string, unknown>
-    contact_email: string | null
-    is_active:     boolean
-    created_at:    string
-  }>("/v1/admin/tenant")
+  return request<TenantProfile>("/v1/admin/tenant")
 }
 
 export async function updateTenant(data: {
@@ -662,13 +654,7 @@ export async function updateTenant(data: {
   contact_email?: string
   global_policy?: Record<string, unknown>
 }) {
-  return request<{
-    id:            string
-    name:          string
-    description:   string | null
-    global_policy?: Record<string, unknown>
-    contact_email: string | null
-  }>("/v1/admin/tenant", {
+  return request<TenantProfile>("/v1/admin/tenant", {
     method: "PUT",
     body:   JSON.stringify(data),
   })

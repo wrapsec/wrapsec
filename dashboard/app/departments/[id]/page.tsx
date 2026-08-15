@@ -124,7 +124,7 @@ export default function DepartmentDetailPage() {
     setLlmSaving(true)
     setLlmError(null)
     try {
-      const payload: any = {}
+      const payload: Parameters<typeof updateDeptLLMOverride>[1] = {}
       if (llmProvider) payload.provider = llmProvider
       if (llmModel)    payload.model    = llmModel
       if (llmBaseUrl)  payload.base_url = llmBaseUrl
@@ -171,7 +171,7 @@ export default function DepartmentDetailPage() {
     setProxySaving(true)
     setProxyError(null)
     try {
-      const payload: any = {}
+      const payload: Parameters<typeof updateDeptProxyOverride>[1] = {}
       if (proxyProvider) payload.provider       = proxyProvider
       if (proxyBaseUrl)  payload.base_url        = proxyBaseUrl
       if (proxyModel)    payload.default_model   = proxyModel

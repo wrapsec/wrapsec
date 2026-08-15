@@ -147,7 +147,7 @@ export default function ApplicationDetailPage() {
     setLlmSaving(true)
     setLlmError(null)
     try {
-      const payload: any = {}
+      const payload: Parameters<typeof updateAppLLMOverride>[1] = {}
       if (llmProvider)      payload.provider = llmProvider
       if (llmModel)         payload.model    = llmModel
       if (llmBaseUrl)       payload.base_url = llmBaseUrl
@@ -194,7 +194,7 @@ export default function ApplicationDetailPage() {
     setProxySaving(true)
     setProxyError(null)
     try {
-      const payload: any = {}
+      const payload: Parameters<typeof updateAppProxyOverride>[1] = {}
       if (proxyProvider)      payload.provider        = proxyProvider
       if (proxyBaseUrl)       payload.base_url        = proxyBaseUrl
       if (proxyModel)         payload.default_model   = proxyModel

@@ -16,9 +16,9 @@ interface TenantSettingsFormProps {
     name:          string
     description:   string | null
     contact_email: string | null
-    global_policy?: Record<string, any>
+    global_policy?: Record<string, unknown>
   }
-  onUpdated:      (t: any) => void
+  onUpdated:      (t: Awaited<ReturnType<typeof updateTenant>>) => void
   // Actual enforced values - from DB settings, not global_policy
   // Passed from parent page which already fetches these via SWR
   blockThreshold?:    number

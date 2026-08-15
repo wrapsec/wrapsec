@@ -431,6 +431,18 @@ export interface ProxyHealthResult {
 }
 
 // ── Dashboard Users (JWT auth) ────────────────────────────────
+/** Tenant profile returned by GET and PUT /v1/admin/tenant (both return the full row). */
+export interface TenantProfile {
+  id:             string
+  slug:           string
+  name:           string
+  description:    string | null
+  global_policy?: Record<string, unknown>
+  contact_email:  string | null
+  is_active:      boolean
+  created_at:     string
+}
+
 export interface DashboardUser {
   id:                    string
   email:                 string

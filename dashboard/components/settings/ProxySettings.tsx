@@ -58,7 +58,7 @@ export function ProxySettingsForm({ config, onUpdated }: ProxySettingsFormProps)
     setError(null)
     setHealth(null)
     try {
-      const payload: any = { provider, base_url: baseUrl, default_model: model, timeout }
+      const payload: Parameters<typeof updateProxySettings>[0] = { provider, base_url: baseUrl, default_model: model, timeout }
       if (apiKey.trim()) payload.api_key = apiKey.trim()
       const updated = await updateProxySettings(payload)
       onUpdated(updated)
