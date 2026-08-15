@@ -26,6 +26,7 @@ from collections.abc import Sequence
 
 import sqlalchemy as sa
 from alembic import op
+from sqlalchemy.dialects import postgresql
 
 revision: str = "0015_memberships"
 down_revision: str | None = "0014_email_outbox"
@@ -43,10 +44,10 @@ def upgrade() -> None:
     if _TABLE not in tables:
         op.create_table(
             _TABLE,
-            sa.Column("id",        sa.dialects.postgresql.UUID(as_uuid=True), primary_key=True),
-            sa.Column("user_id",   sa.dialects.postgresql.UUID(as_uuid=True), nullable=False),
-            sa.Column("tenant_id", sa.dialects.postgresql.UUID(as_uuid=True), nullable=False),
-            sa.Column("dept_id",   sa.dialects.postgresql.UUID(as_uuid=True), nullable=True),
+            sa.Column("id",        postgresql.UUID(as_uuid=True), primary_key=True),
+            sa.Column("user_id",   postgresql.UUID(as_uuid=True), nullable=False),
+            sa.Column("tenant_id", postgresql.UUID(as_uuid=True), nullable=False),
+            sa.Column("dept_id",   postgresql.UUID(as_uuid=True), nullable=True),
             sa.Column("role",      sa.String(50), nullable=False, server_default="DEVELOPER"),
             sa.Column("created_at", sa.DateTime(timezone=True), nullable=False,
                       server_default=sa.text("now()")),

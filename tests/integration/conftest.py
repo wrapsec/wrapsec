@@ -492,11 +492,11 @@ async def auth_setup():
         "tenant":       _Obj(id=tenant_id),
         "dept":         _Obj(id=dept_id),
         "admin_user":   _Obj(id=admin_db_id,  email=admin_email,  role="ADMIN"),
-        "admin_token":  create_access_token(_mock(admin_db_id,  tenant_id, None,    "ADMIN")),
+        "admin_token":  create_access_token((_m := _mock(admin_db_id,  tenant_id, None,    "ADMIN")), _m),
         "dev_user":     _Obj(id=dev_db_id,    email=dev_email,    role="DEVELOPER"),
-        "dev_token":    create_access_token(_mock(dev_db_id,    tenant_id, dept_id, "DEVELOPER")),
+        "dev_token":    create_access_token((_m := _mock(dev_db_id,    tenant_id, dept_id, "DEVELOPER")), _m),
         "viewer_user":  _Obj(id=viewer_db_id, email=viewer_email, role="VIEWER"),
-        "viewer_token": create_access_token(_mock(viewer_db_id, tenant_id, dept_id, "VIEWER")),
+        "viewer_token": create_access_token((_m := _mock(viewer_db_id, tenant_id, dept_id, "VIEWER")), _m),
     }
 
     # ── Cleanup ────────────────────────────────────────────────────────────────
@@ -658,7 +658,7 @@ async def two_tenant_setup():
                     "app":          _Obj(id=aid),
                     "admin_user":   _Obj(id=u.id, email=email, role="ADMIN"),
                     "admin_token":  create_access_token(
-                        _mock(u.id, tid, None, "ADMIN")
+                        (_m := _mock(u.id, tid, None, "ADMIN")), _m
                     ),
                     "api_key_id":   keyid,
                     "audit_trace":  trace,

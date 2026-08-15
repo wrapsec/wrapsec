@@ -28,10 +28,26 @@ Design decisions:
 """
 
 import logging
+from typing import Any, cast
+
+from sqlalchemy import CursorResult
+from sqlalchemy.engine import Result
 
 from services.time import utc_now
 
 logger = logging.getLogger("wrapsec.retention_worker")
+
+
+def _rows_affected(result: "Result[Any]") -> int:
+    """Row count of a DML statement.
+
+    SQLAlchemy's async ``AsyncSession.execute`` is typed to return ``Result``,
+    but a DELETE/UPDATE returns a ``CursorResult`` at runtime -- where
+    ``rowcount`` lives (the async execute overloads omit the CursorResult return
+    that the sync ``Session`` declares). Narrow to the real runtime type rather
+    than suppressing the check.
+    """
+    return cast("CursorResult[Any]", result).rowcount or 0
 
 
 RETENTION_LEASE_KEY = "wrapsec:retention:lease"
@@ -174,20 +190,15 @@ async def _cleanup_audit_logs() -> int:
     with the deployment default. Returns total rows deleted. DELETE is permitted by
     the audit immutability trigger, which blocks UPDATE only.
     """
-    from sqlalchemy import text
+    from datetime import timedelta
+
+    from sqlalchemy import delete
 
     from config.settings import get_settings
+    from db.models import AuditLogModel
     from db.repositories.tenant import TenantRepository
     from db.session import AsyncSessionFactory
-
-    delete_scoped = text(
-        "DELETE FROM audit_logs WHERE tenant_id = :tid "
-        "AND created_at < NOW() - INTERVAL '1 day' * :days"
-    )
-    delete_orphan = text(
-        "DELETE FROM audit_logs WHERE tenant_id IS NULL "
-        "AND created_at < NOW() - INTERVAL '1 day' * :days"
-    )
+    from services.time import utc_now
 
     total = 0
     async with AsyncSessionFactory() as session:
@@ -198,15 +209,25 @@ async def _cleanup_audit_logs() -> int:
                 logger.error("Retention worker: invalid retention_days=%d for tenant %s - skipping",
                              days, tenant.id)
                 continue
-            res = await session.execute(delete_scoped, {"tid": str(tenant.id), "days": days})
-            total += res.rowcount or 0
+            res = await session.execute(
+                delete(AuditLogModel).where(
+                    AuditLogModel.tenant_id == str(tenant.id),
+                    AuditLogModel.created_at < utc_now() - timedelta(days=days),
+                )
+            )
+            total += _rows_affected(res)
 
         # Un-attributed rows (no tenant_id) use the deployment default so nothing
         # is orphaned from cleanup by the per-tenant iteration.
         env_days = get_settings().audit_retention_days
         if env_days >= 1:
-            res = await session.execute(delete_orphan, {"days": env_days})
-            total += res.rowcount or 0
+            res = await session.execute(
+                delete(AuditLogModel).where(
+                    AuditLogModel.tenant_id.is_(None),
+                    AuditLogModel.created_at < utc_now() - timedelta(days=env_days),
+                )
+            )
+            total += _rows_affected(res)
 
         await session.commit()
 

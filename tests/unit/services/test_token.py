@@ -33,51 +33,51 @@ def _make_user(role="DEVELOPER", dept_id=None):
 
 def test_access_token_has_sub():
     user    = _make_user()
-    payload = decode_access_token(create_access_token(user))
+    payload = decode_access_token(create_access_token(user, user))
     assert payload["sub"] == str(user.id)
 
 
 def test_access_token_type_is_access():
     user    = _make_user()
-    payload = decode_access_token(create_access_token(user))
+    payload = decode_access_token(create_access_token(user, user))
     assert payload["type"] == "access"
 
 
 def test_access_token_has_ver():
     user               = _make_user()
     user.token_version = 3
-    payload            = decode_access_token(create_access_token(user))
+    payload            = decode_access_token(create_access_token(user, user))
     assert payload["ver"] == 3
 
 
 def test_access_token_has_audience():
     user    = _make_user()
-    payload = decode_access_token(create_access_token(user))
+    payload = decode_access_token(create_access_token(user, user))
     assert payload["aud"] == ACCESS_TOKEN_AUDIENCE
 
 
 def test_access_token_has_tenant_id():
     user    = _make_user()
-    payload = decode_access_token(create_access_token(user))
+    payload = decode_access_token(create_access_token(user, user))
     assert payload["tenant_id"] == str(user.tenant_id)
 
 
 def test_access_token_has_role():
     user    = _make_user(role="ADMIN")
-    payload = decode_access_token(create_access_token(user))
+    payload = decode_access_token(create_access_token(user, user))
     assert payload["role"] == "ADMIN"
 
 
 def test_access_token_dept_null_for_admin():
     user    = _make_user(role="ADMIN", dept_id=None)
-    payload = decode_access_token(create_access_token(user))
+    payload = decode_access_token(create_access_token(user, user))
     assert payload["dept_id"] is None
 
 
 def test_access_token_dept_present_for_developer():
     dept_id = uuid.uuid4()
     user    = _make_user(role="DEVELOPER", dept_id=dept_id)
-    payload = decode_access_token(create_access_token(user))
+    payload = decode_access_token(create_access_token(user, user))
     assert payload["dept_id"] == str(dept_id)
 
 
@@ -85,7 +85,7 @@ def test_access_token_dept_present_for_developer():
 
 def test_decode_valid_returns_payload():
     user    = _make_user()
-    token   = create_access_token(user)
+    token   = create_access_token(user, user)
     payload = decode_access_token(token)
     assert "sub" in payload
     assert "exp" in payload
@@ -93,7 +93,7 @@ def test_decode_valid_returns_payload():
 
 def test_decode_tampered_raises():
     user  = _make_user()
-    token = create_access_token(user) + "tampered"
+    token = create_access_token(user, user) + "tampered"
     with pytest.raises(InvalidTokenError):
         decode_access_token(token)
 

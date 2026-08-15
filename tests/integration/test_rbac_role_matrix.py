@@ -62,7 +62,7 @@ async def _make_user_token(tenant_id, role: str, *, dept_id=None) -> tuple[uuid.
         await engine.dispose()
     m = MagicMock()
     m.id = uid; m.tenant_id = tenant_id; m.dept_id = dept_id; m.role = role; m.token_version = 1
-    return uid, create_access_token(m)
+    return uid, create_access_token(m, m)
 
 
 @pytest_asyncio.fixture

@@ -25,6 +25,7 @@ from collections.abc import Sequence
 
 import sqlalchemy as sa
 from alembic import op
+from sqlalchemy.dialects import postgresql
 
 revision: str = "0017_settings_split"
 down_revision: str | None = "0016_users_identity_only"
@@ -45,7 +46,7 @@ def _create_platform_settings() -> None:
 def _create_tenant_settings() -> None:
     op.create_table(
         "tenant_settings",
-        sa.Column("tenant_id", sa.dialects.postgresql.UUID(as_uuid=True), nullable=False),
+        sa.Column("tenant_id", postgresql.UUID(as_uuid=True), nullable=False),
         sa.Column("key",       sa.String(100), nullable=False),
         sa.Column("value",     sa.Text, nullable=False),
         sa.Column("updated_at", sa.DateTime(timezone=True), nullable=False,

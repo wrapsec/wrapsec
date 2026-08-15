@@ -45,8 +45,8 @@ class _FakeUser:
 def test_create_access_token_embeds_unique_jti():
     user = _FakeUser()
 
-    token_a = create_access_token(user)
-    token_b = create_access_token(user)
+    token_a = create_access_token(user, user)
+    token_b = create_access_token(user, user)
 
     payload_a = decode_access_token(token_a)
     payload_b = decode_access_token(token_b)

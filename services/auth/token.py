@@ -25,18 +25,14 @@ ACCESS_TOKEN_AUDIENCE = "wrapsec-dashboard"
 # Must match exactly on token creation and validation.
 
 
-def create_access_token(
-    user: "UserModel", membership: "MembershipModel | None" = None
-) -> str:
+def create_access_token(user: "UserModel", membership: "MembershipModel") -> str:
     """
     Creates a short-lived JWT access token scoped to one membership.
 
     Identity model D2 Option B: the authz claims (tenant_id, role, dept_id) come
     from the MEMBERSHIP the session is scoped to; identity claims (sub, ver) come
-    from the user. Production always passes a membership. When it is omitted the
-    claims are read off `user` itself (role/tenant_id/dept_id) -- used only by unit
-    tests that pass a lightweight user double carrying those attributes (the real
-    UserModel no longer has them).
+    from the user. A token is ALWAYS minted from a membership -- there is no
+    tenant/role source on the user row -- so both arguments are required.
 
     Claims and their purposes:
         sub        - user UUID string (JWT subject - standard claim)
@@ -59,15 +55,14 @@ def create_access_token(
     now     = utc_now()
     expires = now + timedelta(minutes=_settings.jwt_access_token_expire_minutes)
 
-    src = membership if membership is not None else user
     payload = {
         "sub":       str(user.id),
         "jti":       secrets.token_urlsafe(16),
         "type":      "access",
         "ver":       user.token_version,
-        "role":      src.role,
-        "tenant_id": str(src.tenant_id),
-        "dept_id":   str(src.dept_id) if src.dept_id else None,
+        "role":      membership.role,
+        "tenant_id": str(membership.tenant_id),
+        "dept_id":   str(membership.dept_id) if membership.dept_id else None,
         "aud":       ACCESS_TOKEN_AUDIENCE,
         "iat":       now,
         "exp":       expires,

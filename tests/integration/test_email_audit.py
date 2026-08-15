@@ -122,7 +122,7 @@ async def _make_auditor(tenant_id) -> str:
         await engine.dispose()
     m = MagicMock()
     m.id = uid; m.tenant_id = tenant_id; m.dept_id = None; m.role = "AUDITOR"; m.token_version = 1
-    return create_access_token(m)
+    return create_access_token(m, m)
 
 
 # -- RBAC ------------------------------------------------------------

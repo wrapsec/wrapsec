@@ -23,6 +23,7 @@ from collections.abc import Sequence
 
 import sqlalchemy as sa
 from alembic import op
+from sqlalchemy.dialects import postgresql
 
 revision: str = "0019_proxy_interactions_tenant"
 down_revision: str | None = "0018_drop_legacy_settings"
@@ -45,7 +46,7 @@ def upgrade() -> None:
 
     for col in _COLUMNS:
         if col not in existing_cols:
-            op.add_column(_TABLE, sa.Column(col, sa.dialects.postgresql.UUID(as_uuid=True), nullable=True))
+            op.add_column(_TABLE, sa.Column(col, postgresql.UUID(as_uuid=True), nullable=True))
     if _INDEX not in existing_indexes:
         op.create_index(_INDEX, _TABLE, ["tenant_id", "created_at"])
 
