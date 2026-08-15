@@ -31,3 +31,11 @@ exclude_lines =
     @(abc\.)?abstractmethod
     ^\s*\.\.\.\s*$
 sort = miss
+# CI regression floor. `coverage report` exits non-zero below this, and the
+# `make coverage` target runs under `set -e`, so CI fails on a real drop. Set a
+# few points under the current branch-coverage level (~84-85%) so ordinary
+# fluctuation does not flake the build; RATCHET UP as coverage improves -- never
+# lower it to make a drop pass. The gap to 100% is un-unit-testable I/O (the LLM
+# provider clients, the app lifespan, model-dependent detectors), deliberately
+# kept in the denominator rather than omitted (an honest metric).
+fail_under = 82

@@ -30,8 +30,8 @@ coverage:
 	for i in $$(seq 1 30); do docker exec $$CID pg_isready -U wrapsec -d wrapsec_test >/dev/null 2>&1 && break; sleep 1; done; \
 	URL=postgresql+asyncpg://wrapsec:wrapsec@localhost:55432/wrapsec_test; \
 	DATABASE_URL=$$URL WRAPSEC_TEST_PG_URL=$$URL TESTING=true coverage run -m pytest tests/unit tests/integration -q; \
-	coverage report; \
-	coverage html'
+	coverage html; \
+	coverage report'
 
 # Apply pending Alembic migrations. Also runs automatically on API startup.
 migrate:
