@@ -598,7 +598,7 @@ export default function DepartmentDetailPage() {
                 >
                   <div>
                     <p className="text-sm font-medium text-slate-900">{app.name}</p>
-                    <p className="text-xs text-slate-400">{app.slug} Â· {app.environment}</p>
+                    <p className="text-xs text-slate-400">{app.slug} {"·"} {app.environment}</p>
                   </div>
                   <a
                     href={`/applications/${app.id}`}

@@ -22,7 +22,6 @@ import {
   getEmailDelivery,
   getDepartments,
 } from "@/lib/api"
-import type { EmailDelivery } from "@/lib/types"
 
 // The URL is the single source of truth for filters + pagination (deep-linkable,
 // refresh-safe). Only non-sensitive navigation state lives here.

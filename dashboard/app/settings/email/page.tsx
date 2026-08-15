@@ -38,11 +38,15 @@ export default function EmailSettingsPage() {
 
   // Seed the form once settings arrive (and after a successful save re-fetch).
   useEffect(() => {
+    // Intentional: seed the form state from the fetched settings once they arrive (guarded by
+    // if(data), keyed on [data]); this is initialization from async data, not a render loop.
+    /* eslint-disable react-hooks/set-state-in-effect */
     if (data) {
       setEnabled(data.notifications_enabled)
       setAttempts(data.max_attempts)
       setRetention(data.retention_days)
     }
+    /* eslint-enable react-hooks/set-state-in-effect */
   }, [data])
 
   if (isLoading && !data) return <Shell title={t("title")}><PageSpinner /></Shell>

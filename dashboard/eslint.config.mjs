@@ -5,6 +5,17 @@ import nextTs from "eslint-config-next/typescript";
 const eslintConfig = defineConfig([
   ...nextVitals,
   ...nextTs,
+  // Allow an underscore prefix to mark an intentionally-unused binding
+  // (unused args, destructured-but-ignored values, caught errors).
+  {
+    rules: {
+      "@typescript-eslint/no-unused-vars": ["warn", {
+        argsIgnorePattern:        "^_",
+        varsIgnorePattern:        "^_",
+        caughtErrorsIgnorePattern: "^_",
+      }],
+    },
+  },
   // No-new-hardcoded-strings guard. The full dashboard has been migrated to the
   // next-intl catalog (v1.8.2 sweep): every route and rendered component below is
   // covered so bare JSX text must go through t(); only punctuation/markers are

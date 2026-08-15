@@ -8,7 +8,6 @@ import { useTranslations } from "next-intl"
 import { useAuthMode } from "@/hooks/useAuthMode"
 import { Button } from "@/components/ui/Button"
 import {
-  getProxySettings,
   updateProxySettings,
   deleteProxySettings,
   getProxyHealth,

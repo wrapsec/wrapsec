@@ -151,13 +151,8 @@ function LatencyCard({ stats, byReason }: { stats: AuditStatsResponse; byReason:
   const fmt      = useFormat()
   const t        = useTranslations("pages.overview")
   const tc       = useTranslations("common")
-  const total    = stats.total_requests || 1
   const maxMs    = stats.p95_latency_ms || 1
   const avgPct   = Math.min((stats.avg_latency_ms / maxMs) * 100, 100)
-
-  const fastCount  = byReason.find(r => r.primary_reason === "RULE_DETECTOR" || r.primary_reason === "ML_DETECTOR")
-  const llmCount   = byReason.find(r => r.primary_reason === "LLM_DETECTOR")
-  const totalDetections = byReason.reduce((s, r) => s + r.count, 0) || 1
 
   const ruleML = byReason
     .filter(r => r.primary_reason === "RULE_DETECTOR" || r.primary_reason === "ML_DETECTOR")
@@ -235,6 +230,7 @@ function InfrastructureCard({ depts, apps, keys }: { depts: { departments: Depar
   const neverUsed    = allKeys.filter((k) => !k.last_used_at).length
   const recentlyUsed = allKeys.filter((k) => {
     if (!k.last_used_at) return false
+    // eslint-disable-next-line react-hooks/purity -- read-only "active in last 24h" display metric; Date.now() is a relative-age reference, not state or a security control
     return (Date.now() - new Date(k.last_used_at).getTime()) < 24 * 60 * 60 * 1000
   }).length
 
@@ -326,6 +322,7 @@ function ApiKeyActivityCard({ keys }: { keys: ApiKeysResponse | undefined }) {
   const tc      = useTranslations("common")
   const allKeys = keys?.keys ?? []
 
+  // eslint-disable-next-line react-hooks/purity -- read-only "active in last 24h/7d" display metrics; Date.now() is a relative-age reference, not state or a security control
   const now = Date.now()
   const active24h = allKeys.filter((k) => k.last_used_at &&
     (now - new Date(k.last_used_at).getTime()) < 24 * 60 * 60 * 1000)

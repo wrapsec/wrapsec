@@ -99,6 +99,10 @@ export function useInactivityTimer() {
   }, [clearAllTimers])
 
   useEffect(() => {
+    // Intentional initialization: this effect starts the inactivity auto-logout timers on mount
+    // (a security control), and startTimers() resets the warning state as part of that init.
+    // Restructuring could alter the auto-logout timer behavior. This runs once, not a render loop.
+    // eslint-disable-next-line react-hooks/set-state-in-effect
     startTimers()
 
     const handleActivity = (e: Event) => {
@@ -125,7 +129,7 @@ export function useInactivityTimer() {
         window.removeEventListener(event, handleActivity)
       })
     }
-  }, [])   // run once on mount - startTimers ref is stable
+  }, [startTimers, clearAllTimers])   // both are stable useCallbacks, so this still runs once on mount
 
   return { showWarning, secondsRemaining, resetTimer, logoutNow }
 }

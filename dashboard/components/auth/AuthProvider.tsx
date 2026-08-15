@@ -31,7 +31,6 @@ import {
   login as authLogin,
   logout as authLogout,
   initAuth,
-  getToken,
   type AuthUser,
   type LoginResponse,
 } from "@/lib/auth"
