@@ -12,6 +12,7 @@ import { ScannerInput } from "@/components/scanner/ScannerInput"
 import { ScanResult } from "@/components/scanner/ScanResult"
 import { GatewayResponse, AIRequest } from "@/lib/types"
 import { scanRequest } from "@/lib/api"
+import { errorMessage } from "@/lib/apiError"
 
 export default function ScannerPage() {
   const t = useTranslations("pages.scanner")
@@ -25,8 +26,8 @@ export default function ScannerPage() {
     try {
       const res = await scanRequest(req)
       setResult(res)
-    } catch (e: any) {
-      setError(e.message || t("scan_failed"))
+    } catch (e: unknown) {
+      setError(errorMessage(e) || t("scan_failed"))
     } finally {
       setLoading(false)
     }

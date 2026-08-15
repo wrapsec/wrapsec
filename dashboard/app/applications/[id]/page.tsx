@@ -17,6 +17,7 @@ import {
   getApplicationPolicy, setApplicationPolicy, resetApplicationPolicy,
   updateAppLLMOverride, updateAppProxyOverride,
 } from "@/lib/api"
+import { errorMessage } from "@/lib/apiError"
 import Link from "next/link"
 import { PageHeader } from "@/components/ui/PageHeader"
 import { useBackNav } from "@/hooks/useBackNav"
@@ -109,8 +110,8 @@ export default function ApplicationDetailPage() {
       setEditing(false)
       setSaved(true)
       setTimeout(() => setSaved(false), 3000)
-    } catch (e: any) {
-      setError(e.message)
+    } catch (e: unknown) {
+      setError(errorMessage(e))
     } finally {
       setSaving(false)
     }
@@ -125,8 +126,8 @@ export default function ApplicationDetailPage() {
       mutatePolicy()
       setSaved(true)
       setTimeout(() => setSaved(false), 3000)
-    } catch (e: any) {
-      setError(e.message)
+    } catch (e: unknown) {
+      setError(errorMessage(e))
     } finally {
       setResetting(false)
     }
@@ -158,8 +159,8 @@ export default function ApplicationDetailPage() {
       setLlmEditing(false)
       setLlmSaved(true)
       setTimeout(() => setLlmSaved(false), 3000)
-    } catch (e: any) {
-      setLlmError(e.message)
+    } catch (e: unknown) {
+      setLlmError(errorMessage(e))
     } finally {
       setLlmSaving(false)
     }
@@ -172,8 +173,8 @@ export default function ApplicationDetailPage() {
       const updated = await updateAppLLMOverride(id, { clear: true })
       mutateApp(updated, false)
       setLlmEditing(false)
-    } catch (e: any) {
-      setLlmError(e.message)
+    } catch (e: unknown) {
+      setLlmError(errorMessage(e))
     } finally {
       setLlmSaving(false)
     }
@@ -205,8 +206,8 @@ export default function ApplicationDetailPage() {
       setProxyEditing(false)
       setProxySaved(true)
       setTimeout(() => setProxySaved(false), 3000)
-    } catch (e: any) {
-      setProxyError(e.message)
+    } catch (e: unknown) {
+      setProxyError(errorMessage(e))
     } finally {
       setProxySaving(false)
     }
@@ -219,8 +220,8 @@ export default function ApplicationDetailPage() {
       const updated = await updateAppProxyOverride(id, { clear: true })
       mutateApp(updated, false)
       setProxyEditing(false)
-    } catch (e: any) {
-      setProxyError(e.message)
+    } catch (e: unknown) {
+      setProxyError(errorMessage(e))
     } finally {
       setProxySaving(false)
     }

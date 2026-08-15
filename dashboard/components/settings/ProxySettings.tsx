@@ -13,6 +13,7 @@ import {
   deleteProxySettings,
   getProxyHealth,
 } from "@/lib/api"
+import { errorMessage } from "@/lib/apiError"
 import { ProxyProviderConfig, ProxyHealthResult } from "@/lib/types"
 
 interface ProxySettingsFormProps {
@@ -64,8 +65,8 @@ export function ProxySettingsForm({ config, onUpdated }: ProxySettingsFormProps)
       setApiKey("")   // clear plaintext after save
       setSaved(true)
       setTimeout(() => setSaved(false), 3000)
-    } catch (e: any) {
-      setError(e.message)
+    } catch (e: unknown) {
+      setError(errorMessage(e))
     } finally {
       setSaving(false)
     }
@@ -78,8 +79,8 @@ export function ProxySettingsForm({ config, onUpdated }: ProxySettingsFormProps)
     try {
       await deleteProxySettings()
       onUpdated(null)
-    } catch (e: any) {
-      setError(e.message)
+    } catch (e: unknown) {
+      setError(errorMessage(e))
     } finally {
       setDeleting(false)
     }
@@ -92,8 +93,8 @@ export function ProxySettingsForm({ config, onUpdated }: ProxySettingsFormProps)
     try {
       const result = await getProxyHealth()
       setHealth(result)
-    } catch (e: any) {
-      setError(e.message)
+    } catch (e: unknown) {
+      setError(errorMessage(e))
     } finally {
       setTesting(false)
     }

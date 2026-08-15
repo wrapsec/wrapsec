@@ -8,6 +8,7 @@ import { useTranslations } from "next-intl"
 import { useAuthMode } from "@/hooks/useAuthMode"
 import { Button } from "@/components/ui/Button"
 import { updateRateLimitSettings } from "@/lib/api"
+import { errorMessage } from "@/lib/apiError"
 
 interface RateLimitSettingsFormProps {
   perMinute:  number
@@ -43,8 +44,8 @@ export function RateLimitSettingsForm({
       onUpdated(updated.per_minute, updated.source)
       setSaved(true)
       setTimeout(() => setSaved(false), 3000)
-    } catch (e: any) {
-      setError(e.message)
+    } catch (e: unknown) {
+      setError(errorMessage(e))
     } finally {
       setSaving(false)
     }

@@ -8,6 +8,7 @@ import { useTranslations } from "next-intl"
 import { useAuthMode } from "@/hooks/useAuthMode"
 import { Button } from "@/components/ui/Button"
 import { updateTenant } from "@/lib/api"
+import { errorMessage } from "@/lib/apiError"
 
 interface TenantSettingsFormProps {
   tenant: {
@@ -62,8 +63,8 @@ export function TenantSettingsForm({
       onUpdated(updated)
       setSaved(true)
       setTimeout(() => setSaved(false), 3000)
-    } catch (e: any) {
-      setError(e.message)
+    } catch (e: unknown) {
+      setError(errorMessage(e))
     } finally {
       setSaving(false)
     }

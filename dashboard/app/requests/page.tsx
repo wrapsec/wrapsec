@@ -6,6 +6,7 @@
 import { Suspense, useState } from "react"
 import { useTranslations } from "next-intl"
 import { useErrorMessage } from "@/hooks/useErrorMessage"
+import { errorMessage } from "@/lib/apiError"
 import { swrKeys } from "@/lib/swrKeys"
 import useSWR from "swr"
 import { Shell } from "@/components/layout/Shell"
@@ -116,8 +117,8 @@ function RequestsPageInner() {
       a.download = `wrapsec_audit_${new Date().toISOString().slice(0, 10)}.csv`
       a.click()
       URL.revokeObjectURL(url)
-    } catch (e: any) {
-      setExporting({ loading: false, error: e?.message ?? t("export_error") })
+    } catch (e: unknown) {
+      setExporting({ loading: false, error: errorMessage(e) || t("export_error") })
       return
     }
     setExporting({ loading: false, error: null })

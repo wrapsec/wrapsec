@@ -46,6 +46,16 @@ export class ApiError extends Error {
   }
 }
 
+/**
+ * Extract a display message from an unknown caught value. request() throws an
+ * ApiError (which extends Error), so this returns the same string that `e.message`
+ * on an `any`-typed catch produced -- it only replaces the unsafe `any` with a
+ * narrowed `unknown`. Behavior is unchanged.
+ */
+export function errorMessage(e: unknown): string {
+  return e instanceof Error ? e.message : String(e)
+}
+
 /** Build an ApiError from a response status + parsed JSON body (may be null). */
 export function parseApiError(status: number, body: unknown): ApiError {
   const err = (body as { error?: Record<string, unknown> } | null)?.error ?? {}

@@ -16,6 +16,7 @@ import {
   getDepartment, updateDepartment, getApplicationsByDept, getDepartmentStats,
   updateDeptLLMOverride, updateDeptProxyOverride,
 } from "@/lib/api"
+import { errorMessage } from "@/lib/apiError"
 import { PageHeader } from "@/components/ui/PageHeader"
 import { useBackNav } from "@/hooks/useBackNav"
 import { useFormat } from "@/hooks/useFormat"
@@ -102,8 +103,8 @@ export default function DepartmentDetailPage() {
       setEditing(false)
       setSaved(true)
       setTimeout(() => setSaved(false), 3000)
-    } catch (e: any) {
-      setError(e.message)
+    } catch (e: unknown) {
+      setError(errorMessage(e))
     } finally {
       setSaving(false)
     }
@@ -135,8 +136,8 @@ export default function DepartmentDetailPage() {
       setLlmEditing(false)
       setLlmSaved(true)
       setTimeout(() => setLlmSaved(false), 3000)
-    } catch (e: any) {
-      setLlmError(e.message)
+    } catch (e: unknown) {
+      setLlmError(errorMessage(e))
     } finally {
       setLlmSaving(false)
     }
@@ -149,8 +150,8 @@ export default function DepartmentDetailPage() {
       const updated = await updateDeptLLMOverride(id, { clear: true })
       mutate(updated, false)
       setLlmEditing(false)
-    } catch (e: any) {
-      setLlmError(e.message)
+    } catch (e: unknown) {
+      setLlmError(errorMessage(e))
     } finally {
       setLlmSaving(false)
     }
@@ -182,8 +183,8 @@ export default function DepartmentDetailPage() {
       setProxyEditing(false)
       setProxySaved(true)
       setTimeout(() => setProxySaved(false), 3000)
-    } catch (e: any) {
-      setProxyError(e.message)
+    } catch (e: unknown) {
+      setProxyError(errorMessage(e))
     } finally {
       setProxySaving(false)
     }
@@ -196,8 +197,8 @@ export default function DepartmentDetailPage() {
       const updated = await updateDeptProxyOverride(id, { clear: true })
       mutate(updated, false)
       setProxyEditing(false)
-    } catch (e: any) {
-      setProxyError(e.message)
+    } catch (e: unknown) {
+      setProxyError(errorMessage(e))
     } finally {
       setProxySaving(false)
     }
@@ -597,7 +598,7 @@ export default function DepartmentDetailPage() {
                 >
                   <div>
                     <p className="text-sm font-medium text-slate-900">{app.name}</p>
-                    <p className="text-xs text-slate-400">{app.slug} · {app.environment}</p>
+                    <p className="text-xs text-slate-400">{app.slug} Â· {app.environment}</p>
                   </div>
                   <a
                     href={`/applications/${app.id}`}

@@ -11,6 +11,7 @@ import { Button } from "@/components/ui/Button"
 import { Input } from "@/components/ui/Input"
 import { ApiKeyCreated } from "@/lib/types"
 import { createApiKey, getDepartments, getApplicationsByDept } from "@/lib/api"
+import { errorMessage } from "@/lib/apiError"
 
 interface CreateKeyModalProps {
   onCreated: (key: ApiKeyCreated) => void
@@ -62,8 +63,8 @@ export function CreateKeyModal({ onCreated, onClose }: CreateKeyModalProps) {
       )
       setCreated(key)
       onCreated(key)
-    } catch (e: any) {
-      setError(e.message)
+    } catch (e: unknown) {
+      setError(errorMessage(e))
     } finally {
       setLoading(false)
     }

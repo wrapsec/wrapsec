@@ -9,6 +9,7 @@ import { useAuthMode } from "@/hooks/useAuthMode"
 import { Button } from "@/components/ui/Button"
 import { LLMSettings } from "@/lib/types"
 import { updateLLMSettings } from "@/lib/api"
+import { errorMessage } from "@/lib/apiError"
 
 interface LLMSettingsFormProps {
   settings:  LLMSettings
@@ -71,8 +72,8 @@ export function LLMSettingsForm({ settings, onUpdated }: LLMSettingsFormProps) {
       setApiKey("")   // clear plaintext after save
       setSaved(true)
       setTimeout(() => setSaved(false), 3000)
-    } catch (e: any) {
-      setError(e.message)
+    } catch (e: unknown) {
+      setError(errorMessage(e))
     } finally {
       setLoading(false)
     }

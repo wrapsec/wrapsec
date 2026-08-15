@@ -9,6 +9,7 @@ import { useAuthMode } from "@/hooks/useAuthMode"
 import { Button } from "@/components/ui/Button"
 import { Thresholds } from "@/lib/types"
 import { updateThresholds } from "@/lib/api"
+import { errorMessage } from "@/lib/apiError"
 
 interface ThresholdFormProps {
   thresholds:  Thresholds
@@ -45,8 +46,8 @@ export function ThresholdForm({ thresholds, onUpdated }: ThresholdFormProps) {
       onUpdated(updated)
       setSaved(true)
       setTimeout(() => setSaved(false), 3000)
-    } catch (e: any) {
-      setError(e.message)
+    } catch (e: unknown) {
+      setError(errorMessage(e))
     } finally {
       setLoading(false)
     }

@@ -17,12 +17,13 @@ import {
   getUsers, createUser, updateUser, resetUserPassword,
   getDepartments,
 } from "@/lib/api"
+import { errorMessage } from "@/lib/apiError"
 import type { DashboardUser } from "@/lib/types"
 
 // Role identifiers are stable machine codes (never localized); rendered verbatim.
 const ROLES = ["ADMIN", "DEVELOPER", "AUDITOR", "VIEWER"] as const
 
-// ── Role badge ─────────────────────────────────────────────────────────────────
+// â”€â”€ Role badge â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
 function RoleBadge({ role }: { role: string }) {
   const styles: Record<string, string> = {
@@ -38,7 +39,7 @@ function RoleBadge({ role }: { role: string }) {
   )
 }
 
-// ── Status badge ───────────────────────────────────────────────────────────────
+// â”€â”€ Status badge â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
 function StatusBadge({ active }: { active: boolean }) {
   const t = useTranslations("pages.users.status")
@@ -53,7 +54,7 @@ function StatusBadge({ active }: { active: boolean }) {
   )
 }
 
-// ── Input helper ───────────────────────────────────────────────────────────────
+// â”€â”€ Input helper â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
 function Field({
   label, children,
@@ -69,7 +70,7 @@ function Field({
 const inputCls = "h-9 px-3 text-sm rounded-md border border-slate-200 bg-white text-slate-900 placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-purple-700 disabled:opacity-50"
 const selectCls = inputCls
 
-// ── Create user modal ──────────────────────────────────────────────────────────
+// â”€â”€ Create user modal â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
 function CreateUserModal({
   depts,
@@ -114,8 +115,8 @@ function CreateUserModal({
       })
       onCreated()
       onClose()
-    } catch (e: any) {
-      setError(e.message)
+    } catch (e: unknown) {
+      setError(errorMessage(e))
     } finally {
       setSaving(false)
     }
@@ -193,7 +194,7 @@ function CreateUserModal({
   )
 }
 
-// ── Edit user modal ────────────────────────────────────────────────────────────
+// â”€â”€ Edit user modal â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
 function EditUserModal({
   user,
@@ -251,8 +252,8 @@ function EditUserModal({
       })
       onSaved()
       onClose()
-    } catch (e: any) {
-      setError(e.message)
+    } catch (e: unknown) {
+      setError(errorMessage(e))
     } finally {
       setSaving(false)
     }
@@ -265,8 +266,8 @@ function EditUserModal({
       await updateUser(user.id, { is_active: !user.is_active })
       onSaved()
       onClose()
-    } catch (e: any) {
-      setError(e.message)
+    } catch (e: unknown) {
+      setError(errorMessage(e))
     } finally {
       setToggling(false)
     }
@@ -279,8 +280,8 @@ function EditUserModal({
       await resetUserPassword(user.id, newPassword)
       setResetDone(true)
       setNewPassword("")
-    } catch (e: any) {
-      setResetError(e.message)
+    } catch (e: unknown) {
+      setResetError(errorMessage(e))
     } finally {
       setResetting(false)
     }
@@ -398,7 +399,7 @@ function EditUserModal({
   )
 }
 
-// ── Page ───────────────────────────────────────────────────────────────────────
+// â”€â”€ Page â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
 export default function UsersPage() {
   const t  = useTranslations("pages.users")

@@ -8,6 +8,7 @@ import { useTranslations } from "next-intl"
 import { useAuthMode } from "@/hooks/useAuthMode"
 import { Button } from "@/components/ui/Button"
 import { updateRetentionSettings } from "@/lib/api"
+import { errorMessage } from "@/lib/apiError"
 
 interface RetentionSettingsFormProps {
   retentionDays:      number
@@ -50,8 +51,8 @@ export function RetentionSettingsForm({
       onUpdated(updated.retention_days)
       setSaved(true)
       setTimeout(() => setSaved(false), 3000)
-    } catch (e: any) {
-      setError(e.message)
+    } catch (e: unknown) {
+      setError(errorMessage(e))
     } finally {
       setSaving(false)
     }

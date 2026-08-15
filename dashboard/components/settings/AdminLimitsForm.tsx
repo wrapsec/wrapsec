@@ -8,6 +8,7 @@ import { useTranslations } from "next-intl"
 import { useAuthMode } from "@/hooks/useAuthMode"
 import { Button } from "@/components/ui/Button"
 import { updateAdminLimits } from "@/lib/api"
+import { errorMessage } from "@/lib/apiError"
 
 interface AdminLimitsFormProps {
   adminWrite:  number
@@ -47,8 +48,8 @@ export function AdminLimitsForm({
       onUpdated(updated.admin_write_rate_limit, updated.audit_export_rate_limit, updated.source)
       setSaved(true)
       setTimeout(() => setSaved(false), 3000)
-    } catch (e: any) {
-      setError(e.message)
+    } catch (e: unknown) {
+      setError(errorMessage(e))
     } finally {
       setSaving(false)
     }
