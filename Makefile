@@ -1,4 +1,4 @@
-.PHONY: run test test-integration build up down seed lint format migrate migration
+.PHONY: run test test-integration build up down seed lint format migrate migration typecheck semgrep coverage
 
 run:
 	uvicorn api.main:app --reload --host 0.0.0.0 --port 8000
@@ -73,6 +73,28 @@ format:
 # Static type checking, scoped to the Python SDK (config in the repo root).
 typecheck:
 	pyright
+
+# Static application-security scan (Semgrep). Pinned community rulesets -- NOT
+# `--config auto`, which needs network metrics and is nondeterministic. Path
+# excludes live in .semgrepignore; --error makes any finding fail the build.
+#
+# Two rules are excluded deliberately (each verified 100% false-positive here):
+#   * detected-stripe-api-key -- WrapSec has no Stripe integration; the rule only
+#     ever matches our own wsk_live_* API-key format in test fixtures (pattern
+#     collision), so it can never produce a true positive.
+#   * logger-credential-disclosure -- fires on auth_event log TEMPLATES that
+#     contain credential words while the code logs identifiers (user_id, trace_id,
+#     reason), never secret data (verified line-by-line); the log scrubber is the
+#     actual control.
+# Remaining one-off false positives carry an inline `# nosemgrep: <rule>` reason.
+#
+# CI runs this with a native `semgrep`. Locally (e.g. Windows) run the same rules
+# via Docker:
+#   docker run --rm -v "$$PWD:/src" semgrep/semgrep semgrep scan $(SEMGREP_RULES) $(SEMGREP_SKIP) --error --metrics off /src
+SEMGREP_RULES := --config p/python --config p/security-audit --config p/secrets
+SEMGREP_SKIP  := --exclude-rule generic.secrets.security.detected-stripe-api-key.detected-stripe-api-key --exclude-rule python.lang.security.audit.logging.logger-credential-leak.python-logger-credential-disclosure
+semgrep:
+	semgrep scan $(SEMGREP_RULES) $(SEMGREP_SKIP) --error --metrics off .
 
 clean:
 	find . -type d -name __pycache__ -exec rm -rf {} +

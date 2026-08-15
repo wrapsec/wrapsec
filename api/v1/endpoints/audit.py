@@ -600,6 +600,19 @@ async def get_audit_by_source(
     })
 
 
+# Cells beginning with a formula character are prefixed with a single quote so a
+# spreadsheet app treats them as text, not a formula (CSV injection defense). The
+# exported columns are all server-generated (ids, enums, scores, hashes) and thus
+# never attacker-controlled free text, but the export is hardened regardless.
+_CSV_FORMULA_LEAD = ("=", "+", "-", "@", "\t", "\r")
+
+
+def _csv_safe(value):
+    if isinstance(value, str) and value and value[0] in _CSV_FORMULA_LEAD:
+        return "'" + value
+    return value
+
+
 @router.get("/export")
 async def export_audit_logs(
     request:         Request,
@@ -673,7 +686,8 @@ async def export_audit_logs(
             if item.ip_address else None
         )
         user_prefix = item.user_id[:8] if item.user_id else None
-        writer.writerow([
+        # nosemgrep: python.django.security.injection.csv-writer-injection.csv-writer-injection -- cells are server-generated and run through _csv_safe (formula-lead neutralized)
+        writer.writerow([_csv_safe(v) for v in (
             item.trace_id,
             to_iso_z(item.created_at),
             item.decision,
@@ -692,7 +706,7 @@ async def export_audit_logs(
             item.policy_source,
             item.detection_mode,
             item.latency_ms,
-        ])
+        )])
 
     output.seek(0)
     return StreamingResponse(

@@ -36,7 +36,7 @@ async def test_run_plugin_migrations_uses_isolated_version_table():
     async def _drop():
         async with sf() as db:
             await db.execute(text("DROP TABLE IF EXISTS ref_plugin_widget"))
-            await db.execute(text(f"DROP TABLE IF EXISTS {vt}"))
+            await db.execute(text(f"DROP TABLE IF EXISTS {vt}"))  # nosemgrep: python.sqlalchemy.security.audit.avoid-sqlalchemy-text.avoid-sqlalchemy-text -- vt is a controlled constant (alembic_version_refplugin), not user input
             await db.commit()
 
     await _drop()   # clean any artifact left by an aborted run on a reused container
@@ -57,6 +57,7 @@ async def test_run_plugin_migrations_uses_isolated_version_table():
 
             # (2) history lives in the plugin's OWN version table.
             assert (await db.execute(
+                # nosemgrep: python.sqlalchemy.security.audit.avoid-sqlalchemy-text.avoid-sqlalchemy-text -- vt is a controlled constant (alembic_version_refplugin), not user input
                 text(f"SELECT version_num FROM {vt}")
             )).scalar() == "0001_ref_widget"
 

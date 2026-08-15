@@ -37,7 +37,7 @@ def test_normalize_already_clean():
 
 # Legacy bcrypt hash of "SecurePass1" - used to prove verify_password() still
 # accepts pre-v1.1.0 hashes and that needs_rehash() flags them for upgrade.
-_LEGACY_BCRYPT_HASH = "$2b$12$/Xm8bvi2h5VgpK0bK8wrK.QreUKobMaqwqnBI95ZNz51KqG1lRsN2"
+_LEGACY_BCRYPT_HASH = "$2b$12$/Xm8bvi2h5VgpK0bK8wrK.QreUKobMaqwqnBI95ZNz51KqG1lRsN2"  # nosemgrep: generic.secrets.security.detected-bcrypt-hash.detected-bcrypt-hash -- static test fixture, not a live credential
 
 
 def test_hash_returns_argon2id_hash():

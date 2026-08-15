@@ -203,6 +203,7 @@ def test_decode_rejects_alg_none():
         "iat":       datetime.datetime.now(timezone.utc),
         "exp":       datetime.datetime.now(timezone.utc) + timedelta(minutes=30),
     }
+    # nosemgrep: python.jwt.security.jwt-none-alg.jwt-python-none-alg -- intentional: this test constructs an alg=none token to assert it is REJECTED
     token = jwt.encode(payload, key="", algorithm="none")
     with pytest.raises(InvalidTokenError):
         decode_access_token(token)

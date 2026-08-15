@@ -1,6 +1,6 @@
-# Paths excluded from static-analysis scanning. Kept focused on artifacts that
-# are not a runtime attack surface, so real findings in application code stand
-# out.
+# Paths excluded from static-analysis scanning (see the `semgrep` Makefile
+# target). Kept focused on artifacts that are not a runtime attack surface, so
+# real findings in application code stand out.
 
 # Vendored / generated
 .venv/
@@ -8,10 +8,13 @@ node_modules/
 dashboard/node_modules/
 dashboard/.next/
 **/__pycache__/
+backups/
 
 # Database migrations: reviewed, developer-authored DDL with no user input. Raw
 # SQL / f-string-on-static-constant rules only fire false positives here
-# (migrations are inherently raw SQL the ORM cannot express).
+# (migrations are inherently raw SQL the ORM cannot express). The avoid-
+# sqlalchemy-text rule stays ACTIVE for api/ and services/, where a text() built
+# from user input would be a real finding.
 db/migrations/
 
 # Documentation contains placeholder example keys that trip secret-detection
@@ -20,6 +23,11 @@ docs/
 
 # SDK usage examples are illustrative, not the shipped middleware.
 sdk/node/examples/
+
+# Non-suite test dirs (also excluded from `make test`): manual probes + load
+# harness. Not runtime code.
+tests/manual/
+tests/load/
 
 # Scanner output should never itself be scanned.
 semgrep-results.json
