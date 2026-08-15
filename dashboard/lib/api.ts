@@ -9,6 +9,7 @@ import {
   AuditLogsResponse,
   AgentRunResponse,
   AuditStatsResponse,
+  AttributionResponse,
   BySourceResponse,
   Thresholds,
   Layers,
@@ -194,18 +195,12 @@ export async function getAuditStats(params: {
 export async function getAttribution(params: {
   from?: string
   to?:   string
-} = {}): Promise<{
-  by_key:             { key_id: string; source: string; total: number; blocked: number; block_rate: number; avg_latency_ms: number }[]
-  by_department:      { dept_id: string; total: number; blocked: number; block_rate: number }[]
-  by_application:     { app_id: string; total: number; blocked: number; block_rate: number; avg_latency_ms: number }[]
-  by_primary_reason:  { primary_reason: string; count: number }[]
-  by_confidence_band: { band: string; count: number }[]
-}> {
+} = {}): Promise<AttributionResponse> {
   const p = new URLSearchParams()
   if (params.from) p.set("from", params.from)
   if (params.to)   p.set("to",   params.to)
   const qs = p.toString()
-  return request(`/v1/audit/attribution${qs ? `?${qs}` : ""}`)
+  return request<AttributionResponse>(`/v1/audit/attribution${qs ? `?${qs}` : ""}`)
 }
 
 export async function getAnalytics(params: {

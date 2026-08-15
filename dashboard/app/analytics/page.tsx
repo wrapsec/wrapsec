@@ -13,7 +13,7 @@ import { RangeTabs } from "@/components/ui/RangeTabs"
 import { KpiCard } from "@/components/ui/KpiCard"
 import { PageSpinner } from "@/components/ui/Spinner"
 import { getAuditStats, getAttribution, getAnalytics, getDepartments, getApplications } from "@/lib/api"
-import { AuditStatsResponse } from "@/lib/types"
+import { AuditStatsResponse, AttributionResponse } from "@/lib/types"
 import { useFormat } from "@/hooks/useFormat"
 
 
@@ -47,15 +47,15 @@ const TH: React.CSSProperties = {
   whiteSpace: "nowrap" as const,
 }
 
-// ── Security KPIs ─────────────────────────────────────────────────────────
+// â”€â”€ Security KPIs â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
-function SecuritySummary({ stats, attribution }: { stats: AuditStatsResponse; attribution: any }) {
+function SecuritySummary({ stats, attribution }: { stats: AuditStatsResponse; attribution: AttributionResponse }) {
   const fmt        = useFormat()
   const t          = useTranslations("pages.analytics.kpi")
   const byReason   = attribution?.by_primary_reason ?? []
   const piiCount   = byReason
-    .filter((r: any) => r.primary_reason === "PII_GUARDRAIL_BLOCK" || r.primary_reason === "PII_GUARDRAIL_SANITIZE")
-    .reduce((s: number, r: any) => s + r.count, 0)
+    .filter((r) => r.primary_reason === "PII_GUARDRAIL_BLOCK" || r.primary_reason === "PII_GUARDRAIL_SANITIZE")
+    .reduce((s: number, r) => s + r.count, 0)
   const exfilCount   = stats.top_threats?.find(t => t.category === "DATA_EXFILTRATION")?.count ?? 0
   const toxCount     = stats.top_threats?.find(t => t.category === "TOXICITY")?.count ?? 0
   const totalThreats = stats.top_threats?.reduce((s, t) => s + t.count, 0) ?? 0
@@ -80,7 +80,7 @@ function SecuritySummary({ stats, attribution }: { stats: AuditStatsResponse; at
   )
 }
 
-// ── Trend Chart ───────────────────────────────────────────────────────────
+// â”€â”€ Trend Chart â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
 function TrendChart({ data, groupBy, onGroupByChange }: {
   data: { period: string; total: number; blocked: number; sanitized: number; allowed: number; block_rate: number }[]
@@ -239,7 +239,7 @@ function TrendChart({ data, groupBy, onGroupByChange }: {
   )
 }
 
-// ── Threat Intelligence ───────────────────────────────────────────────────
+// â”€â”€ Threat Intelligence â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
 function ThreatIntelligence({ stats }: { stats: AuditStatsResponse }) {
   const fmt = useFormat()
@@ -298,7 +298,7 @@ function ThreatIntelligence({ stats }: { stats: AuditStatsResponse }) {
   )
 }
 
-// ── Detection Layer Breakdown ─────────────────────────────────────────────
+// â”€â”€ Detection Layer Breakdown â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
 function DetectionBreakdown({ byReason }: { byReason: { primary_reason: string; count: number }[] }) {
   const fmt = useFormat()
@@ -346,7 +346,7 @@ function DetectionBreakdown({ byReason }: { byReason: { primary_reason: string; 
   )
 }
 
-// ── Confidence Distribution ───────────────────────────────────────────────
+// â”€â”€ Confidence Distribution â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
 function ConfidenceDistribution({ data }: { data: { band: string; count: number }[] }) {
   const fmt = useFormat()
@@ -392,7 +392,7 @@ function ConfidenceDistribution({ data }: { data: { band: string; count: number 
   )
 }
 
-// ── Primary Reason Breakdown ──────────────────────────────────────────────
+// â”€â”€ Primary Reason Breakdown â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
 function PrimaryReasonBreakdown({ byReason }: { byReason: { primary_reason: string; count: number }[] }) {
   const fmt = useFormat()
@@ -432,7 +432,7 @@ function PrimaryReasonBreakdown({ byReason }: { byReason: { primary_reason: stri
   )
 }
 
-// ── Attribution Table ─────────────────────────────────────────────────────
+// â”€â”€ Attribution Table â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
 function AttributionTable({ title, rows, emptyText }: {
   title: string; emptyText: string
@@ -482,7 +482,7 @@ function AttributionTable({ title, rows, emptyText }: {
   )
 }
 
-// ── Page ──────────────────────────────────────────────────────────────────
+// â”€â”€ Page â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
 export default function AnalyticsPage() {
   const fmt = useFormat()
@@ -512,10 +512,10 @@ export default function AnalyticsPage() {
   const { data: apps  } = useSWR("applications-list", getApplications)
 
   const deptNames: Record<string, string> = {}
-  depts?.departments?.forEach((d: any) => { deptNames[d.id] = d.name })
+  depts?.departments?.forEach((d) => { deptNames[d.id] = d.name })
 
   const appNames: Record<string, string> = {}
-  apps?.applications?.forEach((a: any) => { appNames[a.id] = a.name })
+  apps?.applications?.forEach((a) => { appNames[a.id] = a.name })
 
   if ((statsLoading || attrLoading) && !stats) {
     return <Shell title={t("title")}><PageSpinner /></Shell>
@@ -616,10 +616,10 @@ export default function AnalyticsPage() {
             title={t("attribution.dept_title")}
             emptyText={t("attribution.dept_empty")}
             rows={(attribution?.by_department ?? [])
-              .filter((r: any) => !depts || !!deptNames[r.dept_id])
-              .sort((a: any, b: any) => b.block_rate - a.block_rate)
+              .filter((r) => !depts || !!deptNames[r.dept_id])
+              .sort((a, b) => b.block_rate - a.block_rate)
               .slice(0, 8)
-              .map((r: any) => ({
+              .map((r) => ({
                 name: deptNames[r.dept_id] || r.dept_id || t("attribution.no_department"),
                 sub: t("attribution.requests_sub", { count: fmt.number(r.total) }),
                 blockRate: r.block_rate, total: r.total,
@@ -629,10 +629,10 @@ export default function AnalyticsPage() {
             title={t("attribution.app_title")}
             emptyText={t("attribution.app_empty")}
             rows={(attribution?.by_application ?? [])
-              .filter((r: any) => !apps || !!appNames[r.app_id])
-              .sort((a: any, b: any) => b.block_rate - a.block_rate)
+              .filter((r) => !apps || !!appNames[r.app_id])
+              .sort((a, b) => b.block_rate - a.block_rate)
               .slice(0, 8)
-              .map((r: any) => ({
+              .map((r) => ({
                 name: appNames[r.app_id] || r.app_id || t("attribution.no_application"),
                 sub: t("attribution.requests_latency_sub", { count: fmt.number(r.total), ms: r.avg_latency_ms?.toFixed(0) ?? "-" }),
                 blockRate: r.block_rate, total: r.total,
@@ -644,7 +644,7 @@ export default function AnalyticsPage() {
           <AttributionTable
             title={t("attribution.key_title")}
             emptyText={t("attribution.key_empty")}
-            rows={(attribution!.by_key as any[])
+            rows={(attribution?.by_key ?? [])
               .sort((a, b) => b.total - a.total)
               .slice(0, 10)
               .map(r => ({

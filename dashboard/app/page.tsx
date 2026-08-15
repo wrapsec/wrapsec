@@ -18,11 +18,11 @@ import { RecentRequests } from "@/components/overview/RecentRequests"
 import { RequestDetailModal } from "@/components/requests/RequestDetail"
 import { getAuditStats, getAuditLogs, getAttribution, getDepartments, getApplications, getApiKeys } from "@/lib/api"
 import { POLL_INTERVAL } from "@/lib/constants"
-import { AuditStatsResponse } from "@/lib/types"
+import { AuditStatsResponse, Department, Application, ApiKeysResponse } from "@/lib/types"
 import { useTimeRange } from "@/hooks/useTimeRange"
 import { timeAgo } from "@/lib/datetime"
 
-// ── Shared styles ─────────────────────────────────────────────────────────────
+// â”€â”€ Shared styles â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
 const CARD: React.CSSProperties = {
   background: "#fff", border: "1px solid #e5e7eb", borderRadius: "8px",
@@ -34,7 +34,7 @@ const LABEL: React.CSSProperties = {
   margin: "0 0 6px 0",
 }
 
-// ── Row 1: Request summary cards ─────────────────────────────────────────────
+// â”€â”€ Row 1: Request summary cards â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
 function RequestCards({ stats, from, to }: { stats: AuditStatsResponse; from: string; to: string }) {
   const fmt       = useFormat()
@@ -73,7 +73,7 @@ function RequestCards({ stats, from, to }: { stats: AuditStatsResponse; from: st
   )
 }
 
-// ── Row 2: Donut ──────────────────────────────────────────────────────────────
+// â”€â”€ Row 2: Donut â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
 function DonutChart({ stats }: { stats: AuditStatsResponse }) {
   const fmt       = useFormat()
@@ -145,7 +145,7 @@ function DonutChart({ stats }: { stats: AuditStatsResponse }) {
   )
 }
 
-// ── Row 2: Latency card ───────────────────────────────────────────────────────
+// â”€â”€ Row 2: Latency card â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
 function LatencyCard({ stats, byReason }: { stats: AuditStatsResponse; byReason: { primary_reason: string; count: number }[] }) {
   const fmt      = useFormat()
@@ -223,17 +223,17 @@ function LatencyCard({ stats, byReason }: { stats: AuditStatsResponse; byReason:
   )
 }
 
-// ── Row 3: Infrastructure ─────────────────────────────────────────────────────
+// â”€â”€ Row 3: Infrastructure â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
-function InfrastructureCard({ depts, apps, keys }: { depts: any; apps: any; keys: any }) {
+function InfrastructureCard({ depts, apps, keys }: { depts: { departments: Department[] } | undefined; apps: { applications: Application[] } | undefined; keys: ApiKeysResponse | undefined }) {
   const t            = useTranslations("pages.overview")
   const deptCount    = depts?.departments?.length ?? 0
   const appCount     = apps?.applications?.length ?? 0
   const allKeys      = keys?.keys ?? []
-  const liveKeys     = allKeys.filter((k: any) => k.key_type === "live").length
-  const trialKeys    = allKeys.filter((k: any) => k.key_type === "trial").length
-  const neverUsed    = allKeys.filter((k: any) => !k.last_used_at).length
-  const recentlyUsed = allKeys.filter((k: any) => {
+  const liveKeys     = allKeys.filter((k) => k.key_type === "live").length
+  const trialKeys    = allKeys.filter((k) => k.key_type === "trial").length
+  const neverUsed    = allKeys.filter((k) => !k.last_used_at).length
+  const recentlyUsed = allKeys.filter((k) => {
     if (!k.last_used_at) return false
     return (Date.now() - new Date(k.last_used_at).getTime()) < 24 * 60 * 60 * 1000
   }).length
@@ -269,7 +269,7 @@ function InfrastructureCard({ depts, apps, keys }: { depts: any; apps: any; keys
   )
 }
 
-// ── Row 3: Detection layers ───────────────────────────────────────────────────
+// â”€â”€ Row 3: Detection layers â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
 function DetectionLayersCard({ byReason }: { byReason: { primary_reason: string; count: number }[] }) {
   const fmt = useFormat()
@@ -319,19 +319,19 @@ function DetectionLayersCard({ byReason }: { byReason: { primary_reason: string;
   )
 }
 
-// ── Row 3: API key activity ───────────────────────────────────────────────────
+// â”€â”€ Row 3: API key activity â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
-function ApiKeyActivityCard({ keys }: { keys: any }) {
+function ApiKeyActivityCard({ keys }: { keys: ApiKeysResponse | undefined }) {
   const t       = useTranslations("pages.overview")
   const tc      = useTranslations("common")
   const allKeys = keys?.keys ?? []
 
   const now = Date.now()
-  const active24h = allKeys.filter((k: any) => k.last_used_at &&
+  const active24h = allKeys.filter((k) => k.last_used_at &&
     (now - new Date(k.last_used_at).getTime()) < 24 * 60 * 60 * 1000)
-  const active7d  = allKeys.filter((k: any) => k.last_used_at &&
+  const active7d  = allKeys.filter((k) => k.last_used_at &&
     (now - new Date(k.last_used_at).getTime()) < 7 * 24 * 60 * 60 * 1000)
-  const neverUsed = allKeys.filter((k: any) => !k.last_used_at)
+  const neverUsed = allKeys.filter((k) => !k.last_used_at)
 
   return (
     <div style={{ ...CARD, padding: "20px" }}>
@@ -359,7 +359,7 @@ function ApiKeyActivityCard({ keys }: { keys: any }) {
 
       {/* Key list */}
       <div style={{ display: "flex", flexDirection: "column", gap: "6px" }}>
-        {allKeys.slice(0, 5).map((k: any) => (
+        {allKeys.slice(0, 5).map((k) => (
           <div key={k.key_id} style={{ display: "flex", alignItems: "center",
             justifyContent: "space-between", padding: "5px 0",
             borderBottom: "1px solid #f9fafb" }}>
@@ -393,7 +393,7 @@ function ApiKeyActivityCard({ keys }: { keys: any }) {
   )
 }
 
-// ── Severity ──────────────────────────────────────────────────────────────────
+// â”€â”€ Severity â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
 function SeveritySummary({ counts }: { counts: { CRITICAL: number; HIGH: number; MEDIUM: number; LOW: number } }) {
   const fmt = useFormat()
@@ -431,7 +431,7 @@ function SeveritySummary({ counts }: { counts: { CRITICAL: number; HIGH: number;
   )
 }
 
-// ── Page ──────────────────────────────────────────────────────────────────────
+// â”€â”€ Page â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
 export default function OverviewPage() {
   const t = useTranslations("pages.overview")

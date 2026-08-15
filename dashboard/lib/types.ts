@@ -168,6 +168,15 @@ export interface AttackOrigin {
   total:        number
 }
 
+/** Breakdown returned by GET /v1/audit/attribution. */
+export interface AttributionResponse {
+  by_key:             { key_id: string; source: string; total: number; blocked: number; block_rate: number; avg_latency_ms: number }[]
+  by_department:      { dept_id: string; total: number; blocked: number; block_rate: number }[]
+  by_application:     { app_id: string; total: number; blocked: number; block_rate: number; avg_latency_ms: number }[]
+  by_primary_reason:  { primary_reason: string; count: number }[]
+  by_confidence_band: { band: string; count: number }[]
+}
+
 export interface BySourceResponse {
   period_from:        string
   period_to:          string
