@@ -29,7 +29,7 @@ const CARD: React.CSSProperties = {
 }
 
 const LABEL: React.CSSProperties = {
-  fontSize: "10px", fontWeight: 700, color: "#9ca3af",
+  fontSize: "10px", fontWeight: 700, color: "#4b5563",
   textTransform: "uppercase" as const, letterSpacing: "0.08em",
   margin: "0 0 6px 0",
 }
@@ -84,10 +84,12 @@ function DonutChart({ stats }: { stats: AuditStatsResponse }) {
   const sanitized = stats.sanitize_count
   const allowed   = stats.allow_count
 
+  // `color` drives the bright arc / legend dot / bar (non-text, no contrast rule);
+  // `textColor` is the AA-compliant (>=4.5:1) shade for the small percentage label.
   const SEGMENTS = [
-    { value: blocked,   color: "#dc2626", label: tc("decision.blocked"),   pct: stats.block_rate    },
-    { value: sanitized, color: "#f59e0b", label: tc("decision.sanitized"), pct: stats.sanitize_rate },
-    { value: allowed,   color: "#10b981", label: tc("decision.allowed"),   pct: stats.allow_rate    },
+    { value: blocked,   color: "#dc2626", textColor: "#b91c1c", label: tc("decision.blocked"),   pct: stats.block_rate    },
+    { value: sanitized, color: "#f59e0b", textColor: "#b45309", label: tc("decision.sanitized"), pct: stats.sanitize_rate },
+    { value: allowed,   color: "#10b981", textColor: "#047857", label: tc("decision.allowed"),   pct: stats.allow_rate    },
   ]
 
   const SIZE = 160, STROKE = 24
@@ -119,7 +121,7 @@ function DonutChart({ stats }: { stats: AuditStatsResponse }) {
           <p style={{ fontSize: "20px", fontWeight: 700, color: "#111827", margin: 0, lineHeight: 1 }}>
             {fmt.number(total)}
           </p>
-          <p style={{ fontSize: "9px", color: "#9ca3af", margin: "3px 0 0 0", fontWeight: 600,
+          <p style={{ fontSize: "9px", color: "#4b5563", margin: "3px 0 0 0", fontWeight: 600,
             textTransform: "uppercase", letterSpacing: "0.06em" }}>{t("requests")}</p>
         </div>
       </div>
@@ -131,7 +133,7 @@ function DonutChart({ stats }: { stats: AuditStatsResponse }) {
                 <div style={{ width: 8, height: 8, borderRadius: "2px", background: seg.color }} />
                 <span style={{ fontSize: "11px", color: "#6b7280", fontWeight: 500 }}>{seg.label}</span>
               </div>
-              <span style={{ fontSize: "12px", fontWeight: 700, color: seg.color }}>
+              <span style={{ fontSize: "12px", fontWeight: 700, color: seg.textColor }}>
                 {(seg.pct * 100).toFixed(1)}%
               </span>
             </div>
@@ -169,14 +171,14 @@ function LatencyCard({ stats, byReason }: { stats: AuditStatsResponse; byReason:
     <div style={{ ...CARD, padding: "20px", display: "flex", flexDirection: "column", gap: "16px" }}>
       <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
         <p style={{ fontSize: "13px", fontWeight: 600, color: "#111827", margin: 0 }}>{t("latency")}</p>
-        <span style={{ fontSize: "11px", color: "#9ca3af" }}>{tc("all_time")}</span>
+        <span style={{ fontSize: "11px", color: "#4b5563" }}>{tc("all_time")}</span>
       </div>
 
       {/* Avg vs P95 visual */}
       <div>
         <div style={{ display: "flex", justifyContent: "space-between", marginBottom: "6px" }}>
-          <span style={{ fontSize: "11px", color: "#9ca3af" }}>{t("avg")}</span>
-          <span style={{ fontSize: "11px", color: "#9ca3af" }}>{t("p95")}</span>
+          <span style={{ fontSize: "11px", color: "#4b5563" }}>{t("avg")}</span>
+          <span style={{ fontSize: "11px", color: "#4b5563" }}>{t("p95")}</span>
         </div>
         <div style={{ position: "relative", height: "8px", background: "#f3f4f6", borderRadius: "4px", overflow: "hidden" }}>
           <div style={{ height: "100%", width: "100%", background: "#e5e7eb", borderRadius: "4px" }} />
@@ -235,12 +237,14 @@ function InfrastructureCard({ depts, apps, keys }: { depts: { departments: Depar
   }).length
 
   const ROWS = [
+    // Colors here render as the value NUMBER text (small), so each meets AA
+    // (>=4.5:1 on white); the brand-bright variants stay on dots/borders elsewhere.
     { label: t("infra.departments"), value: deptCount,    color: "#670FEF" },
-    { label: t("infra.applications"),value: appCount,     color: "#CD00FF" },
-    { label: t("infra.live_keys"),   value: liveKeys,     color: "#00B1FF" },
-    { label: t("infra.trial_keys"),  value: trialKeys,    color: "#9ca3af" },
-    { label: t("infra.active_24h"),  value: recentlyUsed, color: "#16a34a" },
-    { label: t("infra.never_used"),  value: neverUsed,    color: "#f87171" },
+    { label: t("infra.applications"),value: appCount,     color: "#a21caf" },
+    { label: t("infra.live_keys"),   value: liveKeys,     color: "#0369a1" },
+    { label: t("infra.trial_keys"),  value: trialKeys,    color: "#4b5563" },
+    { label: t("infra.active_24h"),  value: recentlyUsed, color: "#15803d" },
+    { label: t("infra.never_used"),  value: neverUsed,    color: "#dc2626" },
   ]
 
   return (
@@ -286,7 +290,7 @@ function DetectionLayersCard({ byReason }: { byReason: { primary_reason: string;
     <div style={{ ...CARD, padding: "20px" }}>
       <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: "14px" }}>
         <p style={{ fontSize: "13px", fontWeight: 600, color: "#111827", margin: 0 }}>{t("detection_layers")}</p>
-        <span style={{ fontSize: "11px", color: "#9ca3af" }}>{t("how_threats_caught")}</span>
+        <span style={{ fontSize: "11px", color: "#4b5563" }}>{t("how_threats_caught")}</span>
       </div>
       <div style={{ display: "flex", flexDirection: "column", gap: "9px" }}>
         {LAYERS.map(layer => {
@@ -334,15 +338,15 @@ function ApiKeyActivityCard({ keys }: { keys: ApiKeysResponse | undefined }) {
     <div style={{ ...CARD, padding: "20px" }}>
       <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: "14px" }}>
         <p style={{ fontSize: "13px", fontWeight: 600, color: "#111827", margin: 0 }}>{t("api_key_activity")}</p>
-        <span style={{ fontSize: "11px", color: "#9ca3af" }}>{t("keys_total", { count: allKeys.length })}</span>
+        <span style={{ fontSize: "11px", color: "#4b5563" }}>{t("keys_total", { count: allKeys.length })}</span>
       </div>
 
       {/* Summary pills */}
       <div style={{ display: "flex", gap: "8px", marginBottom: "14px", flexWrap: "wrap" as const }}>
         {[
-          { label: t("active_today", { count: active24h.length }),   color: "#16a34a", bg: "#f0fdf4", border: "#bbf7d0" },
+          { label: t("active_today", { count: active24h.length }),   color: "#166534", bg: "#f0fdf4", border: "#bbf7d0" },
           { label: t("active_7d", { count: active7d.length }),       color: "#0369a1", bg: "#eff6ff", border: "#bfdbfe" },
-          { label: t("never_used_count", { count: neverUsed.length }), color: neverUsed.length > 0 ? "#d97706" : "#9ca3af",
+          { label: t("never_used_count", { count: neverUsed.length }), color: neverUsed.length > 0 ? "#b45309" : "#4b5563",
             bg: neverUsed.length > 0 ? "#fffbeb" : "#f9fafb",
             border: neverUsed.length > 0 ? "#fde68a" : "#e5e7eb" },
         ].map(pill => (
@@ -365,7 +369,7 @@ function ApiKeyActivityCard({ keys }: { keys: ApiKeysResponse | undefined }) {
                 margin: 0, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" as const }}>
                 {k.name}
               </p>
-              <p style={{ fontSize: "10px", color: "#9ca3af", margin: "1px 0 0 0" }}>
+              <p style={{ fontSize: "10px", color: "#4b5563", margin: "1px 0 0 0" }}>
                 {k.dept_name ?? "-"}
               </p>
             </div>
@@ -373,13 +377,13 @@ function ApiKeyActivityCard({ keys }: { keys: ApiKeysResponse | undefined }) {
               <span style={{
                 fontSize: "10px", fontWeight: 600, padding: "1px 5px",
                 borderRadius: "3px",
-                color:      k.key_type === "trial" ? "#d97706" : "#670FEF",
+                color:      k.key_type === "trial" ? "#b45309" : "#670FEF",
                 background: k.key_type === "trial" ? "#fffbeb"  : "rgba(103,15,239,0.06)",
                 border:     k.key_type === "trial" ? "1px solid #fde68a" : "1px solid rgba(103,15,239,0.15)",
               }}>
                 {k.key_type}
               </span>
-              <span style={{ fontSize: "10px", color: k.last_used_at ? "#6b7280" : "#f87171" }}>
+              <span style={{ fontSize: "10px", color: k.last_used_at ? "#6b7280" : "#dc2626" }}>
                 {k.last_used_at ? timeAgo(k.last_used_at) : tc("never")}
               </span>
             </div>
@@ -396,17 +400,18 @@ function SeveritySummary({ counts }: { counts: { CRITICAL: number; HIGH: number;
   const fmt = useFormat()
   const t   = useTranslations("pages.overview")
   const LEVELS: { level: keyof typeof counts; color: string; bg: string; border: string; desc: string }[] = [
-    { level: "CRITICAL", color: "#dc2626", bg: "#fef2f2", border: "#fecaca", desc: t("severity_desc.critical") },
-    { level: "HIGH",     color: "#d97706", bg: "#fffbeb", border: "#fde68a", desc: t("severity_desc.high")     },
+    // Text colors meet AA (>=4.5:1) against each level's own tinted background.
+    { level: "CRITICAL", color: "#b91c1c", bg: "#fef2f2", border: "#fecaca", desc: t("severity_desc.critical") },
+    { level: "HIGH",     color: "#b45309", bg: "#fffbeb", border: "#fde68a", desc: t("severity_desc.high")     },
     { level: "MEDIUM",   color: "#0369a1", bg: "#eff6ff", border: "#bfdbfe", desc: t("severity_desc.medium")   },
-    { level: "LOW",      color: "#059669", bg: "#f0fdf4", border: "#bbf7d0", desc: t("severity_desc.low")      },
+    { level: "LOW",      color: "#047857", bg: "#f0fdf4", border: "#bbf7d0", desc: t("severity_desc.low")      },
   ]
 
   return (
     <div style={{ ...CARD, padding: "16px 20px" }}>
       <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: "14px" }}>
         <p style={{ fontSize: "13px", fontWeight: 600, color: "#111827", margin: 0 }}>{t("severity_breakdown")}</p>
-        <span style={{ fontSize: "11px", color: "#9ca3af" }}>{t("siem_note")}</span>
+        <span style={{ fontSize: "11px", color: "#4b5563" }}>{t("siem_note")}</span>
       </div>
       <div style={{ display: "grid", gridTemplateColumns: "repeat(4, 1fr)", gap: "10px" }}>
         {LEVELS.map(l => (
@@ -420,7 +425,7 @@ function SeveritySummary({ counts }: { counts: { CRITICAL: number; HIGH: number;
               margin: "0 0 2px 0", lineHeight: 1 }}>
               {fmt.number(counts[l.level])}
             </p>
-            <p style={{ fontSize: "11px", color: l.color, opacity: 0.7, margin: 0 }}>{l.desc}</p>
+            <p style={{ fontSize: "11px", color: l.color, margin: 0 }}>{l.desc}</p>
           </div>
         ))}
       </div>

@@ -46,18 +46,18 @@ function AgentRunInner() {
         <div className="bg-white border border-slate-200 rounded-lg p-4">
           <div className="flex items-center justify-between flex-wrap gap-2">
             <div>
-              <div className="text-xs text-slate-400 mb-1">{tt("run")}</div>
+              <div className="text-xs text-slate-600 mb-1">{tt("run")}</div>
               <div className="font-mono text-sm text-slate-800 break-all">{runId}</div>
             </div>
             <div className="flex items-center gap-4 text-sm">
-              <div><span className="font-semibold">{data?.count ?? 0}</span> <span className="text-slate-400">{tt("turns")}</span></div>
+              <div><span className="font-semibold">{data?.count ?? 0}</span> <span className="text-slate-600">{tt("turns")}</span></div>
               {blocked > 0   && <div className="text-red-600"><span className="font-semibold">{blocked}</span> {tt("blocked")}</div>}
               {sanitized > 0 && <div className="text-amber-600"><span className="font-semibold">{sanitized}</span> {tt("sanitized")}</div>}
             </div>
           </div>
           {sources.length > 0 && (
             <div className="flex items-center gap-2 mt-3 flex-wrap">
-              <span className="text-xs text-slate-400">{tt("sources")}</span>
+              <span className="text-xs text-slate-600">{tt("sources")}</span>
               {sources.map(s => <SourceBadge key={s} source={s} />)}
             </div>
           )}
@@ -90,11 +90,11 @@ function AgentRunInner() {
                     {t.primary_reason && (
                       <span className="text-xs text-slate-500">{t.primary_reason}</span>
                     )}
-                    <span className="text-xs text-slate-400 ml-auto tabular-nums">
+                    <span className="text-xs text-slate-600 ml-auto tabular-nums">
                       {tt("risk", { score: t.risk_score.toFixed(2) })}
                     </span>
                   </div>
-                  <div className="mt-1 text-xs text-slate-400 flex items-center gap-3 flex-wrap">
+                  <div className="mt-1 text-xs text-slate-600 flex items-center gap-3 flex-wrap">
                     <span>{fmt.timestamp(t.timestamp)}</span>
                     <span className="font-mono">{t.trace_id}</span>
                   </div>

@@ -89,7 +89,7 @@ export default function SettingsPage() {
                 padding: "8px 14px",
                 fontSize: "13px",
                 fontWeight: activeTab === tabId ? 600 : 400,
-                color: activeTab === tabId ? "#670FEF" : "#6b7280",
+                color: activeTab === tabId ? "#670FEF" : "#4b5563",
                 background: "none",
                 border: "none",
                 borderBottom: activeTab === tabId ? "2px solid #670FEF" : "2px solid transparent",

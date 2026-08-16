@@ -25,7 +25,7 @@ export function RangeTabs<T extends string>({ options, value, onChange, format }
             "text-xs px-3 py-1.5 rounded-md border-none cursor-pointer transition-all",
             value === o
               ? "bg-white text-slate-900 font-semibold shadow-sm"
-              : "bg-transparent text-slate-500 font-normal",
+              : "bg-transparent text-slate-600 font-normal",
           )}
         >
           {format ? format(o) : o}

@@ -79,7 +79,7 @@ export default function SystemPage() {
                   { label: t("rate_limit_scope"),   value: config.rate_limit?.scope   },
                 ].map(({ label, value }) => (
                   <div key={label} className="bg-slate-50 rounded-lg px-3 py-2.5">
-                    <p className="text-xs text-slate-400 mb-0.5">{label}</p>
+                    <p className="text-xs text-slate-600 mb-0.5">{label}</p>
                     <p className="text-sm font-mono text-slate-800">{String(value ?? "-")}</p>
                   </div>
                 ))}
@@ -126,7 +126,7 @@ export default function SystemPage() {
                   { label: t("llm_trigger"), value: config.llm?.llm_trigger },
                 ].map(({ label, value }) => (
                   <div key={label} className="bg-slate-50 rounded-lg px-3 py-2.5">
-                    <p className="text-xs text-slate-400 mb-0.5">{label}</p>
+                    <p className="text-xs text-slate-600 mb-0.5">{label}</p>
                     <p className="text-sm font-mono text-slate-800">{String(value ?? "-")}</p>
                   </div>
                 ))}

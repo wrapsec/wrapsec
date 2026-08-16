@@ -33,7 +33,7 @@ export function TestResultModal({ endpointLabel, result, loading, onClose }: Pro
     <div className="fixed inset-0 bg-black/40 flex items-center justify-center z-50">
       <div className="bg-white rounded-lg border border-slate-200 w-full max-w-lg p-6 shadow-lg">
         <h2 className="text-base font-semibold text-slate-900 mb-1">{t("title")}</h2>
-        <p className="text-xs text-slate-400 mb-4 break-all">{endpointLabel}</p>
+        <p className="text-xs text-slate-600 mb-4 break-all">{endpointLabel}</p>
 
         {loading ? (
           <p className="text-sm text-slate-500 py-6 text-center">{t("sending")}</p>
@@ -57,7 +57,7 @@ export function TestResultModal({ endpointLabel, result, loading, onClose }: Pro
                 <span className="text-xs text-slate-500">{t("http_status", { code: result.status_code })}</span>
               )}
               {result.duration_ms != null && (
-                <span className="text-xs text-slate-400">{result.duration_ms} ms</span>
+                <span className="text-xs text-slate-600">{result.duration_ms} ms</span>
               )}
             </div>
 

@@ -95,7 +95,7 @@ export function LLMSettingsForm({ settings, onUpdated }: LLMSettingsFormProps) {
               <option key={p} value={p}>{t(`providers.${p}`)}</option>
             ))}
           </select>
-          <p className="text-xs text-slate-400">
+          <p className="text-xs text-slate-600">
             {t("llm.provider_hint")}
           </p>
         </div>
@@ -108,9 +108,9 @@ export function LLMSettingsForm({ settings, onUpdated }: LLMSettingsFormProps) {
             value={model}
             onChange={(e) => setModel(e.target.value)}
             placeholder={t("llm.model_placeholder")}
-            className="h-9 px-3 text-sm rounded-md border border-slate-200 bg-white text-slate-900 placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-purple-700 focus:border-purple-700"
+            className="h-9 px-3 text-sm rounded-md border border-slate-200 bg-white text-slate-900 placeholder:text-slate-600 focus:outline-none focus:ring-2 focus:ring-purple-700 focus:border-purple-700"
           />
-          <p className="text-xs text-slate-400">{t("llm.model_hint")}</p>
+          <p className="text-xs text-slate-600">{t("llm.model_hint")}</p>
         </div>
 
         {/* Base URL */}
@@ -121,9 +121,9 @@ export function LLMSettingsForm({ settings, onUpdated }: LLMSettingsFormProps) {
             value={baseUrl}
             onChange={(e) => setBaseUrl(e.target.value)}
             placeholder={provider === "ollama" ? t("llm.base_url_placeholder_ollama") : t("llm.base_url_placeholder_default")}
-            className="h-9 px-3 text-sm rounded-md border border-slate-200 bg-white text-slate-900 placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-purple-700 focus:border-purple-700"
+            className="h-9 px-3 text-sm rounded-md border border-slate-200 bg-white text-slate-900 placeholder:text-slate-600 focus:outline-none focus:ring-2 focus:ring-purple-700 focus:border-purple-700"
           />
-          <p className="text-xs text-slate-400">
+          <p className="text-xs text-slate-600">
             {provider === "ollama"
               ? t("llm.base_url_hint_ollama")
               : provider === "openai"
@@ -138,7 +138,7 @@ export function LLMSettingsForm({ settings, onUpdated }: LLMSettingsFormProps) {
             <label className="text-xs font-medium text-slate-700">
               {t("llm.api_key")}
               {settings.api_key_masked && (
-                <span className="ml-2 font-normal text-slate-400">
+                <span className="ml-2 font-normal text-slate-600">
                   {t("llm.api_key_current", { masked: settings.api_key_masked })}
                 </span>
               )}
@@ -148,9 +148,9 @@ export function LLMSettingsForm({ settings, onUpdated }: LLMSettingsFormProps) {
               value={apiKey}
               onChange={(e) => setApiKey(e.target.value)}
               placeholder={settings.api_key_masked ? t("llm.api_key_placeholder_keep") : t("llm.api_key_placeholder_new")}
-              className="h-9 px-3 text-sm rounded-md border border-slate-200 bg-white text-slate-900 placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-purple-700 focus:border-purple-700"
+              className="h-9 px-3 text-sm rounded-md border border-slate-200 bg-white text-slate-900 placeholder:text-slate-600 focus:outline-none focus:ring-2 focus:ring-purple-700 focus:border-purple-700"
             />
-            <p className="text-xs text-slate-400">
+            <p className="text-xs text-slate-600">
               {t.rich("llm.api_key_hint", { code })}
             </p>
           </div>
@@ -167,7 +167,7 @@ export function LLMSettingsForm({ settings, onUpdated }: LLMSettingsFormProps) {
             onChange={(e) => { const v = parseInt(e.target.value); if (!isNaN(v)) setTimeout_(v) }}
             className="h-9 px-3 text-sm rounded-md border border-slate-200 bg-white text-slate-900 focus:outline-none focus:ring-2 focus:ring-purple-700 focus:border-purple-700"
           />
-          <p className="text-xs text-slate-400">{t("llm.timeout_hint")}</p>
+          <p className="text-xs text-slate-600">{t("llm.timeout_hint")}</p>
         </div>
       </div>
 

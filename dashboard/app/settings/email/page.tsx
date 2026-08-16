@@ -99,7 +99,7 @@ export default function EmailSettingsPage() {
           <div className="flex items-center justify-between">
             <div className="flex flex-col">
               <span className="text-sm font-medium text-slate-800">{t("notifications_label")}</span>
-              <span className="text-xs text-slate-400 max-w-md">{t("notifications_hint")}</span>
+              <span className="text-xs text-slate-600 max-w-md">{t("notifications_hint")}</span>
             </div>
             <button
               type="button"
@@ -131,7 +131,7 @@ export default function EmailSettingsPage() {
                 onChange={e => { const v = parseInt(e.target.value); if (!isNaN(v)) setAttempts(v) }}
                 className="h-9 px-3 text-sm rounded-md border border-slate-200 bg-white text-slate-900 focus:outline-none focus:ring-2 focus:ring-purple-700 disabled:bg-slate-50"
               />
-              <p className="text-xs text-slate-400">{t("max_attempts_hint", { max: ceiling })}</p>
+              <p className="text-xs text-slate-600">{t("max_attempts_hint", { max: ceiling })}</p>
               {!attemptsValid && <p className="text-xs text-red-600">{t("err_max_attempts", { min: minAtt, max: ceiling })}</p>}
             </div>
 
@@ -144,9 +144,9 @@ export default function EmailSettingsPage() {
                   onChange={e => { const v = parseInt(e.target.value); if (!isNaN(v)) setRetention(v) }}
                   className="h-9 px-3 text-sm rounded-md border border-slate-200 bg-white text-slate-900 focus:outline-none focus:ring-2 focus:ring-purple-700 disabled:bg-slate-50 w-28"
                 />
-                <span className="text-xs text-slate-400">{t("days")}</span>
+                <span className="text-xs text-slate-600">{t("days")}</span>
               </div>
-              <p className="text-xs text-slate-400">{t("retention_hint")}</p>
+              <p className="text-xs text-slate-600">{t("retention_hint")}</p>
               {!retentionValid && <p className="text-xs text-red-600">{t("err_retention")}</p>}
             </div>
           </div>
@@ -157,7 +157,7 @@ export default function EmailSettingsPage() {
             <div className="h-9 px-3 text-sm rounded-md border border-slate-100 bg-slate-50 flex items-center text-slate-600 font-mono">
               {t("retry_intervals", { intervals })}
             </div>
-            <p className="text-xs text-slate-400">{t("retry_policy_hint")}</p>
+            <p className="text-xs text-slate-600">{t("retry_policy_hint")}</p>
           </div>
         </section>
 
@@ -169,7 +169,7 @@ export default function EmailSettingsPage() {
           ) : (
             <div className="flex items-center gap-2">
               <Button size="sm" disabled>{t("save")}</Button>
-              <span className="text-xs text-slate-400">
+              <span className="text-xs text-slate-600">
                 {tc.rich("requires_admin", {
                   link: (chunks) => <a href="/login" className="text-purple-700 underline">{chunks}</a>,
                 })}

@@ -75,7 +75,7 @@ export function RetentionSettingsForm({
           </span>
           <p className="text-xs text-slate-500 mt-0.5">{t(`retention.mode_${modeKey}_desc`)}</p>
         </div>
-        <p className="text-xs text-slate-400 mt-2">
+        <p className="text-xs text-slate-600 mt-2">
           {t.rich("retention.storage_config_note", { code })}
         </p>
       </div>
@@ -103,7 +103,7 @@ export function RetentionSettingsForm({
               }}
               className="h-9 px-3 text-sm rounded-md border border-slate-200 bg-white text-slate-900 focus:outline-none focus:ring-2 focus:ring-purple-700 focus:border-purple-700"
             />
-            <p className="text-xs text-slate-400">
+            <p className="text-xs text-slate-600">
               {t("retention.period_hint", { days })}
             </p>
           </div>
@@ -115,7 +115,7 @@ export function RetentionSettingsForm({
             <div className="h-9 px-3 text-sm rounded-md border border-slate-100 bg-slate-50 flex items-center text-slate-600">
               {source}
             </div>
-            <p className="text-xs text-slate-400">
+            <p className="text-xs text-slate-600">
               {t("retention.source_hint")}
             </p>
           </div>
@@ -141,7 +141,7 @@ export function RetentionSettingsForm({
             <div className="h-9 px-3 text-sm rounded-md border border-slate-100 bg-slate-50 flex items-center text-slate-600 font-mono">
               {t("retention.proxy_days_value", { days: proxyRetentionDays })}
             </div>
-            <p className="text-xs text-slate-400">
+            <p className="text-xs text-slate-600">
               {t("retention.proxy_text_hint", { days: proxyRetentionDays })}
             </p>
           </div>
@@ -153,12 +153,12 @@ export function RetentionSettingsForm({
             <div className="h-9 px-3 text-sm rounded-md border border-slate-100 bg-slate-50 flex items-center text-slate-500 text-xs">
               {t("retention.permanent_value")}
             </div>
-            <p className="text-xs text-slate-400">
+            <p className="text-xs text-slate-600">
               {t("retention.permanent_hint")}
             </p>
           </div>
         </div>
-        <p className="text-xs text-slate-400 mt-2">
+        <p className="text-xs text-slate-600 mt-2">
           {t.rich("retention.proxy_config_note", { code })}
         </p>
       </div>

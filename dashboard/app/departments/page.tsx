@@ -121,7 +121,7 @@ export default function DepartmentsPage() {
                     if (!slugEdited) setSlug(slugify(e.target.value))
                   }}
                   placeholder={tf("name_placeholder")}
-                  className="h-9 px-3 text-sm rounded-md border border-slate-200 bg-white text-slate-900 placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-purple-700"
+                  className="h-9 px-3 text-sm rounded-md border border-slate-200 bg-white text-slate-900 placeholder:text-slate-600 focus:outline-none focus:ring-2 focus:ring-purple-700"
                 />
               </div>
               <div className="flex flex-col gap-1">
@@ -131,9 +131,9 @@ export default function DepartmentsPage() {
                   value={slug}
                   onChange={(e) => { setSlugEdited(true); setSlug(e.target.value.toLowerCase().replace(/\s+/g, "-")) }}
                   placeholder={tf("slug_placeholder")}
-                  className="h-9 px-3 text-sm rounded-md border border-slate-200 bg-white text-slate-900 placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-purple-700"
+                  className="h-9 px-3 text-sm rounded-md border border-slate-200 bg-white text-slate-900 placeholder:text-slate-600 focus:outline-none focus:ring-2 focus:ring-purple-700"
                 />
-                <span className="text-[11px] text-slate-400">{tf("slug_hint")}</span>
+                <span className="text-[11px] text-slate-600">{tf("slug_hint")}</span>
               </div>
               <div className="flex flex-col gap-1">
                 <label className="text-xs font-medium text-slate-700">{tf("description")}</label>
@@ -142,7 +142,7 @@ export default function DepartmentsPage() {
                   value={description}
                   onChange={(e) => setDescription(e.target.value)}
                   placeholder={tf("description_placeholder")}
-                  className="h-9 px-3 text-sm rounded-md border border-slate-200 bg-white text-slate-900 placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-purple-700"
+                  className="h-9 px-3 text-sm rounded-md border border-slate-200 bg-white text-slate-900 placeholder:text-slate-600 focus:outline-none focus:ring-2 focus:ring-purple-700"
                 />
               </div>
               <div className="flex flex-col gap-1">
@@ -152,7 +152,7 @@ export default function DepartmentsPage() {
                   value={contact}
                   onChange={(e) => setContact(e.target.value)}
                   placeholder={tf("contact_placeholder")}
-                  className="h-9 px-3 text-sm rounded-md border border-slate-200 bg-white text-slate-900 placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-purple-700"
+                  className="h-9 px-3 text-sm rounded-md border border-slate-200 bg-white text-slate-900 placeholder:text-slate-600 focus:outline-none focus:ring-2 focus:ring-purple-700"
                 />
               </div>
             </div>
@@ -176,7 +176,7 @@ export default function DepartmentsPage() {
               value={search}
               onChange={(e) => setSearch(e.target.value)}
               placeholder={t("search_placeholder")}
-              className="h-8 w-full max-w-xs px-3 text-sm rounded-md border border-slate-200 bg-white text-slate-900 placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-purple-700"
+              className="h-8 w-full max-w-xs px-3 text-sm rounded-md border border-slate-200 bg-white text-slate-900 placeholder:text-slate-600 focus:outline-none focus:ring-2 focus:ring-purple-700"
             />
           </div>
           {!showCreate && error && <p className="px-5 pb-2 text-xs text-red-600">{error}</p>}
@@ -185,7 +185,7 @@ export default function DepartmentsPage() {
           ) : fetchError && !data ? (
             <div className="px-5 py-10 text-center">
               <p className="text-sm font-semibold text-red-600 mb-1">{t("load_error")}</p>
-              <p className="text-xs text-slate-400">{resolve(fetchError).message}</p>
+              <p className="text-xs text-slate-600">{resolve(fetchError).message}</p>
             </div>
           ) : (
             <div style={{ overflowY: "auto", maxHeight: "520px" }}>
@@ -203,7 +203,7 @@ export default function DepartmentsPage() {
                       <Td colSpan={5}>
                         <div className="px-5 py-14 text-center">
                           <div className="text-sm font-semibold text-slate-700 mb-1">{t("empty_title")}</div>
-                          <div className="text-xs text-slate-400">{t("empty_body")}</div>
+                          <div className="text-xs text-slate-600">{t("empty_body")}</div>
                         </div>
                       </Td>
                     </tr>

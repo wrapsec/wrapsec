@@ -99,7 +99,7 @@ export function CreateIntegrationModal({ onCreated, onClose }: Props) {
               className="flex items-center justify-between text-left px-4 py-3 rounded-lg border border-slate-200 hover:border-[#670FEF] hover:bg-[rgba(103,15,239,0.04)] transition-colors"
             >
               <span className="text-sm font-medium text-slate-800">{ct.label}</span>
-              <span className="text-slate-300">&rsaquo;</span>
+              <span className="text-slate-500">&rsaquo;</span>
             </button>
           ))}
         </div>
@@ -114,7 +114,7 @@ export function CreateIntegrationModal({ onCreated, onClose }: Props) {
   return (
     <Overlay>
       <div className="flex items-center gap-2 mb-4">
-        <button onClick={() => setSelected(null)} className="text-slate-400 hover:text-slate-700 text-sm">&lsaquo; {t("back")}</button>
+        <button onClick={() => setSelected(null)} className="text-slate-600 hover:text-slate-700 text-sm">&lsaquo; {t("back")}</button>
         <h2 className="text-base font-semibold text-slate-900">{selected.label}</h2>
       </div>
 
@@ -138,7 +138,7 @@ export function CreateIntegrationModal({ onCreated, onClose }: Props) {
           />
         )}
         {selected.secret.generated && (
-          <p className="text-xs text-slate-400">
+          <p className="text-xs text-slate-600">
             {t("secret_generated_note")}
           </p>
         )}

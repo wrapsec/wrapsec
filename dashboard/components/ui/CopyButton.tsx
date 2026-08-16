@@ -34,7 +34,7 @@ export function CopyButton({ value, title, className = "" }: {
       onClick={copy}
       title={label}
       aria-label={label}
-      className={`inline-flex items-center justify-center text-slate-400 hover:text-slate-700 transition-colors ${className}`}
+      className={`inline-flex items-center justify-center text-slate-600 hover:text-slate-700 transition-colors ${className}`}
     >
       {copied ? <CheckIcon /> : <CopyIcon />}
     </button>

@@ -264,7 +264,7 @@ export default function ApplicationDetailPage() {
               { label: ta("info_created"),     value: new Date(app.created_at).toLocaleDateString() },
             ].map(({ label, value }) => (
               <div key={label} className="bg-slate-50 rounded-lg px-3 py-2.5">
-                <p className="text-xs text-slate-400 mb-0.5">{label}</p>
+                <p className="text-xs text-slate-600 mb-0.5">{label}</p>
                 <p className="text-xs font-mono text-slate-700">{value}</p>
               </div>
             ))}
@@ -289,7 +289,7 @@ export default function ApplicationDetailPage() {
                 <span className="text-sm text-slate-600">{t("block_threshold")}</span>
                 <span className="text-sm font-mono text-slate-900">
                   {override?.thresholds?.block ?? (
-                    <span className="text-slate-400">
+                    <span className="text-slate-600">
                       {ta("inherits_from", { dept: deptName, value: policyData?.resolved_policy?.thresholds?.block ?? "0.7" })}
                     </span>
                   )}
@@ -299,7 +299,7 @@ export default function ApplicationDetailPage() {
                 <span className="text-sm text-slate-600">{t("sanitize_threshold")}</span>
                 <span className="text-sm font-mono text-slate-900">
                   {override?.thresholds?.sanitize ?? (
-                    <span className="text-slate-400">
+                    <span className="text-slate-600">
                       {ta("inherits_from", { dept: deptName, value: policyData?.resolved_policy?.thresholds?.sanitize ?? "0.4" })}
                     </span>
                   )}
@@ -312,7 +312,7 @@ export default function ApplicationDetailPage() {
                     {ta("override_active")}
                   </p>
                 ) : (
-                  <p className="text-xs text-slate-400">
+                  <p className="text-xs text-slate-600">
                     {ta("no_overrides", { dept: deptName })}
                   </p>
                 )}
@@ -359,9 +359,9 @@ export default function ApplicationDetailPage() {
                     value={blockVal}
                     onChange={e => setBlockVal(e.target.value)}
                     placeholder={ta("block_ph", { value: policyData?.resolved_policy?.thresholds?.block ?? "0.7" })}
-                    className="h-9 px-3 text-sm rounded-md border border-slate-200 bg-white text-slate-900 placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-purple-700"
+                    className="h-9 px-3 text-sm rounded-md border border-slate-200 bg-white text-slate-900 placeholder:text-slate-600 focus:outline-none focus:ring-2 focus:ring-purple-700"
                   />
-                  <p className="text-xs text-slate-400">{ta("leave_blank", { dept: deptName })}</p>
+                  <p className="text-xs text-slate-600">{ta("leave_blank", { dept: deptName })}</p>
                 </div>
                 <div className="flex flex-col gap-1">
                   <label className="text-xs font-medium text-slate-700">{t("sanitize_threshold")}</label>
@@ -371,9 +371,9 @@ export default function ApplicationDetailPage() {
                     value={sanitizeVal}
                     onChange={e => setSanitizeVal(e.target.value)}
                     placeholder={ta("sanitize_ph", { value: policyData?.resolved_policy?.thresholds?.sanitize ?? "0.4" })}
-                    className="h-9 px-3 text-sm rounded-md border border-slate-200 bg-white text-slate-900 placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-purple-700"
+                    className="h-9 px-3 text-sm rounded-md border border-slate-200 bg-white text-slate-900 placeholder:text-slate-600 focus:outline-none focus:ring-2 focus:ring-purple-700"
                   />
-                  <p className="text-xs text-slate-400">{ta("leave_blank", { dept: deptName })}</p>
+                  <p className="text-xs text-slate-600">{ta("leave_blank", { dept: deptName })}</p>
                 </div>
               </div>
               {error && <p className="text-xs text-red-600">{error}</p>}
@@ -424,7 +424,7 @@ export default function ApplicationDetailPage() {
                   ))}
                 </>
               ) : (
-                <p className="text-xs text-slate-400">{ta("llm_inherits", { dept: deptName })}</p>
+                <p className="text-xs text-slate-600">{ta("llm_inherits", { dept: deptName })}</p>
               )}
             </div>
           ) : (
@@ -441,26 +441,26 @@ export default function ApplicationDetailPage() {
                   <label className="text-xs font-medium text-slate-700">{t("model")}</label>
                   <input type="text" value={llmModel} onChange={(e) => setLlmModel(e.target.value)}
                     placeholder={t("model_ph")}
-                    className="h-9 px-3 text-sm rounded-md border border-slate-200 bg-white text-slate-900 placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-purple-700" />
+                    className="h-9 px-3 text-sm rounded-md border border-slate-200 bg-white text-slate-900 placeholder:text-slate-600 focus:outline-none focus:ring-2 focus:ring-purple-700" />
                 </div>
                 <div className="flex flex-col gap-1 col-span-2">
                   <label className="text-xs font-medium text-slate-700">{t("base_url")}</label>
                   <input type="text" value={llmBaseUrl} onChange={(e) => setLlmBaseUrl(e.target.value)}
                     placeholder={t("base_url_ph")}
-                    className="h-9 px-3 text-sm rounded-md border border-slate-200 bg-white text-slate-900 placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-purple-700" />
+                    className="h-9 px-3 text-sm rounded-md border border-slate-200 bg-white text-slate-900 placeholder:text-slate-600 focus:outline-none focus:ring-2 focus:ring-purple-700" />
                 </div>
                 {llmProvider !== "ollama" && (
                   <div className="flex flex-col gap-1 col-span-2">
                     <label className="text-xs font-medium text-slate-700">
                       {t("api_key")}
                       {app.policy_override?.llm?.api_key_masked && (
-                        <span className="ml-2 font-normal text-slate-400">{t("api_key_current", { masked: app.policy_override.llm.api_key_masked })}</span>
+                        <span className="ml-2 font-normal text-slate-600">{t("api_key_current", { masked: app.policy_override.llm.api_key_masked })}</span>
                       )}
                     </label>
                     <input type="password" value={llmApiKey} onChange={(e) => setLlmApiKey(e.target.value)}
                       placeholder={app.policy_override?.llm?.api_key_masked ? t("api_key_keep") : t("api_key_new")}
-                      className="h-9 px-3 text-sm rounded-md border border-slate-200 bg-white text-slate-900 placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-purple-700" />
-                    <p className="text-xs text-slate-400">{ta("llm_encrypted")}</p>
+                      className="h-9 px-3 text-sm rounded-md border border-slate-200 bg-white text-slate-900 placeholder:text-slate-600 focus:outline-none focus:ring-2 focus:ring-purple-700" />
+                    <p className="text-xs text-slate-600">{ta("llm_encrypted")}</p>
                   </div>
                 )}
                 <div className="flex flex-col gap-1">
@@ -525,7 +525,7 @@ export default function ApplicationDetailPage() {
                   ))}
                 </>
               ) : (
-                <p className="text-xs text-slate-400">{ta("proxy_inherits", { dept: deptName })}</p>
+                <p className="text-xs text-slate-600">{ta("proxy_inherits", { dept: deptName })}</p>
               )}
             </div>
           ) : (
@@ -542,26 +542,26 @@ export default function ApplicationDetailPage() {
                   <label className="text-xs font-medium text-slate-700">{t("default_model")}</label>
                   <input type="text" value={proxyModel} onChange={(e) => setProxyModel(e.target.value)}
                     placeholder={t("model_ph_proxy")}
-                    className="h-9 px-3 text-sm rounded-md border border-slate-200 bg-white text-slate-900 placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-purple-700" />
+                    className="h-9 px-3 text-sm rounded-md border border-slate-200 bg-white text-slate-900 placeholder:text-slate-600 focus:outline-none focus:ring-2 focus:ring-purple-700" />
                 </div>
                 <div className="flex flex-col gap-1 col-span-2">
                   <label className="text-xs font-medium text-slate-700">{t("base_url")}</label>
                   <input type="text" value={proxyBaseUrl} onChange={(e) => setProxyBaseUrl(e.target.value)}
                     placeholder={t("base_url_ph")}
-                    className="h-9 px-3 text-sm rounded-md border border-slate-200 bg-white text-slate-900 placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-purple-700" />
+                    className="h-9 px-3 text-sm rounded-md border border-slate-200 bg-white text-slate-900 placeholder:text-slate-600 focus:outline-none focus:ring-2 focus:ring-purple-700" />
                 </div>
                 {proxyProvider !== "ollama" && (
                   <div className="flex flex-col gap-1 col-span-2">
                     <label className="text-xs font-medium text-slate-700">
                       {t("api_key")}
                       {app.policy_override?.proxy_provider?.api_key_masked && (
-                        <span className="ml-2 font-normal text-slate-400">{t("api_key_current", { masked: app.policy_override.proxy_provider.api_key_masked })}</span>
+                        <span className="ml-2 font-normal text-slate-600">{t("api_key_current", { masked: app.policy_override.proxy_provider.api_key_masked })}</span>
                       )}
                     </label>
                     <input type="password" value={proxyApiKey} onChange={(e) => setProxyApiKey(e.target.value)}
                       placeholder={app.policy_override?.proxy_provider?.api_key_masked ? t("api_key_keep") : t("api_key_new")}
-                      className="h-9 px-3 text-sm rounded-md border border-slate-200 bg-white text-slate-900 placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-purple-700" />
-                    <p className="text-xs text-slate-400">{t("proxy_encrypted")}</p>
+                      className="h-9 px-3 text-sm rounded-md border border-slate-200 bg-white text-slate-900 placeholder:text-slate-600 focus:outline-none focus:ring-2 focus:ring-purple-700" />
+                    <p className="text-xs text-slate-600">{t("proxy_encrypted")}</p>
                   </div>
                 )}
                 <div className="flex flex-col gap-1">
@@ -608,7 +608,7 @@ export default function ApplicationDetailPage() {
             </Link>
           </div>
           {appKeys.length === 0 ? (
-            <p className="text-sm text-slate-400">
+            <p className="text-sm text-slate-600">
               {ta("no_keys")}{" "}
               <Link href="/settings/keys" className="text-blue-700 hover:underline">
                 {ta("create_one")}
@@ -623,9 +623,9 @@ export default function ApplicationDetailPage() {
                 >
                   <div className="min-w-0">
                     <p className="text-sm font-medium text-slate-900">{key.name}</p>
-                    <p className="text-xs text-slate-400 font-mono">{key.key_id}</p>
+                    <p className="text-xs text-slate-600 font-mono">{key.key_id}</p>
                     {key.last_used_at && (
-                      <p className="text-xs text-slate-400">
+                      <p className="text-xs text-slate-600">
                         {ta("last_used", { date: new Date(key.last_used_at).toLocaleDateString() })}
                       </p>
                     )}

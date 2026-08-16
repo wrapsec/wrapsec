@@ -75,7 +75,7 @@ export function RateLimitSettingsForm({
               }}
               className="h-9 px-3 text-sm rounded-md border border-slate-200 bg-white text-slate-900 focus:outline-none focus:ring-2 focus:ring-purple-700 focus:border-purple-700"
             />
-            <p className="text-xs text-slate-400">
+            <p className="text-xs text-slate-600">
               {t.rich("rate_limit.live_hint", { code })}
             </p>
           </div>
@@ -86,7 +86,7 @@ export function RateLimitSettingsForm({
             <div className="h-9 px-3 text-sm rounded-md border border-slate-100 bg-slate-50 flex items-center text-slate-600">
               {source}
             </div>
-            <p className="text-xs text-slate-400">
+            <p className="text-xs text-slate-600">
               {t("rate_limit.source_hint")}
             </p>
           </div>
@@ -109,25 +109,25 @@ export function RateLimitSettingsForm({
       <div>
         <p className="text-xs font-semibold text-slate-500 uppercase tracking-wide mb-3">
           {t("rate_limit.trial_title")}
-          <span className="ml-2 text-xs font-normal text-slate-400 normal-case">{t("rate_limit.trial_note")}</span>
+          <span className="ml-2 text-xs font-normal text-slate-600 normal-case">{t("rate_limit.trial_note")}</span>
         </p>
         <div className="grid grid-cols-3 gap-3">
           <div className="bg-slate-50 rounded-lg px-3 py-2.5">
-            <p className="text-xs text-slate-400 mb-0.5">{t("rate_limit.trial_rate_limit")}</p>
+            <p className="text-xs text-slate-600 mb-0.5">{t("rate_limit.trial_rate_limit")}</p>
             <p className="text-xs font-mono text-slate-700">
               {t("rate_limit.trial_rate_value", { value: process.env.NEXT_PUBLIC_TRIAL_RATE_LIMIT ?? "10" })}
             </p>
           </div>
           <div className="bg-slate-50 rounded-lg px-3 py-2.5">
-            <p className="text-xs text-slate-400 mb-0.5">{t("rate_limit.trial_max_input")}</p>
+            <p className="text-xs text-slate-600 mb-0.5">{t("rate_limit.trial_max_input")}</p>
             <p className="text-xs font-mono text-slate-700">{t("rate_limit.trial_max_input_value")}</p>
           </div>
           <div className="bg-slate-50 rounded-lg px-3 py-2.5">
-            <p className="text-xs text-slate-400 mb-0.5">{t("rate_limit.trial_proxy_mode")}</p>
+            <p className="text-xs text-slate-600 mb-0.5">{t("rate_limit.trial_proxy_mode")}</p>
             <p className="text-xs font-mono text-slate-700">{t("rate_limit.trial_proxy_value")}</p>
           </div>
         </div>
-        <p className="text-xs text-slate-400 mt-2">
+        <p className="text-xs text-slate-600 mt-2">
           {t.rich("rate_limit.trial_config_note", { code })}
         </p>
       </div>

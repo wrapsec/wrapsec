@@ -115,7 +115,7 @@ export function ProxySettingsForm({ config, onUpdated }: ProxySettingsFormProps)
               <option key={p} value={p}>{t(`providers.${p}`)}</option>
             ))}
           </select>
-          <p className="text-xs text-slate-400">
+          <p className="text-xs text-slate-600">
             {t("proxy.provider_hint")}
           </p>
         </div>
@@ -128,9 +128,9 @@ export function ProxySettingsForm({ config, onUpdated }: ProxySettingsFormProps)
             value={model}
             onChange={(e) => setModel(e.target.value)}
             placeholder={t("proxy.model_placeholder")}
-            className="h-9 px-3 text-sm rounded-md border border-slate-200 bg-white text-slate-900 placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-purple-700 focus:border-purple-700"
+            className="h-9 px-3 text-sm rounded-md border border-slate-200 bg-white text-slate-900 placeholder:text-slate-600 focus:outline-none focus:ring-2 focus:ring-purple-700 focus:border-purple-700"
           />
-          <p className="text-xs text-slate-400">
+          <p className="text-xs text-slate-600">
             {t("proxy.model_hint")}
           </p>
         </div>
@@ -143,9 +143,9 @@ export function ProxySettingsForm({ config, onUpdated }: ProxySettingsFormProps)
             value={baseUrl}
             onChange={(e) => setBaseUrl(e.target.value)}
             placeholder={t("proxy.base_url_placeholder")}
-            className="h-9 px-3 text-sm rounded-md border border-slate-200 bg-white text-slate-900 placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-purple-700 focus:border-purple-700"
+            className="h-9 px-3 text-sm rounded-md border border-slate-200 bg-white text-slate-900 placeholder:text-slate-600 focus:outline-none focus:ring-2 focus:ring-purple-700 focus:border-purple-700"
           />
-          <p className="text-xs text-slate-400">
+          <p className="text-xs text-slate-600">
             {t("proxy.base_url_hint")}
           </p>
         </div>
@@ -156,7 +156,7 @@ export function ProxySettingsForm({ config, onUpdated }: ProxySettingsFormProps)
             <label className="text-xs font-medium text-slate-700">
               {t("proxy.api_key")}
               {config?.api_key_masked && (
-                <span className="ml-2 font-normal text-slate-400">
+                <span className="ml-2 font-normal text-slate-600">
                   {t("proxy.api_key_current", { masked: config.api_key_masked })}
                 </span>
               )}
@@ -166,9 +166,9 @@ export function ProxySettingsForm({ config, onUpdated }: ProxySettingsFormProps)
               value={apiKey}
               onChange={(e) => setApiKey(e.target.value)}
               placeholder={config?.api_key_masked ? t("proxy.api_key_placeholder_keep") : t("proxy.api_key_placeholder_new")}
-              className="h-9 px-3 text-sm rounded-md border border-slate-200 bg-white text-slate-900 placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-purple-700 focus:border-purple-700"
+              className="h-9 px-3 text-sm rounded-md border border-slate-200 bg-white text-slate-900 placeholder:text-slate-600 focus:outline-none focus:ring-2 focus:ring-purple-700 focus:border-purple-700"
             />
-            <p className="text-xs text-slate-400">
+            <p className="text-xs text-slate-600">
               {t("proxy.api_key_hint")}
             </p>
           </div>
@@ -185,7 +185,7 @@ export function ProxySettingsForm({ config, onUpdated }: ProxySettingsFormProps)
             onChange={(e) => { const v = parseInt(e.target.value); if (!isNaN(v)) setTimeout_(v) }}
             className="h-9 px-3 text-sm rounded-md border border-slate-200 bg-white text-slate-900 focus:outline-none focus:ring-2 focus:ring-purple-700 focus:border-purple-700"
           />
-          <p className="text-xs text-slate-400">{t("proxy.timeout_hint")}</p>
+          <p className="text-xs text-slate-600">{t("proxy.timeout_hint")}</p>
         </div>
       </div>
 

@@ -115,7 +115,7 @@ function ChangePasswordModal({ onClose }: { onClose: () => void }) {
                 {next.length > 0 && (
                   <ul className="mt-1.5 space-y-1">
                     {REQUIREMENTS.map(r => (
-                      <li key={r.key} className={`flex items-center gap-1.5 text-xs ${r.test(next) ? "text-green-600" : "text-slate-400"}`}>
+                      <li key={r.key} className={`flex items-center gap-1.5 text-xs ${r.test(next) ? "text-green-600" : "text-slate-600"}`}>
                         <span>{r.test(next) ? "" : "○"}</span>{tr(r.key)}
                       </li>
                     ))}
@@ -198,9 +198,9 @@ export default function ProfilePage() {
           />
 
           {loading ? (
-            <p className="text-sm text-slate-400">{t("loading")}</p>
+            <p className="text-sm text-slate-600">{t("loading")}</p>
           ) : isApiKey ? (
-            <p className="text-sm text-slate-400">
+            <p className="text-sm text-slate-600">
               {t("api_key_notice")}
             </p>
           ) : profile ? (
@@ -216,7 +216,7 @@ export default function ProfilePage() {
               )}
             </div>
           ) : (
-            <p className="text-sm text-slate-400">{t("unable_to_load")}</p>
+            <p className="text-sm text-slate-600">{t("unable_to_load")}</p>
           )}
         </Card>
       </div>
@@ -228,7 +228,7 @@ export default function ProfilePage() {
   )
 }
 
-const inputCls = "h-9 px-3 text-sm rounded-md border border-slate-200 bg-white text-slate-900 placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-purple-700 disabled:opacity-50 w-full"
+const inputCls = "h-9 px-3 text-sm rounded-md border border-slate-200 bg-white text-slate-900 placeholder:text-slate-600 focus:outline-none focus:ring-2 focus:ring-purple-700 disabled:opacity-50 w-full"
 
 function Field({ label, children }: { label: string; children: React.ReactNode }) {
   return (

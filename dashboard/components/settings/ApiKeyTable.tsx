@@ -142,13 +142,13 @@ export function ApiKeyTable({ keys, onRevoke, onRotate, revoking, canWrite = tru
                     {key.dept_name || (key.dept_id ? (
                       <span className="font-mono">{key.dept_id.slice(0, 8)}...</span>
                     ) : (
-                      <span className="text-slate-300">-</span>
+                      <span className="text-slate-500">-</span>
                     ))}
                   </td>
 
                   <td className="px-4 py-3 text-xs text-slate-500">
                     {key.app_name || (
-                      <span className="text-slate-300">{t("dept_scoped")}</span>
+                      <span className="text-slate-500">{t("dept_scoped")}</span>
                     )}
                   </td>
 
@@ -156,7 +156,7 @@ export function ApiKeyTable({ keys, onRevoke, onRotate, revoking, canWrite = tru
                     {fmt.timestamp(key.created_at)}
                   </td>
 
-                  <td className="px-4 py-3 text-xs text-slate-400">
+                  <td className="px-4 py-3 text-xs text-slate-600">
                     {key.last_used_at ? timeAgo(key.last_used_at) : t("never")}
                   </td>
 

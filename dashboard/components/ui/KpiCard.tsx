@@ -31,7 +31,7 @@ export function KpiCard({ label, value, sub, accent, icon, valueColor, href }: {
       }}
     >
       <div className="flex items-start justify-between gap-2 mb-2.5">
-        <span className="text-[10px] font-bold uppercase tracking-[0.08em] text-slate-400 leading-tight">
+        <span className="text-[10px] font-bold uppercase tracking-[0.08em] text-slate-600 leading-tight">
           {label}
         </span>
         {icon && accent && (
@@ -51,7 +51,7 @@ export function KpiCard({ label, value, sub, accent, icon, valueColor, href }: {
       >
         {value}
       </div>
-      {sub != null && <div className="text-[11px] text-slate-400">{sub}</div>}
+      {sub != null && <div className="text-[11px] text-slate-600">{sub}</div>}
     </div>
   )
 

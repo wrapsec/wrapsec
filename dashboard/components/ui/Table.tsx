@@ -27,7 +27,7 @@ export function Th({ children, className, align = "left" }: {
 }) {
   return (
     <th className={cn(
-      "px-4 py-2.5 text-[10px] font-bold uppercase tracking-[0.07em] text-slate-400 whitespace-nowrap border-b border-slate-100 bg-[#fafafa]",
+      "px-4 py-2.5 text-[10px] font-bold uppercase tracking-[0.07em] text-slate-600 whitespace-nowrap border-b border-slate-100 bg-[#fafafa]",
       ALIGN[align], className,
     )}>
       {children}

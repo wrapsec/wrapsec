@@ -27,7 +27,7 @@ export function DetailRow({ label, children, mono, span }: {
 }) {
   return (
     <div className={cn("flex flex-col gap-0.5 min-w-0", span && "col-span-2")}>
-      <span className="text-[11px] text-slate-400">{label}</span>
+      <span className="text-[11px] text-slate-600">{label}</span>
       <span className={cn("text-xs text-slate-700 break-words", mono && "font-mono")}>{children}</span>
     </div>
   )

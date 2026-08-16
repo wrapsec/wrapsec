@@ -13,7 +13,7 @@ export function NameSlug({ name, slug }: { name: string; slug: string }) {
   return (
     <div className="flex flex-col gap-0.5 min-w-0">
       <span className="text-sm font-medium text-slate-900 truncate">{name}</span>
-      <span className="text-[11px] font-mono text-slate-400 truncate">{slug}</span>
+      <span className="text-[11px] font-mono text-slate-600 truncate">{slug}</span>
     </div>
   )
 }
@@ -31,5 +31,5 @@ export function PolicyBadge({ overridden, inheritsLabel }: {
       </span>
     )
   }
-  return <span className="text-xs text-slate-400">{inheritsLabel}</span>
+  return <span className="text-xs text-slate-600">{inheritsLabel}</span>
 }

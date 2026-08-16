@@ -55,10 +55,10 @@ function ScoreBar({ score, color }: { score: number; color: string }) {
 function DecisionChip({ label, decision }: { label: string; decision: string | null }) {
   return (
     <div className="flex flex-col gap-1">
-      <p className="text-[11px] text-slate-400">{label}</p>
+      <p className="text-[11px] text-slate-600">{label}</p>
       {decision
         ? <DecisionBadge decision={decision as Decision} size="sm" />
-        : <span className="text-xs text-slate-300">--</span>}
+        : <span className="text-xs text-slate-500">--</span>}
     </div>
   )
 }
@@ -192,7 +192,7 @@ function AssessmentTab({ detail }: { detail: RequestDetail }) {
       <div>
         <div className="flex items-center gap-2 mb-3">
           <SectionLabel>{t("layer_contributions")}</SectionLabel>
-          <span className="text-[11px] text-slate-400 mb-3">{t("mode_note", { mode: detail.processing.detection_mode })}</span>
+          <span className="text-[11px] text-slate-600 mb-3">{t("mode_note", { mode: detail.processing.detection_mode })}</span>
         </div>
         <div className="space-y-3">
           {contributions.map(c => (
@@ -251,7 +251,7 @@ function ProxyTab({ detail }: { detail: RequestDetail }) {
         <DecisionChip label={t("input_decision")}  decision={detail.decision} />
         <DecisionChip label={t("output_decision")} decision={p.output_decision} />
         <div className="flex flex-col gap-1">
-          <p className="text-[11px] text-slate-400">{t("execution_status")}</p>
+          <p className="text-[11px] text-slate-600">{t("execution_status")}</p>
           <div className="w-fit"><StatusChip status={p.execution_status} /></div>
         </div>
       </div>
@@ -342,7 +342,7 @@ export function RequestDetailModal({ traceId, onClose }: RequestDetailModalProps
 
   const footer = detail ? (
     <div className="px-6 py-3 flex items-center gap-2 flex-wrap">
-      <span className="text-[11px] font-semibold text-slate-400 uppercase tracking-wide mr-1">
+      <span className="text-[11px] font-semibold text-slate-600 uppercase tracking-wide mr-1">
         {t("recommended_actions")}
       </span>
       {detail.run_id && (
@@ -389,7 +389,7 @@ export function RequestDetailModal({ traceId, onClose }: RequestDetailModalProps
               <DecisionBadge decision={detail.decision} />
               {detail.proxy?.output_decision && detail.proxy.output_decision !== detail.decision && (
                 <>
-                  <span className="text-[11px] text-slate-400">-&gt;</span>
+                  <span className="text-[11px] text-slate-600">-&gt;</span>
                   <DecisionBadge decision={detail.proxy.output_decision as Decision} />
                 </>
               )}
@@ -411,12 +411,12 @@ export function RequestDetailModal({ traceId, onClose }: RequestDetailModalProps
             <div className="mt-4 flex items-center gap-2 flex-wrap text-xs text-slate-500">
               <span className="font-mono text-slate-600">{truncateId(traceId)}</span>
               <CopyButton value={traceId} title={t("copy_trace")} />
-              <span className="text-slate-300">.</span>
+              <span className="text-slate-500">.</span>
               <span>{fmt.timestamp(detail.timestamp)}</span>
               <SourceBadge source={detail.input_source} />
               {detail.run_id && (
                 <>
-                  <span className="text-slate-300">.</span>
+                  <span className="text-slate-500">.</span>
                   <span>{formatRun(detail.run_id, detail.turn_index)}</span>
                 </>
               )}

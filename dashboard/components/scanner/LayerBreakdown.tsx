@@ -83,7 +83,7 @@ export function LayerBreakdown({ scores }: LayerBreakdownProps) {
     <div className="space-y-4">
       {/* Detection layers */}
       <div>
-        <p className="text-xs font-semibold text-slate-400 uppercase tracking-wider mb-3">
+        <p className="text-xs font-semibold text-slate-600 uppercase tracking-wider mb-3">
           {t("detection_title")}
         </p>
         <div className="space-y-3">
@@ -108,7 +108,7 @@ export function LayerBreakdown({ scores }: LayerBreakdownProps) {
 
       {/* Guardrail layers */}
       <div>
-        <p className="text-xs font-semibold text-slate-400 uppercase tracking-wider mb-3">
+        <p className="text-xs font-semibold text-slate-600 uppercase tracking-wider mb-3">
           {t("guardrail_title")}
         </p>
         <div className="space-y-3">

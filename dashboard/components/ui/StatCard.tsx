@@ -15,9 +15,9 @@ export function StatCard({ label, value, sub, className }: {
 }) {
   return (
     <div className={className}>
-      <div className="text-[10px] font-semibold uppercase tracking-[0.05em] text-slate-400">{label}</div>
+      <div className="text-[10px] font-semibold uppercase tracking-[0.05em] text-slate-600">{label}</div>
       <div className="text-lg font-bold text-slate-900 tabular-nums">{value}</div>
-      {sub != null && <div className="text-xs text-slate-400 mt-0.5">{sub}</div>}
+      {sub != null && <div className="text-xs text-slate-600 mt-0.5">{sub}</div>}
     </div>
   )
 }

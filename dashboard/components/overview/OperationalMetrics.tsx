@@ -12,8 +12,8 @@ export function OperationalMetrics({ stats }: { stats: AuditStatsResponse }) {
   const tc = useTranslations("common")
   const metrics = [
     { label: t("metrics.block_rate"),    value: formatRate(stats.block_rate),        color: "#dc2626" },
-    { label: t("metrics.sanitize_rate"), value: formatRate(stats.sanitize_rate),     color: "#d97706" },
-    { label: t("metrics.allow_rate"),    value: formatRate(stats.allow_rate),        color: "#16a34a" },
+    { label: t("metrics.sanitize_rate"), value: formatRate(stats.sanitize_rate),     color: "#b45309" },
+    { label: t("metrics.allow_rate"),    value: formatRate(stats.allow_rate),        color: "#15803d" },
     { label: t("metrics.avg_latency"),   value: formatLatency(stats.avg_latency_ms), color: "#670FEF" },
     { label: t("metrics.p95_latency"),   value: formatLatency(stats.p95_latency_ms), color: "#374151" },
   ]
@@ -25,7 +25,7 @@ export function OperationalMetrics({ stats }: { stats: AuditStatsResponse }) {
     }}>
       <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: "16px" }}>
         <h3 style={{ fontSize: "13px", fontWeight: 600, color: "#111827", margin: 0 }}>{t("operational_metrics")}</h3>
-        <span style={{ fontSize: "11px", color: "#9ca3af" }}>{tc("all_time")}</span>
+        <span style={{ fontSize: "11px", color: "#4b5563" }}>{tc("all_time")}</span>
       </div>
       <div style={{ display: "flex", gap: "0" }}>
         {metrics.map((m, i) => (
@@ -34,7 +34,7 @@ export function OperationalMetrics({ stats }: { stats: AuditStatsResponse }) {
             padding: "0 16px",
             borderLeft: i > 0 ? "1px solid #f3f4f6" : "none",
           }}>
-            <p style={{ fontSize: "10px", fontWeight: 600, color: "#9ca3af", textTransform: "uppercase", letterSpacing: "0.07em", margin: "0 0 6px 0" }}>
+            <p style={{ fontSize: "10px", fontWeight: 600, color: "#4b5563", textTransform: "uppercase", letterSpacing: "0.07em", margin: "0 0 6px 0" }}>
               {m.label}
             </p>
             <p style={{ fontSize: "18px", fontWeight: 700, color: m.color, margin: 0, lineHeight: 1 }}>

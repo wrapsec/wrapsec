@@ -22,7 +22,7 @@ export function RecentRequests({ items, onSelect }: {
         display: "flex", alignItems: "center", justifyContent: "space-between",
       }}>
         <h3 style={{ fontSize: "13px", fontWeight: 600, color: "#111827", margin: 0 }}>{t("recent_requests")}</h3>
-        <span style={{ fontSize: "11px", color: "#9ca3af" }}>{t("recent_subtitle")}</span>
+        <span style={{ fontSize: "11px", color: "#4b5563" }}>{t("recent_subtitle")}</span>
       </div>
       <RequestsTable items={items} onSelect={onSelect} compact />
     </div>

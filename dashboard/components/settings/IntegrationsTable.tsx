@@ -84,7 +84,7 @@ export function IntegrationsTable({
           <Tr key={ep.id}>
             <Td>
               <div className="font-medium text-slate-800">{connectorLabel(ep.connector_type) ?? t("generic_webhook")}</div>
-              <div className="text-xs text-slate-400 break-all">{ep.url}</div>
+              <div className="text-xs text-slate-600 break-all">{ep.url}</div>
             </Td>
             <Td><StatusChip status={ep.status} /></Td>
             <Td className="text-xs text-slate-500">

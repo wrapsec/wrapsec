@@ -31,11 +31,11 @@ export function TopThreats({ threats, from, to }: { threats: ThreatCount[]; from
     }}>
       <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: "16px", flexShrink: 0 }}>
         <h3 style={{ fontSize: "13px", fontWeight: 600, color: "#111827", margin: 0 }}>{t("top_threats")}</h3>
-        <span style={{ fontSize: "11px", color: "#9ca3af" }}>{t("categories", { count: threats.length })}</span>
+        <span style={{ fontSize: "11px", color: "#4b5563" }}>{t("categories", { count: threats.length })}</span>
       </div>
 
       {threats.length === 0 ? (
-        <p style={{ fontSize: "13px", color: "#9ca3af" }}>{t("no_threats")}</p>
+        <p style={{ fontSize: "13px", color: "#4b5563" }}>{t("no_threats")}</p>
       ) : (
         <div style={{ overflowY: "auto", overflowX: "hidden", flex: 1, maxHeight: "220px", paddingRight: "8px" }}>
           <div style={{ display: "flex", flexDirection: "column", gap: "12px" }}>

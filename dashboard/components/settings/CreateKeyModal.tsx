@@ -92,7 +92,7 @@ export function CreateKeyModal({ onCreated, onClose }: CreateKeyModalProps) {
             {/* Department */}
             <div className="flex flex-col gap-1">
               <label className="text-xs font-medium text-slate-700">
-                {t("department")} <span className="text-slate-400">{t("required")}</span>
+                {t("department")} <span className="text-slate-600">{t("required")}</span>
               </label>
               <select
                 value={deptId}
@@ -104,7 +104,7 @@ export function CreateKeyModal({ onCreated, onClose }: CreateKeyModalProps) {
                   <option key={d.id} value={d.id}>{d.name}</option>
                 ))}
               </select>
-              <p className="text-xs text-slate-400">
+              <p className="text-xs text-slate-600">
                 {t("dept_hint")}
               </p>
             </div>
@@ -131,7 +131,7 @@ export function CreateKeyModal({ onCreated, onClose }: CreateKeyModalProps) {
             {deptId && (
               <div className="flex flex-col gap-1">
                 <label className="text-xs font-medium text-slate-700">
-                  {t("application")} <span className="text-slate-400">{t("optional")}</span>
+                  {t("application")} <span className="text-slate-600">{t("optional")}</span>
                 </label>
                 <select
                   value={appId}
@@ -143,7 +143,7 @@ export function CreateKeyModal({ onCreated, onClose }: CreateKeyModalProps) {
                     <option key={a.id} value={a.id}>{a.name}</option>
                   ))}
                 </select>
-                <p className="text-xs text-slate-400">
+                <p className="text-xs text-slate-600">
                   {t("app_hint")}
                 </p>
               </div>
@@ -185,20 +185,20 @@ export function CreateKeyModal({ onCreated, onClose }: CreateKeyModalProps) {
             {/* Show scoping info */}
             <div className="grid grid-cols-2 gap-2 text-xs text-slate-500">
               <div>
-                <span className="text-slate-400">{t("type_label")}</span>{" "}
+                <span className="text-slate-600">{t("type_label")}</span>{" "}
                 <span className={`font-medium ${created.key_type === "trial" ? "text-amber-600" : "text-emerald-600"}`}>
                   {created.key_type === "trial" ? t("trial") : t("live")}
                 </span>
               </div>
               {created.dept_id && (
                 <div>
-                  <span className="text-slate-400">{t("dept_label")}</span>{" "}
+                  <span className="text-slate-600">{t("dept_label")}</span>{" "}
                   <span className="font-mono">{created.dept_id.slice(0, 8)}...</span>
                 </div>
               )}
               {created.app_id && (
                 <div>
-                  <span className="text-slate-400">{t("app_label")}</span>{" "}
+                  <span className="text-slate-600">{t("app_label")}</span>{" "}
                   <span className="font-mono">{created.app_id.slice(0, 8)}...</span>
                 </div>
               )}

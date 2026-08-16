@@ -75,7 +75,7 @@ export function AdminLimitsForm({
             }}
             className="h-9 px-3 text-sm rounded-md border border-slate-200 bg-white text-slate-900 focus:outline-none focus:ring-2 focus:ring-purple-700 focus:border-purple-700"
           />
-          <p className="text-xs text-slate-400">
+          <p className="text-xs text-slate-600">
             {t("admin_limits.write_hint")}
           </p>
           {!writeValid && (
@@ -100,7 +100,7 @@ export function AdminLimitsForm({
             }}
             className="h-9 px-3 text-sm rounded-md border border-slate-200 bg-white text-slate-900 focus:outline-none focus:ring-2 focus:ring-purple-700 focus:border-purple-700"
           />
-          <p className="text-xs text-slate-400">
+          <p className="text-xs text-slate-600">
             {t("admin_limits.export_hint")}
           </p>
           {!expValid && (
@@ -121,7 +121,7 @@ export function AdminLimitsForm({
         </p>
       </div>
 
-      <div className="flex items-center gap-2 text-xs text-slate-400">
+      <div className="flex items-center gap-2 text-xs text-slate-600">
         <span>{t("admin_limits.source_label")}</span>
         <span className="font-mono bg-slate-100 px-1.5 py-0.5 rounded text-slate-600">{source}</span>
         {source === "database" && (

@@ -67,7 +67,7 @@ function Field({
   )
 }
 
-const inputCls = "h-9 px-3 text-sm rounded-md border border-slate-200 bg-white text-slate-900 placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-purple-700 disabled:opacity-50"
+const inputCls = "h-9 px-3 text-sm rounded-md border border-slate-200 bg-white text-slate-900 placeholder:text-slate-600 focus:outline-none focus:ring-2 focus:ring-purple-700 disabled:opacity-50"
 const selectCls = inputCls
 
 // â”€â”€ Create user modal â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
@@ -129,7 +129,7 @@ function CreateUserModal({
           <p className="text-sm font-semibold text-slate-900">{t("title")}</p>
           <button
             onClick={onClose}
-            className="p-1 rounded-md text-slate-400 hover:text-slate-600 hover:bg-slate-100 transition-colors"
+            className="p-1 rounded-md text-slate-600 hover:text-slate-600 hover:bg-slate-100 transition-colors"
           >
             <svg className="h-4 w-4" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24">
               <path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" />
@@ -174,7 +174,7 @@ function CreateUserModal({
           )}
         </div>
         {error && <p className="text-xs text-red-600 mt-3">{error}</p>}
-        <p className="text-xs text-slate-400 mt-3">
+        <p className="text-xs text-slate-600 mt-3">
           {t("first_login_note")}
         </p>
         <div className="flex gap-3 mt-4">
@@ -293,13 +293,13 @@ function EditUserModal({
         <div className="flex items-start justify-between mb-4">
           <div>
             <p className="text-sm font-semibold text-slate-900">{user.email}</p>
-            <p className="text-xs text-slate-400 mt-0.5">{user.tenant_id}</p>
+            <p className="text-xs text-slate-600 mt-0.5">{user.tenant_id}</p>
           </div>
           <div className="flex items-center gap-2">
             <StatusBadge active={user.is_active} />
             <button
               onClick={onClose}
-              className="ml-1 p-1 rounded-md text-slate-400 hover:text-slate-600 hover:bg-slate-100 transition-colors"
+              className="ml-1 p-1 rounded-md text-slate-600 hover:text-slate-600 hover:bg-slate-100 transition-colors"
             >
               <svg className="h-4 w-4" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24">
                 <path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" />
@@ -451,7 +451,7 @@ export default function UsersPage() {
               value={search}
               onChange={(e) => setSearch(e.target.value)}
               placeholder={t("search_placeholder")}
-              className="h-8 w-full max-w-xs px-3 text-sm rounded-md border border-slate-200 bg-white text-slate-900 placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-purple-700"
+              className="h-8 w-full max-w-xs px-3 text-sm rounded-md border border-slate-200 bg-white text-slate-900 placeholder:text-slate-600 focus:outline-none focus:ring-2 focus:ring-purple-700"
             />
           </div>
           {isLoading ? (
@@ -459,7 +459,7 @@ export default function UsersPage() {
           ) : fetchError && !usersData ? (
             <div className="px-5 py-10 text-center">
               <p className="text-sm font-semibold text-red-600 mb-1">{t("load_error")}</p>
-              <p className="text-xs text-slate-400">{fetchError?.message ?? tc("unexpected_error")}</p>
+              <p className="text-xs text-slate-600">{fetchError?.message ?? tc("unexpected_error")}</p>
             </div>
           ) : (
             <div style={{ overflowY: "auto", maxHeight: "520px" }}>
@@ -479,7 +479,7 @@ export default function UsersPage() {
                     <td colSpan={6} className="px-5 py-14 text-center">
                       <div style={{ fontSize: "20px", marginBottom: "8px" }}></div>
                       <div className="text-sm font-semibold text-slate-700 mb-1">{t("empty_title")}</div>
-                      <div className="text-xs text-slate-400">{t("empty_body")}</div>
+                      <div className="text-xs text-slate-600">{t("empty_body")}</div>
                     </td>
                   </tr>
                 ) : (

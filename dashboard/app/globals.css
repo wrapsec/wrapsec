@@ -38,10 +38,11 @@
   --topbar-bg:      #ffffff;
   --topbar-border:  #e5e7eb;
 
-  /* Text */
+  /* Text -- all three meet WCAG AA (>=4.5:1) on the light card/page backgrounds
+     used across the dashboard (white down to #f1f5f9). */
   --text-primary:   #111827;
-  --text-secondary: #6b7280;
-  --text-tertiary:  #9ca3af;
+  --text-secondary: #475569;
+  --text-tertiary:  #4b5563;
 
   /* Inputs */
   --input-bg:       #ffffff;

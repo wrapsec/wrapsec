@@ -163,7 +163,7 @@ function SourceCard({ s }: { s: SourceStats }) {
         <StatCard label={t("block_rate")} value={`${(s.block_rate * 100).toFixed(1)}%`} />
         <StatCard
           label={t("avg_peak_risk")}
-          value={<>{s.avg_risk.toFixed(2)} <span className="text-xs text-slate-400 font-semibold">/ {s.max_risk.toFixed(2)}</span></>}
+          value={<>{s.avg_risk.toFixed(2)} <span className="text-xs text-slate-600 font-semibold">/ {s.max_risk.toFixed(2)}</span></>}
         />
         <StatCard label={t("high_risk")} value={fmt.number(s.high_risk_count)} />
       </div>

@@ -60,15 +60,17 @@ export function ThreatBadge({ threat }: { threat: ThreatCategory }) {
 
 // --- SeverityBadge ---
 
+// Text colors darkened to clear WCAG AA (>=4.5:1) against each badge's own tinted
+// background; the backgrounds/borders are unchanged so the palette still reads the same.
 const SEVERITY_STYLES: Record<string, React.CSSProperties> = {
-  CRITICAL: { color: "#dc2626", background: "rgba(220,38,38,0.08)",   border: "1px solid rgba(220,38,38,0.20)"   },
-  HIGH:     { color: "#d97706", background: "rgba(217,119,6,0.08)",   border: "1px solid rgba(217,119,6,0.20)"   },
-  MEDIUM:   { color: "#2563eb", background: "rgba(37,99,235,0.08)",   border: "1px solid rgba(37,99,235,0.20)"   },
-  LOW:      { color: "#6b7280", background: "rgba(107,114,128,0.08)", border: "1px solid rgba(107,114,128,0.20)" },
+  CRITICAL: { color: "#b91c1c", background: "rgba(220,38,38,0.08)",   border: "1px solid rgba(220,38,38,0.20)"   },
+  HIGH:     { color: "#b45309", background: "rgba(217,119,6,0.08)",   border: "1px solid rgba(217,119,6,0.20)"   },
+  MEDIUM:   { color: "#1d4ed8", background: "rgba(37,99,235,0.08)",   border: "1px solid rgba(37,99,235,0.20)"   },
+  LOW:      { color: "#4b5563", background: "rgba(107,114,128,0.08)", border: "1px solid rgba(107,114,128,0.20)" },
 }
 
 export function SeverityBadge({ severity }: { severity: string | null }) {
-  if (!severity) return <span style={{ fontSize: "12px", color: "#d1d5db" }}>-</span>
+  if (!severity) return <span style={{ fontSize: "12px", color: "#6b7280" }}>-</span>
   return (
     <span style={{ ...BADGE_BASE, ...(SEVERITY_STYLES[severity] ?? SEVERITY_STYLES.LOW) }}>
       {severity}

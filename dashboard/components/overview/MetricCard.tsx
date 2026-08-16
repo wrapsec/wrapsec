@@ -26,13 +26,13 @@ export function MetricCard({ label, value, sub, color = "default", accent = "non
       borderRadius: "8px",
       padding:      "16px 20px",
     }}>
-      <p style={{ fontSize: "10px", fontWeight: 700, color: "#9ca3af", textTransform: "uppercase", letterSpacing: "0.08em", margin: "0 0 8px 0" }}>
+      <p style={{ fontSize: "10px", fontWeight: 700, color: "#4b5563", textTransform: "uppercase", letterSpacing: "0.08em", margin: "0 0 8px 0" }}>
         {label}
       </p>
       <p style={{ fontSize: "26px", fontWeight: 700, color: VALUE_COLORS[color], lineHeight: 1, margin: 0 }}>
         {value}
       </p>
-      {sub && <p style={{ fontSize: "11px", color: "#9ca3af", marginTop: "5px", marginBottom: 0 }}>{sub}</p>}
+      {sub && <p style={{ fontSize: "11px", color: "#4b5563", marginTop: "5px", marginBottom: 0 }}>{sub}</p>}
     </div>
   )
 }

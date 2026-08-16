@@ -234,7 +234,7 @@ export default function DepartmentDetailPage() {
               { label: td("stat_top_threat"),  value: stats.top_threats[0]?.category ?? td("none") },
             ].map(({ label, value, color }) => (
               <div key={label} className="bg-white rounded-xl border border-slate-200 px-4 py-3">
-                <p className="text-xs text-slate-400 mb-1">{label}</p>
+                <p className="text-xs text-slate-600 mb-1">{label}</p>
                 <p className={`text-lg font-semibold ${color ?? "text-slate-900"}`}>{value}</p>
               </div>
             ))}
@@ -252,12 +252,12 @@ export default function DepartmentDetailPage() {
                               decision === "SANITIZE" ? "#fbbf24" : "#10b981"
                 return (
                   <div key={decision} className="flex-1 bg-slate-50 rounded-lg px-3 py-2.5">
-                    <p className="text-xs text-slate-400 mb-1">{decision}</p>
+                    <p className="text-xs text-slate-600 mb-1">{decision}</p>
                     <p className="text-sm font-semibold text-slate-900">{fmt.number(count)}</p>
                     <div className="mt-1.5 h-1.5 bg-slate-200 rounded-full overflow-hidden">
                       <div className="h-full rounded-full" style={{ width: `${pct}%`, backgroundColor: color }} />
                     </div>
-                    <p className="text-xs text-slate-400 mt-1">{pct}%</p>
+                    <p className="text-xs text-slate-600 mt-1">{pct}%</p>
                   </div>
                 )
               })}
@@ -278,7 +278,7 @@ export default function DepartmentDetailPage() {
               { label: td("info_created"),     value: new Date(dept.created_at).toLocaleDateString() },
             ].map(({ label, value }) => (
               <div key={label} className="bg-slate-50 rounded-lg px-3 py-2.5">
-                <p className="text-xs text-slate-400 mb-0.5">{label}</p>
+                <p className="text-xs text-slate-600 mb-0.5">{label}</p>
                 <p className="text-xs font-mono text-slate-700">{value}</p>
               </div>
             ))}
@@ -305,7 +305,7 @@ export default function DepartmentDetailPage() {
                 <span className="text-sm text-slate-600">{t("block_threshold")}</span>
                 <span className="text-sm font-mono text-slate-900">
                   {dept.policy_override?.thresholds?.block ?? (
-                    <span className="text-slate-400">{td("inherits_block")}</span>
+                    <span className="text-slate-600">{td("inherits_block")}</span>
                   )}
                 </span>
               </div>
@@ -313,12 +313,12 @@ export default function DepartmentDetailPage() {
                 <span className="text-sm text-slate-600">{t("sanitize_threshold")}</span>
                 <span className="text-sm font-mono text-slate-900">
                   {dept.policy_override?.thresholds?.sanitize ?? (
-                    <span className="text-slate-400">{td("inherits_sanitize")}</span>
+                    <span className="text-slate-600">{td("inherits_sanitize")}</span>
                   )}
                 </span>
               </div>
               {dept.policy_override === null && (
-                <p className="text-xs text-slate-400 pt-1">
+                <p className="text-xs text-slate-600 pt-1">
                   {td("no_overrides")}
                 </p>
               )}
@@ -334,9 +334,9 @@ export default function DepartmentDetailPage() {
                     value={blockVal}
                     onChange={(e) => setBlockVal(e.target.value)}
                     placeholder={td("block_ph")}
-                    className="h-9 px-3 text-sm rounded-md border border-slate-200 bg-white text-slate-900 placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-purple-700"
+                    className="h-9 px-3 text-sm rounded-md border border-slate-200 bg-white text-slate-900 placeholder:text-slate-600 focus:outline-none focus:ring-2 focus:ring-purple-700"
                   />
-                  <p className="text-xs text-slate-400">{td("leave_blank")}</p>
+                  <p className="text-xs text-slate-600">{td("leave_blank")}</p>
                 </div>
                 <div className="flex flex-col gap-1">
                   <label className="text-xs font-medium text-slate-700">{t("sanitize_threshold")}</label>
@@ -346,9 +346,9 @@ export default function DepartmentDetailPage() {
                     value={sanitizeVal}
                     onChange={(e) => setSanitizeVal(e.target.value)}
                     placeholder={td("sanitize_ph")}
-                    className="h-9 px-3 text-sm rounded-md border border-slate-200 bg-white text-slate-900 placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-purple-700"
+                    className="h-9 px-3 text-sm rounded-md border border-slate-200 bg-white text-slate-900 placeholder:text-slate-600 focus:outline-none focus:ring-2 focus:ring-purple-700"
                   />
-                  <p className="text-xs text-slate-400">{td("leave_blank")}</p>
+                  <p className="text-xs text-slate-600">{td("leave_blank")}</p>
                 </div>
               </div>
               {error && <p className="text-xs text-red-600">{error}</p>}
@@ -399,7 +399,7 @@ export default function DepartmentDetailPage() {
                   ))}
                 </>
               ) : (
-                <p className="text-xs text-slate-400">{td("llm_inherits")}</p>
+                <p className="text-xs text-slate-600">{td("llm_inherits")}</p>
               )}
             </div>
           ) : (
@@ -421,26 +421,26 @@ export default function DepartmentDetailPage() {
                   <label className="text-xs font-medium text-slate-700">{t("model")}</label>
                   <input type="text" value={llmModel} onChange={(e) => setLlmModel(e.target.value)}
                     placeholder={t("model_ph")}
-                    className="h-9 px-3 text-sm rounded-md border border-slate-200 bg-white text-slate-900 placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-purple-700" />
+                    className="h-9 px-3 text-sm rounded-md border border-slate-200 bg-white text-slate-900 placeholder:text-slate-600 focus:outline-none focus:ring-2 focus:ring-purple-700" />
                 </div>
                 <div className="flex flex-col gap-1 col-span-2">
                   <label className="text-xs font-medium text-slate-700">{t("base_url")}</label>
                   <input type="text" value={llmBaseUrl} onChange={(e) => setLlmBaseUrl(e.target.value)}
                     placeholder={t("base_url_ph")}
-                    className="h-9 px-3 text-sm rounded-md border border-slate-200 bg-white text-slate-900 placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-purple-700" />
+                    className="h-9 px-3 text-sm rounded-md border border-slate-200 bg-white text-slate-900 placeholder:text-slate-600 focus:outline-none focus:ring-2 focus:ring-purple-700" />
                 </div>
                 {llmProvider !== "ollama" && (
                   <div className="flex flex-col gap-1 col-span-2">
                     <label className="text-xs font-medium text-slate-700">
                       {t("api_key")}
                       {dept.policy_override?.llm?.api_key_masked && (
-                        <span className="ml-2 font-normal text-slate-400">{t("api_key_current", { masked: dept.policy_override.llm.api_key_masked })}</span>
+                        <span className="ml-2 font-normal text-slate-600">{t("api_key_current", { masked: dept.policy_override.llm.api_key_masked })}</span>
                       )}
                     </label>
                     <input type="password" value={llmApiKey} onChange={(e) => setLlmApiKey(e.target.value)}
                       placeholder={dept.policy_override?.llm?.api_key_masked ? t("api_key_keep") : t("api_key_new")}
-                      className="h-9 px-3 text-sm rounded-md border border-slate-200 bg-white text-slate-900 placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-purple-700" />
-                    <p className="text-xs text-slate-400">{td("llm_encrypted")}</p>
+                      className="h-9 px-3 text-sm rounded-md border border-slate-200 bg-white text-slate-900 placeholder:text-slate-600 focus:outline-none focus:ring-2 focus:ring-purple-700" />
+                    <p className="text-xs text-slate-600">{td("llm_encrypted")}</p>
                   </div>
                 )}
                 <div className="flex flex-col gap-1">
@@ -505,7 +505,7 @@ export default function DepartmentDetailPage() {
                   ))}
                 </>
               ) : (
-                <p className="text-xs text-slate-400">{td("proxy_no_override")}</p>
+                <p className="text-xs text-slate-600">{td("proxy_no_override")}</p>
               )}
             </div>
           ) : (
@@ -527,26 +527,26 @@ export default function DepartmentDetailPage() {
                   <label className="text-xs font-medium text-slate-700">{t("default_model")}</label>
                   <input type="text" value={proxyModel} onChange={(e) => setProxyModel(e.target.value)}
                     placeholder={t("model_ph_proxy")}
-                    className="h-9 px-3 text-sm rounded-md border border-slate-200 bg-white text-slate-900 placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-purple-700" />
+                    className="h-9 px-3 text-sm rounded-md border border-slate-200 bg-white text-slate-900 placeholder:text-slate-600 focus:outline-none focus:ring-2 focus:ring-purple-700" />
                 </div>
                 <div className="flex flex-col gap-1 col-span-2">
                   <label className="text-xs font-medium text-slate-700">{t("base_url")}</label>
                   <input type="text" value={proxyBaseUrl} onChange={(e) => setProxyBaseUrl(e.target.value)}
                     placeholder={t("base_url_ph")}
-                    className="h-9 px-3 text-sm rounded-md border border-slate-200 bg-white text-slate-900 placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-purple-700" />
+                    className="h-9 px-3 text-sm rounded-md border border-slate-200 bg-white text-slate-900 placeholder:text-slate-600 focus:outline-none focus:ring-2 focus:ring-purple-700" />
                 </div>
                 {proxyProvider !== "ollama" && (
                   <div className="flex flex-col gap-1 col-span-2">
                     <label className="text-xs font-medium text-slate-700">
                       {t("api_key")}
                       {dept.policy_override?.proxy_provider?.api_key_masked && (
-                        <span className="ml-2 font-normal text-slate-400">{t("api_key_current", { masked: dept.policy_override.proxy_provider.api_key_masked })}</span>
+                        <span className="ml-2 font-normal text-slate-600">{t("api_key_current", { masked: dept.policy_override.proxy_provider.api_key_masked })}</span>
                       )}
                     </label>
                     <input type="password" value={proxyApiKey} onChange={(e) => setProxyApiKey(e.target.value)}
                       placeholder={dept.policy_override?.proxy_provider?.api_key_masked ? t("api_key_keep") : t("api_key_new")}
-                      className="h-9 px-3 text-sm rounded-md border border-slate-200 bg-white text-slate-900 placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-purple-700" />
-                    <p className="text-xs text-slate-400">{t("proxy_encrypted")}</p>
+                      className="h-9 px-3 text-sm rounded-md border border-slate-200 bg-white text-slate-900 placeholder:text-slate-600 focus:outline-none focus:ring-2 focus:ring-purple-700" />
+                    <p className="text-xs text-slate-600">{t("proxy_encrypted")}</p>
                   </div>
                 )}
                 <div className="flex flex-col gap-1">
@@ -588,7 +588,7 @@ export default function DepartmentDetailPage() {
             subtitle={td("apps_subtitle")}
           />
           {(appsData?.applications ?? []).length === 0 ? (
-            <p className="text-sm text-slate-400">{td("no_apps")}</p>
+            <p className="text-sm text-slate-600">{td("no_apps")}</p>
           ) : (
             <div className="space-y-2">
               {(appsData?.applications ?? []).map((app) => (
@@ -598,7 +598,7 @@ export default function DepartmentDetailPage() {
                 >
                   <div>
                     <p className="text-sm font-medium text-slate-900">{app.name}</p>
-                    <p className="text-xs text-slate-400">{app.slug} {"·"} {app.environment}</p>
+                    <p className="text-xs text-slate-600">{app.slug} {"·"} {app.environment}</p>
                   </div>
                   <a
                     href={`/applications/${app.id}`}

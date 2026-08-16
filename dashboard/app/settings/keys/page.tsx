@@ -77,7 +77,7 @@ export default function ApiKeysPage() {
               value={search}
               onChange={(e) => setSearch(e.target.value)}
               placeholder={t("search_placeholder")}
-              className="h-8 w-full max-w-xs px-3 text-sm rounded-md border border-slate-200 bg-white text-slate-900 placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-purple-700"
+              className="h-8 w-full max-w-xs px-3 text-sm rounded-md border border-slate-200 bg-white text-slate-900 placeholder:text-slate-600 focus:outline-none focus:ring-2 focus:ring-purple-700"
             />
           </div>
           <div className="px-5 py-4">
@@ -86,7 +86,7 @@ export default function ApiKeysPage() {
             ) : fetchError && !data ? (
               <div className="py-10 text-center">
                 <p className="text-sm font-semibold text-red-600 mb-1">{t("load_error")}</p>
-                <p className="text-xs text-slate-400">{fetchError?.message ?? tc("unexpected_error")}</p>
+                <p className="text-xs text-slate-600">{fetchError?.message ?? tc("unexpected_error")}</p>
               </div>
             ) : (
               <div style={{ overflowY: "auto", maxHeight: "520px" }}>

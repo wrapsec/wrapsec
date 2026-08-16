@@ -38,7 +38,7 @@ export function SecurityOverview({ stats, loading }: {
   const s = stats
   return (
     <div className="flex flex-col gap-2">
-      <span className="text-[11px] text-slate-400">{t("scoped")}</span>
+      <span className="text-[11px] text-slate-600">{t("scoped")}</span>
       <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-3">
         <KpiCard label={t("requests")}          value={<Count n={s.total_requests} />} accent="#670FEF" />
         <KpiCard label={tc("decision.allowed")} value={<Count n={s.allow_count} />}    valueColor="#16a34a" accent="#16a34a" sub={formatRate(s.allow_rate)} />
@@ -55,7 +55,7 @@ function OverviewSkeleton() {
   const t = useTranslations("pages.requests.overview")
   return (
     <div className="flex flex-col gap-2">
-      <span className="text-[11px] text-slate-400">{t("scoped")}</span>
+      <span className="text-[11px] text-slate-600">{t("scoped")}</span>
       <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-3">
         {Array.from({ length: 6 }).map((_, i) => (
           <div

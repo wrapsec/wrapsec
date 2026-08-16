@@ -31,7 +31,7 @@ export function SeverityCard({ level, count, description }: SeverityCardProps) {
     }}>
       <p style={{
         fontSize: "10px", fontWeight: 700, letterSpacing: "0.08em",
-        textTransform: "uppercase", color: "#9ca3af",
+        textTransform: "uppercase", color: "#4b5563",
         margin: "0 0 8px 0",
       }}>
         {level}
@@ -39,7 +39,7 @@ export function SeverityCard({ level, count, description }: SeverityCardProps) {
       <p style={{ fontSize: "30px", fontWeight: 700, color: cfg.color, lineHeight: 1, margin: "0 0 5px 0" }}>
         {fmt.number(count)}
       </p>
-      <p style={{ fontSize: "11px", color: "#9ca3af", margin: 0 }}>{description}</p>
+      <p style={{ fontSize: "11px", color: "#4b5563", margin: 0 }}>{description}</p>
     </div>
   )
 }

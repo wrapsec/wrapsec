@@ -30,7 +30,7 @@ export function Pagination({ total, offset, limit, onChange }: PaginationProps) 
       padding:        "10px 16px",
       borderTop:      "1px solid #f3f4f6",
     }}>
-      <p style={{ fontSize: "12px", color: "#9ca3af", margin: 0 }}>
+      <p style={{ fontSize: "12px", color: "#4b5563", margin: 0 }}>
         {t.rich("showing", {
           range: `${fmt.number(offset + 1)}-${fmt.number(Math.min(offset + limit, total))}`,
           total: fmt.number(total),

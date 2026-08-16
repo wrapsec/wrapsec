@@ -96,7 +96,7 @@ export function TenantSettingsForm({
             aria-label={t("tenant.contact")}
             onChange={(e) => setContact(e.target.value)}
             placeholder={t("tenant.contact_placeholder")}
-            className="h-9 px-3 text-sm rounded-md border border-slate-200 bg-white text-slate-900 placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-purple-700 focus:border-purple-700"
+            className="h-9 px-3 text-sm rounded-md border border-slate-200 bg-white text-slate-900 placeholder:text-slate-600 focus:outline-none focus:ring-2 focus:ring-purple-700 focus:border-purple-700"
           />
         </div>
         <div className="flex flex-col gap-1 col-span-2">
@@ -108,7 +108,7 @@ export function TenantSettingsForm({
             value={description}
             onChange={(e) => setDescription(e.target.value)}
             placeholder={t("tenant.description_placeholder")}
-            className="h-9 px-3 text-sm rounded-md border border-slate-200 bg-white text-slate-900 placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-purple-700 focus:border-purple-700"
+            className="h-9 px-3 text-sm rounded-md border border-slate-200 bg-white text-slate-900 placeholder:text-slate-600 focus:outline-none focus:ring-2 focus:ring-purple-700 focus:border-purple-700"
           />
         </div>
       </div>
@@ -117,7 +117,7 @@ export function TenantSettingsForm({
       <div>
         <p className="text-xs font-medium text-slate-700 mb-3">
           {t("tenant.enforced_title")}
-          <span className="ml-2 text-xs text-slate-400 font-normal">
+          <span className="ml-2 text-xs text-slate-600 font-normal">
             {t("tenant.enforced_note")}
           </span>
         </p>
@@ -131,12 +131,12 @@ export function TenantSettingsForm({
             { label: t("tenant.llm_detector"),       value: llmEnabled  != null ? (llmEnabled  ? t("tenant.enabled") : t("tenant.disabled")) : "-" },
           ].map(({ label, value }) => (
             <div key={label} className="bg-slate-50 rounded-lg px-3 py-2.5">
-              <p className="text-xs text-slate-400 mb-0.5">{label}</p>
+              <p className="text-xs text-slate-600 mb-0.5">{label}</p>
               <p className="text-xs font-mono text-slate-700">{String(value)}</p>
             </div>
           ))}
         </div>
-        <p className="text-xs text-slate-400 mt-2">
+        <p className="text-xs text-slate-600 mt-2">
           {t("tenant.manage_note")}
         </p>
       </div>

@@ -29,7 +29,7 @@ export function ErrorState({ title = "Something went wrong", message, severity =
   return (
     <div className="flex flex-col items-center justify-center text-center py-12 px-6">
       <p className={`text-sm font-semibold mb-1 ${TITLE_COLOR[severity]}`}>{title}</p>
-      {message && <p className="text-xs text-slate-400 max-w-sm">{message}</p>}
+      {message && <p className="text-xs text-slate-600 max-w-sm">{message}</p>}
       {action && <div className="mt-4">{action}</div>}
     </div>
   )

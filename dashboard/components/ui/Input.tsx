@@ -17,7 +17,7 @@ export function Input({ label, error, hint, className, ...props }: InputProps) {
       )}
       <input
         className={cn(
-          "h-9 px-3 text-sm rounded-md border bg-white text-slate-900 placeholder:text-slate-400",
+          "h-9 px-3 text-sm rounded-md border bg-white text-slate-900 placeholder:text-slate-600",
           "focus:outline-none focus:ring-2 focus:ring-purple-700 focus:ring-offset-0 focus:border-purple-700",
           error
             ? "border-red-400 focus:ring-red-400"

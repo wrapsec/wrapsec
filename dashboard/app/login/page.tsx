@@ -200,7 +200,7 @@ export default function LoginPage() {
           <h3 style={{ fontSize: "18px", fontWeight: 700, color: "#fff", margin: "0 0 6px 0" }}>
             {t("sign_in")}
           </h3>
-          <p style={{ fontSize: "12px", color: "rgba(255,255,255,0.35)", margin: "0 0 28px 0" }}>
+          <p style={{ fontSize: "12px", color: "rgba(255,255,255,0.6)", margin: "0 0 28px 0" }}>
             {t("subtitle")}
           </p>
 
@@ -319,11 +319,11 @@ export default function LoginPage() {
                 onClick={() => { setTab("apikey"); setError(null) }}
                 style={{
                   background: "none", border: "none", cursor: "pointer",
-                  fontSize: "12px", color: "rgba(255,255,255,0.35)",
+                  fontSize: "12px", color: "rgba(255,255,255,0.6)",
                   padding: 0, textDecoration: "underline", textUnderlineOffset: "2px",
                 }}
                 onMouseEnter={e => (e.currentTarget.style.color = "rgba(255,255,255,0.65)")}
-                onMouseLeave={e => (e.currentTarget.style.color = "rgba(255,255,255,0.35)")}
+                onMouseLeave={e => (e.currentTarget.style.color = "rgba(255,255,255,0.6)")}
               >
                 {t("switch_to_apikey")}
               </button>
@@ -332,17 +332,17 @@ export default function LoginPage() {
                 onClick={() => { setTab("credentials"); setError(null) }}
                 style={{
                   background: "none", border: "none", cursor: "pointer",
-                  fontSize: "12px", color: "rgba(255,255,255,0.35)",
+                  fontSize: "12px", color: "rgba(255,255,255,0.6)",
                   padding: 0, textDecoration: "underline", textUnderlineOffset: "2px",
                 }}
                 onMouseEnter={e => (e.currentTarget.style.color = "rgba(255,255,255,0.65)")}
-                onMouseLeave={e => (e.currentTarget.style.color = "rgba(255,255,255,0.35)")}
+                onMouseLeave={e => (e.currentTarget.style.color = "rgba(255,255,255,0.6)")}
               >
                 {t("switch_to_creds")}
               </button>
             )}
           </div>
-          <p style={{ fontSize: "11px", color: "rgba(255,255,255,0.15)", marginTop: "16px", textAlign: "center" }}>
+          <p style={{ fontSize: "11px", color: "rgba(255,255,255,0.55)", marginTop: "16px", textAlign: "center" }}>
             {tc("app_name")} · {tc("tagline")}
           </p>
         </div>

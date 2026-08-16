@@ -68,13 +68,13 @@ export function RequestsTable({ items, onSelect, compact = false }: {
                   />
                 </div>
                 {item.run_id && (
-                  <div className="mt-1 text-[10px] text-slate-400 whitespace-nowrap">
+                  <div className="mt-1 text-[10px] text-slate-600 whitespace-nowrap">
                     {formatRun(item.run_id, item.turn_index)}
                   </div>
                 )}
               </Td>
             )}
-            <Td className="text-xs text-slate-400 whitespace-nowrap">
+            <Td className="text-xs text-slate-600 whitespace-nowrap">
               {timeAgo(item.timestamp)}
             </Td>
             <Td><SeverityBadge severity={item.severity} /></Td>
@@ -82,7 +82,7 @@ export function RequestsTable({ items, onSelect, compact = false }: {
               {item.output_decision && item.output_decision !== item.decision ? (
                 <div className="flex items-center gap-1">
                   <DecisionBadge decision={item.decision} size="sm" />
-                  <span className="text-[10px] text-slate-400">{"->"}</span>
+                  <span className="text-[10px] text-slate-600">{"->"}</span>
                   <DecisionBadge decision={item.output_decision} size="sm" />
                 </div>
               ) : (
@@ -92,7 +92,7 @@ export function RequestsTable({ items, onSelect, compact = false }: {
             {show("source") && <Td><SourceBadge source={item.input_source} /></Td>}
             <Td>
               {item.threats.length === 0
-                ? <span className="text-xs text-slate-300">-</span>
+                ? <span className="text-xs text-slate-500">-</span>
                 : <div className="flex flex-wrap gap-[3px]">{item.threats.map(t => <ThreatBadge key={t} threat={t} />)}</div>
               }
             </Td>
@@ -101,10 +101,10 @@ export function RequestsTable({ items, onSelect, compact = false }: {
                 {(item.dept_name || item.app_name) ? (
                   <div className="flex flex-col gap-px">
                     {item.dept_name && <span className="text-xs text-slate-700 font-medium">{item.dept_name}</span>}
-                    {item.app_name && <span className="text-[11px] text-slate-400">{item.app_name}</span>}
+                    {item.app_name && <span className="text-[11px] text-slate-600">{item.app_name}</span>}
                   </div>
                 ) : (
-                  <span className="text-xs text-slate-300">-</span>
+                  <span className="text-xs text-slate-500">-</span>
                 )}
               </Td>
             )}
@@ -124,9 +124,10 @@ export function RequestsTable({ items, onSelect, compact = false }: {
 }
 
 // Compact risk readout for the row. Color mirrors the policy bands (block /
-// sanitize / allow) so a scan of the column matches the decision column.
+// sanitize / allow) so a scan of the column matches the decision column. Shades
+// are chosen to meet WCAG AA (>=4.5:1) as small text on the white row.
 function RiskValue({ score }: { score: number }) {
-  const color = score >= 0.7 ? "#dc2626" : score >= 0.4 ? "#d97706" : "#16a34a"
+  const color = score >= 0.7 ? "#dc2626" : score >= 0.4 ? "#b45309" : "#15803d"
   return (
     <span className="text-xs font-semibold tabular-nums" style={{ color }}>
       {formatScore(score)}

@@ -35,7 +35,7 @@ export function ScannerInput({ onScan, loading }: ScannerInputProps) {
         onChange={(e) => setInput(e.target.value)}
         placeholder={t("placeholder")}
         rows={5}
-        className="w-full px-4 py-3 text-sm rounded-lg border border-slate-200 bg-white text-slate-900 placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-purple-700 focus:border-purple-700 resize-none"
+        className="w-full px-4 py-3 text-sm rounded-lg border border-slate-200 bg-white text-slate-900 placeholder:text-slate-600 focus:outline-none focus:ring-2 focus:ring-purple-700 focus:border-purple-700 resize-none"
       />
       <div className="flex items-center justify-between">
         <div className="flex items-center gap-4">
@@ -51,7 +51,7 @@ export function ScannerInput({ onScan, loading }: ScannerInputProps) {
                 className="accent-blue-800"
               />
               <span className="text-sm text-slate-700">{t(`mode.${mode}`)}</span>
-              <span className="text-xs text-slate-400">
+              <span className="text-xs text-slate-600">
                 {t(`mode_hint.${mode}`)}
               </span>
             </label>

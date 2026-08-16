@@ -6,7 +6,7 @@ import { cn } from "@/lib/utils"
 export function Spinner({ className }: { className?: string }) {
   return (
     <svg
-      className={cn("animate-spin h-4 w-4 text-slate-400", className)}
+      className={cn("animate-spin h-4 w-4 text-slate-600", className)}
       fill="none"
       viewBox="0 0 24 24"
     >

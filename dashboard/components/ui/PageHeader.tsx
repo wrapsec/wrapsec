@@ -49,7 +49,7 @@ export function PageHeader({
           <div className="flex items-center gap-3 min-w-0">
             {showBack && <BackButton onBack={onBack} backHref={backHref} label={backLabel ?? t("buttons.back")} />}
             {description && (
-              <div className="text-sm text-slate-500 min-w-0">{description}</div>
+              <div className="text-sm text-slate-600 min-w-0">{description}</div>
             )}
           </div>
           {actions && (
@@ -63,7 +63,7 @@ export function PageHeader({
 
 function BackButton({ onBack, backHref, label }: { onBack?: () => void; backHref?: string; label: string }) {
   const content = (
-    <span className="inline-flex items-center gap-1 text-sm text-slate-500 hover:text-slate-900 transition-colors">
+    <span className="inline-flex items-center gap-1 text-sm text-slate-600 hover:text-slate-900 transition-colors">
       <svg className="w-4 h-4" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24">
         <path strokeLinecap="round" strokeLinejoin="round" d="M15 19l-7-7 7-7" />
       </svg>

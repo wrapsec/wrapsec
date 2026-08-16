@@ -67,7 +67,7 @@ export function ThresholdForm({ thresholds, onUpdated }: ThresholdFormProps) {
             onChange={(e) => setBlock(parseFloat(e.target.value))}
             className="h-9 w-full px-3 text-sm rounded-md border border-slate-200 bg-white text-slate-900 focus:outline-none focus:ring-2 focus:ring-purple-700 focus:border-purple-700"
           />
-          <p className="text-xs text-slate-400 mt-1">
+          <p className="text-xs text-slate-600 mt-1">
             {t("threshold.block_hint", { value: block })}
           </p>
         </div>
@@ -82,7 +82,7 @@ export function ThresholdForm({ thresholds, onUpdated }: ThresholdFormProps) {
             onChange={(e) => setSanitize(parseFloat(e.target.value))}
             className="h-9 w-full px-3 text-sm rounded-md border border-slate-200 bg-white text-slate-900 focus:outline-none focus:ring-2 focus:ring-purple-700 focus:border-purple-700"
           />
-          <p className="text-xs text-slate-400 mt-1">
+          <p className="text-xs text-slate-600 mt-1">
             {t("threshold.sanitize_hint", { value: sanitize })}
           </p>
         </div>

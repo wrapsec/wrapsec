@@ -259,7 +259,7 @@ function DetailDrawer({ id, deptName, onClose }: {
 
   const line = (label: string, value: React.ReactNode) => (
     <div className="flex flex-col gap-0.5 py-2 border-b border-slate-50">
-      <span className="text-xs text-slate-400">{label}</span>
+      <span className="text-xs text-slate-600">{label}</span>
       <span className="text-sm text-slate-800 break-all">{value ?? t("detail.none")}</span>
     </div>
   )
@@ -270,7 +270,7 @@ function DetailDrawer({ id, deptName, onClose }: {
       <div className="relative w-full max-w-md h-full bg-white shadow-xl overflow-y-auto p-5" onClick={e => e.stopPropagation()}>
         <div className="flex items-center justify-between mb-4">
           <h2 className="text-sm font-semibold text-slate-900">{t("detail.title")}</h2>
-          <button onClick={onClose} className="text-slate-400 hover:text-slate-900">&times;</button>
+          <button onClick={onClose} className="text-slate-600 hover:text-slate-900">&times;</button>
         </div>
         {isLoading || !row ? (
           <PageSpinner />
