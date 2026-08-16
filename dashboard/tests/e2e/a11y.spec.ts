@@ -3,8 +3,8 @@
 // WrapSec v1.0 | AI Security Gateway - https://wrapsec.com
 //
 // Automated accessibility (axe) on the important pages. Runs WCAG 2.0/2.1 A + AA
-// rules and gates on CRITICAL violations (the highest-impact, fully-blocking
-// issues); serious/moderate/minor are reported for follow-up, not gated yet.
+// rules and gates on CRITICAL and SERIOUS violations (color-contrast is
+// "serious"); moderate/minor are reported for follow-up, not gated yet.
 import { test, expect } from "@playwright/test"
 import AxeBuilder from "@axe-core/playwright"
 
@@ -24,8 +24,10 @@ async function audit(page: import("@playwright/test").Page) {
     .join("\n")
   console.log(`axe: ${results.violations.length} violation type(s)\n${summary}`)
 
-  // Gate: no CRITICAL violations. Serious/moderate/minor are reported above.
+  // Gate: no CRITICAL or SERIOUS violations (color-contrast lives at "serious").
+  // Moderate/minor are reported above for follow-up, not gated yet.
   expect(by("critical"), `critical a11y violations:\n${summary}`).toEqual([])
+  expect(by("serious"), `serious a11y violations:\n${summary}`).toEqual([])
 }
 
 // Authenticated key pages (reused admin session).
