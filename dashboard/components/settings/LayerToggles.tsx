@@ -29,7 +29,7 @@ export function LayerToggles({ layers, llmTrigger, onUpdated }: LayerTogglesProp
   const [trigger, setTrigger] = useState(llmTrigger)
   const [loading, setLoading] = useState(false)
   const [saved,   setSaved]   = useState(false)
-  const { isJwt } = useAuthMode()
+  const { isAdmin } = useAuthMode()
 
   const handleToggle = (key: keyof Layers) => {
     setState((prev) => ({ ...prev, [key]: !prev[key] }))
@@ -102,7 +102,7 @@ export function LayerToggles({ layers, llmTrigger, onUpdated }: LayerTogglesProp
       </div>
 
       <div className="flex items-center gap-3 pt-1">
-        {isJwt ? (
+        {isAdmin ? (
           <Button size="sm" onClick={handleSave} loading={loading}>
             {t("layers.save")}
           </Button>

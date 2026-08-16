@@ -73,7 +73,7 @@ export default function DepartmentDetailPage() {
   const [proxySaved,     setProxySaved]     = useState(false)
   const [proxyError,     setProxyError]     = useState<string | null>(null)
 
-  const { isJwt } = useAuthMode()
+  const { isAdmin } = useAuthMode()
 
   const handleEditStart = () => {
     const override = dept?.policy_override
@@ -292,7 +292,7 @@ export default function DepartmentDetailPage() {
               title={td("policy_title")}
               subtitle={td("policy_subtitle")}
             />
-            {!editing && isJwt && (
+            {!editing && isAdmin && (
               <Button onClick={handleEditStart} variant="secondary">
                 {t("edit")}
               </Button>
@@ -353,7 +353,7 @@ export default function DepartmentDetailPage() {
               </div>
               {error && <p className="text-xs text-red-600">{error}</p>}
               <div className="flex items-center gap-3">
-                {isJwt
+                {isAdmin
                   ? <Button onClick={handleSave} loading={saving}>{t("save_overrides")}</Button>
                   : <Button disabled>{t("save_overrides")}</Button>
                 }
@@ -376,7 +376,7 @@ export default function DepartmentDetailPage() {
               title={t("llm_title")}
               subtitle={td("llm_subtitle")}
             />
-            {!llmEditing && isJwt && (
+            {!llmEditing && isAdmin && (
               <Button onClick={handleLlmEditStart} variant="secondary">{t("edit")}</Button>
             )}
           </div>
@@ -482,7 +482,7 @@ export default function DepartmentDetailPage() {
               title={t("proxy_title")}
               subtitle={td("proxy_subtitle")}
             />
-            {!proxyEditing && isJwt && (
+            {!proxyEditing && isAdmin && (
               <Button onClick={handleProxyEditStart} variant="secondary">{t("edit")}</Button>
             )}
           </div>

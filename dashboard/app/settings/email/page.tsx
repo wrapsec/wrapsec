@@ -25,7 +25,7 @@ function fmtInterval(seconds: number): string {
 export default function EmailSettingsPage() {
   const t   = useTranslations("pages.email_settings")
   const tc  = useTranslations("common")
-  const { isJwt } = useAuthMode()
+  const { isAdmin } = useAuthMode()
   const { resolve } = useErrorMessage()
   const { data, isLoading, error, mutate } = useSWR<EmailSettings>("email-settings", getEmailSettings)
 
@@ -105,11 +105,11 @@ export default function EmailSettingsPage() {
               type="button"
               role="switch"
               aria-checked={enabled}
-              disabled={!isJwt}
+              disabled={!isAdmin}
               onClick={() => setEnabled(v => !v)}
               className={`relative inline-flex h-6 w-11 shrink-0 items-center rounded-full transition-colors ${
                 enabled ? "bg-purple-700" : "bg-slate-300"
-              } ${isJwt ? "cursor-pointer" : "cursor-not-allowed opacity-60"}`}
+              } ${isAdmin ? "cursor-pointer" : "cursor-not-allowed opacity-60"}`}
             >
               <span className={`inline-block h-5 w-5 transform rounded-full bg-white transition-transform ${enabled ? "translate-x-5" : "translate-x-1"}`} />
             </button>
@@ -127,7 +127,7 @@ export default function EmailSettingsPage() {
               <label className="text-xs font-medium text-slate-700">{t("max_attempts_label")}</label>
               <input
                 type="number" min={minAtt} max={ceiling} value={attempts}
-                disabled={!isJwt}
+                disabled={!isAdmin}
                 onChange={e => { const v = parseInt(e.target.value); if (!isNaN(v)) setAttempts(v) }}
                 className="h-9 px-3 text-sm rounded-md border border-slate-200 bg-white text-slate-900 focus:outline-none focus:ring-2 focus:ring-purple-700 disabled:bg-slate-50"
               />
@@ -140,7 +140,7 @@ export default function EmailSettingsPage() {
               <div className="flex items-center gap-2">
                 <input
                   type="number" min={1} value={retention}
-                  disabled={!isJwt}
+                  disabled={!isAdmin}
                   onChange={e => { const v = parseInt(e.target.value); if (!isNaN(v)) setRetention(v) }}
                   className="h-9 px-3 text-sm rounded-md border border-slate-200 bg-white text-slate-900 focus:outline-none focus:ring-2 focus:ring-purple-700 disabled:bg-slate-50 w-28"
                 />
@@ -164,7 +164,7 @@ export default function EmailSettingsPage() {
         {saveError && <p className="text-xs text-red-600">{saveError}</p>}
 
         <div className="flex items-center gap-3">
-          {isJwt ? (
+          {isAdmin ? (
             <Button size="sm" onClick={handleSave} loading={saving} disabled={!canSave}>{t("save")}</Button>
           ) : (
             <div className="flex items-center gap-2">

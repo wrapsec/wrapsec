@@ -36,7 +36,7 @@ export default function DepartmentsPage() {
   const [error,             setError]             = useState<string | null>(null)
   const [search,            setSearch]            = useState("")
   const [confirmDeactivate, setConfirmDeactivate] = useState<string | null>(null)
-  const { isJwt } = useAuthMode()
+  const { isAdmin } = useAuthMode()
 
   const { data, isLoading, mutate, error: fetchError } = useSWR(swrKeys.departments, getDepartments)
 
@@ -88,7 +88,7 @@ export default function DepartmentsPage() {
       <PageHeader
         description={t("description")}
         actions={
-          isJwt ? (
+          isAdmin ? (
             <Button size="sm" onClick={() => setShowCreate(true)}>
               <PlusIcon /> {t("add")}
             </Button>
@@ -158,7 +158,7 @@ export default function DepartmentsPage() {
             </div>
             {error && <p className="text-xs text-red-600 mt-3">{error}</p>}
             <div className="flex gap-3 mt-4">
-              {isJwt
+              {isAdmin
                 ? <Button size="sm" onClick={handleCreate} loading={saving}>{tc("buttons.create")}</Button>
                 : <Button size="sm" disabled>{tc("buttons.create")}</Button>
               }
@@ -224,7 +224,7 @@ export default function DepartmentsPage() {
                           <Td align="right">
                             <div className="flex items-center justify-end gap-3">
                               <Link href={`/departments/${dept.id}`} className="text-xs text-blue-700 hover:underline">{tc("buttons.manage")}</Link>
-                              {isJwt && dept.slug !== "default" && (
+                              {isAdmin && dept.slug !== "default" && (
                                 <button
                                   onClick={() => setConfirmDeactivate(confirmDeactivate === dept.id ? null : dept.id)}
                                   className="text-xs text-red-600 hover:underline cursor-pointer"

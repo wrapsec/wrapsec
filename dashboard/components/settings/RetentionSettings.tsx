@@ -37,7 +37,7 @@ export function RetentionSettingsForm({
   const [days,   setDays]   = useState(retentionDays)
   const [saving, setSaving] = useState(false)
   const [saved,  setSaved]  = useState(false)
-  const { isJwt } = useAuthMode()
+  const { isAdmin } = useAuthMode()
   const [error,  setError]  = useState<string | null>(null)
 
   const isValid = days >= 7 && days <= 3650
@@ -166,7 +166,7 @@ export function RetentionSettingsForm({
       {error && <p className="text-xs text-red-600">{error}</p>}
 
       <div className="flex items-center gap-3">
-        {isJwt ? (
+        {isAdmin ? (
           <Button size="sm" onClick={handleSave} loading={saving} disabled={!isValid}>
             {t("retention.save")}
           </Button>
@@ -187,4 +187,4 @@ export function RetentionSettingsForm({
 
     </div>
   )
-}
+}

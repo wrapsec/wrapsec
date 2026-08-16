@@ -29,7 +29,7 @@ export function RateLimitSettingsForm({
   const [limit,  setLimit]  = useState(perMinute)
   const [saving, setSaving] = useState(false)
   const [saved,  setSaved]  = useState(false)
-  const { isJwt } = useAuthMode()
+  const { isAdmin } = useAuthMode()
   const [error,  setError]  = useState<string | null>(null)
 
   const isBelowTrialLimit = limit < trialLimit
@@ -135,7 +135,7 @@ export function RateLimitSettingsForm({
       {error && <p className="text-xs text-red-600">{error}</p>}
 
       <div className="flex items-center gap-3">
-        {isJwt ? (
+        {isAdmin ? (
           <Button size="sm" onClick={handleSave} loading={saving} disabled={!isValid}>
             {t("rate_limit.save")}
           </Button>

@@ -24,7 +24,7 @@ import { WebhookEndpoint, WebhookTestResult } from "@/lib/types"
 export default function IntegrationsPage() {
   const t  = useTranslations("pages.integrations")
   const tc = useTranslations("common")
-  const { isJwt } = useAuthMode()
+  const { isAdmin } = useAuthMode()
   const { data, isLoading, mutate } = useSWR("webhooks", getWebhooks)
   const endpoints = data?.endpoints ?? []
 
@@ -88,7 +88,7 @@ export default function IntegrationsPage() {
       <PageHeader
         description={t("description")}
         actions={
-          isJwt ? (
+          isAdmin ? (
             <Button size="sm" onClick={() => setShowCreate(true)}>
               <PlusIcon /> {t("add")}
             </Button>
@@ -119,7 +119,7 @@ export default function IntegrationsPage() {
           ) : (
             <IntegrationsTable
               endpoints={endpoints}
-              canWrite={isJwt}
+              canWrite={isAdmin}
               testingId={testingId}
               deletingId={deleting ? deleteTarget?.id ?? null : null}
               pausingId={pausingId}

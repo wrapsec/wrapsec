@@ -48,7 +48,7 @@ export function TenantSettingsForm({
   const [contact,     setContact]     = useState(tenant.contact_email || "")
   const [saving,      setSaving]      = useState(false)
   const [saved,       setSaved]       = useState(false)
-  const { isJwt } = useAuthMode()
+  const { isAdmin } = useAuthMode()
   const [error,       setError]       = useState<string | null>(null)
 
   const handleSave = async () => {
@@ -144,7 +144,7 @@ export function TenantSettingsForm({
       {error && <p className="text-xs text-red-600">{error}</p>}
 
       <div className="flex items-center gap-3">
-        {isJwt ? (
+        {isAdmin ? (
           <Button size="sm" onClick={handleSave} loading={saving}>
             {t("tenant.save")}
           </Button>
@@ -164,4 +164,4 @@ export function TenantSettingsForm({
       </div>
     </div>
   )
-}
+}

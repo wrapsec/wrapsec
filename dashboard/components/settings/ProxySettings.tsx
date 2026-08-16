@@ -36,7 +36,7 @@ export function ProxySettingsForm({ config, onUpdated }: ProxySettingsFormProps)
   const [deleting,       setDeleting]       = useState(false)
   const [testing,        setTesting]        = useState(false)
   const [confirmDelete,  setConfirmDelete]  = useState(false)
-  const { isJwt } = useAuthMode()
+  const { isAdmin } = useAuthMode()
   const [error,          setError]          = useState<string | null>(null)
   const [health,         setHealth]         = useState<ProxyHealthResult | null>(null)
 
@@ -215,7 +215,7 @@ export function ProxySettingsForm({ config, onUpdated }: ProxySettingsFormProps)
       {error && <p className="text-xs text-red-600">{error}</p>}
 
       <div className="flex items-center gap-3 flex-wrap">
-        {isJwt ? (
+        {isAdmin ? (
           <Button size="sm" onClick={handleSave} loading={saving}>
             {t("proxy.save")}
           </Button>

@@ -24,7 +24,7 @@ export function ThresholdForm({ thresholds, onUpdated }: ThresholdFormProps) {
   const [loading,  setLoading]  = useState(false)
   const [error,    setError]    = useState<string | null>(null)
   const [saved,    setSaved]    = useState(false)
-  const { isJwt } = useAuthMode()
+  const { isAdmin } = useAuthMode()
 
   const valid = (
     block > 0.0 &&
@@ -106,7 +106,7 @@ export function ThresholdForm({ thresholds, onUpdated }: ThresholdFormProps) {
       )}
 
       <div className="flex items-center gap-3">
-        {isJwt ? (
+        {isAdmin ? (
           <Button size="sm"onClick={handleSave} loading={loading} disabled={!valid}>
             {t("threshold.save")}
           </Button>
@@ -126,4 +126,4 @@ export function ThresholdForm({ thresholds, onUpdated }: ThresholdFormProps) {
       </div>
     </div>
   )
-}
+}

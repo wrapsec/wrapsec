@@ -30,7 +30,7 @@ export function AdminLimitsForm({
   const [saving, setSaving] = useState(false)
   const [saved,  setSaved]  = useState(false)
   const [error,  setError]  = useState<string | null>(null)
-  const { isJwt } = useAuthMode()
+  const { isAdmin } = useAuthMode()
 
   const writeValid = write >= 5  && write <= 200
   const expValid   = exp   >= 1  && exp   <= 60
@@ -132,7 +132,7 @@ export function AdminLimitsForm({
       {error && <p className="text-xs text-red-600">{error}</p>}
 
       <div className="flex items-center gap-3">
-        {isJwt ? (
+        {isAdmin ? (
           <Button size="sm" onClick={handleSave} loading={saving} disabled={!isValid}>
             {t("admin_limits.save")}
           </Button>

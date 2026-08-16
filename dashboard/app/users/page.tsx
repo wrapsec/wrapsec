@@ -96,7 +96,7 @@ function CreateUserModal({
   const [deptId,   setDeptId]   = useState(depts[0]?.id ?? "")
   const [saving,   setSaving]   = useState(false)
   const [error,    setError]    = useState<string | null>(null)
-  const { isJwt } = useAuthMode()
+  const { isAdmin } = useAuthMode()
 
   // ADMIN forbids dept_id; AUDITOR treats it as optional (tenant-wide when
   // empty); DEVELOPER/VIEWER require it. Matches ck_users_dept_required_v2.
@@ -178,7 +178,7 @@ function CreateUserModal({
           {t("first_login_note")}
         </p>
         <div className="flex gap-3 mt-4">
-          {isJwt
+          {isAdmin
             ? <Button size="sm" onClick={handleCreate} loading={saving}>{t("submit")}</Button>
             : <Button size="sm" disabled>{t("submit")}</Button>
           }
@@ -225,7 +225,7 @@ function EditUserModal({
   )
   const [saving,   setSaving]   = useState(false)
   const [error,    setError]    = useState<string | null>(null)
-  const { isJwt } = useAuthMode()
+  const { isAdmin } = useAuthMode()
 
   const [confirmToggle, setConfirmToggle] = useState(false)
   const [toggling,      setToggling]      = useState(false)
@@ -331,7 +331,7 @@ function EditUserModal({
         {error && <p className="text-xs text-red-600 mt-3">{error}</p>}
 
         <div className="flex gap-2 mt-4">
-          {isJwt
+          {isAdmin
             ? <Button size="sm" onClick={handleSave} loading={saving}>{t("save")}</Button>
             : <Button size="sm" disabled>{t("save")}</Button>
           }
@@ -408,7 +408,7 @@ export default function UsersPage() {
   const [showCreate, setShowCreate] = useState(false)
   const [editing,    setEditing]    = useState<DashboardUser | null>(null)
   const [search,     setSearch]     = useState("")
-  const { isJwt } = useAuthMode()
+  const { isAdmin } = useAuthMode()
 
   const { data: usersData, isLoading, mutate, error: fetchError } = useSWR("users", () => getUsers())
   const { data: deptsData } = useSWR(swrKeys.departments, getDepartments)
@@ -436,7 +436,7 @@ export default function UsersPage() {
       <PageHeader
         description={t("description")}
         actions={
-          <Button size="sm" onClick={() => setShowCreate(true)} disabled={!isJwt} title={!isJwt ? t("requires_admin") : undefined}>
+          <Button size="sm" onClick={() => setShowCreate(true)} disabled={!isAdmin} title={!isAdmin ? t("requires_admin") : undefined}>
             <PlusIcon /> {t("add")}
           </Button>
         }

@@ -176,19 +176,48 @@ describe("POST /api/auth/refresh", () => {
 })
 
 describe("GET /api/auth/session", () => {
-  it("reports jwt + can_write without ever exposing the cookie value", async () => {
-    jar = { wrapsec_jwt: "super-secret-token" }
+  // Build a JWT-shaped token (header.payload.signature) whose payload carries the
+  // given role. The signature is never verified here -- the route decodes the role
+  // claim only to shape the UI; the backend re-validates on every request.
+  function fakeJwt(claims: Record<string, unknown>): string {
+    const b64 = (o: unknown) => Buffer.from(JSON.stringify(o)).toString("base64url")
+    return `${b64({ alg: "HS256", typ: "JWT" })}.${b64(claims)}.sig`
+  }
+
+  it("reports an ADMIN JWT as is_admin true without exposing the cookie value", async () => {
+    jar = { wrapsec_jwt: fakeJwt({ role: "ADMIN", sub: "u1" }) }
     const res = await sessionGET(new NextRequest("http://localhost/api/auth/session"))
     const body = await res.json()
-    expect(body).toEqual({ authenticated: true, auth_type: "jwt", can_write: true })
-    expect(JSON.stringify(body)).not.toContain("super-secret-token")
+    expect(body).toEqual({
+      authenticated: true, auth_type: "jwt", role: "ADMIN", is_admin: true, can_write: true,
+    })
+    // The raw token (and its signature segment) must never leak in the response.
+    expect(JSON.stringify(body)).not.toContain(".sig")
   })
 
-  it("reports api_key with can_write false", async () => {
+  it("reports a VIEWER JWT as is_admin false but can_write true (has a session)", async () => {
+    jar = { wrapsec_jwt: fakeJwt({ role: "VIEWER", sub: "u2" }) }
+    const res = await sessionGET(new NextRequest("http://localhost/api/auth/session"))
+    const body = await res.json()
+    expect(body).toEqual({
+      authenticated: true, auth_type: "jwt", role: "VIEWER", is_admin: false, can_write: true,
+    })
+  })
+
+  it("reports a malformed JWT as role null / is_admin false", async () => {
+    jar = { wrapsec_jwt: "not-a-jwt" }
+    const res = await sessionGET(new NextRequest("http://localhost/api/auth/session"))
+    const body = await res.json()
+    expect(body).toMatchObject({ authenticated: true, auth_type: "jwt", role: null, is_admin: false })
+  })
+
+  it("reports api_key with can_write false and is_admin false", async () => {
     jar = { wrapsec_api_key: "wsk_live_secret" }
     const res = await sessionGET(new NextRequest("http://localhost/api/auth/session"))
     const body = await res.json()
-    expect(body).toMatchObject({ authenticated: true, auth_type: "api_key", can_write: false })
+    expect(body).toMatchObject({
+      authenticated: true, auth_type: "api_key", role: null, is_admin: false, can_write: false,
+    })
     expect(JSON.stringify(body)).not.toContain("wsk_live_secret")
   })
 

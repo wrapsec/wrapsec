@@ -81,7 +81,7 @@ export default function ApplicationDetailPage() {
   const [proxySaved,    setProxySaved]    = useState(false)
   const [proxyError,    setProxyError]    = useState<string | null>(null)
 
-  const { isJwt } = useAuthMode()
+  const { isAdmin } = useAuthMode()
 
   const handleEditStart = () => {
     const override = policyData?.policy_override
@@ -278,7 +278,7 @@ export default function ApplicationDetailPage() {
               title={t("policy_title")}
               subtitle={ta("policy_subtitle", { dept: deptName })}
             />
-            {!editing && isJwt && (
+            {!editing && isAdmin && (
               <Button onClick={handleEditStart} variant="secondary">{t("edit")}</Button>
             )}
           </div>
@@ -316,7 +316,7 @@ export default function ApplicationDetailPage() {
                     {ta("no_overrides", { dept: deptName })}
                   </p>
                 )}
-                {hasOverride && isJwt && (
+                {hasOverride && isAdmin && (
                   confirmReset ? (
                     <div className="flex items-center gap-2 ml-4 flex-shrink-0">
                       <span className="text-xs text-red-600 whitespace-nowrap">{ta("reset_q")}</span>
@@ -378,7 +378,7 @@ export default function ApplicationDetailPage() {
               </div>
               {error && <p className="text-xs text-red-600">{error}</p>}
               <div className="flex items-center gap-3">
-                {isJwt
+                {isAdmin
                   ? <Button onClick={handleSave} loading={saving}>{t("save_overrides")}</Button>
                   : <Button disabled>{t("save_overrides")}</Button>
                 }
@@ -401,7 +401,7 @@ export default function ApplicationDetailPage() {
               title={t("llm_title")}
               subtitle={ta("llm_subtitle", { dept: deptName })}
             />
-            {!llmEditing && isJwt && (
+            {!llmEditing && isAdmin && (
               <Button onClick={handleLlmEditStart} variant="secondary">{t("edit")}</Button>
             )}
           </div>
@@ -502,7 +502,7 @@ export default function ApplicationDetailPage() {
               title={t("proxy_title")}
               subtitle={ta("proxy_subtitle", { dept: deptName })}
             />
-            {!proxyEditing && isJwt && (
+            {!proxyEditing && isAdmin && (
               <Button onClick={handleProxyEditStart} variant="secondary">{t("edit")}</Button>
             )}
           </div>
@@ -642,4 +642,4 @@ export default function ApplicationDetailPage() {
       </div>
     </Shell>
   )
-}
+}

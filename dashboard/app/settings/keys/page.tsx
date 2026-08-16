@@ -23,7 +23,7 @@ export default function ApiKeysPage() {
   const [showModal, setShowModal] = useState(false)
   const [revoking,  setRevoking]  = useState<string | null>(null)
   const [search,    setSearch]    = useState("")
-  const { isJwt } = useAuthMode()
+  const { isAdmin } = useAuthMode()
 
   const { data, isLoading, mutate, error: fetchError } = useSWR("api-keys", getApiKeys)
 
@@ -52,7 +52,7 @@ export default function ApiKeysPage() {
       <PageHeader
         description={t("description")}
         actions={
-          isJwt ? (
+          isAdmin ? (
             <Button size="sm" onClick={() => setShowModal(true)}>
               <PlusIcon /> {t("create")}
             </Button>
@@ -104,7 +104,7 @@ export default function ApiKeysPage() {
                 onRevoke={handleRevoke}
                 onRotate={handleRotate}
                 revoking={revoking}
-                canWrite={isJwt}
+                canWrite={isAdmin}
               />
               </div>
             )}
@@ -113,7 +113,7 @@ export default function ApiKeysPage() {
 
       </div>
 
-      {showModal && isJwt && (
+      {showModal && isAdmin && (
         <CreateKeyModal
           onCreated={handleCreated}
           onClose={() => setShowModal(false)}
@@ -121,4 +121,4 @@ export default function ApiKeysPage() {
       )}
     </Shell>
   )
-}
+}

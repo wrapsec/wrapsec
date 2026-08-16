@@ -12,9 +12,11 @@ vi.mock("@/lib/api", () => ({
 import { ThresholdForm } from "@/components/settings/ThresholdForm"
 import { updateThresholds } from "@/lib/api"
 
-// useAuthMode fetches /api/auth/session; return a JWT session so the save button
-// is enabled (write allowed). Individual tests can override the response.
-function stubSession(session: Record<string, unknown> = { authenticated: true, auth_type: "jwt", can_write: true }) {
+// useAuthMode fetches /api/auth/session; return an ADMIN session so the save button
+// is enabled (admin write allowed). Individual tests can override the response.
+function stubSession(
+  session: Record<string, unknown> = { authenticated: true, auth_type: "jwt", role: "ADMIN", is_admin: true, can_write: true },
+) {
   vi.stubGlobal("fetch", vi.fn().mockResolvedValue({ json: async () => session }))
 }
 
@@ -102,9 +104,17 @@ describe("ThresholdForm submit", () => {
   })
 
   it("hides the enabled Save for an API-key session (no write)", async () => {
-    stubSession({ authenticated: true, auth_type: "api_key", can_write: false })
+    stubSession({ authenticated: true, auth_type: "api_key", role: null, is_admin: false, can_write: false })
     renderWithIntl(<ThresholdForm thresholds={valid} onUpdated={() => {}} />)
-    // The API-key branch renders a DISABLED save + a requires-admin note.
+    // The non-admin branch renders a DISABLED save + a requires-admin note.
+    await waitFor(() => expect(screen.getByRole("button", { name: "Save thresholds" })).toBeDisabled())
+  })
+
+  it("disables Save for a VIEWER JWT session (has a session but not admin)", async () => {
+    // Regression: write gating must key off the ADMIN role, not merely a JWT
+    // session. A VIEWER holds a JWT (can_write true) yet must not see enabled writes.
+    stubSession({ authenticated: true, auth_type: "jwt", role: "VIEWER", is_admin: false, can_write: true })
+    renderWithIntl(<ThresholdForm thresholds={valid} onUpdated={() => {}} />)
     await waitFor(() => expect(screen.getByRole("button", { name: "Save thresholds" })).toBeDisabled())
   })
 })

@@ -16,7 +16,7 @@ vi.mock("@/components/layout/Shell", () => ({
   Shell: ({ children }: { children: React.ReactNode }) => <div>{children}</div>,
 }))
 
-let session = { isJwt: true }
+let session = { isAdmin: true }
 vi.mock("@/hooks/useAuthMode", () => ({ useAuthMode: () => session }))
 
 vi.mock("@/lib/api", () => ({
@@ -41,7 +41,7 @@ function key(over: Partial<ApiKey> = {}): ApiKey {
 }
 
 beforeEach(() => {
-  session = { isJwt: true }
+  session = { isAdmin: true }
   vi.mocked(getApiKeys).mockReset()
   vi.mocked(revokeApiKey).mockReset()
 })
@@ -75,14 +75,14 @@ describe("ApiKeysPage search filter", () => {
 })
 
 describe("ApiKeysPage write gating (security)", () => {
-  it("shows the Create button for a JWT session", async () => {
+  it("shows the Create button for an ADMIN session", async () => {
     vi.mocked(getApiKeys).mockResolvedValue({ keys: [] })
     renderWithIntl(<ApiKeysPage />)
     await waitFor(() => expect(screen.getByRole("button", { name: /create key/i })).toBeEnabled())
   })
 
-  it("disables Create for an API-key session (no write)", async () => {
-    session = { isJwt: false }
+  it("disables Create for a non-admin session (VIEWER/DEVELOPER/API-key)", async () => {
+    session = { isAdmin: false }
     vi.mocked(getApiKeys).mockResolvedValue({ keys: [] })
     renderWithIntl(<ApiKeysPage />)
     await waitFor(() => expect(screen.getByRole("button", { name: /create key/i })).toBeDisabled())

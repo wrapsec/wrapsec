@@ -42,7 +42,7 @@ export function LLMSettingsForm({ settings, onUpdated }: LLMSettingsFormProps) {
   const [loading,  setLoading]  = useState(false)
   const [saved,    setSaved]    = useState(false)
   const [error,    setError]    = useState<string | null>(null)
-  const { isJwt } = useAuthMode()
+  const { isAdmin } = useAuthMode()
 
   const handleProviderChange = (p: LLMSettings["provider"]) => {
     setProvider(p)
@@ -174,7 +174,7 @@ export function LLMSettingsForm({ settings, onUpdated }: LLMSettingsFormProps) {
       {error && <p className="text-xs text-red-600">{error}</p>}
 
       <div className="flex items-center gap-3">
-        {isJwt ? (
+        {isAdmin ? (
           <Button size="sm" onClick={handleSave} loading={loading}>
             {t("llm.save")}
           </Button>
