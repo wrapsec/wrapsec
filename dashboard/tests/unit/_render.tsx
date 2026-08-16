@@ -12,11 +12,17 @@ import { NextIntlClientProvider } from "next-intl"
 import messages from "@/messages/en.json"
 
 export function renderWithIntl(ui: ReactElement, locale = "en") {
-  return render(
+  const wrap = (node: ReactElement) => (
     <NextIntlClientProvider locale={locale} messages={messages}>
-      {ui}
+      {node}
     </NextIntlClientProvider>
   )
+  const result = render(wrap(ui))
+  return {
+    ...result,
+    // Re-render inside the same intl provider (RTL's raw rerender drops the wrapper).
+    rerender: (node: ReactElement) => result.rerender(wrap(node)),
+  }
 }
 
 export * from "@testing-library/react"
