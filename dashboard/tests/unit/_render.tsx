@@ -9,13 +9,18 @@
 import type { ReactElement } from "react"
 import { render } from "@testing-library/react"
 import { NextIntlClientProvider } from "next-intl"
+import { SWRConfig } from "swr"
 import messages from "@/messages/en.json"
 
 export function renderWithIntl(ui: ReactElement, locale = "en") {
+  // A fresh SWR cache per render isolates useSWR data between tests (SWR's cache
+  // is a module singleton keyed by the SWR key, so it otherwise leaks across tests).
   const wrap = (node: ReactElement) => (
-    <NextIntlClientProvider locale={locale} messages={messages}>
-      {node}
-    </NextIntlClientProvider>
+    <SWRConfig value={{ provider: () => new Map() }}>
+      <NextIntlClientProvider locale={locale} messages={messages}>
+        {node}
+      </NextIntlClientProvider>
+    </SWRConfig>
   )
   const result = render(wrap(ui))
   return {
