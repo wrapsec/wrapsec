@@ -3,6 +3,13 @@ WORKDIR /app
 
 FROM base AS deps
 COPY dashboard/package*.json ./
+# npm ci requires the COMPLETE cross-platform tree in package-lock.json. Windows
+# npm prunes Linux-only optional deps (@tailwindcss/oxide wasm fallback's @emnapi*,
+# next-intl's @swc/helpers), so a lockfile committed after a Windows `npm install`
+# fails here with "Missing ... from lock file / out of sync". FIX: after ANY
+# dashboard dependency change, regenerate the lockfile ON LINUX before committing:
+#   docker run --rm -v "$PWD/dashboard:/app" -w /app node:20-alpine \
+#     npm install --package-lock-only --no-audit --no-fund
 RUN npm ci
 
 FROM base AS builder
