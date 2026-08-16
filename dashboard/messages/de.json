@@ -299,6 +299,8 @@
         "sort_desc": "Absteigend - zum Wechseln klicken",
         "sort_asc": "Aufsteigend - zum Wechseln klicken",
         "clear_dates": "Datumsfilter zurücksetzen",
+        "date_from": "Von Datum",
+        "date_to": "Bis Datum",
         "clear_all": "Alle zurücksetzen",
         "date_error": "Das Enddatum muss nach dem Startdatum liegen."
       },

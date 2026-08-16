@@ -221,6 +221,7 @@ export default function LoginPage() {
                 <label style={LABEL}>{t("email")}</label>
                 <input
                   type="email" value={email}
+                  aria-label={t("email")}
                   onChange={e => setEmail(e.target.value)}
                   onKeyDown={e => e.key === "Enter" && handleCredentials()}
                   placeholder={t("email_ph")}
@@ -234,6 +235,7 @@ export default function LoginPage() {
                 <label style={LABEL}>{t("password")}</label>
                 <input
                   type="password" value={password}
+                  aria-label={t("password")}
                   onChange={e => setPassword(e.target.value)}
                   onKeyDown={e => e.key === "Enter" && handleCredentials()}
                   placeholder=""

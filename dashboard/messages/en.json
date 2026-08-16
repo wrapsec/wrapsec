@@ -300,6 +300,8 @@
         "sort_asc": "Ascending - click to switch",
         "clear_dates": "Clear dates",
         "clear_all": "Clear all",
+        "date_from": "From date",
+        "date_to": "To date",
         "date_error": "End date must be after start date"
       },
       "table": {

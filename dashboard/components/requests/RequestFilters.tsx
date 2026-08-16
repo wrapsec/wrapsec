@@ -21,6 +21,9 @@ function FilterSelect({ value, onChange, options, width = 140 }: {
       <select
         value={value}
         onChange={e => onChange(e.target.value)}
+        // The first option is the category placeholder ("Decision", "Threat", ...);
+        // use it as the accessible name so the filter selects are labelled (a11y).
+        aria-label={options[0]?.label}
         style={{
           width: "100%", height: "32px",
           padding: "0 24px 0 9px",
@@ -179,6 +182,7 @@ export function RequestFilters({
               <input
                 key={type}
                 type="date"
+                aria-label={type === "from" ? t("date_from") : t("date_to")}
                 value={type === "from" ? from : to}
                 min={type === "to" ? from || undefined : undefined}
                 max={type === "from" ? to || undefined : undefined}

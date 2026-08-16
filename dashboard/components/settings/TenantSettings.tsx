@@ -81,6 +81,7 @@ export function TenantSettingsForm({
           <input
             type="text"
             value={name}
+            aria-label={t("tenant.name")}
             onChange={(e) => setName(e.target.value)}
             className="h-9 px-3 text-sm rounded-md border border-slate-200 bg-white text-slate-900 focus:outline-none focus:ring-2 focus:ring-purple-700 focus:border-purple-700"
           />
@@ -92,6 +93,7 @@ export function TenantSettingsForm({
           <input
             type="email"
             value={contact}
+            aria-label={t("tenant.contact")}
             onChange={(e) => setContact(e.target.value)}
             placeholder={t("tenant.contact_placeholder")}
             className="h-9 px-3 text-sm rounded-md border border-slate-200 bg-white text-slate-900 placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-purple-700 focus:border-purple-700"
