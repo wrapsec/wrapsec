@@ -14,7 +14,8 @@ export default defineConfig({
     environment: "jsdom",
     globals:     true,
     setupFiles:  ["./vitest.setup.ts"],
-    include:     ["**/*.{test,spec}.{ts,tsx}"],
-    exclude:     ["node_modules/**", ".next/**"],
+    // Tests live under tests/{unit,integration,e2e}; source dirs stay test-free.
+    include:     ["tests/**/*.{test,spec}.{ts,tsx}"],
+    exclude:     ["node_modules/**", ".next/**", "tests/e2e/**"],
   },
 })
