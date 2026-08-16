@@ -39,7 +39,6 @@ dashboard/.env.local
 
 # Sibling checkouts / scratch dirs not used at runtime
 backups/
-models/
 tmp/
 *.log
 

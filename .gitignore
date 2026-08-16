@@ -231,13 +231,10 @@ soak_report.html
 soak_results_*.csv
 tests/load/results/
 
-# ML training data, model binary, and logs
+# ML: the training process + data live in the private wrapsec-ml repo. This repo
+# ships a small sample model under models/ (tracked) so a deployment has a working
+# ML detection tier out of the box. Only the raw training datasets stay ignored.
 ml/data/raw/
-models/ml_detector.pkl
-models/ml_detector.pkl.sha256
-models/ml_detector.sha256
-models/training_dataset.csv
-models/training.log
 
 # Dashboard build output
 dashboard/.next/
