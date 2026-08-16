@@ -32,6 +32,16 @@ export default defineConfig({
         "**/loading.tsx", "**/error.tsx", "**/not-found.tsx",
         "next.config.ts", "eslint.config.mjs", "vitest.config.mts", "vitest.setup.ts",
       ],
+      // RATCHETING floor: set just under the current baseline so coverage cannot
+      // regress, and RAISE these as more of the page/component layer is tested.
+      // Never lower them to make a drop pass (same discipline as the backend's
+      // coverage fail_under). Baseline at introduction: 13.56/12.84/10.94/14.08.
+      thresholds: {
+        statements: 13,
+        branches:   12,
+        functions:  10,
+        lines:      13,
+      },
     },
   },
 })
