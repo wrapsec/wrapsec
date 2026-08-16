@@ -18,6 +18,14 @@ export async function login(page: Page): Promise<void> {
   await expect(page.getByRole("link", { name: "Overview" })).toBeVisible()
 }
 
+/** Log out via the user menu and confirm the redirect to /login. */
+export async function logout(page: Page): Promise<void> {
+  // The user-menu trigger's accessible name includes the logged-in email.
+  await page.getByRole("button", { name: E2E_EMAIL }).click()
+  await page.getByRole("button", { name: "Sign out" }).click()
+  await expect(page).toHaveURL(/\/login/)
+}
+
 /** Unique e2e- prefixed name so created resources are identifiable + self-cleaned. */
 export function e2eName(kind: string): string {
   return `e2e-${kind}-${Date.now()}-${Math.floor(Math.random() * 1000)}`
