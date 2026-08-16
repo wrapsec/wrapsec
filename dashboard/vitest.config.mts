@@ -17,5 +17,21 @@ export default defineConfig({
     // Tests live under tests/{unit,integration,e2e}; source dirs stay test-free.
     include:     ["tests/**/*.{test,spec}.{ts,tsx}"],
     exclude:     ["node_modules/**", ".next/**", "tests/e2e/**"],
+    coverage: {
+      provider:  "v8",
+      reporter:  ["text", "html"],
+      // Measure the first-party source we test. Excludes: tests themselves, the
+      // Next routing/layout shells and config, generated/vendor, and pure type
+      // decls (no runtime to cover).
+      include:   ["app/**", "components/**", "lib/**", "hooks/**", "contexts/**", "middleware.ts"],
+      exclude:   [
+        "tests/**",
+        "**/*.d.ts",
+        "lib/types.ts",
+        "app/layout.tsx",
+        "**/loading.tsx", "**/error.tsx", "**/not-found.tsx",
+        "next.config.ts", "eslint.config.mjs", "vitest.config.mts", "vitest.setup.ts",
+      ],
+    },
   },
 })
