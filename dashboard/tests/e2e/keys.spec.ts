@@ -6,10 +6,9 @@
 // Self-cleaning: the key carries an e2e- prefix and is revoked by the same test;
 // nothing else is touched.
 import { test, expect } from "@playwright/test"
-import { login, e2eName } from "./helpers/auth"
+import { e2eName } from "./helpers/auth"
 
 test("API key create then revoke", async ({ page }) => {
-  await login(page)
   await page.goto("/settings/keys")
 
   const keyName = e2eName("key")

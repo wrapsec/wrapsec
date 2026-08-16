@@ -31,10 +31,43 @@ E2E_EMAIL    = os.getenv("E2E_ADMIN_EMAIL", "e2e-admin@wrapsec-e2e.com")
 E2E_PASSWORD = os.getenv("E2E_ADMIN_PASSWORD", "E2eAdmin!Pass123")
 
 
-async def seed() -> int:
+# Second identity: a VIEWER, for the "unauthorized -> denied" E2E journey.
+E2E_VIEWER_EMAIL = os.getenv("E2E_VIEWER_EMAIL", "e2e-viewer@wrapsec-e2e.com")
+
+
+async def _seed_user(db, email, password, role, dept_id):
+    """Create or reset a user + ensure its (role, dept) membership. Idempotent."""
     from db.repositories.membership import MembershipRepository
-    from db.repositories.tenant import TenantRepository
     from db.repositories.user import UserRepository
+
+    user_repo = UserRepository(db)
+    existing  = await user_repo.get_by_email(email)
+    if existing is None:
+        user = await user_repo.create({
+            "email":                 email,
+            "password_hash":         password,
+            "force_password_change": False,
+        })
+        await user_repo.flush()
+        action = "created"
+    else:
+        await user_repo.update(existing.id, {
+            "password_hash":         password,
+            "force_password_change": False,
+            "is_active":             True,
+        })
+        user   = existing
+        action = "reset"
+
+    await MembershipRepository(db).upsert_for_user(
+        user_id=user.id, tenant_id=dept_id[0], role=role, dept_id=dept_id[1],
+    )
+    return action
+
+
+async def seed() -> int:
+    from db.repositories.department import DepartmentRepository
+    from db.repositories.tenant import TenantRepository
     from db.session import AsyncSessionFactory
     from services.auth.password import (
         hash_password,
@@ -43,7 +76,9 @@ async def seed() -> int:
     )
 
     validate_password_strength(E2E_PASSWORD)
-    email = normalize_email(E2E_EMAIL)
+    admin_email  = normalize_email(E2E_EMAIL)
+    viewer_email = normalize_email(E2E_VIEWER_EMAIL)
+    pw_hash      = hash_password(E2E_PASSWORD)
 
     async with AsyncSessionFactory() as db:
         tenant = await TenantRepository(db).get_bootstrap_default()
@@ -51,35 +86,18 @@ async def seed() -> int:
             print("seed_e2e_user: no default tenant found", file=sys.stderr)
             return 1
 
-        user_repo = UserRepository(db)
-        existing  = await user_repo.get_by_email(email)
+        # VIEWER requires a dept_id (ck_users_dept_required); use any tenant dept.
+        depts = await DepartmentRepository(db).list_by_tenant(tenant.id)
+        if not depts:
+            print("seed_e2e_user: no department to scope the viewer", file=sys.stderr)
+            return 1
+        dept_id = str(depts[0].id)
 
-        if existing is None:
-            user = await user_repo.create({
-                "email":                 email,
-                "password_hash":         hash_password(E2E_PASSWORD),
-                "force_password_change": False,
-            })
-            await user_repo.flush()
-            action = "created"
-        else:
-            # Reset password + clear any force-change / disabled state so login is
-            # deterministic. Never touches other users.
-            await user_repo.update(existing.id, {
-                "password_hash":         hash_password(E2E_PASSWORD),
-                "force_password_change": False,
-                "is_active":             True,
-            })
-            user   = existing
-            action = "reset"
-
-        # Ensure an ADMIN membership in the default tenant (upsert is idempotent).
-        await MembershipRepository(db).upsert_for_user(
-            user_id=user.id, tenant_id=tenant.id, role="ADMIN", dept_id=None,
-        )
+        a = await _seed_user(db, admin_email,  pw_hash, "ADMIN",  (tenant.id, None))
+        v = await _seed_user(db, viewer_email, pw_hash, "VIEWER", (tenant.id, dept_id))
         await db.commit()
 
-    print(f"seed_e2e_user: {action} {email} (ADMIN, tenant={tenant.slug})")
+    print(f"seed_e2e_user: {a} {admin_email} (ADMIN); {v} {viewer_email} (VIEWER)")
     return 0
 
 

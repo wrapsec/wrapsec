@@ -7,6 +7,9 @@
 import { test, expect } from "@playwright/test"
 import { login, logout } from "./helpers/auth"
 
+// These specs exercise login/logout + the unauthenticated guard -> start fresh.
+test.use({ storageState: { cookies: [], origins: [] } })
+
 test("logout returns to the login page", async ({ page }) => {
   await login(page)
   await logout(page)

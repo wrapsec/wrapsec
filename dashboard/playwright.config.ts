@@ -26,6 +26,14 @@ export default defineConfig({
     screenshot: "only-on-failure",
   },
   projects: [
-    { name: "chromium", use: { ...devices["Desktop Chrome"] } },
+    // Logs in once and writes playwright/.auth/admin.json.
+    { name: "setup", testMatch: /.*\.setup\.ts/ },
+    // Journey specs start already authenticated (reused session); auth/logout and
+    // the VIEWER spec opt out per-file with an empty storageState.
+    {
+      name: "chromium",
+      use: { ...devices["Desktop Chrome"], storageState: "playwright/.auth/admin.json" },
+      dependencies: ["setup"],
+    },
   ],
 })

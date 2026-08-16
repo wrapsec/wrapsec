@@ -7,6 +7,9 @@
 import { test, expect } from "@playwright/test"
 import { login } from "./helpers/auth"
 
+// These specs test the login flow itself -> start UNAUTHENTICATED (no reused session).
+test.use({ storageState: { cookies: [], origins: [] } })
+
 test("login lands on the dashboard", async ({ page }) => {
   await login(page)
 

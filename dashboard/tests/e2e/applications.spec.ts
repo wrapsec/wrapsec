@@ -5,10 +5,9 @@
 // Journey 5: application create -> update (threshold override) -> delete.
 // Self-cleaning: e2e- prefixed; deactivates only the app it created.
 import { test, expect } from "@playwright/test"
-import { login, e2eName } from "./helpers/auth"
+import { e2eName } from "./helpers/auth"
 
 test("application create, update override, then deactivate", async ({ page }) => {
-  await login(page)
   await page.goto("/applications")
 
   const name = e2eName("app")

@@ -6,10 +6,9 @@
 // Self-cleaning: the department carries an e2e- prefix and this test deactivates
 // only the one it created; no other data is touched.
 import { test, expect } from "@playwright/test"
-import { login, e2eName } from "./helpers/auth"
+import { e2eName } from "./helpers/auth"
 
 test("department create, update override, then deactivate", async ({ page }) => {
-  await login(page)
   await page.goto("/departments")
 
   const name = e2eName("dept")
