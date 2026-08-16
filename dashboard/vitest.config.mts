@@ -35,12 +35,17 @@ export default defineConfig({
       // RATCHETING floor: set just under the current baseline so coverage cannot
       // regress, and RAISE these as more of the page/component layer is tested.
       // Never lower them to make a drop pass (same discipline as the backend's
-      // coverage fail_under). Baseline at introduction: 13.56/12.84/10.94/14.08.
+      // coverage fail_under). NOT a release gate -- the plan's 80/75 targets are
+      // aspirational, not required. Raised from the 13/12/10/13 introduction floor
+      // to the measured baseline after the security-critical + primary-journey
+      // pass (auth lifecycle, key management, auto-logout): 20.66/18.35/18.89/21.80.
+      // The remaining data/analytics/settings pages are DEFERRED coverage (lower
+      // security priority) -- see docs/internal/wrapsec_frontend_testing_plan.md.
       thresholds: {
-        statements: 13,
-        branches:   12,
-        functions:  10,
-        lines:      13,
+        statements: 20,
+        branches:   18,
+        functions:  18,
+        lines:      21,
       },
     },
   },
