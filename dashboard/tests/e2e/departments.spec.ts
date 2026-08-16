@@ -17,10 +17,8 @@ test("department create, update override, then deactivate", async ({ page }) => 
   // --- Create ---
   await page.getByRole("button", { name: "Add department" }).click()
   await page.getByPlaceholder("Finance Department").fill(name)   // slug auto-derives
-  // NOTE: contact_email is UI-optional but the create form sends "" when blank,
-  // which the backend rejects (422 INVALID_EMAIL). Supplying a value here exercises
-  // the happy path; the blank-contact bug is reported separately.
-  await page.locator('input[type="email"]').fill("e2e-dept@wrapsec-e2e.com")
+  // Leave contact_email BLANK on purpose: it is UI-optional and the form must omit
+  // it (not send ""), so an empty optional email still creates successfully.
   await page.getByRole("button", { name: "Create", exact: true }).click()
 
   // Appears in the list (scope via search).

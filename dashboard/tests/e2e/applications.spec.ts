@@ -17,8 +17,7 @@ test("application create, update override, then deactivate", async ({ page }) =>
   await page.getByRole("button", { name: "Add application" }).click()
   await page.getByPlaceholder("Finance Bot").fill(name)
   await page.getByRole("combobox").first().selectOption({ index: 1 })   // department
-  // owner_email is UI-optional but "" is rejected (422), same as departments.
-  await page.locator('input[type="email"]').fill("e2e-owner@wrapsec-e2e.com")
+  // Leave owner_email BLANK: optional -> the form must omit it, not send "".
   await page.getByRole("button", { name: "Create", exact: true }).click()
 
   // Appears in the list.

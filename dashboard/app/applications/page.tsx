@@ -64,7 +64,8 @@ export default function ApplicationsPage() {
         slug,
         description,
         owner_name:  ownerName,
-        owner_email: ownerEmail,
+        // owner_email is optional: omit it when blank (sending "" is rejected 422).
+        owner_email: ownerEmail.trim() || undefined,
         environment,
       })
       setShowCreate(false)

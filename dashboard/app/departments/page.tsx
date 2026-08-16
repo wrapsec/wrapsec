@@ -53,7 +53,8 @@ export default function DepartmentsPage() {
     setSaving(true)
     setError(null)
     try {
-      await createDepartment({ name, slug, description, contact_email: contact })
+      // contact_email is optional: omit it when blank (sending "" is rejected 422).
+      await createDepartment({ name, slug, description, contact_email: contact.trim() || undefined })
       setShowCreate(false)
       setName(""); setSlug(""); setSlugEdited(false); setDescription(""); setContact("")
       mutate()
