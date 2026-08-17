@@ -72,7 +72,9 @@ jobs:
     env:
       TESTING: "true"
       PYTHONPATH: ${{ github.workspace }}
-      ENVIRONMENT: testing
+      # Must be development|staging|production (validated); test mode is signalled
+      # by TESTING=true, not by ENVIRONMENT.
+      ENVIRONMENT: development
       DATABASE_URL: postgresql+asyncpg://wrapsec:wrapsec@localhost:5432/wrapsec_test
       WRAPSEC_TEST_PG_URL: postgresql+asyncpg://wrapsec:wrapsec@localhost:5432/wrapsec_test
       REDIS_URL: redis://localhost:6379/0
@@ -103,6 +105,7 @@ jobs:
     env:
       TESTING: "true"
       PYTHONPATH: ${{ github.workspace }}
+      ENVIRONMENT: development
     steps:
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
       - uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065 # v5
