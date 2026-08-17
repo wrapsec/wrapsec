@@ -96,6 +96,12 @@ SEMGREP_SKIP  := --exclude-rule generic.secrets.security.detected-stripe-api-key
 semgrep:
 	semgrep scan $(SEMGREP_RULES) $(SEMGREP_SKIP) --error --metrics off .
 
+# Reproduce the OS-divergent CI checks (Linux ruff + dashboard build) in Docker
+# before pushing, so Windows-invisible failures (e.g. ruff EXE001) surface early.
+# Deterministic gates run faster locally: make typecheck / semgrep / coverage / eval.
+ci-local:
+	bash scripts/ci-local.sh
+
 clean:
 	find . -type d -name __pycache__ -exec rm -rf {} +
 	find . -type f -name "*.pyc" -delete
