@@ -128,6 +128,11 @@ jobs:
   frontend-static:
     name: frontend-static (eslint / tsc / build)
     runs-on: ubuntu-22.04
+    env:
+      # next build enforces this is set (the M4 guard in next.config.ts rejects
+      # the http://localhost:8000 fallback). It is a BFF value, unused
+      # client-side; any explicit URL satisfies the guard.
+      NEXT_PUBLIC_API_URL: http://localhost
     defaults:
       run:
         working-directory: dashboard
