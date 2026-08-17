@@ -2,12 +2,33 @@
 
 All notable changes to WrapSec are documented here.
 
-## [Unreleased]
+## [Unreleased - proposed v1.8.9] Multi-tenant SaaS baseline
 
-Multi-tenant SaaS baseline (identity + memberships, settings split, tenant
-lifecycle, tenant isolation) and the open-core plugin seams. Full notes are
-written when this version is cut; the operationally significant item is called
-out now:
+Reshapes the single-tenant core into a multi-tenant SaaS baseline: global user
+identity with per-tenant memberships, a platform/tenant settings split, a tenant
+lifecycle with a platform-operator control plane, tenant-isolation proofs, and the
+open-core plugin seams. One operationally breaking change (encrypted-secret wire
+format). Version number is proposed; the date is filled at cut.
+
+### Added
+- **Multi-tenant identity (users + memberships).** A user is now global identity
+  (globally unique email; owns credentials and refresh tokens) and holds a role in
+  one or more tenants through membership records; the access token is minted from a
+  membership. One person can belong to several tenants. At a single tenant, login
+  is unchanged.
+- **AUDITOR role.** A read-only role for audit and compliance that, unlike VIEWER,
+  can also read settings and the API-key inventory (`settings:read` + `keys:read`)
+  without any write path.
+- **Platform-operator control plane.** New `/v1/admin/tenants` endpoints (create,
+  list, detail, suspend, reactivate, bootstrap-admin) gated to the platform
+  operator, for provisioning and lifecycle across tenants.
+- **Capability and usage endpoints.** `GET /v1/capabilities` reports the plugin
+  capabilities effective for the tenant; `GET /v1/admin/tenant/usage` returns a
+  per-tenant usage aggregate.
+- **Open-core plugin seams.** An identity-provider registry (login resolves the
+  auth backend by method), a final-ceiling policy hook in policy resolution, a
+  reserved `plugin:<name>:<key>` entitlement namespace in tenant settings, and a
+  per-plugin migration convention. A reference plugin exercises all four end to end.
 
 ### Changed
 - **BREAKING (operational): encrypted provider secrets use a new wire format.**
@@ -17,6 +38,68 @@ out now:
   must be re-entered once via the dashboard; new installs are unaffected. The key
   id is the seam that lets a future per-tenant or KMS-held key be introduced with
   no re-encryption campaign.
+- **Settings are split into tenant and platform scopes.** The single `settings`
+  table becomes `tenant_settings` (per-tenant config) and `platform_settings`
+  (platform/control-plane config), resolved env default -> platform -> tenant ->
+  department -> application. Removes the previous sentinel-tenant coupling between
+  the two scopes.
+- **Tenants use a lifecycle status.** Tenants carry `status` / `suspended_at` /
+  `plan` instead of a boolean `is_active`; the dead `global_policy` field is
+  removed.
+- **Per-tenant data retention.** Audit-retention windows apply per tenant rather
+  than one global window.
+- **Proxy is API-key only.** `/v1/chat/completions` rejects dashboard (JWT)
+  sessions with 403 `PROXY_REQUIRES_API_KEY`; programmatic traffic uses an API key.
+- **Proxy interactions are tenant-attributed.** Proxy rows store
+  tenant/department/application ids directly, so a revoked or deleted key no longer
+  erases its interaction history.
+
+### Security
+- **Suspended tenants are rejected at authentication.** Both the API-key and JWT
+  paths return 403 `TENANT_SUSPENDED` for a suspended tenant (the platform admin
+  key is exempt); the decision is cached with a short TTL and invalidated on
+  suspend / reactivate.
+- **Settings reads require permission.** The `GET /v1/settings/*` family is gated
+  on `settings:read` (VIEWER and trial keys denied; DEVELOPER and AUDITOR pass).
+- **Backend quality gates.** The build now gates on 0 type-checker errors, 0
+  static-analysis (SAST) findings, and a line-coverage floor.
+
+## [Unreleased - proposed v1.9.0] Dashboard testing, accessibility, and security-UX
+
+Hardens the dashboard: a full automated test suite (unit/component, end-to-end,
+accessibility), WCAG AA color contrast, and role-gated admin actions, plus a
+detection-evaluation gate ratcheted to the current baseline. Version number is
+proposed; the date is filled at cut.
+
+### Added
+- **Dashboard test suite.** Unit and component tests (Vitest + Testing Library),
+  end-to-end journeys (Playwright against the real stack: auth, API-key /
+  department / application lifecycle, scanner decisions, settings, failure paths,
+  keyboard-only flows), and automated accessibility checks (axe, WCAG 2.0/2.1
+  A+AA) on the key pages, with ratcheting coverage floors.
+- **Sample detector model in the image.** A ready-to-run ML detector model is
+  bundled so a fresh deployment scans out of the box.
+
+### Changed
+- **Admin write actions are role-gated in the UI.** Creating or editing API keys,
+  departments, applications, and settings now requires the ADMIN role in the
+  dashboard, not merely a signed-in session: a VIEWER sees disabled controls with
+  an "administrator access required" note instead of an enabled button that fails
+  with a 403 on submit. The backend remains authoritative.
+- **Dashboard meets WCAG AA color contrast.** Muted text and status colors that
+  fell below the 4.5:1 minimum were darkened across the audited pages; the
+  accessibility suite now fails on serious violations (color-contrast), not just
+  critical ones, so contrast cannot silently regress.
+- **Detection eval gate ratcheted to the current baseline.** The red-team
+  regression floors/ceilings were tightened to one regressing case outside the
+  measured baseline (catch >= 0.95, FPR <= 0.12, OOD >= 0.90), and a dedicated
+  benign-hard over-defense ceiling (<= 0.24) was added, so a detection or
+  over-defense improvement cannot silently drift back.
+
+### Fixed
+- **Blank optional email no longer rejected.** The department and application
+  create forms omit an empty contact / owner email instead of sending `""`, which
+  the API rejected with a 422.
 
 ## [1.8.8] - 2026-08-14
 
