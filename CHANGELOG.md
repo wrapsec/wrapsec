@@ -2,13 +2,13 @@
 
 All notable changes to WrapSec are documented here.
 
-## [Unreleased - proposed v1.8.9] Multi-tenant SaaS baseline
+## [Unreleased - v1.8.9] Multi-tenant SaaS baseline
 
 Reshapes the single-tenant core into a multi-tenant SaaS baseline: global user
 identity with per-tenant memberships, a platform/tenant settings split, a tenant
 lifecycle with a platform-operator control plane, tenant-isolation proofs, and the
 open-core plugin seams. One operationally breaking change (encrypted-secret wire
-format). Version number is proposed; the date is filled at cut.
+format). The date is filled in at cut.
 
 ### Added
 - **Multi-tenant identity (users + memberships).** A user is now global identity
@@ -64,12 +64,12 @@ format). Version number is proposed; the date is filled at cut.
 - **Backend quality gates.** The build now gates on 0 type-checker errors, 0
   static-analysis (SAST) findings, and a line-coverage floor.
 
-## [Unreleased - proposed v1.9.0] Dashboard testing, accessibility, and security-UX
+## [Unreleased - v1.9.0] Dashboard testing, accessibility, and security-UX
 
 Hardens the dashboard: a full automated test suite (unit/component, end-to-end,
 accessibility), WCAG AA color contrast, and role-gated admin actions, plus a
-detection-evaluation gate ratcheted to the current baseline. Version number is
-proposed; the date is filled at cut.
+detection-evaluation gate ratcheted to the current baseline. The date is filled in
+at cut.
 
 ### Added
 - **Dashboard test suite.** Unit and component tests (Vitest + Testing Library),
