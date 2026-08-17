@@ -27,11 +27,14 @@ jobs:
           python-version: "3.10"
           cache: pip
       - name: Install deps + linters
-        # pyright is pinned in requirements-dev; ruff + semgrep are Linux/CI-only
-        # (semgrep is intentionally not a dev dep -- Windows runs it via Docker).
+        # pyright is pinned in requirements-dev; ruff + semgrep are pinned here,
+        # CI-only. Semgrep is intentionally NOT a project dev dep -- it does not
+        # install cleanly on Windows, where it is run via the semgrep/semgrep
+        # Docker image instead. Keep these in lockstep with the versions validated
+        # locally (ruff `ruff --version`, semgrep the semgrep/semgrep image tag).
         run: |
           pip install -r requirements-dev.txt
-          pip install ruff semgrep
+          pip install ruff==0.16.2 semgrep==1.172.0
       - name: Lint (ruff)
         run: make lint
       - name: Types (pyright)
