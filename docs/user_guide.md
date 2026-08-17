@@ -1,7 +1,7 @@
 # WrapSec User Guide
 
 *For dashboard administrators and users.*
-*Last updated: April 2026*
+*Last updated: August 2026*
 
 ---
 
@@ -23,9 +23,11 @@ On the login page you have two options:
 
 **Email / Password** - the primary login method for all dashboard users. Enter your email and password. If your account was created by an admin, you will be required to change your password on first login before accessing anything else.
 
-**API Key** - gives read-only access to settings, audit logs, and scan endpoints. **API key sessions cannot modify settings, manage users, manage keys, or change any configuration** - all write operations require an ADMIN account login via Email / Password.
+**API Key** - gives read-only access to audit logs, scan endpoints, and (for live keys) settings. **API key sessions cannot modify settings, manage users, manage keys, or change any configuration** - all write operations require an ADMIN account login via Email / Password. Trial keys cannot read settings.
 
 If your account has been locked after too many failed attempts, wait 15 minutes and try again.
+
+If every login fails with a "tenant suspended" error, your organisation's access has been suspended by the platform operator - contact your operator or hosting administrator.
 
 **Session timeout:** The dashboard automatically logs you out after 15 minutes of inactivity. A warning appears at 2 minutes remaining - click **Stay logged in** to continue, or **Log out now** to end your session immediately.
 
@@ -33,7 +35,7 @@ If your account has been locked after too many failed attempts, wait 15 minutes 
 
 ## Roles
 
-Every user has one of three roles. Your role determines what you can see and do.
+Every user has one of four roles. Your role determines what you can see and do.
 
 **ADMIN**
 Full access to everything. Can manage users, departments, applications, API keys, and settings. Not scoped to any department - sees data across the entire organisation. There must always be at least one active ADMIN account.
@@ -41,8 +43,11 @@ Full access to everything. Can manage users, departments, applications, API keys
 **DEVELOPER**
 Operational access scoped to their assigned department. Can scan prompts, view audit logs, create and manage API keys, and read settings. Cannot manage users or change settings.
 
+**AUDITOR**
+Read-only compliance role. Can view audit logs, request history, settings, and API key metadata. Assigned either tenant-wide (no department - sees audit data across all departments) or scoped to a single department. Cannot create keys or modify anything.
+
 **VIEWER**
-Read-only access scoped to their assigned department. Can view audit logs and request history. Cannot create API keys or modify anything.
+Read-only access scoped to their assigned department. Can view audit logs and request history. Cannot create API keys, read settings, or modify anything.
 
 ---
 
@@ -56,8 +61,8 @@ Click **Add user**. Fill in:
 
 - **Email** - must be unique across the system
 - **Temporary password** - minimum 8 characters, at least one uppercase letter, one lowercase letter, and one digit
-- **Role** - ADMIN, DEVELOPER, or VIEWER
-- **Department** - required for DEVELOPER and VIEWER; not applicable for ADMIN
+- **Role** - ADMIN, DEVELOPER, AUDITOR, or VIEWER
+- **Department** - required for DEVELOPER and VIEWER; optional for AUDITOR (leave empty for tenant-wide audit access); not applicable for ADMIN
 
 The user will be required to change this password on their first login. Share the credentials with them out-of-band (email, Slack, etc.).
 
@@ -183,7 +188,9 @@ The **Scanner** page lets you test inputs manually. Enter any text and run a sca
 
 ## Settings
 
-Settings are readable by all authenticated users (API key or JWT). Only ADMIN users logged in via Email / Password can modify settings. API key sessions see all settings but cannot save changes - a "Requires admin login" message is shown on all save buttons.
+Settings are readable by users with the settings-read permission: ADMIN, DEVELOPER, and AUDITOR accounts, and live API key sessions. VIEWER accounts and trial keys cannot read settings. Only ADMIN users logged in via Email / Password can modify settings. API key sessions see settings but cannot save changes - a "Requires admin login" message is shown on all save buttons.
+
+Settings apply to your organisation. On installations hosting more than one organisation, each organisation has its own independent settings.
 
 ### Detection thresholds
 
@@ -210,11 +217,11 @@ For latency-sensitive applications, disable the LLM detector and use `fast` mode
 
 Controls the global request rate limit for live API keys. Default: 60 requests per minute per key. Cannot be set below the trial key limit (10 req/min).
 
-Changes take effect within 5 minutes (Redis cache TTL).
+Changes take effect immediately on save; on multi-node deployments, other nodes pick up the change within 1 minute (cache TTL).
 
 ### Retention
 
-Controls how long audit logs are kept. Default: 30 days. Range: 7 to 3650 days. Logs older than the retention period are permanently deleted by the daily cleanup worker.
+Controls how long your organisation's audit logs are kept. Default: 30 days. Range: 7 to 3650 days. Logs older than the retention period are permanently deleted by the daily cleanup worker, which applies each organisation's own retention window.
 
 ### Storage mode
 
@@ -228,7 +235,9 @@ Controls whether raw input and output text is stored. Read-only - set via enviro
 
 ### Proxy settings
 
-Configure the LLM provider for proxy mode. Set the provider (OpenAI, Ollama, Groq, etc.), base URL, API key, default model, and timeout. The provider API key is encrypted at rest and never shown in full after saving.
+Configure the LLM provider for proxy mode. Set the provider (OpenAI, Ollama, or any OpenAI-compatible endpoint via the custom provider), base URL, API key, default model, and timeout. The provider API key is encrypted at rest and never shown in full after saving.
+
+Proxy settings are admin-only, including viewing - configuring an outbound provider and its credentials changes what leaves your system.
 
 Use **Test connection** to verify WrapSec can reach the configured provider.
 
@@ -248,7 +257,7 @@ Every request is assigned a severity level for audit and alerting purposes. Seve
 
 | Severity | Condition |
 |---|---|
-| CRITICAL | BLOCK with high risk score (≥0.9) or blocked by a guardrail |
+| CRITICAL | BLOCK with high risk score (0.9 or higher) or blocked by a guardrail |
 | HIGH | BLOCK with lower risk score, or a system error |
 | MEDIUM | SANITIZE (any reason) |
 | LOW | ALLOW |
@@ -296,4 +305,4 @@ When a department has an override, it shows **Overridden** in the department lis
 
 ---
 
-*WrapSec v1.0 - May 2026*
+*WrapSec v1.0 - August 2026*

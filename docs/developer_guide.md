@@ -107,12 +107,17 @@ else:
 
 If `x-api-key` is present, JWT is ignored - unconditionally. No exceptions.
 
+### Identity model - users + memberships
+
+`users` is pure identity: credentials and account state only - NO tenant, role, or dept columns. A `memberships` row `(user_id, tenant_id, role, dept_id)` carries the user's authorization WITHIN one tenant; one human may hold memberships in multiple tenants with an independent role in each. The access token is minted from ONE membership (login resolves the user's oldest membership as the deterministic default; V1 runs single-membership mode). On every request the middleware re-reads role/dept from the DB-backed membership for the token's tenant - a token can never carry authorization the DB no longer grants, and a token for a tenant the user holds no membership in is rejected outright.
+
 ### JWT structure
 
 Access token payload (HS256):
 ```json
 {
     "sub":       "user-uuid",
+    "jti":       "opaque-token-id",
     "type":      "access",
     "ver":       1,
     "role":      "DEVELOPER",
@@ -124,10 +129,12 @@ Access token payload (HS256):
 }
 ```
 
+- `jti` - per-token id; blacklisted in Redis on logout for immediate revocation
 - `type` - prevents refresh tokens being used as access tokens
 - `ver` - matched against `users.token_version` on every request
 - `aud` - prevents tokens being replayed against other services
-- `dept_id` - null for ADMIN, required for DEVELOPER/VIEWER
+- `role` / `tenant_id` / `dept_id` - come from the MEMBERSHIP the session is scoped to. The claims select which membership; the middleware re-derives the authoritative role/dept from the DB membership on every request
+- `dept_id` - null for ADMIN, required for DEVELOPER/VIEWER, optional for AUDITOR (null = tenant-wide audit scope)
 
 **Library:** PyJWT (`import jwt`, `from jwt.exceptions import InvalidTokenError`).
 Not python-jose. These are not interchangeable - exception types differ.
@@ -138,10 +145,12 @@ Not python-jose. These are not interchangeable - exception types differ.
 
 `logout_all_sessions()` increments `token_version` + revokes all refresh tokens + deletes the Redis user cache entry. Called on:
 - Password change
-- Role change
-- Department change
+- Role change (on the membership)
+- Department change (on the membership)
 - Account deactivation
 - Admin password reset
+
+`token_version` is deliberately per-USER, not per-membership: a role change in one tenant invalidates the user's sessions everywhere (the safe variant). Any future membership-removal path MUST also call `logout_all_sessions()`.
 
 NOT called on reactivation - there are no active sessions to invalidate.
 
@@ -151,11 +160,11 @@ To avoid a DB lookup on every authenticated request, the JWT middleware caches t
 
 - **Cache key:** `auth:user:{user_id}` (UUID string)
 - **TTL:** 1800 seconds - matches the JWT access token expiry
-- **Cached fields:** `id`, `is_active`, `tenant_id`, `dept_id`, `role`, `force_password_change`, `token_version`, `email`
+- **Cached fields:** `id`, `is_active`, `force_password_change`, `token_version`, `email`, and `memberships` - a map keyed by tenant_id of `{role, dept_id}`. One cache entry covers all of the user's tenant contexts, so one delete invalidates every membership at once
 - **Invalidation:** `logout_all_sessions()` deletes the key immediately after the DB commit that increments `token_version`
 - **Failure mode:** any Redis error falls back to a direct DB lookup - never fails auth
 
-**Important for developers:** if you add a new field to the `users` table that must affect auth decisions (e.g., a new flag that should gate access), you must:
+**Important for developers:** if you add a new field to the `users` or `memberships` tables that must affect auth decisions (e.g., a new flag that should gate access), you must:
 1. Add it to the cached payload dict in `_get_user_cached()` in `api/v1/middleware/auth.py`
 2. Add it to the downstream check in `_authenticate_jwt()`
 3. Ensure `logout_all_sessions()` is called whenever that field changes, so the cache is invalidated
@@ -249,9 +258,15 @@ Enforced at middleware level - not just frontend. When `force_password_change = 
 
 ### AuthProvider abstraction
 
-As of v1.1.0 the credential-verification step of `AuthService.login()` runs
-behind an `AuthProvider` interface (`services/auth/providers/base.py`) so v1.5+
-can plug in OIDC, SAML, or SCIM providers without touching AuthService.
+The credential-verification step of `AuthService.login()` runs behind an
+`AuthProvider` interface (`services/auth/providers/base.py`). Providers are
+resolved by method name from a registry (`services/auth/providers/registry.py`);
+`register_auth_provider(name, provider)` is the plugin seam - an enterprise
+package registers OIDC/SAML backends from its `register(app)` without touching
+AuthService. The registry is non-shadowing (a duplicate name raises) and an
+unknown method is treated as an authentication FAILURE (fail closed). The
+provider returns IDENTITY only; membership resolution and token minting stay
+in AuthService.
 
 ```
 AuthService.login()
@@ -290,9 +305,12 @@ implementing `authenticate()` - the surrounding policy is unchanged.
 `tenant_id` is the outermost security boundary. All four layers must hold:
 
 ```
-Layer 1 - DB schema:        users.tenant_id NOT NULL, api_keys.tenant_id NOT NULL
-Layer 2 - JWT decode:       sub, tenant_id, role, ver - all required, missing -> 401
-Layer 3 - Middleware:       JWT tenant_id cross-validated against DB value
+Layer 1 - DB schema:        memberships.tenant_id NOT NULL, api_keys.tenant_id NOT NULL
+                            (users carry no tenant - identity only)
+Layer 2 - JWT decode:       sub, tenant_id, role, ver, jti - all required, missing -> 401
+Layer 3 - Middleware:       token tenant must match a membership the user still
+                            holds; role/dept sourced from that membership, never
+                            from the token claims
 Layer 4 - Principal build:  raises ValueError if tenant_id is None
 ```
 
@@ -331,12 +349,14 @@ require_jwt(principal)                   # JWT only - rejects API key with 403
 require_role(*roles)                     # JWT + role - factory, implies require_jwt
 require_admin()                          # shorthand for require_role("ADMIN") - JWT only
 require_any_admin()                      # admin access from any auth type - JWT ADMIN role OR admin API key
+require_permission(perm, allow_trial=False)  # permission check via ROLE_PERMISSIONS; trial keys rejected unless allow_trial
+require_platform_operator()              # master admin API key only - the cross-tenant control plane gate
 endpoint_rate_limit(limit_setting: str)  # per-identity rate limit - factory
 ```
 
 Principal is built from `request.state` - no second DB call in dependencies.
 
-`has_permission()` raises `NotImplementedError` in v1. All guards use `has_role()` exclusively. Permission strings in `ROLE_PERMISSIONS` are defined for v2+ reference only.
+`has_permission()` is implemented (wildcard matching over `ROLE_PERMISSIONS`) and enforced where a role label is too coarse - the first consumer is `require_permission("settings:read")` on the settings GET family (ADMIN/DEVELOPER/AUDITOR hold it; VIEWER does not; trial keys are rejected by the dependency regardless of permissions). Coarse endpoint guards still use `has_role()`.
 
 `endpoint_rate_limit` is a dependency factory applied on top of the global middleware limit. It reads the effective limit from Redis cache -> DB -> `.env` (same 3-tier chain as the global limit). Identity key: `key_id` from `request.state` with IP fallback. Bucket key: `endpoint:{path}:{identity}` - per-endpoint, per-identity, never shared across endpoints. Fails open if Redis is unavailable.
 
@@ -355,17 +375,27 @@ JWT + ADMIN:       ALL /v1/admin/users/*
                    PUT /v1/settings/*
                    POST /v1/keys, PUT /v1/keys/{id}, DELETE /v1/keys/{id}
                    POST /v1/keys/{id}/rotate
+                   ALL /v1/admin/webhooks/*
 
-Admin (any auth):  PUT /v1/settings/proxy   (require_any_admin - JWT ADMIN or admin API key)
+Admin (any auth):  GET/PUT/DELETE /v1/settings/proxy*, GET /v1/settings/proxy/health
+                   (require_any_admin - JWT ADMIN or admin API key; reads included)
 
-API key OR JWT:    POST /v1/ai/request, POST /v1/chat/completions
-                   GET /v1/ai/requests/*, GET /v1/audit/*
-                   GET /v1/settings/*, GET/DELETE /v1/settings/proxy*
+Platform operator: ALL /v1/admin/tenants* (require_platform_operator - master
+                   admin API key only; tenant credentials rejected)
+
+API key only:      POST /v1/chat/completions (live keys; JWT -> 403
+                   PROXY_REQUIRES_API_KEY, trial -> 403 trial_proxy_disabled)
+
+settings:read:     GET /v1/settings/* (require_permission - ADMIN/DEVELOPER/
+                   AUDITOR or live API key; VIEWER and trial keys rejected)
+
+API key OR JWT:    POST /v1/ai/request, POST /v1/ai/scan-batch
+                   GET /v1/ai/requests/*, GET /v1/agent-runs/*, GET /v1/audit/*
                    GET /v1/keys, GET /v1/keys/{id}
-                   GET /v1/admin/tenant, GET /v1/admin/departments/*
-                   GET /v1/admin/applications/*
+                   GET /v1/admin/tenant, GET /v1/admin/tenant/usage
+                   GET /v1/admin/departments/*, GET /v1/admin/applications/*
                    GET /v1/proxy/interactions/*
-                   GET /health/config
+                   GET /v1/capabilities, GET /health/config
 ```
 
 Implementation: every endpoint has an explicit FastAPI dependency - no endpoint relies
@@ -443,11 +473,15 @@ All keys use a 60-second sliding window via the Lua script in `cache/rate_limit_
 ### Limit configuration - 3-tier chain (Layers 1, 4, 5)
 
 ```
-Priority 1: Redis cache  (wrapsec:settings:rate_limit or wrapsec:settings:admin_rate_limits)
+Priority 1: Redis cache  (wrapsec:settings:rate_limit for the global pre-auth
+            ceiling; wrapsec:settings:admin_rate_limits:{tenant_id} per tenant)
             TTL: 60 seconds - changes propagate within 1 minute on all nodes.
 
-Priority 2: DB           (settings table, keys: "rate_limit" and "admin_rate_limits")
-            Updated via PUT /v1/settings/rate_limit or PUT /v1/settings/admin_limits.
+Priority 2: DB           The global pre-auth ceiling reads platform_settings
+            (key "rate_limit") - it runs BEFORE auth, so the tenant is unknown
+            and it is deliberately a deployment-wide setting. Per-tenant limits
+            (tenant_settings, via resolve_policy) are enforced post-auth.
+            admin_rate_limits reads tenant_settings for the caller's tenant.
             On read: value is written back to Redis cache (cache warming).
 
 Priority 3: .env         (RATE_LIMIT_PER_MINUTE, ADMIN_WRITE_RATE_LIMIT, AUDIT_EXPORT_RATE_LIMIT)
@@ -509,6 +543,8 @@ Adding a schema change:
 3. Commit the model change and the migration together.
 
 The legacy `db.session.create_tables()` helper (raw `Base.metadata.create_all()`) is kept only for throwaway per-test SQLite databases; production and dev startup goes through Alembic.
+
+Startup migrates the CORE chain only. A plugin that owns tables ships its own Alembic chain with a separate version table (`alembic_version_<plugin>`) and runs it from its `register()` - see `docs/plugin_migrations.md`.
 
 ### Session management
 
@@ -711,21 +747,22 @@ WrapSec uses `PUT` for settings endpoints (full replacement) and `PATCH` for use
 `PATCH /v1/admin/users/{id}` validates the combined final state, not individual fields:
 
 ```python
-final_role    = data.get("role",    user.role)
-final_dept_id = data.get("dept_id", str(user.dept_id) if user.dept_id else None)
+final_role    = data.get("role",    membership.role)
+final_dept_id = data.get("dept_id", str(membership.dept_id) if membership.dept_id else None)
 error = _validate_role_dept_consistency(final_role, final_dept_id)
 ```
+
+Role and dept live on the MEMBERSHIP (not the user row); the endpoint loads the caller-tenant membership, validates the combined final state, and writes through `MembershipRepository.upsert_for_user()`.
 
 Example: `PATCH {"role": "ADMIN", "dept_id": "uuid"}` -> invalid even though either field alone might be valid in context.
 
 ### dept_id tenant integrity
 
-`UserRepository` verifies `dept_id` belongs to the same tenant on every create and update:
-```python
-SELECT id FROM departments WHERE id = dept_id AND tenant_id = tenant_id
-```
+Enforced at TWO layers on every create and update:
+- Endpoint layer (`admin/users.py`): loads the department and rejects when `dept.tenant_id != principal.tenant_id`
+- Repository layer (`MembershipRepository._verify_dept_belongs_to_tenant`): re-checks before any membership write
 
-Also enforced at DB level via composite FK (`fk_users_dept_tenant`).
+The role/dept consistency rule itself is additionally backed by the DB check constraint `ck_memberships_dept_required` on the memberships table.
 
 ### Guards
 
@@ -764,47 +801,33 @@ Guardrails always override detection. Independent thresholds.
 
 ```python
 system_defaults (.env)
-    ↓ deep merge
-DB settings table (policy_thresholds, detection_layers, llm_settings, rate_limit)
-    ↓ deep merge
+    | deep merge
+platform_settings      <- deployment defaults; platform-operator managed
+    | deep merge
+tenant_settings        <- the caller's tenant (policy_thresholds, detection_layers,
+    |                     llm_settings, rate_limit) - what PUT /v1/settings/* writes
+    | deep merge
 dept.policy_override   <- null fields inherit from above
-    ↓ deep merge
+    | deep merge
 app.policy_override    <- null fields inherit from above
-    ↓ app.rate_limit_override (integer column, takes precedence over rate_limit.per_minute)
-    ↓
-resolved_policy
+    | app.rate_limit_override (integer column, takes precedence over rate_limit.per_minute)
+    |
+    | plugin policy layers (registered via services.policy_layers) - a FINAL
+    | CEILING applied after all core resolution, so a plan/entitlement layer
+    | clamps even an app override. No-op in OSS (none registered). Fail-open:
+    | a raising layer is logged and skipped.
+    v
+resolved_policy        <- thresholds sanity-checked last (0.0 < sanitize < block <= 1.0;
+                          invalid values revert to system defaults)
 ```
 
-`global_policy` on the tenant table is kept in DB but not applied in resolution. DB settings table is authoritative.
+The tenant profile (`PUT /v1/admin/tenant`) carries NO policy configuration - the old `global_policy` field was removed. Policy is configured exclusively through `/v1/settings/*` (tenant-scoped), dept/app overrides, and platform defaults.
 
-When set via `PUT /v1/tenant`, `global_policy` is validated against `GlobalPolicySchema` - only the following keys are accepted (`extra="forbid"` rejects anything else):
-
-```json
-{
-  "thresholds": {
-    "block":    0.8,
-    "sanitize": 0.4
-  },
-  "detection": {
-    "rule_enabled": true,
-    "ml_enabled":   true,
-    "llm_enabled":  true
-  },
-  "guardrails": {
-    "pii":      { "enabled": true, "block_threshold": 0.8, "sanitize_threshold": 0.4 },
-    "toxicity": { "enabled": true, "block_threshold": 0.8 }
-  },
-  "rate_limit": {
-    "per_minute": 60
-  }
-}
-```
-
-All fields are optional - only provided keys are stored. Invariant: `0.0 < sanitize < block <= 1.0`.
-
-Toxicity is BLOCK-or-ALLOW only (Bedrock-style semantics). The `toxicity.sanitize_threshold` field is accepted for backward compatibility with pre-v1.0.9 stored policies but is a no-op.
+Toxicity is BLOCK-or-ALLOW only (Bedrock-style semantics). The `toxicity.sanitize_threshold` field is accepted in stored policies for backward compatibility but is a no-op.
 
 `rate_limit_override` on an application is a dedicated integer column (separate from `policy_override`). When set, it overrides `policy["rate_limit"]["per_minute"]` and is enforced as a per-app bucket (key `app:{app_id}`) in `ai.py` after policy resolution. Setting it to `null` removes the per-app limit.
+
+Settings keys under the reserved `plugin:<name>:<key>` namespace are the per-tenant entitlement store: only a plugin may write them (`allow_plugin_namespace=True` at the repository layer); core settings endpoints reject the prefix. See `docs/PLUGIN_CONTRACT.md`.
 
 ---
 

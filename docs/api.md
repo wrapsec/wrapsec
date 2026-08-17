@@ -59,14 +59,18 @@ Used by dashboard users. Issued via `POST /v1/auth/login`.
 | `GET /health/config` | yes any key | yes any role |
 | `POST /v1/auth/login`, `POST /v1/auth/refresh` | no public/cookie | no public/cookie |
 | `POST /v1/auth/logout`, `GET /v1/auth/me`, `POST /v1/auth/change-password` | no | yes any role |
-| `POST /v1/ai/request`, `POST /v1/chat/completions` | yes | yes any role |
+| `POST /v1/ai/request`, `POST /v1/ai/scan-batch` | yes | yes any role |
+| `POST /v1/chat/completions` | yes (live keys only) | no - `403 PROXY_REQUIRES_API_KEY` |
 | `GET /v1/ai/requests/{trace_id}` | yes | yes any role |
 | `GET /v1/agent-runs/{run_id}` | yes | yes any role |
 | `GET /v1/audit/*` | yes | yes any role |
 | `GET /v1/proxy/interactions/*` | yes | yes any role |
-| `GET /v1/settings/*` | yes | yes any role |
+| `GET /v1/capabilities` | yes | yes any role |
+| `GET /v1/settings/*` | yes live keys only (trial rejected) | yes ADMIN, DEVELOPER, AUDITOR (`settings:read`); VIEWER rejected |
 | `PUT /v1/settings/*` | no | yes ADMIN only |
-| `GET/PUT/DELETE /v1/settings/proxy*` | yes | yes any role |
+| `GET/PUT/DELETE /v1/settings/proxy*` | admin API key only | yes ADMIN only |
+| `GET /v1/admin/tenant/usage` | yes | yes any role |
+| `ALL /v1/admin/tenants*` | admin API key only (platform operator) | no |
 | `GET /v1/keys` | yes | yes any role |
 | `GET /v1/keys/{id}` | yes | yes any role |
 | `POST /v1/keys`, `PUT /v1/keys/{id}`, `DELETE /v1/keys/{id}`, `POST /v1/keys/{id}/rotate` | no | yes ADMIN only |
@@ -81,7 +85,11 @@ Used by dashboard users. Issued via `POST /v1/auth/login`.
 **Notes:**
 - `GET /v1/keys` requires auth but accepts API key - CLI `wrapsec keys list` uses this
 - `PUT /v1/settings/*` requires JWT + ADMIN - admin API key not accepted
-- `/v1/settings/proxy*` scoped per `tenant_id` - one proxy config shared across all API keys for the tenant
+- `/v1/settings/proxy*` scoped per `tenant_id` - one proxy config shared across all API keys for the tenant. All proxy-settings operations (including reads) require admin: configuring an outbound provider changes what leaves the system
+- `POST /v1/chat/completions` is API-key only. Dashboard (JWT) sessions receive `403 PROXY_REQUIRES_API_KEY` regardless of role
+- `GET /v1/settings/*` requires the `settings:read` permission: ADMIN, DEVELOPER, and AUDITOR roles hold it; VIEWER does not. Trial API keys are rejected
+- `/v1/admin/tenants*` is the platform-operator control plane (tenant provisioning and lifecycle). Master admin API key only; excluded from the OpenAPI schema
+- If a tenant is suspended, every request under its credentials returns `403 TENANT_SUSPENDED`
 - All write endpoints on admin resources require JWT (no API key writes)
 
 ---
@@ -165,6 +173,8 @@ Security and proxy errors additionally include a `wrapsec` key:
 | `SESSION_INVALIDATED` | 401 | Token version mismatch - re-login required |
 | `FORBIDDEN` | 403 | Valid credentials, insufficient role |
 | `PASSWORD_CHANGE_REQUIRED` | 403 | Must change password before accessing this resource |
+| `TENANT_SUSPENDED` | 403 | The tenant has been suspended by the platform operator - all its traffic is rejected until reactivation |
+| `PROXY_REQUIRES_API_KEY` | 403 | `POST /v1/chat/completions` called with a JWT session - the proxy accepts API keys only |
 | `NOT_FOUND` | 404 | Resource does not exist |
 | `CONFLICT` | 409 | Duplicate (e.g. email already registered) |
 | `IDEMPOTENCY_CONFLICT` | 409 | Same Idempotency-Key, different body |
@@ -194,7 +204,24 @@ Security and proxy errors additionally include a `wrapsec` key:
 | Same key + same body | Return cached response, `X-Idempotency-Replayed: true` |
 | Same key + different body | `409 IDEMPOTENCY_CONFLICT` |
 
-`POST /v1/chat/completions` does **not** support idempotency - provider calls have side effects.
+`POST /v1/chat/completions` supports idempotency too: a client retry with the same `Idempotency-Key` and body replays the cached response instead of calling the paid provider a second time.
+
+---
+
+## Capabilities
+
+### GET /v1/capabilities
+
+Which optional plugin capabilities are active in this deployment. The dashboard uses this to show or hide the corresponding UI. Informational only - this endpoint is never an authorization control; features enforce their own gates at request time.
+
+**Auth:** any valid principal (API key or JWT).
+
+**Response 200:**
+```json
+{"edition": "oss", "capabilities": []}
+```
+
+The OSS edition always returns an empty set. An enterprise deployment lists the capabilities its installed plugin registered (filtered by the `WRAPSEC_FEATURES` deployment ceiling, if set). `edition` is display metadata, not an authorization claim.
 
 ---
 
@@ -367,7 +394,7 @@ Changes the user's password. Immediately invalidates all active sessions (all re
 {"current_password": "OldPassword1!", "new_password": "NewPassword2026!"}
 ```
 
-Password requirements: ≥8 chars, ≥1 uppercase, ≥1 lowercase, ≥1 digit.
+Password requirements: minimum 8 chars, at least 1 uppercase, 1 lowercase, and 1 digit.
 
 **Response 200:**
 ```json
@@ -597,9 +624,9 @@ The `assessment` object is an always-present, self-contained security verdict - 
 | `RULE_DETECTOR` | Rule detector highest score |
 | `ML_DETECTOR` | ML classifier highest score |
 | `LLM_DETECTOR` | LLM semantic detector highest score |
-| `PII_GUARDRAIL_BLOCK` | PII score ≥ block threshold |
-| `PII_GUARDRAIL_SANITIZE` | PII score ≥ sanitize threshold |
-| `TOXICITY_GUARDRAIL_BLOCK` | Toxicity score ≥ block threshold (BLOCK-only tier; see note below) |
+| `PII_GUARDRAIL_BLOCK` | PII score at or above block threshold |
+| `PII_GUARDRAIL_SANITIZE` | PII score at or above sanitize threshold |
+| `TOXICITY_GUARDRAIL_BLOCK` | Toxicity score at or above block threshold (BLOCK-only tier; see note below) |
 | `NO_THREAT_DETECTED` | All detectors ran, no threat found |
 | `SYSTEM_ERROR` | Detector failure or exception |
 
@@ -867,7 +894,7 @@ response = client.chat.completions.create(model="openai/gpt-4o", messages=[...])
 
 ### POST /v1/chat/completions
 
-**Auth:** API key OR JWT Bearer. Trial keys: `403 trial_proxy_disabled`.
+**Auth:** live API key only. Trial keys: `403 trial_proxy_disabled`. JWT (dashboard) sessions: `403 PROXY_REQUIRES_API_KEY` regardless of role.
 
 **Request (OpenAI-compatible):**
 ```json
@@ -1035,6 +1062,8 @@ Returns `404 NOT_FOUND` if trace_id not found.
 ---
 
 ## Proxy Settings
+
+All proxy-settings operations - including reads and the health probe - require admin (JWT ADMIN or the admin API key): configuring an outbound provider and its credentials changes what leaves the system.
 
 ### PUT /v1/settings/proxy
 
@@ -1327,6 +1356,8 @@ Exports audit logs as CSV.
 
 ## Settings
 
+Settings are tenant-scoped: each tenant reads and writes its own values, layered over platform defaults. Reads require the `settings:read` permission (ADMIN, DEVELOPER, AUDITOR roles, or a live API key; VIEWER and trial keys are rejected). Writes require JWT + ADMIN.
+
 ### GET /v1/settings/thresholds
 
 Returns current detection thresholds.
@@ -1473,7 +1504,7 @@ Creates a new API key. Returns the raw key value once - store it securely, it ca
 }
 ```
 
-Provide `app_id` for app-scoped keys (dept and tenant derived from app). Provide `dept_id` for dept-scoped keys. `key_type`: `live` (default) or `trial`.
+Provide `app_id` for app-scoped keys (dept and tenant derived from app). Provide `dept_id` for dept-scoped keys. `key_type`: `live` (default) or `trial`. Optional `expires_at` (ISO-8601): the key stops authenticating after this instant; omitted or `null` means no expiry. The response echoes the stored value.
 
 **Response 201:**
 ```json
@@ -1594,7 +1625,7 @@ Cannot rotate a key that is already in a grace period or already expired.
 
 ### GET /v1/admin/tenant
 
-Returns the default tenant configuration.
+Returns the caller's tenant profile. Scoped to the authenticated principal's tenant.
 
 **Response 200:**
 ```json
@@ -1603,39 +1634,118 @@ Returns the default tenant configuration.
   "slug":          "default",
   "name":          "My Organisation",
   "description":   null,
-  "global_policy": {},
   "contact_email": null,
-  "is_active":     true,
-  "created_at":    "2026-04-01T00:00:00"
+  "status":        "active",
+  "created_at":    "2026-04-01T00:00:00Z",
+  "locale":        null
 }
 ```
+
+`status` is `active` or `suspended` (set via the platform-operator endpoints). `locale` is the tenant's default BCP-47 locale, or `null` to inherit the system default.
 
 ### PUT /v1/admin/tenant
 
-Updates tenant name, description, contact email, or global policy. All fields are optional - only provided fields are updated.
+Updates tenant name, description, contact email, or default locale. All fields are optional - only provided fields are updated. Unknown fields are rejected (422).
 
-`global_policy` is schema-validated. Accepted structure (all sub-fields optional):
-
-```json
-{
-  "thresholds": { "block": 0.8, "sanitize": 0.4 },
-  "detection":  { "rule_enabled": true, "ml_enabled": true, "llm_enabled": true },
-  "guardrails": {
-    "pii":      { "enabled": true, "block_threshold": 0.8, "sanitize_threshold": 0.4 },
-    "toxicity": { "enabled": true, "block_threshold": 0.8 }
-  },
-  "rate_limit": { "per_minute": 60 }
-}
-```
-
-Unknown keys are rejected (422). Invariant: `0.0 < sanitize < block <= 1.0`.
-
-Toxicity is BLOCK-or-ALLOW only (see decision model section). The `toxicity.sanitize_threshold` field is accepted for backward compatibility with pre-v1.0.9 policies but is a no-op - use `toxicity.block_threshold` to tune sensitivity.
+Policy configuration is NOT part of the tenant profile. Detection thresholds, layers, guardrails, and rate limits are managed through `/v1/settings/*` (tenant-scoped) and per-department or per-application policy overrides.
 
 **Request:**
 ```json
 {"name": "Acme Corp", "contact_email": "security@acme.com"}
 ```
+
+### GET /v1/admin/tenant/usage
+
+Tenant-scoped usage aggregate over the audit trail: scan and proxy request counts and blocked/sanitized decisions, totalled and broken down by day. Every request path (scan, batch, proxy, cache hit) writes an audit row, so these figures are complete.
+
+**Auth:** any valid principal (API key or JWT).
+
+**Query params:** `from`, `to` - ISO-8601 timestamps; the window is `[from, to)`. Defaults to the last 30 days.
+
+**Response 200:**
+```json
+{
+  "from":   "2026-07-16T00:00:00Z",
+  "to":     "2026-08-15T00:00:00Z",
+  "totals": {"scan": 1240, "proxy": 310, "blocked": 57, "sanitized": 12, "total": 1550},
+  "by_day": [
+    {"day": "2026-07-16", "scan": 40, "proxy": 11, "blocked": 2, "sanitized": 0, "total": 51}
+  ]
+}
+```
+
+**Errors:** `400 INVALID_REQUEST` - malformed timestamps or `from` not before `to`.
+
+---
+
+## Platform Operator - Tenant Lifecycle
+
+Tenant provisioning and lifecycle management. **Master admin API key only** (the platform-operator principal) - tenant credentials, including tenant ADMIN JWTs, are rejected. These endpoints are excluded from the OpenAPI schema.
+
+On a single-tenant self-hosted installation these endpoints are normally not needed: the default tenant is created at startup and the first admin via `/v1/setup`.
+
+### POST /v1/admin/tenants
+
+Creates a tenant.
+
+**Request:**
+```json
+{"slug": "acme", "name": "Acme Corp", "description": null}
+```
+
+`slug`: 2-50 chars, lowercase alphanumeric or hyphen, must start alphanumeric. Unique across the installation.
+
+**Response 201:**
+```json
+{
+  "id":           "3f6b1f9a-3c1c-4a3f-9a44-9be1a1d0e930",
+  "slug":         "acme",
+  "name":         "Acme Corp",
+  "description":  null,
+  "status":       "active",
+  "plan":         null,
+  "suspended_at": null,
+  "created_at":   "2026-08-15T00:00:00Z"
+}
+```
+
+**Errors:** `400 INVALID_REQUEST` - bad slug. `409 CONFLICT` - slug already exists.
+
+### GET /v1/admin/tenants
+
+Lists all tenants with lifecycle status.
+
+**Response 200:** `{"total": 2, "tenants": [ ... ]}` - same tenant shape as create.
+
+### GET /v1/admin/tenants/{tenant_id}
+
+Returns one tenant. `404 NOT_FOUND` if it does not exist.
+
+### POST /v1/admin/tenants/{tenant_id}/suspend
+
+Suspends the tenant. All traffic under its credentials (API keys and user sessions) is rejected with `403 TENANT_SUSPENDED` until reactivation. Takes effect immediately (the cached lifecycle status is invalidated on change).
+
+**Response 200:** the tenant with `"status": "suspended"` and `suspended_at` set.
+
+### POST /v1/admin/tenants/{tenant_id}/reactivate
+
+Restores a suspended tenant. **Response 200:** the tenant with `"status": "active"`.
+
+### POST /v1/admin/tenants/{tenant_id}/bootstrap-admin
+
+Creates the FIRST admin user of a tenant (identity plus ADMIN membership). Refuses once the tenant has any member. The created user has `force_password_change = true` - they must rotate the operator-set password on first login.
+
+**Request:**
+```json
+{"email": "admin@acme-corp.com", "password": "TemporaryPass1!"}
+```
+
+**Response 201:**
+```json
+{"id": "d8b1...", "email": "admin@acme-corp.com", "role": "ADMIN"}
+```
+
+**Errors:** `400 INVALID_REQUEST` - weak password. `409 CONFLICT` - tenant already has members, or the email is already registered. `404 NOT_FOUND` - unknown tenant.
 
 ---
 
