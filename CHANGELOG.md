@@ -2,7 +2,7 @@
 
 All notable changes to WrapSec are documented here.
 
-## [Unreleased - v1.8.9] Multi-tenant SaaS baseline
+## [1.8.9] - 2026-08-18
 
 Reshapes the single-tenant core into a multi-tenant SaaS baseline: global user
 identity with per-tenant memberships, a platform/tenant settings split, a tenant
@@ -64,7 +64,7 @@ format). The date is filled in at cut.
 - **Backend quality gates.** The build now gates on 0 type-checker errors, 0
   static-analysis (SAST) findings, and a line-coverage floor.
 
-## [Unreleased - v1.9.0] Dashboard testing, accessibility, and security-UX
+## [1.9.0] - 2026-08-18
 
 Hardens the dashboard: a full automated test suite (unit/component, end-to-end,
 accessibility), WCAG AA color contrast, and role-gated admin actions, plus a
