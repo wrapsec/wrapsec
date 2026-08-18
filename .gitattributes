@@ -1,0 +1,8 @@
+# Normalize all text files to LF in the repository and on checkout. This ends
+# the mixed CRLF/LF churn from Windows development and keeps line endings
+# consistent across Windows, WSL, Linux, and CI (where CRLF in shell/YAML breaks
+# embedded scripts). Renormalized once at introduction.
+* text=auto eol=lf
+
+# Binary artifacts -- never normalize or diff.
+*.pkl binary
