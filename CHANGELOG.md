@@ -79,12 +79,11 @@ at cut.
   A+AA) on the key pages, with ratcheting coverage floors.
 - **Sample detector model in the image.** A ready-to-run ML detector model is
   bundled so a fresh deployment scans out of the box.
-- **Continuous integration.** A GitHub Actions workflow runs the full gate set on
+- **Continuous integration.** A GitHub Actions workflow runs the gate set on
   every pull request and push to `main`: backend static analysis (ruff, pyright,
-  semgrep), unit + integration tests with a coverage floor, the detection
-  red-team gate, and the dashboard suite (eslint / tsc / build, Vitest, and
-  Playwright E2E + axe against a disposable Docker Compose stack, with failure
-  artifacts uploaded).
+  semgrep), unit + integration tests with a coverage floor, and the dashboard
+  suite (eslint / tsc / build, Vitest, and Playwright E2E + axe against a
+  disposable Docker Compose stack, with failure artifacts uploaded).
 
 ### Changed
 - **Admin write actions are role-gated in the UI.** Creating or editing API keys,

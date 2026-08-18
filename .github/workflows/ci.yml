@@ -98,31 +98,10 @@ jobs:
           coverage run -m pytest tests/unit tests/integration -q
           coverage report
 
-  # ── Detection quality: red-team regression gate (offline) ───────────────────
-  detection-eval:
-    name: detection-eval (red-team gate)
-    runs-on: ubuntu-22.04
-    env:
-      TESTING: "true"
-      PYTHONPATH: ${{ github.workspace }}
-      ENVIRONMENT: development
-      # The eval is offline (FAST/SCAN_ONLY, no DB/Redis), but Settings still
-      # requires these fields to construct -- provided as config only, never
-      # connected.
-      SECRET_KEY: ci_secret_key_for_testing_minimum_32_characters_long
-      ADMIN_API_KEY: ci_admin_api_key_for_testing_minimum_32_chars_x
-      DATABASE_URL: postgresql+asyncpg://wrapsec:wrapsec@localhost:5432/wrapsec_test
-      REDIS_URL: redis://localhost:6379/0
-    steps:
-      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
-      - uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065 # v5
-        with:
-          python-version: "3.10"
-          cache: pip
-      - name: Install dependencies
-        run: pip install -r requirements-dev.txt
-      - name: Evaluate + gate
-        run: make eval
+  # The detection red-team gate (`make eval`) is intentionally NOT a CI job: its
+  # baseline is measured with the optional Tier-2 transformer model installed,
+  # which CI does not carry. Run it where that tier is present (locally / a
+  # dedicated environment), per docs/internal/eval_harness.md.
 
   # ── Frontend: static quality ────────────────────────────────────────────────
   frontend-static:
