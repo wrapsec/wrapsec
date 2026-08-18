@@ -17,8 +17,13 @@ permissions:
 
 jobs:
   # ── Backend: static gates (no services, fast) ───────────────────────────────
+  # NOTE: Semgrep is deliberately NOT a required PR gate. Its rulesets (p/python
+  # etc.) are fetched live from the Semgrep registry on every run, so the same
+  # pinned binary returns different findings from one run to the next -- a
+  # non-deterministic gate that flakes PRs on registry drift, not real changes.
+  # The SAST scan runs on a schedule / on demand instead (security-semgrep.yml).
   backend-static:
-    name: backend-static (ruff / pyright / semgrep)
+    name: backend-static (ruff / pyright)
     runs-on: ubuntu-22.04
     steps:
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
@@ -26,21 +31,16 @@ jobs:
         with:
           python-version: "3.10"
           cache: pip
-      - name: Install deps + linters
-        # pyright is pinned in requirements-dev; ruff + semgrep are pinned here,
-        # CI-only. Semgrep is intentionally NOT a project dev dep -- it does not
-        # install cleanly on Windows, where it is run via the semgrep/semgrep
-        # Docker image instead. Keep these in lockstep with the versions validated
-        # locally (ruff `ruff --version`, semgrep the semgrep/semgrep image tag).
+      - name: Install deps + linter
+        # pyright is pinned in requirements-dev; ruff is pinned here (kept in
+        # lockstep with `ruff --version` locally).
         run: |
           pip install -r requirements-dev.txt
-          pip install ruff==0.16.2 semgrep==1.172.0
+          pip install ruff==0.16.2
       - name: Lint (ruff)
         run: make lint
       - name: Types (pyright)
         run: make typecheck
-      - name: SAST (semgrep)
-        run: make semgrep
 
   # ── Backend: unit + integration + coverage floor ────────────────────────────
   backend-tests:

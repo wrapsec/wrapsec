@@ -74,9 +74,12 @@ format:
 typecheck:
 	pyright
 
-# Static application-security scan (Semgrep). Pinned community rulesets -- NOT
-# `--config auto`, which needs network metrics and is nondeterministic. Path
-# excludes live in .semgrepignore; --error makes any finding fail the build.
+# Static application-security scan (Semgrep). NOT a required PR gate -- it runs on
+# a schedule / on demand via .github/workflows/security-semgrep.yml. The p/*
+# rulesets are fetched live from the Semgrep registry, so the same pinned binary
+# returns different findings from one run to the next (non-deterministic); its
+# findings are reviewed, not merge-blocking. Path excludes live in .semgrepignore;
+# --error fails the run on any finding.
 #
 # Two rules are excluded deliberately (each verified 100% false-positive here):
 #   * detected-stripe-api-key -- WrapSec has no Stripe integration; the rule only
@@ -88,9 +91,9 @@ typecheck:
 #     actual control.
 # Remaining one-off false positives carry an inline `# nosemgrep: <rule>` reason.
 #
-# CI runs this with a native `semgrep`. Locally (e.g. Windows) run the same rules
+# The scheduled workflow and local runs use this SAME target. On Windows run it
 # via Docker:
-#   docker run --rm -v "$$PWD:/src" semgrep/semgrep semgrep scan $(SEMGREP_RULES) $(SEMGREP_SKIP) --error --metrics off /src
+#   docker run --rm -v "$$PWD:/src" -w /src semgrep/semgrep:1.172.0 semgrep scan $(SEMGREP_RULES) $(SEMGREP_SKIP) --error --metrics off .
 SEMGREP_RULES := --config p/python --config p/security-audit --config p/secrets
 SEMGREP_SKIP  := --exclude-rule generic.secrets.security.detected-stripe-api-key.detected-stripe-api-key --exclude-rule python.lang.security.audit.logging.logger-credential-leak.python-logger-credential-disclosure
 semgrep:
@@ -98,7 +101,7 @@ semgrep:
 
 # Reproduce the OS-divergent CI checks (Linux ruff + dashboard build) in Docker
 # before pushing, so Windows-invisible failures (e.g. ruff EXE001) surface early.
-# Deterministic gates run faster locally: make typecheck / semgrep / coverage / eval.
+# The other gates run faster locally: make typecheck / coverage / eval.
 ci-local:
 	bash scripts/ci-local.sh
 

@@ -1,0 +1,41 @@
+name: Security (Semgrep)
+
+# Static application-security scan (Semgrep). This is deliberately SEPARATE from
+# the required PR checks (ci.yml) and is NOT a PR gate.
+#
+# Why: Semgrep's rulesets (p/python, p/security-audit, p/secrets) are fetched
+# live from the Semgrep registry on every run, so the same pinned binary can
+# return different findings from one run to the next. That non-determinism makes
+# it unsuitable as a required, blocking PR check (it would flake red on registry
+# drift rather than on real code changes). Instead it runs on a schedule and on
+# demand, and its findings are reviewed rather than merge-blocking.
+#
+# Pinned binary (semgrep 1.172.0) + the registry configs, invoked via the
+# canonical `make semgrep` target so local and this workflow run identically.
+
+on:
+  schedule:
+    - cron: "0 6 * * 1"   # weekly, Monday 06:00 UTC
+  workflow_dispatch: {}    # manual, on-demand
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ${{ github.workflow }}
+  cancel-in-progress: true
+
+jobs:
+  semgrep:
+    name: semgrep (registry rules, pinned 1.172.0)
+    runs-on: ubuntu-22.04
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+      - uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065 # v5
+        with:
+          python-version: "3.10"
+          cache: pip
+      - name: Install Semgrep (pinned)
+        run: pip install semgrep==1.172.0
+      - name: Scan (registry rules)
+        run: make semgrep
