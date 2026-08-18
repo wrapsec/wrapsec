@@ -150,7 +150,7 @@ async def test_saas_lifecycle_rehearsal(client):
                 text("SELECT id FROM users WHERE email = :e"), {"e": email})).scalar()
             if tid is not None:
                 for tbl in _TENANT_CHILD_TABLES:
-                    await db.execute(text(f"DELETE FROM {tbl} WHERE tenant_id = :t"), {"t": str(tid)})
+                    await db.execute(text(f"DELETE FROM {tbl} WHERE tenant_id = :t"), {"t": str(tid)})  # nosemgrep: python.sqlalchemy.security.audit.avoid-sqlalchemy-text.avoid-sqlalchemy-text -- tbl is a table name from the _TENANT_CHILD_TABLES constant (an identifier, not a bindable value), never user input
             if uid is not None:
                 await db.execute(text("DELETE FROM refresh_tokens WHERE user_id = :u"), {"u": str(uid)})
                 await db.execute(text("DELETE FROM users WHERE id = :u"), {"u": str(uid)})
