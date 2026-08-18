@@ -86,12 +86,16 @@ async def seed() -> int:
             print("seed_e2e_user: no default tenant found", file=sys.stderr)
             return 1
 
-        # VIEWER requires a dept_id (ck_users_dept_required); use any tenant dept.
-        depts = await DepartmentRepository(db).list_by_tenant(tenant.id)
-        if not depts:
-            print("seed_e2e_user: no department to scope the viewer", file=sys.stderr)
-            return 1
-        dept_id = str(depts[0].id)
+        # The VIEWER requires a dept_id (ck_users_dept_required). Provision a
+        # dedicated e2e department rather than relying on the dev DB's seed state
+        # (idempotent; never touches real dev departments).
+        dept_repo = DepartmentRepository(db)
+        existing  = await dept_repo.list_by_tenant(tenant.id)
+        dept      = next((d for d in existing if d.slug == "e2e"), None)
+        if dept is None:
+            dept = await dept_repo.create({"tenant_id": tenant.id, "slug": "e2e", "name": "E2E"})
+            await dept_repo.flush()
+        dept_id = str(dept.id)
 
         a = await _seed_user(db, admin_email,  pw_hash, "ADMIN",  (tenant.id, None))
         v = await _seed_user(db, viewer_email, pw_hash, "VIEWER", (tenant.id, dept_id))
