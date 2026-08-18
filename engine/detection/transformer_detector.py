@@ -59,7 +59,7 @@ class TransformerDetector(BaseDetector):
 
     def _load_model(self) -> None:
         try:
-            from transformers import pipeline as hf_pipeline
+            from transformers import pipeline as hf_pipeline  # type: ignore
             self._pipeline             = hf_pipeline(
                 "text-classification",
                 model     = self._model_id,

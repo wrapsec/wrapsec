@@ -23,7 +23,7 @@ class TraceId:
         Falls back to random hex if python-ulid not installed.
         """
         try:
-            from ulid import ULID
+            from ulid import ULID  # type: ignore
             return str(ULID()).lower()
         except ImportError:
             # Fallback - full 128-bit random hex for collision safety
