@@ -16,17 +16,29 @@ tests/load/
 
 ## Prerequisites
 
-```powershell
-# Locust (already installed)
+```bash
+# Locust
 locust --version
 
 # API running
 curl http://127.0.0.1:8000/health/live
-
-# Both departments have valid keys (verified in session)
-# Purchase: wsk_live_siudfvbDrPkGPry-XYn_kXo167GLXE6Bf3WsDWqV3AM
-# Finance:  wsk_live_VKyMV0WBPUFGFkU21bin_b_9DGOd0in2Xah4WH5fCso
 ```
+
+The security tests read every credential from the environment (see
+`tests/load/security/security_tests.py`). Never paste real keys into this file or
+any other tracked file -- export them per shell:
+
+```bash
+export WRAPSEC_ADMIN_KEY=...
+export WRAPSEC_PURCHASE_KEY=wsk_live_...
+export WRAPSEC_FINANCE_KEY=wsk_live_...
+export WRAPSEC_TRIAL_KEY=wsk_trial_...
+export WRAPSEC_PURCHASE_DEPT_ID=...
+export WRAPSEC_FINANCE_DEPT_ID=...
+```
+
+`tests/load/locustfile.py` still carries a literal `wrapsec_admin_key`; it must match
+the running stack's `ADMIN_API_KEY` for the load profiles to authenticate.
 
 ---
 
@@ -51,8 +63,8 @@ Never run Soak or Stress on a system that hasn't passed Security + Baseline.
 
 Run before any load test. These are correctness checks, not load:
 
-```powershell
-cd D:\Projects\wrapsec
+```bash
+cd /path/to/wrapsec
 python tests/load/security/security_tests.py
 ```
 
@@ -70,9 +82,9 @@ Tests cover:
 
 ### 1. Baseline - smoke test (run first)
 
-```powershell
-locust -f tests/load/locustfile.py BaselineUser `
-  --headless -u 1 -r 1 -t 30s `
+```bash
+locust -f tests/load/locustfile.py BaselineUser \
+  --headless -u 1 -r 1 -t 30s \
   --host http://127.0.0.1:8000
 ```
 
@@ -83,18 +95,18 @@ Pass: all requests 200, p95 < 50ms, 0 failures.
 ### 2. Sustained load - 33 RPS for 10 minutes
 
 **With web UI (recommended - watch live):**
-```powershell
-locust -f tests/load/locustfile.py SustainedUser `
+```bash
+locust -f tests/load/locustfile.py SustainedUser \
   --host http://127.0.0.1:8000
 ```
 Open http://localhost:8089, set Users=33, Spawn rate=5, click Start.
 
 **Headless with CSV output:**
-```powershell
-mkdir tests\load\results -ErrorAction SilentlyContinue
-locust -f tests/load/locustfile.py SustainedUser `
-  --headless -u 33 -r 5 -t 10m `
-  --host http://127.0.0.1:8000 `
+```bash
+mkdir -p tests/load/results
+locust -f tests/load/locustfile.py SustainedUser \
+  --headless -u 33 -r 5 -t 10m \
+  --host http://127.0.0.1:8000 \
   --csv=tests/load/results/sustained
 ```
 
@@ -107,10 +119,10 @@ Pass criteria:
 
 ### 3. Burst - 100 users for 2 minutes
 
-```powershell
-locust -f tests/load/locustfile.py BurstUser `
-  --headless -u 100 -r 100 -t 2m `
-  --host http://127.0.0.1:8000 `
+```bash
+locust -f tests/load/locustfile.py BurstUser \
+  --headless -u 100 -r 100 -t 2m \
+  --host http://127.0.0.1:8000 \
   --csv=tests/load/results/burst
 ```
 
@@ -122,21 +134,25 @@ Pass criteria:
 
 ### 4. Soak - 30 RPS for 60 minutes
 
-```powershell
-locust -f tests/load/locustfile.py SoakUser `
-  --headless -u 30 -r 5 -t 60m `
-  --host http://127.0.0.1:8000 `
+```bash
+locust -f tests/load/locustfile.py SoakUser \
+  --headless -u 30 -r 5 -t 60m \
+  --host http://127.0.0.1:8000 \
   --csv=tests/load/results/soak
 ```
 
 While running, monitor in separate terminals:
-```powershell
+```bash
 # DB connections (run every 5 minutes)
-docker exec wrapsec_postgres psql -U wrapsec -d wrapsec `
+docker exec wrapsec_postgres psql -U wrapsec -d wrapsec \
   -c "SELECT count(*) FROM pg_stat_activity WHERE datname='wrapsec';"
 
-# API process memory (watch Task Manager or)
-Get-Process -Name "python" | Select-Object WorkingSet64
+# API process resident memory
+ps -o pid,rss,comm -C python3
+
+# Or watch both continuously
+watch -n 300 'docker exec wrapsec_postgres psql -U wrapsec -d wrapsec \
+  -tAc "SELECT count(*) FROM pg_stat_activity WHERE datname='"'"'wrapsec'"'"';"'
 ```
 
 Pass criteria:
@@ -148,10 +164,10 @@ Pass criteria:
 
 ### 5. Stress - find breaking point
 
-```powershell
-locust -f tests/load/locustfile.py StressUser `
-  --headless -u 200 -r 10 -t 5m `
-  --host http://127.0.0.1:8000 `
+```bash
+locust -f tests/load/locustfile.py StressUser \
+  --headless -u 200 -r 10 -t 5m \
+  --host http://127.0.0.1:8000 \
   --csv=tests/load/results/stress
 ```
 
@@ -174,15 +190,17 @@ No pass/fail - record the RPS where errors start. This is your capacity ceiling.
 
 After any headless run with --csv:
 
-```powershell
+```bash
 # Summary stats
-Import-Csv tests\load\results\sustained_stats.csv | Format-Table
+column -s, -t < tests/load/results/sustained_stats.csv | less -S
 
-# Per-endpoint breakdown
-Import-Csv tests\load\results\sustained_stats.csv |
-  Select-Object Name, "50%", "95%", "99%", "Failure Count" |
-  Format-Table
+# Per-endpoint breakdown (name, p50, p95, p99, failures)
+awk -F, 'BEGIN{OFS="\t"} {print $2, $6, $17, $19, $4}' \
+  tests/load/results/sustained_stats.csv | column -t
 ```
+
+Column positions follow the Locust CSV schema; if a Locust upgrade changes it,
+check the header row with `head -1 tests/load/results/sustained_stats.csv`.
 
 Key columns: `50%` = p50ms, `95%` = p95ms, `Failure Count` = non-200 responses.
 
@@ -192,8 +210,8 @@ Key columns: `50%` = p50ms, `95%` = p95ms, `Failure Count` = non-200 responses.
 
 Wait 60 seconds between test runs to let rate limit windows reset.
 
-```powershell
+```bash
 # Flush Redis rate limit keys between runs
-docker exec wrapsec_redis redis-cli --scan --pattern "rate:*" | `
-  ForEach-Object { docker exec wrapsec_redis redis-cli DEL $_ }
+docker exec wrapsec_redis sh -c \
+  'redis-cli --scan --pattern "rate:*" | xargs -r redis-cli DEL'
 ```

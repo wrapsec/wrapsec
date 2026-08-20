@@ -5,6 +5,27 @@
 
 ---
 
+## Development Environment
+
+Linux is the primary development target. The instructions in this guide assume a
+Linux shell (bash) and a local Python virtualenv at `.venv`.
+
+Windows and macOS are supported through Docker: run the full stack with
+`./setup.sh` and execute commands inside the `api` container rather than
+installing the Python toolchain on the host. Nothing in the codebase is
+Linux-only, but only the Linux path is exercised day to day, so the container is
+the shortest route to a working environment on the other two.
+
+```bash
+# Host-native (Linux)
+make test
+
+# Through Docker (any host OS)
+docker compose -f infrastructure/docker/docker-compose.yml exec api pytest tests/unit tests/integration -v
+```
+
+---
+
 ## Repository Overview
 
 ```
@@ -835,12 +856,19 @@ Settings keys under the reserved `plugin:<name>:<key>` namespace are the per-ten
 
 ### Running tests
 
-```powershell
-$env:TESTING = "true"
-$env:PYTHONPATH = "D:\Projects\wrapsec"
-pytest tests/unit tests/integration -v
-# Expected: 259 passed
+```bash
+export TESTING=true
+export PYTHONPATH="$(pwd)"
+
+pytest tests/unit -q                 # 1012 passed (no services needed)
+make test-integration                # integration tier on a disposable Postgres
+make test                            # both, against whatever DB is configured
 ```
+
+`make test-integration` spins an ephemeral `postgres:16-alpine` on port 55432, points
+both the app and the tests at it, and removes it afterwards even on failure. The
+development compose database is never touched. Without Docker the integration tier
+skips gracefully under plain `make test`.
 
 ### Test infrastructure
 
@@ -856,11 +884,21 @@ pytest tests/unit tests/integration -v
 
 ### End-to-end validation
 
-```powershell
-powershell -ExecutionPolicy Bypass -File .\tests\scripts\validate_e2e.ps1
+End-to-end coverage is a Playwright suite in `dashboard/tests/e2e`, driving a real
+browser against an already-running stack (browser -> dashboard -> `/api/proxy` BFF
+-> API -> Postgres/Redis). Start the stack first, then:
+
+```bash
+cd dashboard
+npx playwright test                      # against http://localhost:3000
+PLAYWRIGHT_BASE_URL=http://localhost:3001 npx playwright test   # or any other stack
 ```
 
-Covers: login, auth event logging, user management, admin event logging, guards, cleanup.
+Covers: login/logout, access control, departments, applications, keys, settings,
+scanner, failure paths, keyboard navigation, and accessibility checks.
+
+The specs create only `e2e-`prefixed records and clean up after themselves, so they
+are safe against a development stack.
 
 ---
 
@@ -1048,12 +1086,12 @@ Treat `SECRET_KEY` rotation as a planned maintenance event - notify users of the
 
 ## Starting the Stack
 
-```powershell
+```bash
 # Infrastructure
 docker compose -f infrastructure/docker/docker-compose.yml up -d postgres redis
 
 # API
-$env:PYTHONPATH = "D:\Projects\wrapsec"
+export PYTHONPATH="$(pwd)"
 uvicorn api.main:app --reload --host 0.0.0.0 --port 8000
 
 # Dashboard
