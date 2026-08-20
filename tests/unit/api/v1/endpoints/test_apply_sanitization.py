@@ -3,43 +3,73 @@
 # WrapSec v1.0 | AI Security Gateway - https://wrapsec.com
 
 """
-B4: proxy scan-all sanitization must preserve per-message boundaries even when a
-user message contains embedded newlines. The old implementation split the joined
-sanitized blob by "\\n" and remapped positionally, which corrupted content when
-any message itself had a newline. The fix re-redacts each user message
-independently.
+Sanitized proxy messages must be rewritten without disturbing their neighbours.
+
+The failure this guards against: an earlier implementation scanned the messages
+as one joined blob and split the sanitized result back apart on newlines, so any
+message that itself contained a newline shifted the split and content was
+remapped onto the wrong message. Replacements are now addressed by the message's
+position, so a message's redactions can only ever land on that message.
 """
 
-from api.v1.endpoints.proxy import _apply_sanitization
+from api.v1.endpoints.proxy import _apply_sanitized_segments
 
 
-def test_scan_all_preserves_boundaries_with_multiline_messages():
+def test_replacements_land_on_their_own_message():
     messages = [
-        {"role": "user",      "content": "first line\nmy SSN is 123-45-6789"},  # multiline + PII
+        {"role": "user",      "content": "first line\nmy SSN is 123-45-6789"},
         {"role": "assistant", "content": "understood"},
         {"role": "user",      "content": "email me at alice@example.com"},
     ]
-    out = _apply_sanitization(messages, sanitized="unused-for-scan-all", scan_all=True)
 
-    # Message 0 keeps its own newline/structure; its PII is redacted in place.
+    out = _apply_sanitized_segments(messages, {
+        0: "first line\nmy SSN is [SSN REDACTED]",
+        2: "email me at [EMAIL REDACTED]",
+    })
+
+    # Each message keeps its own structure and gets only its own redaction.
     assert out[0]["content"].startswith("first line\n")
-    assert "123-45-6789" not in out[0]["content"]
-    # Message 2 is redacted independently; message 0's content did NOT bleed into it.
+    assert "123-45-6789"      not in out[0]["content"]
     assert "alice@example.com" not in out[2]["content"]
-    assert "first line" not in out[2]["content"]
+    # No bleed between messages.
+    assert "first line"  not in out[2]["content"]
     assert "123-45-6789" not in out[2]["content"]
-    # Non-user messages are untouched.
+    # A message that was not replaced is untouched.
     assert out[1]["content"] == "understood"
-    # The original list is not mutated (deep copy).
-    assert messages[0]["content"] == "first line\nmy SSN is 123-45-6789"
 
 
-def test_scan_last_only_replaces_last_user_message():
+def test_an_assistant_message_can_be_rewritten():
+    """Assistant turns are scanned, so they must also be sanitizable."""
     messages = [
-        {"role": "user",      "content": "clean history"},
-        {"role": "assistant", "content": "ok"},
-        {"role": "user",      "content": "raw last message"},
+        {"role": "user",      "content": "clean"},
+        {"role": "assistant", "content": "my SSN is 123-45-6789"},
     ]
-    out = _apply_sanitization(messages, sanitized="[REDACTED] last message", scan_all=False)
-    assert out[2]["content"] == "[REDACTED] last message"
-    assert out[0]["content"] == "clean history"   # earlier messages untouched
+
+    out = _apply_sanitized_segments(messages, {1: "my SSN is [SSN REDACTED]"})
+
+    assert out[1]["content"] == "my SSN is [SSN REDACTED]"
+    assert out[0]["content"] == "clean"
+
+
+def test_the_callers_list_is_not_mutated():
+    messages = [{"role": "user", "content": "raw"}]
+
+    out = _apply_sanitized_segments(messages, {0: "[REDACTED]"})
+
+    assert out[0]["content"]      == "[REDACTED]"
+    assert messages[0]["content"] == "raw"
+
+
+def test_no_replacements_returns_the_messages_unchanged():
+    messages = [{"role": "user", "content": "raw"}]
+    assert _apply_sanitized_segments(messages, {}) is messages
+
+
+def test_an_out_of_range_index_is_ignored():
+    """A stale index must not raise or append a phantom message."""
+    messages = [{"role": "user", "content": "raw"}]
+
+    out = _apply_sanitized_segments(messages, {5: "nowhere"})
+
+    assert len(out) == 1
+    assert out[0]["content"] == "raw"

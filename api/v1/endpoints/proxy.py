@@ -40,6 +40,7 @@ import copy
 import logging
 import time
 import uuid
+from dataclasses import dataclass
 
 import httpx
 from fastapi import APIRouter, BackgroundTasks, Depends, Request
@@ -54,8 +55,8 @@ from config.settings import get_settings
 from db.models import ProxyInteractionModel, ProxyProviderConfigModel
 from db.repositories.audit import AuditRepository
 from domain.entities.principal import Principal
-from domain.entities.request import IncomingRequest, RequestMetadata
-from domain.enums import DetectionMode, ExecutionMode
+from domain.entities.request import RequestMetadata
+from domain.enums import DetectionMode
 from domain.value_objects.severity import compute_severity
 from domain.value_objects.trace_id import TraceId
 from engine.guardrails.output_guard import OutputGuard
@@ -68,6 +69,11 @@ from engine.proxy.router import (
 from errors.catalog import ErrorCode
 from errors.response import error_response as _catalog_error_response
 from observability.metrics import record_proxy_request, record_request
+from services.gateway.fanout import (
+    DetectionPolicy,
+    ScanItem,
+    scan_items,
+)
 from services.gateway.service import GatewayService
 from services.policy_resolver import resolve_policy
 from services.time import utc_now
@@ -151,55 +157,121 @@ class ProxyChatRequest(BaseModel):
 
 # ── Helpers ────────────────────────────────────────────────────────────────────
 
-def _extract_scan_target(messages: list[dict], scan_all: bool) -> str:
+# Chat roles that get scanned, and the trust source each one carries.
+#
+# A caller controls the whole messages array, including what it labels as prior
+# assistant output, so assistant text is treated as content of unknown origin
+# rather than as something the caller authored. Both values are registered
+# sources, so the trust tier comes from the source registry rather than from a
+# judgement made here.
+#
+# system is excluded: system prompts are operator-controlled and routinely
+# contain security wording that legitimately matches detectors. tool is excluded
+# because tool-result security is handled elsewhere.
+_ROLE_SOURCES = {
+    "user":      "user_prompt",
+    "assistant": "external_content",
+}
+
+
+@dataclass(frozen=True)
+class MessageSegment:
+    """One scannable message: where it sat, what it said, how far it is trusted."""
+
+    index:  int
+    role:   str
+    text:   str
+    source: str
+
+
+def _message_text(message: dict) -> str:
     """
-    Extract the text to scan from the messages array.
+    Read a message's content as text.
 
-    scan_all=False (default): scan only the last user message.
-                              System messages are developer-controlled, not scanned.
-    scan_all=True:            scan all user-role messages joined by newline.
-                              Catches injections spread across conversation history.
-
-    Raises ValueError if no user messages found.
+    `content` is legally null for an assistant turn, and `.get(key, default)`
+    returns None when the key is present with a null value rather than the
+    default. Anything that is not a string becomes empty rather than reaching
+    detection or string joins as a non-string.
     """
-    user_messages = [m for m in messages if m.get("role") == "user"]
-    if not user_messages:
-        raise ValueError("No user messages found in messages array.")
-
-    if scan_all:
-        return "\n".join(m.get("content", "") for m in user_messages)
-    return user_messages[-1].get("content", "")
+    content = message.get("content")
+    return content if isinstance(content, str) else ""
 
 
-def _apply_sanitization(
-    messages:  list[dict],
-    sanitized: str,
-    scan_all:  bool,
+def _eligible_segments(messages: list[dict], scan_all: bool) -> list[MessageSegment]:
+    """
+    Select the messages to scan, each carrying its own trust source.
+
+    scan_all=False: the last eligible message only.
+    scan_all=True:  every eligible message, in conversation order.
+
+    Messages are NOT concatenated. A joined scan would force one trust
+    classification onto content of differing origins, and would misreport
+    provenance whichever source it chose.
+
+    Raises ValueError when nothing scannable is present.
+    """
+    segments = [
+        MessageSegment(
+            index  = idx,
+            role   = role,
+            text   = text,
+            source = _ROLE_SOURCES[role],
+        )
+        for idx, message in enumerate(messages)
+        if (role := message.get("role")) in _ROLE_SOURCES
+        and (text := _message_text(message))
+    ]
+
+    if not segments:
+        raise ValueError("No scannable user or assistant message found in messages array.")
+
+    return segments if scan_all else [segments[-1]]
+
+
+# Strictness order used to reduce several message decisions to one. A request is
+# only as safe as its worst message.
+_DECISION_RANK = {"ALLOW": 0, "SANITIZE": 1, "BLOCK": 2}
+
+
+def _strictest_index(results: list) -> int:
+    """
+    Index of the result that decides the request.
+
+    Strictest decision wins; the higher risk score breaks a tie so the reported
+    evidence matches the most severe finding rather than the first one seen.
+    """
+    def rank(pair):
+        _idx, result = pair
+        decision = result.decision
+        return (
+            _DECISION_RANK.get(decision.decision.value, 0),
+            decision.risk_score.value,
+        )
+
+    return max(enumerate(results), key=rank)[0]
+
+
+def _apply_sanitized_segments(
+    messages: list[dict],
+    replacements: dict[int, str],
 ) -> list[dict]:
     """
-    Replace user message content with sanitized version.
-    Returns a new list -- does not mutate the original.
-    """
-    messages = copy.deepcopy(messages)
+    Rewrite each scanned message that came back sanitized, leaving the rest alone.
 
-    user_indices = [i for i, m in enumerate(messages) if m.get("role") == "user"]
-    if not user_indices:
+    Replacements are keyed by the message's position in the original array, so
+    the rewrite lands on the message that was actually scanned. This applies to
+    assistant messages as well as user ones: whatever was scanned is what gets
+    forwarded, sanitized.
+
+    Returns a new list; the caller's array is not mutated.
+    """
+    if not replacements:
         return messages
 
-    if scan_all:
-        # Re-redact each user message independently rather than splitting the
-        # joined sanitized blob by "\n". If any user message itself contains a
-        # newline, the segment count no longer matches the message count and
-        # content is remapped across the wrong messages. The redactor is
-        # stateless and identical to the one the gateway used, so per-message
-        # redaction reproduces the joint scan's redaction for each message.
-        for msg_idx in user_indices:
-            redacted, _ = _pii_redactor.redact(messages[msg_idx].get("content", ""))
-            messages[msg_idx]["content"] = redacted
-    else:
-        # Replace only the last user message
-        messages[user_indices[-1]]["content"] = sanitized
-
+    messages = copy.deepcopy(messages)
+    for index, text in replacements.items():
+        if 0 <= index < len(messages):
+            messages[index]["content"] = text
     return messages
 
 
@@ -554,9 +626,9 @@ async def proxy_chat_completions(
     if mode not in ("fast", "full"):
         mode = "fast"
 
-    # -- 5. Extract scan target --
+    # -- 5. Select the messages to scan --
     try:
-        scan_input = _extract_scan_target(body.messages, scan_all)
+        segments = _eligible_segments(body.messages, scan_all)
     except ValueError as exc:
         return JSONResponse(
             status_code=400,
@@ -569,34 +641,49 @@ async def proxy_chat_completions(
             },
         )
 
-    # -- 6. Run detection pipeline --
-    incoming = IncomingRequest(
-        input          = scan_input,
+    # -- 6. Scan every selected message, then reduce to one decision --
+    # Each message is scanned on its own so it carries its own trust source; a
+    # joined scan would force one classification onto content of mixed origin.
+    # The audit trace column is unique, so each scan gets an id derived from the
+    # request trace and the message's position. The response header keeps the
+    # request-level id.
+    pii_policy      = policy.get("guardrails", {}).get("pii", {})
+    toxicity_policy = policy.get("guardrails", {}).get("toxicity", {})
+
+    scanned = await scan_items(
+        [
+            ScanItem(
+                input        = segment.text,
+                input_source = segment.source,
+                trace_id     = f"{trace_id}-{segment.index}",
+            )
+            for segment in segments
+        ],
+        gateway        = _gateway,
+        policy         = DetectionPolicy(
+            block_threshold             = policy["thresholds"]["block"],
+            sanitize_threshold          = policy["thresholds"]["sanitize"],
+            pii_block_threshold         = pii_policy.get("block_threshold"),
+            pii_sanitize_threshold      = pii_policy.get("sanitize_threshold"),
+            toxicity_block_threshold    = toxicity_policy.get("block_threshold"),
+            toxicity_sanitize_threshold = toxicity_policy.get("sanitize_threshold"),
+            rule_enabled                = policy["detection"]["rule_enabled"],
+            ml_enabled                  = policy["detection"]["ml_enabled"],
+            llm_enabled                 = policy["detection"]["llm_enabled"] if mode == "full" else False,
+            llm_settings                = policy["llm"],
+        ),
         detection_mode = DetectionMode(mode),
-        execution_mode = ExecutionMode("scan_only"),  # gateway does not call LLM -- we handle that
         metadata       = RequestMetadata(
             tenant_id = getattr(request.state, "tenant_id", None),
             user_id   = None,
         ),
     )
-    # Override trace_id so it matches what we log
-    incoming.trace_id = trace_id  # type: ignore[assignment]
 
-    pii_policy      = policy.get("guardrails", {}).get("pii", {})
-    toxicity_policy = policy.get("guardrails", {}).get("toxicity", {})
-    gateway_result = await _gateway.process(
-        incoming,
-        policy["thresholds"]["block"],
-        policy["thresholds"]["sanitize"],
-        pii_policy.get("block_threshold"),
-        pii_policy.get("sanitize_threshold"),
-        toxicity_policy.get("block_threshold"),
-        toxicity_policy.get("sanitize_threshold"),
-        policy["detection"]["rule_enabled"],
-        policy["detection"]["ml_enabled"],
-        policy["detection"]["llm_enabled"] if mode == "full" else False,
-        policy["llm"],
-    )
+    _results       = [result for _incoming, result in scanned]
+    _winner        = _strictest_index(_results)
+    gateway_result = _results[_winner]
+    # The audit row records the text that produced the decision.
+    scan_input     = segments[_winner].text
 
     gd             = gateway_result.decision
     input_decision = gd.decision.value          # ALLOW / BLOCK / SANITIZE
@@ -679,9 +766,17 @@ async def proxy_chat_completions(
         )
 
     # -- 7. Apply SANITIZE to messages if needed --
-    messages = body.messages
-    if input_decision == "SANITIZE" and input_sanit:
-        messages = _apply_sanitization(messages, input_sanit, scan_all)
+    # Every scanned message that came back sanitized is rewritten in place, not
+    # just the one that decided the request: each was scanned independently, so
+    # each may carry its own redactions.
+    messages = _apply_sanitized_segments(
+        body.messages,
+        {
+            segment.index: result.decision.sanitized_input
+            for segment, (_incoming, result) in zip(segments, scanned)
+            if result.decision.sanitized_input
+        },
+    )
 
     # -- 8. Resolve provider and forward request --
     try:
