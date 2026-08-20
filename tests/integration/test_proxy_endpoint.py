@@ -1125,3 +1125,77 @@ class TestProxyProviderFailures:
         assert resp.json()["error"]["code"] == "invalid_messages"
         assert resp.headers.get("X-WrapSec-Trace-Id")
         assert resp.json()["wrapsec"]["trace_id"]
+
+    @pytest.mark.asyncio
+    async def test_a_provider_the_tenant_has_not_configured_is_rejected(self, app):
+        """
+        The request names the provider but the credential and endpoint come from
+        configuration, so a mismatch is a configuration error. It must be caught
+        before scanning or any upstream call, not surface as an outage later.
+        """
+        from api.v1.dependencies.db import get_db
+
+        fake_get_db, _ = _patch_config(_make_config(provider="openai"))
+        app.dependency_overrides[get_db] = fake_get_db
+
+        provider_called = []
+        scanned         = []
+
+        from services.gateway import fanout as _fanout
+        original = _fanout.scan_items
+
+        async def _spy(items, **kwargs):
+            scanned.append(list(items))
+            return await original(items, **kwargs)
+
+        try:
+            with (
+                patch("httpx.AsyncClient") as mock_cls,
+                patch("api.v1.endpoints.proxy.scan_items", new=_spy),
+            ):
+                mock_client      = AsyncMock()
+                mock_client.post = AsyncMock(side_effect=lambda *a, **kw: provider_called.append(True))
+                mock_cls.return_value.__aenter__ = AsyncMock(return_value=mock_client)
+                mock_cls.return_value.__aexit__  = AsyncMock(return_value=False)
+
+                async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as client:
+                    resp = await client.post(
+                        "/v1/chat/completions",
+                        headers={"x-api-key": settings.admin_api_key},
+                        json={"model": "ollama/llama3.2", "messages": _clean_messages()},
+                    )
+        finally:
+            app.dependency_overrides = {}
+
+        assert resp.status_code == 400
+        assert resp.json()["error"]["code"] == "provider_mismatch"
+        assert resp.headers.get("X-WrapSec-Trace-Id")
+        # Rejected before any detection work and before any upstream call.
+        assert scanned         == []
+        assert provider_called == []
+
+    @pytest.mark.asyncio
+    async def test_the_configured_provider_is_accepted(self, app):
+        """The guard must not reject a request that matches the configuration."""
+        from api.v1.dependencies.db import get_db
+
+        fake_get_db, _ = _patch_config(_make_config(provider="openai"))
+        app.dependency_overrides[get_db] = fake_get_db
+
+        try:
+            with patch("httpx.AsyncClient") as mock_cls:
+                mock_client      = AsyncMock()
+                mock_client.post = AsyncMock(return_value=_openai_response("hello"))
+                mock_cls.return_value.__aenter__ = AsyncMock(return_value=mock_client)
+                mock_cls.return_value.__aexit__  = AsyncMock(return_value=False)
+
+                async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as client:
+                    resp = await client.post(
+                        "/v1/chat/completions",
+                        headers={"x-api-key": settings.admin_api_key},
+                        json={"model": "openai/gpt-4o", "messages": _clean_messages()},
+                    )
+        finally:
+            app.dependency_overrides = {}
+
+        assert resp.status_code == 200

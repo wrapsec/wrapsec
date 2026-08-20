@@ -701,6 +701,35 @@ async def proxy_chat_completions(
                 headers      = {"X-WrapSec-Trace-Id": trace_id},
             )
 
+    # -- 3c. Reject a provider the tenant has not configured --
+    # The request names the provider; the credential and endpoint come from the
+    # stored configuration. Honouring a request for a different provider would
+    # build that provider's adapter around another provider's endpoint, so the
+    # call fails upstream in a way that reads as an outage rather than as the
+    # configuration error it is. Checked here, before any scanning or upstream
+    # work, so a misconfigured request costs nothing.
+    _configured_provider = (
+        config.provider if config else (dept_proxy_cfg or {}).get("provider")
+    )
+    if _configured_provider and provider_name and provider_name != _configured_provider:
+        logger.warning(
+            "Provider mismatch trace_id=%s requested=%s configured=%s",
+            trace_id, provider_name, _configured_provider,
+        )
+        return _error_response(
+            status_code  = 400,
+            message      = (
+                f"This deployment is configured for the '{_configured_provider}' provider, "
+                f"but the request asked for '{provider_name}'. Use a "
+                f"'{_configured_provider}/<model>' model string, or update the proxy "
+                f"provider configuration."
+            ),
+            error_type   = "invalid_request_error",
+            error_code   = "provider_mismatch",
+            wrapsec_meta = {"trace_id": trace_id},
+            headers      = {"X-WrapSec-Trace-Id": trace_id},
+        )
+
     # -- 4. Read WrapSec request headers --
     scan_all = request.headers.get("X-WrapSec-Scan-All-Messages", "false").lower() == "true"
     mode     = request.headers.get("X-WrapSec-Mode", "fast").lower()
