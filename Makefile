@@ -1,4 +1,4 @@
-.PHONY: run test test-integration build up down seed lint format migrate migration typecheck semgrep coverage
+.PHONY: run test test-integration test-e2e build up down seed lint format migrate migration typecheck semgrep coverage
 
 run:
 	uvicorn api.main:app --reload --host 0.0.0.0 --port 8000
@@ -20,6 +20,39 @@ test-integration:
 	for i in $$(seq 1 30); do docker exec $$CID pg_isready -U wrapsec -d wrapsec_test >/dev/null 2>&1 && break; sleep 1; done; \
 	URL=postgresql+asyncpg://wrapsec:wrapsec@localhost:55432/wrapsec_test; \
 	DATABASE_URL=$$URL WRAPSEC_TEST_PG_URL=$$URL TESTING=true pytest tests/integration -v'
+
+# End-to-end browser journeys against an EPHEMERAL stack. Brings up postgres,
+# redis, api, and dashboard under their own compose project (separate
+# containers, network, and volumes), migrates into an empty database, seeds the
+# dedicated e2e accounts, runs the suite against localhost:3100, then destroys
+# the stack and its data -- even if the tests fail. The development stack and
+# its database are never touched.
+#
+# Requires the browser and its system libraries:
+#   cd dashboard && npx playwright install chromium chromium-headless-shell
+#   cd dashboard && sudo npx playwright install-deps chromium
+test-e2e:
+	@bash -c 'set -e; \
+	R="$$(pwd)"; \
+	P="docker compose -p wrapsec-e2e -f $$R/infrastructure/docker/docker-compose.yml -f $$R/infrastructure/docker/docker-compose.e2e.yml"; \
+	trap "echo tearing down the ephemeral stack...; $$P down -v --remove-orphans || echo TEARDOWN FAILED -- remove wrapsec-e2e by hand" EXIT; \
+	echo "starting the ephemeral stack..."; \
+	$$P up -d postgres redis api dashboard; \
+	echo "waiting for the api to report healthy..."; \
+	for i in $$(seq 1 60); do \
+	  [ "$$(docker inspect --format "{{.State.Health.Status}}" wrapsec_e2e_api 2>/dev/null)" = "healthy" ] && break; \
+	  sleep 5; \
+	done; \
+	test "$$(docker inspect --format "{{.State.Health.Status}}" wrapsec_e2e_api)" = "healthy" \
+	  || { echo "api never became healthy"; $$P logs --tail 50 api; exit 1; }; \
+	echo "waiting for the dashboard to serve /login..."; \
+	for i in $$(seq 1 40); do curl -sf http://localhost:3100/login >/dev/null 2>&1 && break; sleep 3; done; \
+	curl -sf http://localhost:3100/login >/dev/null \
+	  || { echo "dashboard never served /login"; $$P logs --tail 50 dashboard; exit 1; }; \
+	echo "seeding the e2e accounts..."; \
+	docker exec wrapsec_e2e_api python scripts/seed_e2e_user.py; \
+	echo "running the e2e suite..."; \
+	( cd dashboard && PLAYWRIGHT_BASE_URL=http://localhost:3100 npx playwright test )'
 
 # Combined unit + integration coverage over the server code (config in .coveragerc).
 # Spins a disposable PostgreSQL so the integration tier runs. Writes an HTML report.

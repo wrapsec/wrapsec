@@ -1,0 +1,51 @@
+# Ephemeral end-to-end stack.
+#
+# Layered over docker-compose.yml and brought up under a SEPARATE project name,
+# so containers, network, and volumes are all namespaced and can be destroyed
+# with `down -v` without touching the development stack or its database.
+#
+#   make test-e2e
+#
+# Only four services are needed to drive the browser journeys: postgres, redis,
+# api, dashboard. Nginx, Prometheus, Grafana, and the collector are left out by
+# naming the services explicitly on the `up` command line.
+#
+# Two collisions with a running development stack have to be resolved here:
+#
+#   1. Every base service pins an explicit `container_name`, which is a GLOBAL
+#      name rather than a per-project one, so a second stack fails to start
+#      until each is renamed. (Dropping `container_name` from the base file
+#      would remove the need for these overrides; that is a separate cleanup.)
+#   2. Host port bindings are fixed. The dashboard moves to 3100 (3001 is
+#      already taken by Grafana), and postgres/redis publish nothing at all --
+#      the browser only needs the dashboard, and the dashboard's server-side
+#      proxy reaches the API in-network as api:8000.
+#
+# `!override` and `!reset` replace the base values instead of merging with them;
+# without the tags Compose appends to the base `ports` list and the original
+# bindings would still be claimed.
+
+services:
+  postgres:
+    container_name: wrapsec_e2e_postgres
+    ports: !reset null
+
+  redis:
+    container_name: wrapsec_e2e_redis
+    ports: !reset null
+
+  api:
+    container_name: wrapsec_e2e_api
+    environment:
+      - ENVIRONMENT=development
+      - DATABASE_URL=postgresql+asyncpg://wrapsec:wrapsec@postgres:5432/wrapsec
+      - REDIS_URL=redis://redis:6379/0
+      # A throwaway stack must never inherit a real provider key or start
+      # dialling out mid-test; detection stays on the offline layers.
+      - LLM_PROVIDER=
+    ports: !reset null
+
+  dashboard:
+    container_name: wrapsec_e2e_dashboard
+    ports: !override
+      - "3100:3000"
