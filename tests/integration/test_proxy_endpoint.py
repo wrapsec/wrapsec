@@ -1000,3 +1000,128 @@ async def test_proxy_rejects_dashboard_jwt(auth_client, auth_setup):
     )
     assert resp.status_code == 403
     assert resp.json()["error"]["code"] == "PROXY_REQUIRES_API_KEY"
+
+
+# ---------------------------------------------------------------------------
+# Provider failures reach the caller as distinguishable errors
+# ---------------------------------------------------------------------------
+
+class TestProxyProviderFailures:
+    """The upstream condition must survive the trip back to the caller."""
+
+    async def _post(self, app, post_side_effect):
+        from api.v1.dependencies.db import get_db
+
+        config             = _make_config()
+        fake_get_db, _mock = _patch_config(config)
+        app.dependency_overrides[get_db] = fake_get_db
+
+        try:
+            with patch("httpx.AsyncClient") as mock_cls:
+                mock_client      = AsyncMock()
+                mock_client.post = AsyncMock(side_effect=post_side_effect)
+                mock_cls.return_value.__aenter__ = AsyncMock(return_value=mock_client)
+                mock_cls.return_value.__aexit__  = AsyncMock(return_value=False)
+
+                async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as client:
+                    return await client.post(
+                        "/v1/chat/completions",
+                        headers={"x-api-key": settings.admin_api_key},
+                        json={"model": "openai/gpt-4o", "messages": _clean_messages()},
+                    )
+        finally:
+            app.dependency_overrides = {}
+
+    @pytest.mark.asyncio
+    async def test_a_provider_rate_limit_stays_a_rate_limit(self, app):
+        """A 502 would tell the caller nothing about backing off."""
+        request  = httpx.Request("POST", "https://api.openai.com/v1/chat/completions")
+        response = httpx.Response(429, headers={"Retry-After": "30"}, request=request)
+
+        resp = await self._post(
+            app,
+            httpx.HTTPStatusError("rate limited", request=request, response=response),
+        )
+
+        assert resp.status_code == 429
+        assert resp.json()["error"]["code"] == "provider_rate_limited"
+        assert resp.headers.get("Retry-After") == "30"
+
+    @pytest.mark.asyncio
+    async def test_an_unknown_model_is_a_client_error(self, app):
+        """A model typo must not read as an outage."""
+        request  = httpx.Request("POST", "https://api.openai.com/v1/chat/completions")
+        response = httpx.Response(404, request=request)
+
+        resp = await self._post(
+            app,
+            httpx.HTTPStatusError("not found", request=request, response=response),
+        )
+
+        assert resp.status_code == 400
+        assert resp.json()["error"]["code"] == "provider_model_not_found"
+
+    @pytest.mark.asyncio
+    async def test_a_response_that_cannot_be_inspected_is_not_forwarded(self, app):
+        """
+        A tool-call reply carries a null content. The guard inspects text, so
+        forwarding it would hand back output that never passed the guard.
+        """
+        tool_call_response = MagicMock()
+        tool_call_response.raise_for_status = MagicMock()
+        tool_call_response.json.return_value = {
+            "choices": [{
+                "message": {
+                    "role":       "assistant",
+                    "content":    None,
+                    "tool_calls": [{"id": "call_1", "type": "function",
+                                    "function": {"name": "f", "arguments": "{}"}}],
+                },
+                "finish_reason": "tool_calls",
+                "index": 0,
+            }],
+            "model": "gpt-4o",
+            "id":    "chatcmpl-test",
+        }
+
+        resp = await self._post(app, lambda *a, **kw: tool_call_response)
+
+        assert resp.status_code == 502
+        assert resp.json()["error"]["code"] == "provider_response_unsupported"
+        assert "choices" not in resp.json()
+
+    @pytest.mark.asyncio
+    async def test_a_malformed_response_is_an_upstream_error_not_a_crash(self, app):
+        """Nothing is released when the response cannot be parsed."""
+        broken = MagicMock()
+        broken.raise_for_status = MagicMock()
+        broken.json.return_value = {"unexpected": "shape"}
+
+        resp = await self._post(app, lambda *a, **kw: broken)
+
+        assert resp.status_code == 502
+        assert resp.json()["error"]["code"] == "provider_malformed_response"
+
+    @pytest.mark.asyncio
+    async def test_every_error_response_carries_the_trace_header(self, app):
+        """Documented as present on every response, including early exits."""
+        from api.v1.dependencies.db import get_db
+
+        fake_get_db, _ = _patch_config(_make_config())
+        app.dependency_overrides[get_db] = fake_get_db
+        try:
+            async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as client:
+                # nothing scannable -> rejected before any provider work
+                resp = await client.post(
+                    "/v1/chat/completions",
+                    headers={"x-api-key": settings.admin_api_key},
+                    json={"model": "openai/gpt-4o",
+                          "messages": [{"role": "system", "content": "only a system prompt"}]},
+                )
+        finally:
+            app.dependency_overrides = {}
+
+        assert resp.status_code == 400
+        assert resp.json()["error"]["code"] == "invalid_messages"
+        assert resp.headers.get("X-WrapSec-Trace-Id")
+        assert resp.json()["wrapsec"]["trace_id"]

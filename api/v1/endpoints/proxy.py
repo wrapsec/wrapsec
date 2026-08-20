@@ -308,6 +308,43 @@ def _apply_sanitized_segments(
     return messages
 
 
+# How an upstream failure is reported to the caller.
+#
+# Collapsing every provider failure into one status loses the only information
+# the caller can act on: a rate limit needs a backoff, a model typo needs a fix
+# in the request, and an operator credential problem is not an outage. The
+# provider's own message is never echoed back, because it can carry provider
+# account identifiers; it goes to the log with the trace id instead.
+_PROVIDER_STATUS_MAP = {
+    429: (429, "provider_rate_limited",    "The provider rate-limited this request."),
+    401: (502, "provider_auth_failed",     "The provider rejected the configured credential."),
+    403: (502, "provider_auth_failed",     "The provider rejected the configured credential."),
+    404: (400, "provider_model_not_found", "The provider does not recognise the requested model."),
+    400: (400, "provider_rejected_request", "The provider rejected the request payload."),
+    422: (400, "provider_rejected_request", "The provider rejected the request payload."),
+}
+
+
+def _map_provider_failure(exc: Exception) -> tuple[int, str, str, str | None]:
+    """
+    Translate an upstream failure into (status, code, message, retry_after).
+
+    retry_after is passed through only when the provider supplied it, so a
+    caller backing off uses the provider's own guidance rather than a guess.
+    """
+    if isinstance(exc, httpx.HTTPStatusError):
+        upstream    = exc.response.status_code
+        retry_after = exc.response.headers.get("retry-after")
+        if upstream in _PROVIDER_STATUS_MAP:
+            status, code, message = _PROVIDER_STATUS_MAP[upstream]
+            return status, code, message, retry_after
+        if upstream >= 500:
+            return 502, "provider_unavailable", "The provider is currently unavailable.", retry_after
+        return 502, "provider_unreachable", "The provider could not be reached.", retry_after
+
+    return 502, "provider_unreachable", "The provider could not be reached.", None
+
+
 def _build_wrapsec_headers(
     trace_id:         str,
     input_decision:   str,
@@ -578,16 +615,13 @@ async def proxy_chat_completions(
     # -- 0. Trial key check - proxy mode not available for trial keys --
     key_type = getattr(request.state, "key_type", "live")
     if key_type == "trial":
-        return JSONResponse(
-            status_code=403,
-            content={
-                "error": {
-                    "message": "Proxy mode is not available for trial keys. Upgrade to a live key.",
-                    "type":    "forbidden",
-                    "code":    "trial_proxy_disabled",
-                }
-            },
-            headers={"X-WrapSec-Trace-Id": trace_id},
+        return _error_response(
+            status_code  = 403,
+            message      = "Proxy mode is not available for trial keys. Upgrade to a live key.",
+            error_type   = "forbidden",
+            error_code   = "trial_proxy_disabled",
+            wrapsec_meta = {"trace_id": trace_id},
+            headers      = {"X-WrapSec-Trace-Id": trace_id},
         )
 
     # -- 1. Parse model string if provided; deferred resolution happens after step 3 --
@@ -596,16 +630,13 @@ async def proxy_chat_completions(
         try:
             provider_name, model_name = parse_model_string(body.model)
         except ValueError as exc:
-            return JSONResponse(
-                status_code=400,
-                content={
-                    "error": {
-                        "message": str(exc),
-                        "type":    "invalid_request_error",
-                        "code":    "invalid_model_format",
-                    }
-                },
-                headers={"X-WrapSec-Trace-Id": trace_id},
+            return _error_response(
+                status_code  = 400,
+                message      = str(exc),
+                error_type   = "invalid_request_error",
+                error_code   = "invalid_model_format",
+                wrapsec_meta = {"trace_id": trace_id},
+                headers      = {"X-WrapSec-Trace-Id": trace_id},
             )
 
     # -- 2. Resolve policy (moved early - used for both detection and proxy fallback) --
@@ -628,18 +659,16 @@ async def proxy_chat_completions(
         config = result.scalar_one_or_none()
 
     if not config and not dept_proxy_cfg:
-        return JSONResponse(
-            status_code=400,
-            content={
-                "error": {
-                    "message": (
+        return _error_response(
+            status_code  = 400,
+            message      = (
                         "No proxy provider configured for this API key or department. "
                         "Configure a provider via PUT /v1/settings/proxy or the department policy."
                     ),
-                    "type":    "invalid_request_error",
-                    "code":    "proxy_not_configured",
-                }
-            },
+            error_type   = "invalid_request_error",
+            error_code   = "proxy_not_configured",
+            wrapsec_meta = {"trace_id": trace_id},
+            headers      = {"X-WrapSec-Trace-Id": trace_id},
         )
 
     # -- 3b. Resolve model from default_model if not supplied in request --
@@ -649,33 +678,27 @@ async def proxy_chat_completions(
             else (dept_proxy_cfg or {}).get("default_model")
         )
         if not default_model:
-            return JSONResponse(
-                status_code=400,
-                content={
-                    "error": {
-                        "message": (
+            return _error_response(
+                status_code  = 400,
+                message      = (
                             "No model specified and no default_model configured. "
                             "Pass 'model' in the request body or set a default_model in proxy settings."
                         ),
-                        "type":    "invalid_request_error",
-                        "code":    "model_required",
-                    }
-                },
-                headers={"X-WrapSec-Trace-Id": trace_id},
+                error_type   = "invalid_request_error",
+                error_code   = "model_required",
+                wrapsec_meta = {"trace_id": trace_id},
+                headers      = {"X-WrapSec-Trace-Id": trace_id},
             )
         try:
             provider_name, model_name = parse_model_string(default_model)
         except ValueError as exc:
-            return JSONResponse(
-                status_code=400,
-                content={
-                    "error": {
-                        "message": str(exc),
-                        "type":    "invalid_request_error",
-                        "code":    "invalid_model_format",
-                    }
-                },
-                headers={"X-WrapSec-Trace-Id": trace_id},
+            return _error_response(
+                status_code  = 400,
+                message      = str(exc),
+                error_type   = "invalid_request_error",
+                error_code   = "invalid_model_format",
+                wrapsec_meta = {"trace_id": trace_id},
+                headers      = {"X-WrapSec-Trace-Id": trace_id},
             )
 
     # -- 4. Read WrapSec request headers --
@@ -690,15 +713,13 @@ async def proxy_chat_completions(
     try:
         segments = _eligible_segments(body.messages, scan_all)
     except ValueError as exc:
-        return JSONResponse(
-            status_code=400,
-            content={
-                "error": {
-                    "message": str(exc),
-                    "type":    "invalid_request_error",
-                    "code":    "invalid_messages",
-                }
-            },
+        return _error_response(
+            status_code  = 400,
+            message      = str(exc),
+            error_type   = "invalid_request_error",
+            error_code   = "invalid_messages",
+            wrapsec_meta = {"trace_id": trace_id},
+            headers      = {"X-WrapSec-Trace-Id": trace_id},
         )
 
     # Bound the fan-out. Each scanned message costs a detection run and an audit
@@ -707,20 +728,17 @@ async def proxy_chat_completions(
     # conversation would report a decision that did not cover what was sent.
     _max_messages = get_settings().max_scan_all_messages
     if len(segments) > _max_messages:
-        return JSONResponse(
-            status_code=400,
-            content={
-                "error": {
-                    "message": (
+        return _error_response(
+            status_code  = 400,
+            message      = (
                         f"Scanning all messages is limited to {_max_messages} eligible "
                         f"messages per request; this request has {len(segments)}. "
                         f"Send fewer messages or omit the scan-all header."
                     ),
-                    "type": "invalid_request_error",
-                    "code": "too_many_messages",
-                }
-            },
-            headers={"X-WrapSec-Trace-Id": trace_id},
+            error_type   = "invalid_request_error",
+            error_code   = "too_many_messages",
+            wrapsec_meta = {"trace_id": trace_id},
+            headers      = {"X-WrapSec-Trace-Id": trace_id},
         )
 
     # Charge the extra detection units this request consumes. One unit was
@@ -878,10 +896,13 @@ async def proxy_chat_completions(
     except ValueError as exc:
         total_ms = int((time.monotonic() - wall_start) * 1000)
         logger.error("Provider resolution failed trace_id=%s: %s", trace_id, exc)
-        return JSONResponse(
-            status_code=500,
-            content={"error": {"message": "Provider configuration error.", "type": "provider_error", "code": "provider_config_error"}},
-            headers={"X-WrapSec-Trace-Id": trace_id},
+        return _error_response(
+            status_code  = 500,
+            message      = "Provider configuration error.",
+            error_type   = "provider_error",
+            error_code   = "provider_config_error",
+            wrapsec_meta = {"trace_id": trace_id},
+            headers      = {"X-WrapSec-Trace-Id": trace_id},
         )
 
     # Build kwargs from explicitly declared request fields only
@@ -946,9 +967,13 @@ async def proxy_chat_completions(
             headers=headers,
         )
 
-    except (httpx.ConnectError, httpx.HTTPStatusError) as exc:
+    except (KeyError, IndexError, TypeError, ValueError) as exc:
+        # The provider answered, but not in a shape that can be parsed. Treated
+        # as an upstream failure rather than an internal error: nothing is
+        # released to the caller, because the guard cannot inspect what cannot
+        # be read.
         total_ms = int((time.monotonic() - wall_start) * 1000)
-        logger.error("Provider call failed trace_id=%s: %.500s", trace_id, exc)
+        logger.error("Malformed provider response trace_id=%s: %.500s", trace_id, exc)
         headers  = _build_wrapsec_headers(
             trace_id, input_decision, input_reason, input_conf,
             input_decision == "SANITIZE", None, False, STATUS_FAILED,
@@ -976,9 +1001,59 @@ async def proxy_chat_completions(
         )
         return _error_response(
             status_code  = 502,
-            message      = "Provider unreachable. Your request passed security validation but could not be completed.",
+            message      = (
+                "The provider returned a malformed response. Your request passed "
+                "security validation but could not be completed."
+            ),
             error_type   = "provider_error",
-            error_code   = "provider_unreachable",
+            error_code   = "provider_malformed_response",
+            wrapsec_meta = {
+                "trace_id":         trace_id,
+                "decision":         input_decision,
+                "execution_status": STATUS_FAILED,
+            },
+            headers=headers,
+        )
+
+    except (httpx.ConnectError, httpx.HTTPStatusError) as exc:
+        total_ms = int((time.monotonic() - wall_start) * 1000)
+        _status, _code, _message, _retry_after = _map_provider_failure(exc)
+        logger.error(
+            "Provider call failed trace_id=%s code=%s: %.500s",
+            trace_id, _code, exc,
+        )
+        headers  = _build_wrapsec_headers(
+            trace_id, input_decision, input_reason, input_conf,
+            input_decision == "SANITIZE", None, False, STATUS_FAILED,
+            provider_name, model_name, total_ms,
+        )
+        await _log_interaction(
+            segment_rows=_audit_rows,
+            db=db, trace_id=trace_id, key_id=key_id, user_id=None,
+            tenant_id=tenant_id, dept_id=dept_id, app_id=app_id,
+            source=source, ip_address=ip_address, user_agent=user_agent,
+            input_raw=scan_input, input_sanitized=input_sanit,
+            input_decision=input_decision, input_reason=input_reason,
+            input_confidence=input_conf, input_threats=input_threats,
+            input_attack_type=input_attack,
+            provider=provider_name, model=model_name, provider_latency=None,
+            execution_status=STATUS_FAILED,
+            output_raw=None, output_sanitized=None,
+            output_decision=None, output_reason=None,
+            output_confidence=None, output_threats=None,
+            total_latency_ms=total_ms,
+            risk_score       = gd.risk_score.value if hasattr(gd, "risk_score") else 0.0,
+            detection_scores = _det_scores,
+            guardrail_scores = _grd_scores,
+            input_length     = len(scan_input),
+        )
+        if _retry_after:
+            headers["Retry-After"] = _retry_after
+        return _error_response(
+            status_code  = _status,
+            message      = f"{_message} Your request passed security validation but could not be completed.",
+            error_type   = "provider_error",
+            error_code   = _code,
             wrapsec_meta = {
                 "trace_id":         trace_id,
                 "decision":         input_decision,
@@ -988,6 +1063,58 @@ async def proxy_chat_completions(
         )
 
     # -- 9. Run OutputGuard on provider response --
+    # The guard inspects text. A response whose content is not text -- a
+    # tool-call reply carries a null content alongside the call -- cannot be
+    # inspected, and forwarding it unchecked would hand the caller output that
+    # never passed the guard. Native tool calling is not supported, so this is
+    # refused rather than partially honoured.
+    if not isinstance(provider_response.content, str):
+        total_ms = int((time.monotonic() - wall_start) * 1000)
+        logger.error(
+            "Provider returned an uninspectable response trace_id=%s type=%s",
+            trace_id, type(provider_response.content).__name__,
+        )
+        headers = _build_wrapsec_headers(
+            trace_id, input_decision, input_reason, input_conf,
+            input_decision == "SANITIZE", None, False, STATUS_FAILED,
+            provider_name, model_name, total_ms,
+        )
+        await _log_interaction(
+            segment_rows=_audit_rows,
+            db=db, trace_id=trace_id, key_id=key_id, user_id=None,
+            tenant_id=tenant_id, dept_id=dept_id, app_id=app_id,
+            source=source, ip_address=ip_address, user_agent=user_agent,
+            input_raw=scan_input, input_sanitized=input_sanit,
+            input_decision=input_decision, input_reason=input_reason,
+            input_confidence=input_conf, input_threats=input_threats,
+            input_attack_type=input_attack,
+            provider=provider_name, model=model_name, provider_latency=None,
+            execution_status=STATUS_FAILED,
+            output_raw=None, output_sanitized=None,
+            output_decision=None, output_reason=None,
+            output_confidence=None, output_threats=None,
+            total_latency_ms=total_ms,
+            risk_score       = gd.risk_score.value if hasattr(gd, "risk_score") else 0.0,
+            detection_scores = _det_scores,
+            guardrail_scores = _grd_scores,
+            input_length     = len(scan_input),
+        )
+        return _error_response(
+            status_code  = 502,
+            message      = (
+                "The provider returned a response shape this endpoint does not support, "
+                "so it could not be security-checked and was not forwarded."
+            ),
+            error_type   = "provider_error",
+            error_code   = "provider_response_unsupported",
+            wrapsec_meta = {
+                "trace_id":         trace_id,
+                "decision":         input_decision,
+                "execution_status": STATUS_FAILED,
+            },
+            headers=headers,
+        )
+
     output_result     = _output_guard.inspect(provider_response.content)
     output_decision   = output_result.decision
     output_reason     = output_result.primary_reason
