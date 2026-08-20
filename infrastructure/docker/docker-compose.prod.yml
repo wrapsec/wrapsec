@@ -111,6 +111,9 @@ services:
       - "127.0.0.1:9090:9090"
     volumes:
       - ../prometheus/prometheus.yml:/etc/prometheus/prometheus.yml:ro
+      # Bearer token for the authenticated /metrics scrape. Written by
+      # scripts/write_metrics_token.sh; gitignored, never committed.
+      - ../prometheus/metrics_token:/etc/prometheus/metrics_token:ro
       - prometheus_data:/prometheus
     command:
       - "--config.file=/etc/prometheus/prometheus.yml"

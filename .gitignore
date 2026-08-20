@@ -134,6 +134,9 @@ celerybeat.pid
 # SageMath parsed files
 *.sage.py
 
+# Prometheus scrape credential, materialised from .env at stack start
+infrastructure/prometheus/metrics_token
+
 # Environments
 .env
 .envrc

@@ -5,8 +5,20 @@ global:
 scrape_configs:
   - job_name: "wrapsec_api"
     static_configs:
-      - targets: ["host.docker.internal:8000"]
+      # In-network service name. Prometheus only ever runs as part of the full
+      # compose stack, so the api container is always present and resolvable on
+      # the shared default network. This works identically on every Docker host
+      # (Linux, and Docker Desktop on Windows/macOS), unlike host.docker.internal
+      # which only resolves under Docker Desktop.
+      - targets: ["api:8000"]
     metrics_path: /metrics
+    # /metrics is authenticated (METRICS_TOKEN, falling back to ADMIN_API_KEY)
+    # and fails closed when neither is configured. The token is written to this
+    # file by scripts/write_metrics_token.sh at stack start; it is never
+    # committed. Without it every scrape returns 401.
+    authorization:
+      type: Bearer
+      credentials_file: /etc/prometheus/metrics_token
 
   - job_name: "prometheus"
     static_configs:

@@ -50,6 +50,7 @@ build:
 	docker compose -f infrastructure/docker/docker-compose.yml build
 
 up:
+	@bash scripts/write_metrics_token.sh
 	docker compose -f infrastructure/docker/docker-compose.yml up -d
 
 down:

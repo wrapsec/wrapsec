@@ -12,6 +12,9 @@ set -euo pipefail
 COMPOSE_DEV="docker compose -f infrastructure/docker/docker-compose.yml"
 COMPOSE_PROD="docker compose -f infrastructure/docker/docker-compose.prod.yml"
 
+# Resolved once, for both the dev and prod paths.
+REPO_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+
 # ── Colours ───────────────────────────────────────────────────────────────────
 GREEN="\033[0;32m"; YELLOW="\033[1;33m"; RED="\033[0;31m"; CYAN="\033[0;36m"; NC="\033[0m"
 info()  { echo -e "${GREEN}[wrapsec]${NC} $*"; }
@@ -86,7 +89,6 @@ if [ "$MODE" = "prod" ]; then
     fi
 
     # Select nginx config
-    REPO_ROOT=$(pwd)
     if [ "$SSL_MODE" = true ]; then
         # Generate nginx config from template with envsubst
         NGINX_HOST="${DOMAIN:-$(hostname -I | awk '{print $1}')}"
@@ -102,6 +104,10 @@ if [ "$MODE" = "prod" ]; then
     fi
 
     export POSTGRES_PASSWORD REDIS_PASSWORD GRAFANA_PASSWORD
+
+    # Prometheus cannot read env vars from its config; hand it the /metrics
+    # bearer token as a file before the stack starts.
+    bash "$REPO_ROOT/scripts/write_metrics_token.sh" || die "Could not write the Prometheus scrape token."
 
     info "Building and starting WrapSec (production)..."
     $COMPOSE_PROD up -d --build $BUILD_FLAG
@@ -159,6 +165,10 @@ else
         sed -i "s/your-admin-api-key-minimum-32-chars-here/${ADMIN_KEY}/" .env
         warn "ADMIN_API_KEY generated"
     fi
+
+    # Prometheus cannot read env vars from its config; hand it the /metrics
+    # bearer token as a file before the stack starts.
+    bash "$REPO_ROOT/scripts/write_metrics_token.sh" || die "Could not write the Prometheus scrape token."
 
     info "Building images and starting WrapSec (dev)..."
     $COMPOSE_DEV up -d --build $BUILD_FLAG
