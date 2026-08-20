@@ -393,6 +393,7 @@ class AuthMiddleware(BaseHTTPMiddleware):
 
         # Initialise all state fields
         request.state.key_id         = None
+        request.state.ip_allowlist   = None
         request.state.key_name       = None
         request.state.key_type       = "live"
         request.state.app_id         = None
@@ -435,6 +436,10 @@ class AuthMiddleware(BaseHTTPMiddleware):
                 request.state.tenant_id      = str(key_record.tenant_id) if key_record.tenant_id else None
                 request.state.user_id        = None
                 request.state.user_role      = None
+                # Source networks this credential is restricted to, carried on
+                # the request so an endpoint enforcing it does not re-read the
+                # key. Null or empty means unrestricted.
+                request.state.ip_allowlist   = getattr(key_record, "ip_allowlist", None)
                 if await _tenant_suspended(request.state.tenant_id):
                     return _tenant_suspended_response(request)
                 return await call_next(request)
@@ -472,6 +477,7 @@ class AuthMiddleware(BaseHTTPMiddleware):
 
         request.state.principal_type = "api_key"
         request.state.key_id         = "key:admin"
+        request.state.ip_allowlist   = None
         request.state.key_name       = "Admin Key"
         request.state.key_type       = "live"
         request.state.is_admin       = True

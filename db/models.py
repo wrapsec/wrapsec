@@ -192,6 +192,10 @@ class APIKeyModel(Base):
     expires_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True),    nullable=True)
     last_used_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True),    nullable=True)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True),    nullable=False, default=utc_now)
+    # Source networks this credential may be used from (CIDR strings).
+    # Null or empty means unrestricted: the control is opt-in, so adding
+    # the column cannot lock out an existing credential.
+    ip_allowlist: Mapped[Any | None] = mapped_column(JSONVariant,  nullable=True)
 
     __table_args__ = (
         # Only enforced in PostgreSQL (production). SQLite (used in tests) silently

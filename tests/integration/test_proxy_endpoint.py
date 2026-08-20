@@ -1271,3 +1271,127 @@ class TestProxyObservability:
         assert row.output_scan_ms is not None
         assert row.input_scan_ms  >= 0
         assert row.output_scan_ms >= 0
+
+
+# ---------------------------------------------------------------------------
+# Source network restriction
+# ---------------------------------------------------------------------------
+
+class TestProxyIpAllowlist:
+    """A credential may be restricted to the networks its owner operates from."""
+
+    async def _post(self, app, allowlist, client_ip="203.0.113.9", extra_headers=None):
+        from api.v1.dependencies.db import get_db
+
+        fake_get_db, mock_db = _patch_config(_make_config())
+        app.dependency_overrides[get_db] = fake_get_db
+
+        provider_called = []
+        scanned         = []
+
+        from services.gateway import fanout as _fanout
+        original = _fanout.scan_items
+
+        async def _spy(items, **kwargs):
+            scanned.append(list(items))
+            return await original(items, **kwargs)
+
+        # The middleware resolves the credential and puts its allowlist on the
+        # request. Stand in for that here so the test exercises the endpoint's
+        # enforcement rather than key lookup, using a dependency override so the
+        # values land after authentication has run, exactly as in production.
+        from fastapi import Request as _Request
+
+        from api.v1.dependencies.auth import get_current_principal
+
+        async def _principal_with_allowlist(request: _Request):
+            request.state.ip_allowlist = allowlist
+            request.state.ip_address   = client_ip
+            return await get_current_principal(request)
+
+        app.dependency_overrides[get_current_principal] = _principal_with_allowlist
+
+        try:
+            with (
+                patch("httpx.AsyncClient") as mock_cls,
+                patch("api.v1.endpoints.proxy.scan_items", new=_spy),
+            ):
+                mock_client      = AsyncMock()
+                mock_client.post = AsyncMock(side_effect=lambda *a, **kw: (
+                    provider_called.append(True) or _openai_response("hi")
+                ))
+                mock_cls.return_value.__aenter__ = AsyncMock(return_value=mock_client)
+                mock_cls.return_value.__aexit__  = AsyncMock(return_value=False)
+
+                async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as client:
+                    resp = await client.post(
+                        "/v1/chat/completions",
+                        headers={
+                            "x-api-key": settings.admin_api_key,
+                            **(extra_headers or {}),
+                        },
+                        json={"model": "openai/gpt-4o", "messages": _clean_messages()},
+                    )
+            return resp, scanned, provider_called, mock_db
+        finally:
+            app.dependency_overrides = {}
+
+    @pytest.mark.asyncio
+    async def test_an_allowed_address_proceeds(self, app):
+        resp, scanned, _called, _db = await self._post(
+            app, allowlist=["203.0.113.0/24"], client_ip="203.0.113.9",
+        )
+        assert resp.status_code == 200
+        assert scanned, "the request should have been scanned normally"
+
+    @pytest.mark.asyncio
+    async def test_a_denied_address_is_rejected_before_any_work(self, app):
+        """No policy resolution, no detection, no upstream call."""
+        resp, scanned, called, _db = await self._post(
+            app, allowlist=["10.0.0.0/8"], client_ip="203.0.113.9",
+        )
+        assert resp.status_code == 403
+        assert resp.json()["error"]["code"] == "ip_not_allowed"
+        assert resp.headers.get("X-WrapSec-Trace-Id")
+        assert scanned == []
+        assert called  == []
+
+    @pytest.mark.asyncio
+    async def test_an_unconfigured_allowlist_allows_everything(self, app):
+        """The control is opt-in; existing credentials keep working."""
+        for allowlist in (None, []):
+            resp, _scanned, _called, _db = await self._post(
+                app, allowlist=allowlist, client_ip="198.51.100.1",
+            )
+            assert resp.status_code == 200
+
+    @pytest.mark.asyncio
+    async def test_a_denial_is_recorded(self, app):
+        resp, _scanned, _called, mock_db = await self._post(
+            app, allowlist=["10.0.0.0/8"], client_ip="203.0.113.9",
+        )
+        assert resp.status_code == 403
+
+        added   = [c.args[0] for c in mock_db.add.call_args_list]
+        denials = [o for o in added if getattr(o, "action", None) == "api_key_ip_denied"]
+        assert denials, "the denial was not recorded"
+        assert denials[0].success        is False
+        assert denials[0].failure_reason == "ip_not_allowed"
+        assert denials[0].ip_address     == "203.0.113.9"
+
+    @pytest.mark.asyncio
+    async def test_a_forwarded_header_cannot_present_an_approved_address(self, app):
+        """
+        The address comes from the resolver, which only believes a forwarded
+        header when the immediate peer is a configured trusted proxy. A caller
+        claiming an approved address must still be denied.
+        """
+        resp, _scanned, called, _db = await self._post(
+            app,
+            allowlist     = ["10.0.0.0/8"],
+            client_ip     = "203.0.113.9",          # what the resolver established
+            extra_headers = {"X-Forwarded-For": "10.0.0.5"},  # what the caller claims
+        )
+        assert resp.status_code == 403
+        assert resp.json()["error"]["code"] == "ip_not_allowed"
+        assert called == []

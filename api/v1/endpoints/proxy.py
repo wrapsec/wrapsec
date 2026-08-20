@@ -69,6 +69,7 @@ from engine.proxy.router import (
 from errors.catalog import ErrorCode
 from errors.response import error_response as _catalog_error_response
 from observability.metrics import record_proxy_request, record_request
+from security.ip_allowlist import is_allowed
 from services.gateway.fanout import (
     DetectionPolicy,
     ScanItem,
@@ -396,6 +397,40 @@ def _error_response(
     )
 
 
+async def _record_allowlist_denial(
+    db,
+    request,
+    ip_address: str | None,
+    user_agent: str | None,
+) -> None:
+    """
+    Record a credential used from an unapproved network.
+
+    Lands with the other credential-level events rather than in the request
+    audit trail: nothing was scanned and no decision was made, so recording it
+    as a security decision would misreport what happened.
+
+    A failure to record must not become a failure to deny, so the write is
+    best-effort and the denial stands either way.
+    """
+    try:
+        from db.models import AuthEventModel
+
+        tenant_id = getattr(request.state, "tenant_id", None)
+        db.add(AuthEventModel(
+            tenant_id      = uuid.UUID(tenant_id) if tenant_id else None,
+            user_id        = None,
+            action         = "api_key_ip_denied",
+            success        = False,
+            failure_reason = "ip_not_allowed",
+            ip_address     = ip_address,
+            user_agent     = (user_agent or "")[:500] or None,
+        ))
+        await db.commit()
+    except Exception as exc:
+        logger.error("Could not record a source-network denial: %s", exc)
+
+
 async def _log_interaction(
     db:               AsyncSession,
     trace_id:         str,
@@ -615,6 +650,28 @@ async def proxy_chat_completions(
     source     = getattr(request.state, "key_name",   None) or "proxy"
     ip_address = getattr(request.state, "ip_address", None)
     user_agent = getattr(request.state, "user_agent", None)
+
+    # -- 0a. Source network check --
+    # Runs before every other check so a credential used from an unapproved
+    # network costs nothing: no policy resolution, no detection, no upstream
+    # call. The address comes from get_client_ip, which only believes a
+    # forwarded header when the immediate peer is a configured trusted proxy,
+    # so a caller cannot present an approved address by claiming one.
+    _allowlist = getattr(request.state, "ip_allowlist", None)
+    if _allowlist and not is_allowed(ip_address, _allowlist):
+        logger.warning(
+            "Source network denied trace_id=%s key=%s ip=%s",
+            trace_id, key_id, ip_address,
+        )
+        await _record_allowlist_denial(db, request, ip_address, user_agent)
+        return _error_response(
+            status_code  = 403,
+            message      = "This credential is not permitted from your network address.",
+            error_type   = "forbidden",
+            error_code   = "ip_not_allowed",
+            wrapsec_meta = {"trace_id": trace_id},
+            headers      = {"X-WrapSec-Trace-Id": trace_id},
+        )
 
     # -- 0. Trial key check - proxy mode not available for trial keys --
     key_type = getattr(request.state, "key_type", "live")
