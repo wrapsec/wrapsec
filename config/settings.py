@@ -170,13 +170,24 @@ class Settings(BaseSettings):
     batch_concurrency: int = 8
 
     # Upper bound on how many conversation messages one proxy request may scan
-    # when it asks for every message to be scanned. Deliberately lower than
-    # max_batch_items: each scanned message appends a row to the tenant's audit
-    # hash chain, and every row hashes the one before it, so a large fan-out on
-    # a latency-sensitive path costs more than the detection work alone. Raising
-    # this requires re-checking that the derived per-message audit trace id
-    # (request id plus message position) still fits the audit trace column.
-    max_scan_all_messages: int = 20
+    # when it asks for every message to be scanned.
+    #
+    # Set from measurement, not by inheriting max_batch_items: the batch endpoint
+    # is not on a caller's request path and its writes do not contend the same
+    # way. Two costs grow with this number. Detection is CPU-bound at roughly a
+    # sixth of a second per message, so the scan alone is that many times longer.
+    # Each scanned message also appends a row to the tenant's audit chain, and
+    # those appends serialise behind a per-tenant lock, so the cost per row rose
+    # more than fifteenfold between one and eight concurrent requests from the
+    # same tenant.
+    #
+    # At twenty a single uncontended request took over six seconds, which is not
+    # a reasonable thing to put in front of a caller. Ten keeps an uncontended
+    # request under two seconds. A deployment that expects several simultaneous
+    # scan-all requests from one tenant should lower this further; measure before
+    # raising it, and re-check that the derived per-message audit trace id still
+    # fits the audit trace column.
+    max_scan_all_messages: int = 10
 
     # ── LLM Provider ──────────────────────────────────────────
     llm_provider:             str = Field(default="ollama")  # ollama | openai | groq
