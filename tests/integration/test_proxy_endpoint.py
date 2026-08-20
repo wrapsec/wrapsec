@@ -1199,3 +1199,75 @@ class TestProxyProviderFailures:
             app.dependency_overrides = {}
 
         assert resp.status_code == 200
+
+
+# ---------------------------------------------------------------------------
+# Observability: security overhead and provider usage
+# ---------------------------------------------------------------------------
+
+class TestProxyObservability:
+
+    async def _post(self, app, provider_resp):
+        from api.v1.dependencies.db import get_db
+
+        fake_get_db, mock_db = _patch_config(_make_config())
+        app.dependency_overrides[get_db] = fake_get_db
+        try:
+            with patch("httpx.AsyncClient") as mock_cls:
+                mock_client      = AsyncMock()
+                mock_client.post = AsyncMock(return_value=provider_resp)
+                mock_cls.return_value.__aenter__ = AsyncMock(return_value=mock_client)
+                mock_cls.return_value.__aexit__  = AsyncMock(return_value=False)
+
+                async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as client:
+                    resp = await client.post(
+                        "/v1/chat/completions",
+                        headers={"x-api-key": settings.admin_api_key},
+                        json={"model": "openai/gpt-4o", "messages": _clean_messages()},
+                    )
+            return resp, mock_db
+        finally:
+            app.dependency_overrides = {}
+
+    @pytest.mark.asyncio
+    async def test_provider_token_usage_is_passed_through(self, app):
+        """Reported as the provider sent it; nothing here prices or bills it."""
+        provider_resp = _openai_response("hello")
+        body = provider_resp.json.return_value
+        body["usage"] = {"prompt_tokens": 12, "completion_tokens": 7, "total_tokens": 19}
+
+        resp, _ = await self._post(app, provider_resp)
+
+        assert resp.status_code == 200
+        assert resp.json()["usage"] == {
+            "prompt_tokens": 12, "completion_tokens": 7, "total_tokens": 19,
+        }
+
+    @pytest.mark.asyncio
+    async def test_usage_is_absent_when_the_provider_omits_it(self, app):
+        """Optional, so a caller must not depend on it being present."""
+        resp, _ = await self._post(app, _openai_response("hello"))
+
+        assert resp.status_code == 200
+        assert "usage" not in resp.json()
+
+    @pytest.mark.asyncio
+    async def test_scan_time_is_recorded_separately_from_provider_time(self, app):
+        """
+        Security overhead is measured directly. Inferring it by subtracting
+        provider time from the total would blame scanning for queueing and
+        serialisation as well.
+        """
+        resp, mock_db = await self._post(app, _openai_response("hello"))
+        assert resp.status_code == 200
+
+        # the interaction row is the object handed to the session
+        added = [c.args[0] for c in mock_db.add.call_args_list] if mock_db.add.call_args_list else []
+        interactions = [o for o in added if hasattr(o, "input_scan_ms")]
+        assert interactions, "no proxy interaction row was written"
+
+        row = interactions[0]
+        assert row.input_scan_ms  is not None
+        assert row.output_scan_ms is not None
+        assert row.input_scan_ms  >= 0
+        assert row.output_scan_ms >= 0

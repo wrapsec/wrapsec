@@ -273,6 +273,11 @@ class ProxyInteractionModel(Base):
     provider: Mapped[str | None] = mapped_column(String(32),  nullable=True)
     model: Mapped[str | None] = mapped_column(String(128), nullable=True)
     provider_latency_ms: Mapped[int | None] = mapped_column(Integer,     nullable=True)
+    # Security overhead, recorded directly rather than inferred by
+    # subtracting provider time from the total, which would attribute
+    # queueing and serialisation to scanning.
+    input_scan_ms: Mapped[int | None] = mapped_column(Integer,     nullable=True)
+    output_scan_ms: Mapped[int | None] = mapped_column(Integer,     nullable=True)
     execution_status: Mapped[str] = mapped_column(String(32),  nullable=False)
     output_raw: Mapped[str | None] = mapped_column(Text,        nullable=True)
     output_sanitized: Mapped[str | None] = mapped_column(Text,        nullable=True)

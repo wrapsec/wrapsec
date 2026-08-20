@@ -436,6 +436,8 @@ async def _log_interaction(
     # Per-message evidence, one entry per scanned message. When absent a
     # single row is written from the aggregate fields above.
     segment_rows:     list[dict] | None = None,
+    input_scan_ms:    int | None = None,
+    output_scan_ms:   int | None = None,
 ) -> None:
     try:
         # Honor data_storage_mode:
@@ -484,6 +486,8 @@ async def _log_interaction(
             provider              = provider,
             model                 = model,
             provider_latency_ms   = provider_latency,
+            input_scan_ms         = input_scan_ms,
+            output_scan_ms        = output_scan_ms,
             execution_status      = execution_status,
             output_raw            = stored_output_raw,
             output_sanitized      = stored_output_sanitized,
@@ -783,6 +787,7 @@ async def proxy_chat_completions(
     pii_policy      = policy.get("guardrails", {}).get("pii", {})
     toxicity_policy = policy.get("guardrails", {}).get("toxicity", {})
 
+    _scan_start = time.monotonic()
     scanned = await scan_items(
         [
             ScanItem(
@@ -811,6 +816,8 @@ async def proxy_chat_completions(
             user_id   = None,
         ),
     )
+
+    _input_scan_ms = int((time.monotonic() - _scan_start) * 1000)
 
     _results       = [result for _incoming, result in scanned]
     _winner        = _strictest_index(_results)
@@ -867,6 +874,7 @@ async def proxy_chat_completions(
         )
         await _log_interaction(
             segment_rows=_audit_rows,
+            input_scan_ms=_input_scan_ms,
             db=db, trace_id=trace_id, key_id=key_id, user_id=None,
             tenant_id=tenant_id, dept_id=dept_id, app_id=app_id,
             source=source, ip_address=ip_address, user_agent=user_agent,
@@ -965,6 +973,7 @@ async def proxy_chat_completions(
         )
         await _log_interaction(
             segment_rows=_audit_rows,
+            input_scan_ms=_input_scan_ms,
             db=db, trace_id=trace_id, key_id=key_id, user_id=None,
             tenant_id=tenant_id, dept_id=dept_id, app_id=app_id,
             source=source, ip_address=ip_address, user_agent=user_agent,
@@ -1010,6 +1019,7 @@ async def proxy_chat_completions(
         )
         await _log_interaction(
             segment_rows=_audit_rows,
+            input_scan_ms=_input_scan_ms,
             db=db, trace_id=trace_id, key_id=key_id, user_id=None,
             tenant_id=tenant_id, dept_id=dept_id, app_id=app_id,
             source=source, ip_address=ip_address, user_agent=user_agent,
@@ -1058,6 +1068,7 @@ async def proxy_chat_completions(
         )
         await _log_interaction(
             segment_rows=_audit_rows,
+            input_scan_ms=_input_scan_ms,
             db=db, trace_id=trace_id, key_id=key_id, user_id=None,
             tenant_id=tenant_id, dept_id=dept_id, app_id=app_id,
             source=source, ip_address=ip_address, user_agent=user_agent,
@@ -1110,6 +1121,7 @@ async def proxy_chat_completions(
         )
         await _log_interaction(
             segment_rows=_audit_rows,
+            input_scan_ms=_input_scan_ms,
             db=db, trace_id=trace_id, key_id=key_id, user_id=None,
             tenant_id=tenant_id, dept_id=dept_id, app_id=app_id,
             source=source, ip_address=ip_address, user_agent=user_agent,
@@ -1144,7 +1156,9 @@ async def proxy_chat_completions(
             headers=headers,
         )
 
+    _guard_start      = time.monotonic()
     output_result     = _output_guard.inspect(provider_response.content)
+    _output_scan_ms   = int((time.monotonic() - _guard_start) * 1000)
     output_decision   = output_result.decision
     output_reason     = output_result.primary_reason
     output_conf       = output_result.confidence
@@ -1162,6 +1176,8 @@ async def proxy_chat_completions(
         )
         await _log_interaction(
             segment_rows=_audit_rows,
+            input_scan_ms=_input_scan_ms,
+            output_scan_ms=_output_scan_ms,
             db=db, trace_id=trace_id, key_id=key_id, user_id=None,
             tenant_id=tenant_id, dept_id=dept_id, app_id=app_id,
             source=source, ip_address=ip_address, user_agent=user_agent,
@@ -1203,6 +1219,8 @@ async def proxy_chat_completions(
 
     await _log_interaction(
         segment_rows=_audit_rows,
+        input_scan_ms=_input_scan_ms,
+        output_scan_ms=_output_scan_ms,
         db=db, trace_id=trace_id, key_id=key_id, user_id=None,
         tenant_id=tenant_id, dept_id=dept_id, app_id=app_id,
         source=source, ip_address=ip_address, user_agent=user_agent,
@@ -1264,6 +1282,14 @@ async def proxy_chat_completions(
             }
         ],
     }
+
+    # Pass the provider's own token counts through when it sent them. This is
+    # observability, not metering: the numbers are reported as received and
+    # nothing here prices, budgets, or bills against them. Absent when the
+    # provider omits it, so a caller must treat it as optional.
+    _usage = provider_response.raw.get("usage") if isinstance(provider_response.raw, dict) else None
+    if isinstance(_usage, dict):
+        response_body["usage"] = _usage
 
     # Optional inline meta field (opt-in via header)
     if inline:
