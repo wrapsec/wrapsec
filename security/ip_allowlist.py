@@ -52,6 +52,17 @@ def normalize_entries(entries: list[str] | None) -> list[str]:
             network = ipaddress.ip_network(text, strict=False)
         except ValueError as exc:
             raise ValueError(f"'{entry}' is not a valid IP address or CIDR block") from exc
+
+        # A zero-prefix network covers every address, so accepting it would
+        # store a restriction that restricts nothing. A credential that looks
+        # restricted but is not is worse than one that is openly unrestricted:
+        # leave the list empty to allow everything, and mean it.
+        if network.prefixlen == 0:
+            raise ValueError(
+                f"'{entry}' allows every address, which is not a restriction. "
+                f"Leave the allowlist empty to permit all addresses."
+            )
+
         normalized.append(str(network))
 
     return normalized

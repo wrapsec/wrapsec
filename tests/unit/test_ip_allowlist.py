@@ -106,3 +106,22 @@ class TestIsAllowed:
 
     def test_surrounding_whitespace_is_tolerated(self):
         assert is_allowed(" 10.0.0.7 ", ["10.0.0.0/24"]) is True
+
+
+class TestZeroPrefixRejection:
+    """
+    A credential that looks restricted but is not is worse than one that is
+    openly unrestricted, so a network covering every address is refused.
+    """
+
+    @pytest.mark.parametrize("everything", ["0.0.0.0/0", "::/0"])
+    def test_a_network_covering_everything_is_refused(self, everything):
+        with pytest.raises(ValueError, match="not a restriction"):
+            normalize_entries([everything])
+
+    def test_it_is_refused_even_alongside_real_entries(self):
+        with pytest.raises(ValueError, match="not a restriction"):
+            normalize_entries(["10.0.0.0/8", "0.0.0.0/0"])
+
+    def test_a_narrow_network_is_still_accepted(self):
+        assert normalize_entries(["0.0.0.0/8"]) == ["0.0.0.0/8"]

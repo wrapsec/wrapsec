@@ -3,6 +3,7 @@
 # WrapSec v1.0 | AI Security Gateway - https://wrapsec.com
 
 import hashlib
+import logging
 import secrets
 import uuid
 from datetime import timedelta
@@ -15,12 +16,17 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from api.v1.dependencies.auth import get_current_principal, require_admin
 from api.v1.dependencies.db import get_db
+from api.v1.middleware.auth import get_client_ip
+from db.repositories.admin_event import AdminEventRepository
 from db.repositories.api_key import ApiKeyRepository
 from db.repositories.application import ApplicationRepository
 from db.repositories.department import DepartmentRepository
 from domain.entities.principal import Principal
+from domain.enums import AdminEventAction
 from errors.exceptions import NotFoundError
 from services.time import parse_utc_iso, to_iso_z, utc_now
+
+logger = logging.getLogger("wrapsec.keys")
 
 router = APIRouter()
 
@@ -49,6 +55,9 @@ class CreateKeySchema(BaseModel):
     app_id:     str | None = None  # app-scoped key (dept+tenant derived from app)
     key_type:   KeyType = KeyType.LIVE
     expires_at: str | None = None
+    # Source networks this credential may be used from. Omitted or empty means
+    # unrestricted, so the control stays opt-in.
+    ip_allowlist: list[str] | None = None
 
     @field_validator("dept_id", "app_id")
     @classmethod
@@ -72,6 +81,80 @@ class CreateKeySchema(BaseModel):
         except Exception:
             raise ValueError("expires_at must be an ISO-8601 datetime") from None
         return v
+
+    @field_validator("ip_allowlist")
+    @classmethod
+    def _valid_allowlist(cls, v: list[str] | None) -> list[str] | None:
+        """
+        Store what was understood, not what was typed.
+
+        Entries are canonicalised here so a malformed block is refused while the
+        operator is looking at it. Accepting it would leave enforcement silently
+        skipping that entry, which reads as "this network is not permitted"
+        rather than as the configuration error it is.
+        """
+        if v is None:
+            return None
+        from security.ip_allowlist import normalize_entries
+        return normalize_entries(v)
+
+
+async def _record_allowlist_change(
+    db,
+    request,
+    principal,
+    key_id:    str,
+    dept_id,
+    previous:  list[str] | None,
+    current:   list[str] | None,
+) -> None:
+    """
+    Record a change to where a credential may be used.
+
+    Whoever can set an allowlist can also remove it, so the change itself is the
+    security event: without this, widening a restricted credential to everywhere
+    would leave no trace. Only the shape of the change and the networks involved
+    are recorded -- never the key secret.
+
+    Best-effort, like the other administrative events: the change is already
+    committed and must not be undone by an audit write failing.
+    """
+    before = previous or []
+    after  = current  or []
+    if before == after:
+        return
+
+    if not before:
+        change = "added"
+    elif not after:
+        change = "removed"
+    else:
+        change = "changed"
+
+    try:
+        event_repo = AdminEventRepository(db)
+        await event_repo.insert(
+            tenant_id     = uuid.UUID(request.state.tenant_id),
+            actor_user_id = uuid.UUID(str(principal.id).replace("user:", "")),
+            action        = AdminEventAction.KEY_ALLOWLIST_CHANGED,
+            dept_id       = dept_id,
+            metadata      = {
+                "key_id":          key_id,
+                "change":          change,
+                "previous":        before,
+                "current":         after,
+                "previous_count":  len(before),
+                "current_count":   len(after),
+            },
+            ip_address    = get_client_ip(request),
+            user_agent    = request.headers.get("user-agent"),
+        )
+        await db.commit()
+    except Exception as e:
+        logger.error(
+            "admin_event write failed action=key_allowlist_changed key_id=%s error=%s",
+            key_id, e,
+        )
 
 
 @router.post("")
@@ -167,8 +250,15 @@ async def create_key(
         "dept_id":    dept_id,
         "tenant_id":  tenant_id,
         "expires_at": expires_at,
+        "ip_allowlist": body.ip_allowlist or None,
     })
     await db.commit()
+
+    if body.ip_allowlist:
+        await _record_allowlist_change(
+            db, request, principal, key_id, dept_id,
+            previous=None, current=body.ip_allowlist,
+        )
 
     return JSONResponse(content={
         "key_id":     key_id,
@@ -261,7 +351,7 @@ async def get_key(
             and str(record.dept_id) != str(request.state.dept_id)):
         raise NotFoundError("key", key_id)
 
-    return JSONResponse(content={
+    body = {
         "key_id":       record.key_id,
         "name":         record.name,
         "app_id":       str(record.app_id)    if record.app_id    else None,
@@ -273,10 +363,38 @@ async def get_key(
         "created_at":   to_iso_z(record.created_at),
         "expires_at":   to_iso_z(record.expires_at) if record.expires_at else None,
         "last_used_at": to_iso_z(record.last_used_at) if record.last_used_at else None,
-    })
+    }
+
+    # The networks a credential is confined to describe where an organisation
+    # operates from, so they are shown only to whoever can change them. This
+    # route is readable by a department member, not just an administrator, and
+    # the key listing is broader still.
+    if request.state.is_admin:
+        body["ip_allowlist"] = list(record.ip_allowlist or [])
+
+    return JSONResponse(content=body)
 
 class UpdateKeySchema(BaseModel):
     name: str = Field(min_length=1, max_length=100)
+    # Omitted leaves the allowlist untouched; an empty list clears it, returning
+    # the credential to unrestricted.
+    ip_allowlist: list[str] | None = None
+
+    @field_validator("ip_allowlist")
+    @classmethod
+    def _valid_allowlist(cls, v: list[str] | None) -> list[str] | None:
+        """
+        Store what was understood, not what was typed.
+
+        Entries are canonicalised here so a malformed block is refused while the
+        operator is looking at it. Accepting it would leave enforcement silently
+        skipping that entry, which reads as "this network is not permitted"
+        rather than as the configuration error it is.
+        """
+        if v is None:
+            return None
+        from security.ip_allowlist import normalize_entries
+        return normalize_entries(v)
 
 @router.put("/{key_id}")
 async def update_key(
@@ -292,13 +410,25 @@ async def update_key(
     if not record or str(record.tenant_id) != request.state.tenant_id:
         raise NotFoundError("key", key_id)
 
+    previous_allowlist = list(record.ip_allowlist or [])
+
     record.name = body.name
+    # Omitted leaves the restriction as it was; an empty list clears it.
+    if body.ip_allowlist is not None:
+        record.ip_allowlist = body.ip_allowlist or None
     await db.commit()
 
+    if body.ip_allowlist is not None:
+        await _record_allowlist_change(
+            db, request, principal, record.key_id, record.dept_id,
+            previous=previous_allowlist, current=body.ip_allowlist,
+        )
+
     return JSONResponse(content={
-        "key_id":     record.key_id,
-        "name":       record.name,
-        "updated_at": to_iso_z(utc_now()),
+        "key_id":       record.key_id,
+        "name":         record.name,
+        "ip_allowlist": list(record.ip_allowlist or []),
+        "updated_at":   to_iso_z(utc_now()),
     })
 
 @router.delete("/{key_id}")

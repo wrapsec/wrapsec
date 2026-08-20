@@ -89,6 +89,10 @@ class AdminEventAction(str, Enum):
     PASSWORD_RESET   = "password_reset"
     ROLE_CHANGED     = "role_changed"
     DEPT_CHANGED     = "dept_changed"
+    # Changing where a credential may be used is a change to a security
+    # boundary, so it is recorded separately from other key edits: a
+    # restriction an administrator can quietly remove is a weak control.
+    KEY_ALLOWLIST_CHANGED   = "key_allowlist_changed"
     SETTINGS_CHANGED        = "settings_changed"
     POLICY_OVERRIDE_CHANGED = "policy_override_changed"
     # Webhook endpoint lifecycle (v1.3.0). Every mutation to a
