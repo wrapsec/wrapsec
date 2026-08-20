@@ -14,6 +14,8 @@ hypothesis==6.157.0
 testcontainers[postgres]==4.13.1
 
 # ── Static analysis ───────────────────────────────────────────────────────────
+# Linting and formatting (make lint / make format).
+ruff==0.16.2
 # Static type checking, scoped to the Python SDK (make typecheck).
 pyright==1.1.411
 # Test coverage measurement (make coverage). Config lives in .coveragerc.

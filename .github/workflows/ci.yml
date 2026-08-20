@@ -32,11 +32,9 @@ jobs:
           python-version: "3.10"
           cache: pip
       - name: Install deps + linter
-        # pyright is pinned in requirements-dev; ruff is pinned here (kept in
-        # lockstep with `ruff --version` locally).
-        run: |
-          pip install -r requirements-dev.txt
-          pip install ruff==0.16.2
+        # Both the linter and the type checker are pinned in requirements-dev,
+        # so a fresh local environment gets the same versions this job runs.
+        run: pip install -r requirements-dev.txt
       - name: Lint (ruff)
         run: make lint
       - name: Types (pyright)
