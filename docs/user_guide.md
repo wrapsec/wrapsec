@@ -172,6 +172,49 @@ Click any row to see the full detail, including the input hash, detected threats
 
 Filter by decision, threat category, date range, execution mode (scan-only vs proxy), and more. Export filtered results to CSV using the **Export CSV** button.
 
+### Agent runs
+
+When a request was tagged with a run ID, its detail view shows a **View agent run**
+action. That opens an ordered timeline of every scan made during that one agent
+execution, so a run that took several steps reads as a single story instead of a
+scatter of unrelated rows.
+
+The timeline shows the run's turn count, how many turns were blocked or sanitized, the
+content sources involved, and each turn in order with its decision and risk score.
+
+Run IDs are supplied by whoever makes the request - the SDK, the CLI (`--run-id`), or a
+direct API call. Untagged requests have no run to show, so the action does not appear.
+If a run ID is opened but nothing was tagged with it, the page reports that no turns
+were found rather than erroring.
+
+---
+
+## Sources
+
+The **Sources** page answers a different question from Analytics: not "what is
+happening over time" but "which kinds of content are causing trouble".
+
+Every scan can declare where its content came from - an end-user prompt, a retrieved
+document, a tool result. WrapSec sorts those origins into trust tiers, and content an
+agent pulled in from elsewhere is treated as an indirect prompt-injection surface
+rather than as something the user typed.
+
+The page breaks activity down per source, showing for each:
+
+- **Scans** - volume from that source
+- **Block rate** - how often it was stopped
+- **Avg / Peak risk** - typical and worst-case risk score
+- **High risk** - count of high-risk scans
+- **Decisions** and **Threats by source** - the mix of outcomes and threat categories
+
+**Top Attack Origins** ranks sources by blocked and sanitized volume, which is the
+quickest way to see whether attacks are arriving through your users or through content
+your agents retrieve.
+
+Use the time-range selector to change the window. A source only appears once something
+has been scanned with it, so an empty page means no tagged activity in that range, not
+an error.
+
 ---
 
 ## Analytics

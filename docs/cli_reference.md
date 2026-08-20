@@ -215,6 +215,12 @@ wrapsec scan [TEXT] [OPTIONS]
 | `--json` | off | Pure JSON output to stdout |
 | `--user TEXT`, `-u` | `cli` | User ID for audit attribution - maps to `metadata.user_id` in the API request body |
 | `--quiet`, `-q` | off | No stdout output - exit code only |
+| `--session-id TEXT` | none | Opaque conversation identifier. Groups related scans in the audit trail. Max 200 chars, charset `[A-Za-z0-9_.:-]` |
+| `--turn-index INT` | none | Zero-based turn number within `--session-id`. Range `[0, 10000]` |
+| `--run-id TEXT` | none | Opaque identifier for one agent execution. Same charset rules as `--session-id` |
+
+See [Correlating multi-turn and agent scans](#correlating-multi-turn-and-agent-scans)
+for how these three relate.
 
 ### Examples
 
@@ -316,6 +322,12 @@ wrapsec batch FILE [OPTIONS]
 | `--limit INT` | all | Max lines to process |
 | `--summary` | off | Show counts only - no individual scores or trace IDs |
 | `--json` | off | JSONL output (one JSON object per line) |
+| `--session-id TEXT` | none | Opaque conversation identifier applied to every line. When set, `turn_index` auto-increments from 0 per processed line |
+| `--run-id TEXT` | none | Opaque identifier for one agent execution, applied to every line |
+
+`batch` has no `--turn-index`: the index is derived. With `--session-id` set, each
+processed line gets the next turn number starting at 0; without it, `turn_index` is
+sent as absent.
 | `--quiet` | off | No stdout - exit code only |
 
 ### Limits
@@ -384,6 +396,45 @@ Results:  5 scanned, 0 skipped
 ```
 
 `latency_ms` corresponds to `processing.latency_ms` in the API response. For scan_only: detection pipeline time. For proxy: total end-to-end time (WrapSec + provider). For a full proxy latency breakdown use: `wrapsec audit get <trace_id>`
+
+## Correlating multi-turn and agent scans
+
+A single scan is one audit record. Three optional identifiers let you reconstruct a
+larger unit of work from those records. All three are accepted by `scan`, and
+`--session-id` / `--run-id` by `batch`.
+
+| Identifier | Answers | Scope |
+|---|---|---|
+| `--session-id` | which conversation was this? | many turns of one conversation |
+| `--turn-index` | where in that conversation? | one turn, zero-based |
+| `--run-id` | which agent execution was this? | one run, which may span several scans |
+
+```bash
+# A three-turn conversation
+wrapsec scan "book me a flight"        --session-id conv-42 --turn-index 0
+wrapsec scan "actually, make it two"   --session-id conv-42 --turn-index 1
+wrapsec scan "and add a hotel"         --session-id conv-42 --turn-index 2
+
+# Every scan an agent run makes, tagged so the run can be replayed
+wrapsec scan "$TOOL_OUTPUT" --run-id run-2026-08-20-a7
+wrapsec batch retrieved_docs.txt --run-id run-2026-08-20-a7 --session-id conv-42
+```
+
+Read a run back with `GET /v1/agent-runs/{run_id}`, which returns every turn in order
+with its decision and risk score. The dashboard renders the same data as a timeline.
+
+**Rules that apply to all three:**
+
+- Opaque and caller-chosen. WrapSec never parses them for meaning.
+- Max 200 chars, charset `[A-Za-z0-9_.:-]`. `--turn-index` is `[0, 10000]`.
+- **Correlation metadata only.** They are never an authorization input - supplying
+  someone else's `session_id` grants nothing. Tenant isolation is enforced from the
+  API key or token, not from these fields.
+- **Do not put PII in them.** They are stored in the audit trail as given, and the
+  audit trail is immutable.
+
+`input_source` (content provenance, e.g. `retrieved_document`) is an API-level field
+and is **not** exposed as a CLI flag. See `docs/api.md`.
 
 ## 6. `wrapsec audit`
 
