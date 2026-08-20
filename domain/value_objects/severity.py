@@ -75,8 +75,15 @@ def compute_severity(
         # Lower confidence detection block or SYSTEM_ERROR block
         return "HIGH"
 
-    # Only reached for non-BLOCK decisions (SANITIZE / ALLOW / SYSTEM_ERROR on ALLOW).
-    # BLOCK always returns inside the branch above.
+    # Only reached for non-BLOCK decisions (SANITIZE / ALLOW). BLOCK always
+    # returns inside the branch above.
+    #
+    # SYSTEM_ERROR is not reachable here today: both producers pair it with
+    # BLOCK. GatewayService forces BLOCK whenever a detector failed (the same
+    # condition that yields SYSTEM_ERROR), and OutputGuard sets BLOCK
+    # explicitly when it fails. This branch is kept as a defensive floor so a
+    # future producer that reports SYSTEM_ERROR on a non-BLOCK decision is
+    # still surfaced as HIGH rather than silently scored LOW.
     if primary_reason == "SYSTEM_ERROR":
         return "HIGH"
 

@@ -182,6 +182,60 @@ class TestProxyChatCompletions:
         assert len(provider_called) == 0
 
     # -----------------------------------------------------------------------
+    # Detector failure -> fail closed
+    # -----------------------------------------------------------------------
+
+    @pytest.mark.asyncio
+    async def test_detector_failure_blocks_and_never_calls_provider(self, app):
+        """
+        A crashing detector must not let traffic reach the LLM.
+
+        The gateway swaps a failed detector for a clean result and then forces
+        BLOCK, so a benign prompt that would normally be ALLOWed is blocked when
+        detection could not actually run. This is asserted at the proxy layer
+        because the proxy is what forwards to a provider: gateway-level coverage
+        alone does not prove the request was stopped before egress.
+        """
+        config                = _make_config()
+        fake_get_db, _mock_db = _patch_config(config)
+
+        from api.v1.dependencies.db import get_db
+        app.dependency_overrides[get_db] = fake_get_db
+
+        provider_called = []
+
+        with (
+            patch("httpx.AsyncClient") as mock_cls,
+            patch(
+                "engine.detection.rule_detector.RuleDetector.detect",
+                side_effect=RuntimeError("detector crashed"),
+            ),
+        ):
+            mock_client      = AsyncMock()
+            mock_client.post = AsyncMock(side_effect=lambda *a, **kw: provider_called.append(True))
+            mock_cls.return_value.__aenter__ = AsyncMock(return_value=mock_client)
+            mock_cls.return_value.__aexit__  = AsyncMock(return_value=False)
+
+            async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as client:
+                resp = await client.post(
+                    "/v1/chat/completions",
+                    headers={"x-api-key": settings.admin_api_key},
+                    # Benign input: only the detector failure can cause a block.
+                    json={
+                        "model":    "openai/gpt-4o",
+                        "messages": [{"role": "user", "content": "What is the capital of France?"}],
+                    },
+                )
+
+        app.dependency_overrides = {}
+
+        assert resp.status_code == 400
+        data = resp.json()
+        assert data["wrapsec"]["decision"] == "BLOCK"
+        # The security property: nothing reached the provider.
+        assert len(provider_called) == 0
+
+    # -----------------------------------------------------------------------
     # Provider timeout -> 504
     # -----------------------------------------------------------------------
 
