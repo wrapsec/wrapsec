@@ -2,6 +2,55 @@
 
 All notable changes to WrapSec are documented here.
 
+## [1.9.1] - 2026-08-20
+
+Repairs the bundled metrics scrape, which had been failing silently, and makes the
+local test and container tooling match how the project is actually developed. Docs
+catch up with several shipped features. No API or detection behaviour changes.
+
+### Fixed
+- **Prometheus could not scrape the API.** The bundled scrape target pointed at
+  `host.docker.internal:8000`, which only resolves under Docker Desktop and aimed at
+  the host rather than the API container; it is now the in-network `api:8000`, which
+  works on every Docker host. The scrape had also returned 401 since metrics
+  authentication was introduced, because the scrape config carried no bearer token.
+  It now reads a credentials file written from the environment at stack start and
+  excluded from version control. Grafana panels backed by this data were empty.
+- **Shell scripts were committed non-executable.** `publish.sh` and the manual test
+  scripts carried a shebang but mode 644, so running them directly failed.
+
+### Added
+- **End-to-end tests run on an ephemeral stack.** `make test-e2e` brings up its own
+  postgres, redis, api, and dashboard under a separate compose project with its own
+  volumes, migrates from empty, seeds the dedicated accounts, runs the browser suite,
+  and destroys the stack afterwards even on failure. Previously a local end-to-end run
+  wrote its records into the development database.
+
+### Changed
+- **Compose services no longer pin a container name.** A fixed container name is
+  globally unique and prevented running a second stack alongside an existing one.
+  Containers are now project-scoped, and the CI steps, the end-to-end target, and the
+  load monitor address services by compose service name instead. Existing stacks are
+  renamed on their next recreate; volumes and data are unaffected.
+- **The linter is pinned in `requirements-dev.txt`.** It was pinned only inside the CI
+  workflow, so `make lint` failed with a missing command in a fresh environment.
+
+### Documentation
+- **The proxy's parameter contract is documented.** The API reference never stated
+  which request parameters the OpenAI-compatible endpoint accepts. The schema forbids
+  unknown fields, so `model`, `messages`, `temperature`, `max_tokens`, and `top_p` are
+  the entire surface and everything else is rejected, streaming and tool calling
+  included. The response omissions are recorded too.
+- **A policy layer's "ceiling" is documented as a contract, not enforcement.** The
+  plugin contract implied the core clamps a policy layer's return value. It does not,
+  so a layer that returns a looser policy loosens it; the obligation and the
+  registration-order semantics are now stated.
+- **The CLI reference documents the correlation flags** (`--session-id`,
+  `--turn-index`, `--run-id`), including their validation rules and the warning that
+  they are correlation metadata rather than an authorization input.
+- **The user guide covers the sources page and the agent-run timeline**, both of which
+  had shipped undocumented.
+
 ## [1.8.9] - 2026-08-18
 
 Reshapes the single-tenant core into a multi-tenant SaaS baseline: global user
