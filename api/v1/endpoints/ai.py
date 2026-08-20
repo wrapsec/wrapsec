@@ -2,7 +2,6 @@
 # Copyright (c) 2026 WrapSec. All rights reserved.
 # WrapSec v1.0 | AI Security Gateway - https://wrapsec.com
 
-import asyncio
 import hashlib
 import logging
 import uuid
@@ -28,6 +27,12 @@ from domain.entities.request import (
 from domain.enums import DecisionType, DetectionMode, ExecutionMode
 from domain.value_objects.severity import compute_severity
 from errors.exceptions import DebugForbiddenError, NotFoundError, RateLimitError
+from services.gateway.fanout import (
+    DetectionPolicy,
+    ScanItem,
+    charge_additional_units,
+    scan_items,
+)
 from services.gateway.service import GatewayService
 from services.time import to_iso_z
 from services.webhooks.emitter import emit_from_audit_background
@@ -590,24 +595,8 @@ async def ai_scan_batch(
                     f"Upgrade to a live key for full input limits."
                 )
 
-    # Rate-limit accounting: charge the batch as N units. The middleware already
-    # consumed 1 slot for this HTTP request, so consume the remaining N-1 against
-    # the same per-key bucket. Fails open if Redis is unavailable, as elsewhere.
-    if n > 1:
-        try:
-            from cache.rate_limit_store import is_rate_limited
-            key_id = getattr(request.state, "key_id", None)
-            rl_id  = (
-                f"key:{key_id}" if key_id
-                else f"ip:{getattr(request.state, 'ip_address', None) or 'unknown'}"
-            )
-            is_limited, _, _ = await is_rate_limited(rl_id, cost=n - 1)
-            if is_limited:
-                raise RateLimitError()
-        except RateLimitError:
-            raise
-        except Exception:
-            pass  # Fail open if Redis unavailable
+    # Charge the batch as N units against the caller's bucket.
+    await charge_additional_units(request, n)
 
     # Resolve policy once - the whole batch shares the caller's tenant/dept/app
     # scope. Per-item scope is not a batch concern.
@@ -634,37 +623,29 @@ async def ai_scan_batch(
 
     source = getattr(request.state, "key_name", None) or "unknown"
 
-    # Scan concurrently (bounded), then persist sequentially (hash-chain order).
-    sem = asyncio.Semaphore(max(1, _settings.batch_concurrency))
-
-    async def _scan(item):
-        async with sem:
-            incoming = IncomingRequest(
-                input          = item.input,
-                detection_mode = DetectionMode(det_mode_str),
-                execution_mode = ExecutionMode.SCAN_ONLY,
-                input_source   = item.input_source,
-                metadata       = RequestMetadata(
-                    tenant_id = getattr(request.state, "tenant_id", None),
-                    source    = source,
-                ),
-            )
-            result = await _gateway.process(
-                incoming,
-                block_threshold,
-                sanitize_threshold,
-                pii_block_threshold,
-                pii_sanitize_threshold,
-                toxicity_block_threshold,
-                toxicity_sanitize_threshold,
-                rule_enabled,
-                ml_enabled,
-                llm_enabled,
-                llm_settings,
-            )
-            return incoming, result
-
-    scanned = await asyncio.gather(*[_scan(item) for item in items])
+    # Scan concurrently (bounded), then persist sequentially below to keep the
+    # audit hash chain in order.
+    scanned = await scan_items(
+        [ScanItem(input=item.input, input_source=item.input_source) for item in items],
+        gateway        = _gateway,
+        policy         = DetectionPolicy(
+            block_threshold             = block_threshold,
+            sanitize_threshold          = sanitize_threshold,
+            pii_block_threshold         = pii_block_threshold,
+            pii_sanitize_threshold      = pii_sanitize_threshold,
+            toxicity_block_threshold    = toxicity_block_threshold,
+            toxicity_sanitize_threshold = toxicity_sanitize_threshold,
+            rule_enabled                = rule_enabled,
+            ml_enabled                  = ml_enabled,
+            llm_enabled                 = llm_enabled,
+            llm_settings                = llm_settings,
+        ),
+        detection_mode = DetectionMode(det_mode_str),
+        metadata       = RequestMetadata(
+            tenant_id = getattr(request.state, "tenant_id", None),
+            source    = source,
+        ),
+    )
 
     repo    = AuditRepository(db)
     results = []
