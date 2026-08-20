@@ -906,6 +906,35 @@ response = client.chat.completions.create(model="openai/gpt-4o", messages=[...])
 }
 ```
 
+**Accepted parameters - this is the complete list:**
+
+| Field | Type | Notes |
+|---|---|---|
+| `messages` | array | Required |
+| `model` | string | `provider/model` format, e.g. `openai/gpt-4o`. A bare `gpt-4` is rejected with `invalid_model_format` |
+| `temperature` | float | Optional |
+| `max_tokens` | int | Optional |
+| `top_p` | float | Optional |
+
+The request schema forbids unknown fields, so **any other parameter returns `422`**,
+including `stream`, `tools`, `tool_choice`, `functions`, `response_format`, `seed`,
+`stop`, `n`, `presence_penalty`, `frequency_penalty`, `logit_bias`, `logprobs`, and
+`user`. This is deliberate: every one of them either changes the response shape the
+guardrails inspect or opens a path that bypasses output scanning. Streaming in
+particular cannot be supported while the response is scanned before it is returned.
+
+Client libraries built for the OpenAI API often set some of these by default - most
+commonly `stream` - so a drop-in base-URL swap may need those options disabled
+explicitly.
+
+**Response differences from the OpenAI schema:**
+
+- There is no `usage` block. Token accounting is not proxied.
+- There is no `created` field.
+- `id` is `wrapsec-{trace_id}`, which correlates with the audit trail rather than
+  matching an upstream provider id.
+- Each choice carries `index`, `message`, and `finish_reason` only.
+
 **WrapSec request headers:**
 
 | Header | Default | Description |
