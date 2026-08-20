@@ -175,10 +175,13 @@ jobs:
         run: docker compose -f infrastructure/docker/docker-compose.yml up -d --build postgres redis api dashboard
 
       - name: Wait for the stack to be ready
+        # Services are addressed by compose service name, not by a fixed
+        # container name, so the containers stay project-scoped.
         run: |
+          COMPOSE="docker compose -f infrastructure/docker/docker-compose.yml"
           echo "waiting for the API container to report healthy..."
           for i in $(seq 1 60); do
-            status=$(docker inspect --format '{{.State.Health.Status}}' wrapsec_api 2>/dev/null || echo starting)
+            status=$(docker inspect --format '{{.State.Health.Status}}' "$($COMPOSE ps -q api)" 2>/dev/null || echo starting)
             [ "$status" = "healthy" ] && break
             sleep 5
           done
@@ -188,11 +191,11 @@ jobs:
             sleep 3
           done
           # Fail the step (and surface logs) if either is still not up.
-          test "$(docker inspect --format '{{.State.Health.Status}}' wrapsec_api)" = "healthy"
+          test "$(docker inspect --format '{{.State.Health.Status}}' "$($COMPOSE ps -q api)")" = "healthy"
           curl -sf http://localhost:3000/login >/dev/null
 
       - name: Seed E2E users (e2e-admin, e2e-viewer)
-        run: docker exec wrapsec_api python scripts/seed_e2e_user.py
+        run: docker compose -f infrastructure/docker/docker-compose.yml exec -T api python scripts/seed_e2e_user.py
 
       - name: Install Playwright + Chromium
         working-directory: dashboard

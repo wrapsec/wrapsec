@@ -144,14 +144,16 @@ locust -f tests/load/locustfile.py SoakUser \
 While running, monitor in separate terminals:
 ```bash
 # DB connections (run every 5 minutes)
-docker exec wrapsec_postgres psql -U wrapsec -d wrapsec \
+docker compose -f infrastructure/docker/docker-compose.yml exec -T postgres \
+  psql -U wrapsec -d wrapsec \
   -c "SELECT count(*) FROM pg_stat_activity WHERE datname='wrapsec';"
 
 # API process resident memory
 ps -o pid,rss,comm -C python3
 
 # Or watch both continuously
-watch -n 300 'docker exec wrapsec_postgres psql -U wrapsec -d wrapsec \
+watch -n 300 'docker compose -f infrastructure/docker/docker-compose.yml exec -T postgres \
+  psql -U wrapsec -d wrapsec \
   -tAc "SELECT count(*) FROM pg_stat_activity WHERE datname='"'"'wrapsec'"'"';"'
 ```
 
@@ -212,6 +214,6 @@ Wait 60 seconds between test runs to let rate limit windows reset.
 
 ```bash
 # Flush Redis rate limit keys between runs
-docker exec wrapsec_redis sh -c \
+docker compose -f infrastructure/docker/docker-compose.yml exec -T redis sh -c \
   'redis-cli --scan --pattern "rate:*" | xargs -r redis-cli DEL'
 ```

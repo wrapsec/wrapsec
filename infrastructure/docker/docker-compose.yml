@@ -2,7 +2,6 @@ services:
 
   nginx:
     image: nginx:alpine
-    container_name: wrapsec_nginx
     ports:
       - "80:80"
     volumes:
@@ -22,7 +21,6 @@ services:
       dockerfile: infrastructure/docker/Dockerfile
       args:
         BUILD_ENV: dev
-    container_name: wrapsec_api
     env_file:
       - ../../.env
     environment:
@@ -50,7 +48,6 @@ services:
         # in next.config.ts. In dev, http://localhost points at the nginx
         # container which reverse-proxies to the api.
         NEXT_PUBLIC_API_URL: ${NEXT_PUBLIC_API_URL:-http://localhost}
-    container_name: wrapsec_dashboard
     environment:
       - API_URL=http://api:8000
       - COOKIE_SECURE=false
@@ -70,7 +67,6 @@ services:
 
   postgres:
     image: postgres:16-alpine
-    container_name: wrapsec_postgres
     environment:
       POSTGRES_USER:     wrapsec
       POSTGRES_PASSWORD: wrapsec
@@ -89,7 +85,6 @@ services:
 
   redis:
     image: redis:7-alpine
-    container_name: wrapsec_redis
     ports:
       - "6379:6379"
     volumes:
@@ -105,7 +100,6 @@ services:
 
   prometheus:
     image: prom/prometheus:latest
-    container_name: wrapsec_prometheus
     ports:
       # Bind to localhost only — Prometheus must never be public-facing.
       # Access via SSH tunnel: ssh -L 9090:localhost:9090 user@host
@@ -131,7 +125,6 @@ services:
   # Config: infrastructure/otel-collector/otel-collector-config.yaml
   otel-collector:
     image: otel/opentelemetry-collector-contrib:latest
-    container_name: wrapsec_otel_collector
     profiles: ["otlp"]
     command: ["--config=/etc/otelcol/config.yaml"]
     environment:
@@ -152,7 +145,6 @@ services:
 
   grafana:
     image: grafana/grafana:latest
-    container_name: wrapsec_grafana
     ports:
       # Bind to localhost only — serve Grafana behind nginx with auth in production.
       # IMPORTANT: Change GF_SECURITY_ADMIN_PASSWORD before deployment.

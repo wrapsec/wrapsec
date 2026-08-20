@@ -18,11 +18,14 @@ Press Ctrl+C to stop. Final summary printed on exit.
 
 Requirements:
   pip install psutil --break-system-packages
-  docker running with wrapsec_postgres and wrapsec_redis containers
+  the compose stack running (the postgres and redis containers are resolved
+  by service name; set WRAPSEC_PG_CONTAINER / WRAPSEC_REDIS_CONTAINER to
+  override)
 """
 
 from __future__ import annotations
 
+import os
 import statistics
 import subprocess
 import sys
@@ -37,8 +40,32 @@ except ImportError:
     import psutil
 
 SAMPLE_INTERVAL = 2      # seconds between samples
-DOCKER_POSTGRES = "wrapsec_postgres"
-DOCKER_REDIS    = "wrapsec_redis"
+
+# Compose derives container names from the project, so they are not fixed and
+# must be resolved at runtime. Override either variable to point at a container
+# directly (a stack started by other means, or a remote name).
+COMPOSE_FILE    = "infrastructure/docker/docker-compose.yml"
+DOCKER_POSTGRES = os.getenv("WRAPSEC_PG_CONTAINER",    "")
+DOCKER_REDIS    = os.getenv("WRAPSEC_REDIS_CONTAINER", "")
+
+
+def _resolve_container(service: str) -> str:
+    """
+    Return the running container id for a compose service, or "" if the stack
+    is not up. Callers degrade to skipping that metric rather than failing.
+    """
+    try:
+        out = subprocess.run(
+            ["docker", "compose", "-f", COMPOSE_FILE, "ps", "-q", service],
+            capture_output = True, text = True, timeout = 10,
+        )
+        return out.stdout.strip().splitlines()[0] if out.stdout.strip() else ""
+    except Exception:
+        return ""
+
+
+DOCKER_POSTGRES = DOCKER_POSTGRES or _resolve_container("postgres")
+DOCKER_REDIS    = DOCKER_REDIS    or _resolve_container("redis")
 
 # ── Helpers ───────────────────────────────────────────────────────────────────
 

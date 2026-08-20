@@ -12,7 +12,8 @@ dashboard. This account is isolated from real dev users and is the ONLY identity
 the E2E suite authenticates with.
 
 Run inside the api container (has the app + DB access):
-    docker exec wrapsec_api python scripts/seed_e2e_user.py
+    docker compose -f infrastructure/docker/docker-compose.yml exec -T api \
+        python scripts/seed_e2e_user.py
 
 Credentials are overridable via env (E2E_ADMIN_EMAIL / E2E_ADMIN_PASSWORD) so CI
 can inject its own; defaults below are for the local stack.

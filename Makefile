@@ -39,18 +39,19 @@ test-e2e:
 	echo "starting the ephemeral stack..."; \
 	$$P up -d postgres redis api dashboard; \
 	echo "waiting for the api to report healthy..."; \
+	HEALTH="docker inspect --format {{.State.Health.Status}}"; \
 	for i in $$(seq 1 60); do \
-	  [ "$$(docker inspect --format "{{.State.Health.Status}}" wrapsec_e2e_api 2>/dev/null)" = "healthy" ] && break; \
+	  [ "$$($$HEALTH $$($$P ps -q api) 2>/dev/null)" = "healthy" ] && break; \
 	  sleep 5; \
 	done; \
-	test "$$(docker inspect --format "{{.State.Health.Status}}" wrapsec_e2e_api)" = "healthy" \
+	test "$$($$HEALTH $$($$P ps -q api) 2>/dev/null)" = "healthy" \
 	  || { echo "api never became healthy"; $$P logs --tail 50 api; exit 1; }; \
 	echo "waiting for the dashboard to serve /login..."; \
 	for i in $$(seq 1 40); do curl -sf http://localhost:3100/login >/dev/null 2>&1 && break; sleep 3; done; \
 	curl -sf http://localhost:3100/login >/dev/null \
 	  || { echo "dashboard never served /login"; $$P logs --tail 50 dashboard; exit 1; }; \
 	echo "seeding the e2e accounts..."; \
-	docker exec wrapsec_e2e_api python scripts/seed_e2e_user.py; \
+	$$P exec -T api python scripts/seed_e2e_user.py; \
 	echo "running the e2e suite..."; \
 	( cd dashboard && PLAYWRIGHT_BASE_URL=http://localhost:3100 npx playwright test )'
 

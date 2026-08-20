@@ -220,9 +220,9 @@ class SoakUser(WrapSecUser):
     Watch during test:
       - API process memory (Task Manager or htop)
       - PostgreSQL connection count:
-        docker exec wrapsec_postgres psql -U wrapsec -d wrapsec \
+        docker compose exec -T postgres psql -U wrapsec -d wrapsec \
           -c "SELECT count(*) FROM pg_stat_activity;"
-      - Redis memory: docker exec wrapsec_redis redis-cli INFO memory
+      - Redis memory: docker compose exec -T redis redis-cli INFO memory
 
     Pass criteria:
       No degradation in p95 over time (compare first 5min vs last 5min)
