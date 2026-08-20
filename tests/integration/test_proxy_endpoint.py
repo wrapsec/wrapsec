@@ -968,9 +968,15 @@ async def test_proxy_audit_row_tenant_attributed_and_chained(client, test_db):
     # 1. The proxy audit row is tenant/dept-attributed and participates in the
     #    per-tenant tamper-evident hash chain (record_hash is only computed when
     #    tenant_id is present).
+    # The proxy writes one audit row per scanned message, keyed by an id derived
+    # from the request trace, so the row is found by that prefix rather than by
+    # the request id itself.
     row = (await test_db.execute(
-        _select(AuditLogModel).where(AuditLogModel.trace_id == trace)
-    )).scalar_one()
+        _select(AuditLogModel).where(
+            AuditLogModel.trace_id.startswith(f"{trace}-", autoescape=True)
+        )
+    )).scalars().first()
+    assert row is not None
     assert row.execution_mode == "proxy"
     assert row.tenant_id == str(tid)
     assert row.dept_id == str(did)
@@ -979,7 +985,9 @@ async def test_proxy_audit_row_tenant_attributed_and_chained(client, test_db):
     # 2. It is no longer invisible: the tenant-scoped audit API (same key) lists it.
     listed = await client.get("/v1/audit/logs", headers={"x-api-key": raw})
     assert listed.status_code == 200
-    assert trace in {i["trace_id"] for i in listed.json()["items"]}
+    assert any(
+        i["trace_id"].startswith(f"{trace}-") for i in listed.json()["items"]
+    )
 
 @pytest.mark.asyncio
 async def test_proxy_rejects_dashboard_jwt(auth_client, auth_setup):

@@ -64,14 +64,30 @@ async def get_scoped_audit_record(
     Non-admin no dept : tenant-scoped (defensive fallback for edge cases).
     """
     if _is_master_admin(request):
-        return await repo.get_by_trace_id(trace_id)
+        record = await repo.get_by_trace_id(trace_id)
+        if record is None:
+            derived = await repo.first_derived_trace_id(trace_id)
+            record  = await repo.get_by_trace_id(derived) if derived else None
+        return record
 
     is_admin  = getattr(request.state, "is_admin", False)
     tenant_id = getattr(request.state, "tenant_id", "") or ""
     dept_id   = getattr(request.state, "dept_id", None)
 
-    if is_admin:
-        return await repo.get_by_trace_id_tenant_scoped(trace_id, tenant_id)
-    if dept_id:
-        return await repo.get_by_trace_id_scoped(trace_id, dept_id, tenant_id)
-    return await repo.get_by_trace_id_tenant_scoped(trace_id, tenant_id)
+    async def _scoped(tid: str):
+        if is_admin:
+            return await repo.get_by_trace_id_tenant_scoped(tid, tenant_id)
+        if dept_id:
+            return await repo.get_by_trace_id_scoped(tid, dept_id, tenant_id)
+        return await repo.get_by_trace_id_tenant_scoped(tid, tenant_id)
+
+    record = await _scoped(trace_id)
+    if record is not None:
+        return record
+
+    # A proxy request writes one audit row per scanned message, each keyed by an
+    # id derived from the request trace, so the id the caller holds matches no
+    # row directly. Resolve it to the first row of that request and re-run the
+    # same scoped lookup, so scoping is applied identically either way.
+    derived = await repo.first_derived_trace_id(trace_id, tenant_id or None)
+    return await _scoped(derived) if derived else None

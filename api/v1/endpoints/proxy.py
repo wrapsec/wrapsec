@@ -72,6 +72,7 @@ from observability.metrics import record_proxy_request, record_request
 from services.gateway.fanout import (
     DetectionPolicy,
     ScanItem,
+    charge_additional_units,
     scan_items,
 )
 from services.gateway.service import GatewayService
@@ -251,6 +252,38 @@ def _strictest_index(results: list) -> int:
     return max(enumerate(results), key=rank)[0]
 
 
+def _segment_audit_rows(segments: list[MessageSegment], scanned: list) -> list[dict]:
+    """
+    Per-message audit overlays, one per scanned message, in conversation order.
+
+    Each row records what that specific message was judged to be and how far it
+    was trusted, so the evidence behind an aggregate decision stays attributable
+    to the message that produced it. The audit trace column is unique, so each
+    row carries the id derived from the request trace and the message position.
+    """
+    rows = []
+    for segment, (incoming, result) in zip(segments, scanned):
+        decision = result.decision
+        scores   = decision.layer_scores
+        rows.append({
+            "trace_id":         str(incoming.trace_id),
+            "decision":         decision.decision.value,
+            "risk_score":       decision.risk_score.value,
+            "threats":          [threat.value for threat in decision.threats],
+            "primary_reason":   decision.primary_reason or "NO_THREAT_DETECTED",
+            "confidence":       decision.confidence if decision.confidence is not None else 0.0,
+            "input_length":     len(segment.text),
+            "input_source":     segment.source,
+            "detection_scores": {
+                "rule": scores.rule_score,
+                "ml":   scores.ml_score,
+                "llm":  scores.llm_score,
+            } if scores else {},
+            "guardrail_scores": {"pii": scores.pii_score} if scores else {},
+        })
+    return rows
+
+
 def _apply_sanitized_segments(
     messages: list[dict],
     replacements: dict[int, str],
@@ -363,6 +396,9 @@ async def _log_interaction(
     source:           str | None = None,
     ip_address:       str | None = None,
     user_agent:       str | None = None,
+    # Per-message evidence, one entry per scanned message. When absent a
+    # single row is written from the aggregate fields above.
+    segment_rows:     list[dict] | None = None,
 ) -> None:
     try:
         # Honor data_storage_mode:
@@ -426,38 +462,62 @@ async def _log_interaction(
         db.add(interaction)
         await db.flush()   # flush to get interaction.id before audit_logs insert
 
-        # 2. Insert into audit_logs with FK
+        # 2. Insert audit_logs rows, all linked to the interaction above.
+        #
+        # One row per scanned message when the caller supplied per-message
+        # evidence, so the reason for a decision stays attributable to the
+        # message that caused it. The interaction row above carries the
+        # aggregate. Rows are written in order, not concurrently: the audit
+        # chain is per-tenant and each row hashes the previous one.
         repo = AuditRepository(db)
-        await repo.create({
-            "trace_id":              trace_id,
-            "decision":              input_decision,
-            "risk_score":            risk_score,
-            "threats":               input_threats or [],
-            "input_hash":            "proxy:" + trace_id,
-            "detection_mode":        "fast",
-            "execution_mode":        "proxy",
-            "llm_invoked":           False,
-            "latency_ms":            float(total_latency_ms),
-            "detection_scores":      detection_scores or {},
-            "guardrail_scores":      guardrail_scores or {},
-            "key_id":                key_id,
-            "primary_reason":        input_reason,
-            "confidence":            input_confidence,
-            "confidence_band":       "HIGH" if input_confidence >= 0.7 else "MEDIUM" if input_confidence >= 0.4 else "LOW",
-            "input_length":          input_length,
-            "tenant_id":             tenant_id,
-            "dept_id":               dept_id,
-            "app_id":                app_id,
-            "source":                source,
-            "ip_address":            ip_address,
-            "user_agent":            user_agent,
-            "severity":              compute_severity(
-                decision       = input_decision,
-                risk_score     = risk_score,
-                primary_reason = input_reason,
-            ),
-            "proxy_interaction_id":  interaction.id,
-        })
+        rows = segment_rows or [{
+            "trace_id":         trace_id,
+            "decision":         input_decision,
+            "risk_score":       risk_score,
+            "threats":          input_threats or [],
+            "primary_reason":   input_reason,
+            "confidence":       input_confidence,
+            "input_length":     input_length,
+            "detection_scores": detection_scores or {},
+            "guardrail_scores": guardrail_scores or {},
+        }]
+
+        for row in rows:
+            row_trace = row["trace_id"]
+            row_conf  = row["confidence"]
+            audit_row = {
+                "trace_id":              row_trace,
+                "decision":              row["decision"],
+                "risk_score":            row["risk_score"],
+                "threats":               row["threats"],
+                "input_hash":            "proxy:" + row_trace,
+                "detection_mode":        "fast",
+                "execution_mode":        "proxy",
+                "llm_invoked":           False,
+                "latency_ms":            float(total_latency_ms),
+                "detection_scores":      row["detection_scores"],
+                "guardrail_scores":      row["guardrail_scores"],
+                "key_id":                key_id,
+                "primary_reason":        row["primary_reason"],
+                "confidence":            row_conf,
+                "confidence_band":       "HIGH" if row_conf >= 0.7 else "MEDIUM" if row_conf >= 0.4 else "LOW",
+                "input_length":          row["input_length"],
+                "tenant_id":             tenant_id,
+                "dept_id":               dept_id,
+                "app_id":                app_id,
+                "source":                source,
+                "ip_address":            ip_address,
+                "user_agent":            user_agent,
+                "severity":              compute_severity(
+                    decision       = row["decision"],
+                    risk_score     = row["risk_score"],
+                    primary_reason = row["primary_reason"],
+                ),
+                "proxy_interaction_id":  interaction.id,
+            }
+            if "input_source" in row:
+                audit_row["input_source"] = row["input_source"]
+            await repo.create(audit_row)
 
     except Exception as exc:
         logger.error(f"Failed to log proxy interaction trace_id={trace_id}: {exc}")
@@ -641,6 +701,32 @@ async def proxy_chat_completions(
             },
         )
 
+    # Bound the fan-out. Each scanned message costs a detection run and an audit
+    # chain append, so a long conversation must not turn one request into
+    # unbounded work. Reject rather than truncate: silently scanning part of a
+    # conversation would report a decision that did not cover what was sent.
+    _max_messages = get_settings().max_scan_all_messages
+    if len(segments) > _max_messages:
+        return JSONResponse(
+            status_code=400,
+            content={
+                "error": {
+                    "message": (
+                        f"Scanning all messages is limited to {_max_messages} eligible "
+                        f"messages per request; this request has {len(segments)}. "
+                        f"Send fewer messages or omit the scan-all header."
+                    ),
+                    "type": "invalid_request_error",
+                    "code": "too_many_messages",
+                }
+            },
+            headers={"X-WrapSec-Trace-Id": trace_id},
+        )
+
+    # Charge the extra detection units this request consumes. One unit was
+    # already taken by the HTTP request itself.
+    await charge_additional_units(request, len(segments))
+
     # -- 6. Scan every selected message, then reduce to one decision --
     # Each message is scanned on its own so it carries its own trust source; a
     # joined scan would force one classification onto content of mixed origin.
@@ -684,6 +770,8 @@ async def proxy_chat_completions(
     gateway_result = _results[_winner]
     # The audit row records the text that produced the decision.
     scan_input     = segments[_winner].text
+    # Per-message evidence, written as one audit row per scanned message.
+    _audit_rows    = _segment_audit_rows(segments, scanned)
 
     gd             = gateway_result.decision
     input_decision = gd.decision.value          # ALLOW / BLOCK / SANITIZE
@@ -731,6 +819,7 @@ async def proxy_chat_completions(
             None, None, total_ms,
         )
         await _log_interaction(
+            segment_rows=_audit_rows,
             db=db, trace_id=trace_id, key_id=key_id, user_id=None,
             tenant_id=tenant_id, dept_id=dept_id, app_id=app_id,
             source=source, ip_address=ip_address, user_agent=user_agent,
@@ -825,6 +914,7 @@ async def proxy_chat_completions(
             provider_name, model_name, total_ms,
         )
         await _log_interaction(
+            segment_rows=_audit_rows,
             db=db, trace_id=trace_id, key_id=key_id, user_id=None,
             tenant_id=tenant_id, dept_id=dept_id, app_id=app_id,
             source=source, ip_address=ip_address, user_agent=user_agent,
@@ -865,6 +955,7 @@ async def proxy_chat_completions(
             provider_name, model_name, total_ms,
         )
         await _log_interaction(
+            segment_rows=_audit_rows,
             db=db, trace_id=trace_id, key_id=key_id, user_id=None,
             tenant_id=tenant_id, dept_id=dept_id, app_id=app_id,
             source=source, ip_address=ip_address, user_agent=user_agent,
@@ -914,6 +1005,7 @@ async def proxy_chat_completions(
             STATUS_OUTPUT_BLOCKED, provider_name, model_name, total_ms,
         )
         await _log_interaction(
+            segment_rows=_audit_rows,
             db=db, trace_id=trace_id, key_id=key_id, user_id=None,
             tenant_id=tenant_id, dept_id=dept_id, app_id=app_id,
             source=source, ip_address=ip_address, user_agent=user_agent,
@@ -954,6 +1046,7 @@ async def proxy_chat_completions(
     execution_status = STATUS_SUCCESS
 
     await _log_interaction(
+        segment_rows=_audit_rows,
         db=db, trace_id=trace_id, key_id=key_id, user_id=None,
         tenant_id=tenant_id, dept_id=dept_id, app_id=app_id,
         source=source, ip_address=ip_address, user_agent=user_agent,

@@ -65,6 +65,32 @@ class AuditRepository(BaseRepository):
         )
         return result.scalar_one_or_none()
 
+    async def first_derived_trace_id(
+        self,
+        base_trace_id: str,
+        tenant_id:     str | None = None,
+    ) -> str | None:
+        """
+        Earliest per-message trace id belonging to a request-level trace.
+
+        The proxy writes one audit row per scanned message, each with an id
+        derived from the request trace plus the message position, because the
+        trace column is unique. A caller only ever sees the request-level id, so
+        a lookup by that id resolves through here.
+
+        autoescape keeps the underscore in the id prefix literal rather than
+        letting it act as a single-character wildcard.
+        """
+        stmt = (
+            select(AuditLogModel.trace_id)
+            .where(AuditLogModel.trace_id.startswith(f"{base_trace_id}-", autoescape=True))
+            .order_by(AuditLogModel.trace_id)
+            .limit(1)
+        )
+        if tenant_id:
+            stmt = stmt.where(AuditLogModel.tenant_id == tenant_id)
+        return (await self.session.execute(stmt)).scalar_one_or_none()
+
     async def get_by_trace_id_scoped(
         self,
         trace_id:  str,

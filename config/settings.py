@@ -169,6 +169,15 @@ class Settings(BaseSettings):
     max_batch_items:   int = 50
     batch_concurrency: int = 8
 
+    # Upper bound on how many conversation messages one proxy request may scan
+    # when it asks for every message to be scanned. Deliberately lower than
+    # max_batch_items: each scanned message appends a row to the tenant's audit
+    # hash chain, and every row hashes the one before it, so a large fan-out on
+    # a latency-sensitive path costs more than the detection work alone. Raising
+    # this requires re-checking that the derived per-message audit trace id
+    # (request id plus message position) still fits the audit trace column.
+    max_scan_all_messages: int = 20
+
     # ── LLM Provider ──────────────────────────────────────────
     llm_provider:             str = Field(default="ollama")  # ollama | openai | groq
     llm_model:                str = Field(default="llama3.2")
