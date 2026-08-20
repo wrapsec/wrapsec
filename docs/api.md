@@ -929,11 +929,17 @@ explicitly.
 
 **Response differences from the OpenAI schema:**
 
-- There is no `usage` block. Token accounting is not proxied.
+- `usage` is **optional**. The provider's own token counts are passed through
+  unchanged when it sends them, and the field is absent when it does not. Treat it
+  as optional rather than guaranteed. The numbers are observability only: nothing
+  in WrapSec prices, budgets, or bills against them.
 - There is no `created` field.
 - `id` is `wrapsec-{trace_id}`, which correlates with the audit trail rather than
   matching an upstream provider id.
 - Each choice carries `index`, `message`, and `finish_reason` only.
+- A response the security guard cannot inspect is **not forwarded**. A tool-call
+  reply carries a null `content`, which cannot be scanned, so it is rejected with
+  `provider_response_unsupported` rather than returned unchecked.
 
 **WrapSec request headers:**
 
