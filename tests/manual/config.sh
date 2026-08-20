@@ -1,6 +1,8 @@
-#!/usr/bin/env bash
 # =============================================================================
 # WrapSec Manual Test Suite - Configuration
+#
+# Sourced by run_all.sh and by the individual api/ and cli/ scripts; never
+# executed directly, so it carries no shebang and stays non-executable.
 # =============================================================================
 # Edit the values below, then run: bash run_all.sh
 #
