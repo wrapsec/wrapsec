@@ -103,6 +103,21 @@ layer can clamp even an application override. The core never interprets
 app_id}`. A layer that raises is logged and skipped (fail-open) -- never rely on
 it to *deny*; use it to shape.
 
+**"Ceiling" describes intent, not enforcement.** The core threads whatever policy
+dict your layer returns into the next layer and on to the policy engine; it does
+NOT clamp your return value against the pre-layer policy. A layer that returns a
+looser policy will loosen it. Two consequences:
+
+- Keeping the result at or below what you were handed is YOUR obligation. Compare
+  against the incoming `policy` and take the stricter value rather than assuming
+  the core will do it for you.
+- Layer order is registration order, and each layer sees the previous layer's
+  output. With more than one plugin installed, the last registered layer wins any
+  disagreement, so do not assume yours runs last.
+
+Treat a policy layer as a trusted, reviewable extension point: it runs in-process
+with full ability to widen the policy it was given.
+
 ### Per-tenant config and entitlements
 
 Plugin config and per-tenant entitlements are `tenant_settings` rows under the
