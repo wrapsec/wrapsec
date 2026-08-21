@@ -456,14 +456,23 @@ class AdminEventModel(Base):
 
 class AuthEventModel(Base):
     """
-    Authentication event log - one row per login attempt.
-    Separate from audit_logs (AI security events) and admin_events (admin actions).
+    Credential authentication and authorization event log.
+
+    One row per attempt to authenticate or use a credential. Originally sign-ins
+    only, which is why most columns describe a user; it now also carries refusals
+    of machine credentials, where there is no user and the subject is the key.
+    Separate from audit_logs (AI security events) and admin_events (admin actions):
+    nothing recorded here passed through inspection, so none of it belongs in a
+    decision trail whose numbers feed block-rate and threat analytics.
 
     Logging: non-blocking, best-effort. Must use BackgroundTasks or separate DB session.
     Must NOT use the request session. Must NOT delay login response.
 
     tenant_id NULLABLE - NULL when user not found (cannot resolve tenant).
-    user_id   NULLABLE - NULL when user not found.
+    user_id   NULLABLE - NULL when user not found, and on every machine-credential row.
+    key_id    NULLABLE - NULL on user sign-ins; set on machine-credential rows. Holds
+                         the bare id as stored in api_keys.key_id, not the prefixed
+                         form request state carries, so the two join directly.
     Prefer NULL over incorrect attribution. Never use sentinel values.
 
     action must be a value from AuthEventAction enum.
@@ -482,6 +491,7 @@ class AuthEventModel(Base):
     failure_reason: Mapped[str | None] = mapped_column(String(50),  nullable=True)
     ip_address: Mapped[str | None] = mapped_column(String(45),  nullable=True)
     user_agent: Mapped[str | None] = mapped_column(String(500), nullable=True)
+    key_id: Mapped[str | None] = mapped_column(String(50),  nullable=True, index=True)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True),    nullable=False, default=utc_now)
 
     __table_args__ = (

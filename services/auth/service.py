@@ -61,6 +61,7 @@ async def _log_auth_event(
     failure_reason: str  | None = None,
     ip_address:     str  | None = None,
     user_agent:     str  | None = None,
+    key_id:         str  | None = None,
 ) -> None:
     """
     Inserts an auth_event row using a separate NullPool DB session.
@@ -72,6 +73,10 @@ async def _log_auth_event(
     tenant_id / user_id:
         Known user   -> set from user record
         Unknown user -> both None (user not found, cannot resolve tenant)
+
+    key_id identifies a machine credential when the event is about one. Pass the
+    bare id as stored on the key, not the prefixed form request state carries, so
+    a reader can join the two. None for user sign-ins.
     """
     from db.repositories.auth_event import AuthEventRepository
     from domain.enums import AuthEventAction as _Action
@@ -88,6 +93,7 @@ async def _log_auth_event(
             failure_reason = _Reason(failure_reason) if failure_reason else None,
             ip_address     = ip_address,
             user_agent     = user_agent,
+            key_id         = key_id,
         )
         await session.commit()
     except Exception as e:

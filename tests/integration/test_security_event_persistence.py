@@ -106,10 +106,11 @@ class TestAuthEventPersistence:
         assert after[-1].failure_reason, "no reason was recorded for the rejection"
 
     @pytest.mark.asyncio
-    async def test_a_rejected_source_address_is_recorded(self, test_db):
+    async def test_a_rejected_source_address_names_the_credential(self, test_db):
         """
         A denial that leaves no trace is indistinguishable from a request that
-        never happened, which is the opposite of what a restriction is for.
+        never happened. A denial that does not say WHICH credential was refused
+        is barely better: it turns revoking one key into auditing all of them.
         """
         from types import SimpleNamespace
 
@@ -117,11 +118,14 @@ class TestAuthEventPersistence:
 
         tenant_id = uuid.uuid4()
         request   = SimpleNamespace(
-            state   = SimpleNamespace(tenant_id=str(tenant_id)),
+            state   = SimpleNamespace(
+                tenant_id = str(tenant_id),
+                key_id    = "key:wsk_abc123",   # the prefixed form request state carries
+            ),
             headers = {"user-agent": "probe"},
         )
 
-        await _record_allowlist_denial(test_db, request, "203.0.113.9", "probe")
+        await _record_allowlist_denial(request, "203.0.113.9", "probe")
 
         row = (await test_db.execute(
             select(AuthEventModel).where(AuthEventModel.tenant_id == tenant_id)
@@ -131,6 +135,40 @@ class TestAuthEventPersistence:
         assert row.success        is False
         assert row.failure_reason == "ip_not_allowed"
         assert row.ip_address     == "203.0.113.9"
+        # stored bare, so it joins against api_keys.key_id
+        assert row.key_id         == "wsk_abc123"
+        # a machine credential has no user; the docstring forbids inventing one
+        assert row.user_id is None
+
+    @pytest.mark.asyncio
+    async def test_the_denial_recorder_does_not_use_the_request_session(self, test_db):
+        """
+        The credential log is written on its own session by contract, so
+        recording can never delay or fail the request it describes. Passing the
+        request session would also enlist the write in that request's
+        transaction, where a later rollback would erase the refusal.
+        """
+        import inspect
+        from types import SimpleNamespace
+        from unittest.mock import AsyncMock
+
+        from api.v1.endpoints.proxy import _record_allowlist_denial
+
+        # the signature cannot accept one
+        assert "db" not in inspect.signature(_record_allowlist_denial).parameters
+
+        # and a session handed in some other way is never touched
+        sentinel = AsyncMock()
+        request  = SimpleNamespace(
+            state   = SimpleNamespace(tenant_id=str(uuid.uuid4()), key_id="key:wsk_x"),
+            headers = {"user-agent": "probe"},
+            session = sentinel,
+        )
+
+        await _record_allowlist_denial(request, "203.0.113.9", "probe")
+
+        sentinel.add.assert_not_called()
+        sentinel.commit.assert_not_called()
 
 
 # ── Changing a restriction lands among the administrative events ──────────────

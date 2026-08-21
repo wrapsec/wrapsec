@@ -124,6 +124,10 @@ class AuthEventAction(str, Enum):
     TOKEN_REFRESH_SUCCESS = "token_refresh_success"
     TOKEN_REFRESH_FAILED  = "token_refresh_failed"
     SESSION_EXPIRED       = "session_expired"
+    # A machine credential refused because it was presented from an address
+    # its owner did not permit. Not a sign-in: there is no user and no
+    # password, which is why the row carries a credential rather than a user.
+    API_KEY_IP_DENIED     = "api_key_ip_denied"
 
 
 class AuthFailureReason(str, Enum):
@@ -141,6 +145,8 @@ class AuthFailureReason(str, Enum):
     TOKEN_INVALID       = "token_invalid"
     INACTIVITY          = "inactivity"
     MANUAL              = "manual"
+    # The presented address is outside the networks configured on the credential.
+    IP_NOT_ALLOWED      = "ip_not_allowed"
     EXPIRED             = "expired"
     REFRESH_FAILED      = "refresh_failed"
     SESSION_INVALIDATED = "session_invalidated"

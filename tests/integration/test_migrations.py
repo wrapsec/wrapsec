@@ -123,3 +123,63 @@ def test_audit_logs_has_v1_2_session_and_hash_columns(tmp_path):
     for name in ("session_id", "turn_index", "run_id", "record_hash", "prev_hash"):
         assert name in cols, f"audit_logs missing v1.2.0 column: {name}"
         assert cols[name]["nullable"] is True, f"audit_logs.{name} must be nullable"
+
+
+# ---------------------------------------------------------------------------
+# Reversibility
+# ---------------------------------------------------------------------------
+
+def _columns(url: str, table: str) -> set[str]:
+    engine = create_engine(url)
+    try:
+        inspector = inspect(engine)
+        if table not in inspector.get_table_names():
+            return set()
+        return {c["name"] for c in inspector.get_columns(table)}
+    finally:
+        engine.dispose()
+
+
+def test_recent_migrations_reverse_and_reapply(tmp_path):
+    """
+    A downgrade path that is never exercised is a downgrade path that does not
+    work. Nothing here called downgrade before, so each of these was only ever
+    verified by hand, which is not a thing CI can repeat.
+
+    Steps down through the migrations that added columns, checks each column is
+    gone, then steps back up and checks it returns. Re-applying matters as much
+    as reversing: an operator who rolls back to investigate has to be able to
+    roll forward again.
+    """
+    db_file   = tmp_path / "reversible.db"
+    async_url = f"sqlite+aiosqlite:///{db_file}"
+    sync_url  = f"sqlite:///{db_file}"
+    cfg       = _alembic_config(async_url)
+
+    command.upgrade(cfg, "head")
+
+    # (revision that adds them, table, columns it adds)
+    steps = [
+        ("0023_auth_event_key_id",   "auth_events",        {"key_id"}),
+        ("0022_api_key_ip_allowlist", "api_keys",          {"ip_allowlist"}),
+        ("0021_proxy_scan_latency",  "proxy_interactions", {"input_scan_ms", "output_scan_ms"}),
+    ]
+
+    for revision, table, added in steps:
+        assert added <= _columns(sync_url, table), (
+            f"{revision} did not leave {added} on {table}"
+        )
+
+    # walk back down through all three
+    for revision, table, added in steps:
+        command.downgrade(cfg, "-1")
+        assert not (added & _columns(sync_url, table)), (
+            f"{revision} downgrade left {added & _columns(sync_url, table)} behind"
+        )
+
+    # and forward again
+    command.upgrade(cfg, "head")
+    for revision, table, added in steps:
+        assert added <= _columns(sync_url, table), (
+            f"{revision} did not restore {added} on re-upgrade"
+        )

@@ -1365,19 +1365,11 @@ class TestProxyIpAllowlist:
             )
             assert resp.status_code == 200
 
-    @pytest.mark.asyncio
-    async def test_a_denial_is_recorded(self, app):
-        resp, _scanned, _called, mock_db = await self._post(
-            app, allowlist=["10.0.0.0/8"], client_ip="203.0.113.9",
-        )
-        assert resp.status_code == 403
-
-        added   = [c.args[0] for c in mock_db.add.call_args_list]
-        denials = [o for o in added if getattr(o, "action", None) == "api_key_ip_denied"]
-        assert denials, "the denial was not recorded"
-        assert denials[0].success        is False
-        assert denials[0].failure_reason == "ip_not_allowed"
-        assert denials[0].ip_address     == "203.0.113.9"
+    # The denial's persistence is asserted against the real table in
+    # test_security_event_persistence.py, which also checks that the refused
+    # credential is named. It cannot be checked here: the credential log is
+    # written on its own session by contract, so the request session this test
+    # mocks never sees it.
 
     @pytest.mark.asyncio
     async def test_a_forwarded_header_cannot_present_an_approved_address(self, app):

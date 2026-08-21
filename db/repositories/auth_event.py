@@ -34,6 +34,7 @@ class AuthEventRepository(BaseRepository):
         failure_reason: AuthFailureReason | None = None,
         ip_address:     str  | None            = None,
         user_agent:     str  | None            = None,
+        key_id:         str  | None            = None,
     ) -> AuthEventModel:
         """
         Inserts a single auth event row.
@@ -59,6 +60,7 @@ class AuthEventRepository(BaseRepository):
             failure_reason = failure_reason.value if failure_reason else None,
             ip_address     = ip_address,
             user_agent     = user_agent,
+            key_id         = key_id,
         )
         self.session.add(event)
         await self.session.flush()

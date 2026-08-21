@@ -397,36 +397,51 @@ def _error_response(
     )
 
 
+def _bare_key_id(state_key_id: str | None) -> str | None:
+    """
+    The credential id as stored on the key, from the prefixed form request state
+    carries. State distinguishes credential kinds ("key:wsk_...", "key:admin",
+    "user:<uuid>"); the stored id has no prefix, and only a machine credential
+    has one to record.
+    """
+    if not state_key_id or not state_key_id.startswith("key:"):
+        return None
+    bare = state_key_id[len("key:"):]
+    return bare or None
+
+
 async def _record_allowlist_denial(
-    db,
     request,
     ip_address: str | None,
     user_agent: str | None,
 ) -> None:
     """
-    Record a credential used from an unapproved network.
+    Record a credential refused because of where it was presented from.
 
-    Lands with the other credential-level events rather than in the request
-    audit trail: nothing was scanned and no decision was made, so recording it
-    as a security decision would misreport what happened.
+    Goes to the credential event log rather than the request trail: nothing was
+    scanned and no decision was made, so a row in the decision trail would need
+    an invented decision, and those numbers feed block-rate and threat analytics.
 
-    A failure to record must not become a failure to deny, so the write is
-    best-effort and the denial stands either way.
+    Deliberately does NOT take the request session. That log is written on its
+    own session so recording can never delay or fail the request it describes,
+    and the write is best-effort for the same reason: a refusal that cannot be
+    recorded is still a refusal.
     """
-    try:
-        from db.models import AuthEventModel
+    from domain.enums import AuthEventAction, AuthFailureReason
+    from services.auth.service import _log_auth_event
 
-        tenant_id = getattr(request.state, "tenant_id", None)
-        db.add(AuthEventModel(
+    tenant_id = getattr(request.state, "tenant_id", None)
+    try:
+        await _log_auth_event(
+            action         = AuthEventAction.API_KEY_IP_DENIED.value,
+            success        = False,
             tenant_id      = uuid.UUID(tenant_id) if tenant_id else None,
             user_id        = None,
-            action         = "api_key_ip_denied",
-            success        = False,
-            failure_reason = "ip_not_allowed",
+            failure_reason = AuthFailureReason.IP_NOT_ALLOWED.value,
             ip_address     = ip_address,
             user_agent     = (user_agent or "")[:500] or None,
-        ))
-        await db.commit()
+            key_id         = _bare_key_id(getattr(request.state, "key_id", None)),
+        )
     except Exception as exc:
         logger.error("Could not record a source-network denial: %s", exc)
 
@@ -663,7 +678,7 @@ async def proxy_chat_completions(
             "Source network denied trace_id=%s key=%s ip=%s",
             trace_id, key_id, ip_address,
         )
-        await _record_allowlist_denial(db, request, ip_address, user_agent)
+        await _record_allowlist_denial(request, ip_address, user_agent)
         return _error_response(
             status_code  = 403,
             message      = "This credential is not permitted from your network address.",
