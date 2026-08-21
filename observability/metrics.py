@@ -58,6 +58,17 @@ PROXY_EXECUTION = Counter(
     # execution_status: SUCCESS | BLOCKED | OUTPUT_BLOCKED | FAILED | TIMEOUT
 )
 
+PROXY_REJECTED = Counter(
+    "wrapsec_proxy_rejected_total",
+    "Proxy requests refused before any inspection, by reason",
+    ["reason"],
+    # These never reach detection, so they are deliberately NOT written to the
+    # decision trail: a row there would need an invented decision, and those
+    # numbers feed block-rate and threat analytics. A counter answers what is
+    # actually asked of them -- how often, and is it getting worse -- and the
+    # log line carries the trace id and tenant for the individual case.
+)
+
 PROXY_LATENCY = Histogram(
     "wrapsec_proxy_latency_ms",
     "Total proxy end-to-end latency in milliseconds",
@@ -198,6 +209,32 @@ def record_request(
             safe_layer = _safe(layer, _VALID_LAYERS)
             if safe_layer != "unknown":
                 LAYER_SCORE.labels(layer=safe_layer).observe(score)
+
+
+# Reasons a proxy request can be refused before inspection. Fixed set: a label
+# fed from arbitrary strings turns one metric into unbounded time series.
+_REJECTION_REASONS = frozenset({
+    "trial_proxy_disabled",
+    "ip_not_allowed",
+    "invalid_model_format",
+    "proxy_not_configured",
+    "model_required",
+    "provider_mismatch",
+    "invalid_messages",
+    "too_many_messages",
+})
+
+
+def record_proxy_rejection(reason: str) -> None:
+    """
+    Count a proxy request refused before inspection.
+
+    An unrecognised reason is counted as "other" rather than dropped: losing the
+    signal is worse than losing its name, and a new rejection path showing up in
+    the "other" bucket is how you find out someone forgot to name it.
+    """
+    label = reason if reason in _REJECTION_REASONS else "other"
+    PROXY_REJECTED.labels(reason=label).inc()
 
 
 def record_proxy_request(

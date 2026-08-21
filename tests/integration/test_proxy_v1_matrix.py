@@ -301,3 +301,64 @@ class TestAllowlistAuthorisation:
             json={"name": "victim", "ip_allowlist": []},
         )
         assert resp.status_code == 404
+
+
+# ── Refusals before inspection are counted, not written to the decision trail ──
+
+class TestPreInspectionRefusals:
+    """
+    These never reach detection. Recording them as decisions would need an
+    invented decision, and that trail's numbers are what block-rate and threat
+    analytics are built from, so they are counted and logged instead.
+    """
+
+    def _count(self, reason: str) -> float:
+        from observability.metrics import PROXY_REJECTED
+        return PROXY_REJECTED.labels(reason=reason)._value.get()
+
+    @pytest.mark.asyncio
+    async def test_a_refusal_increments_its_reason(self, app):
+        before = self._count("provider_mismatch")
+
+        resp = await _post(app, {
+            "model":    "ollama/llama3",           # tenant is configured for openai
+            "messages": [{"role": "user", "content": "hi"}],
+        })
+
+        assert resp.status_code == 400
+        assert resp.json()["error"]["code"] == "provider_mismatch"
+        assert self._count("provider_mismatch") == before + 1
+
+    @pytest.mark.asyncio
+    async def test_reasons_are_counted_separately(self, app):
+        """A single lump counter cannot tell a client bug from a broken tenant."""
+        before = self._count("invalid_messages")
+
+        resp = await _post(app, {
+            "model":    "openai/gpt-4o",
+            "messages": [{"role": "system", "content": "only a system prompt"}],
+        })
+
+        assert resp.status_code == 400
+        assert self._count("invalid_messages") == before + 1
+
+    @pytest.mark.asyncio
+    async def test_a_refusal_writes_no_decision_row(self, app):
+        """
+        The assertion that matters: nothing lands in the decision trail. A row
+        there would inflate block-rate with requests where no content was ever
+        examined.
+        """
+        created = []
+
+        async def _capture(self, data):
+            created.append(data)
+
+        with patch("db.repositories.audit.AuditRepository.create", new=_capture):
+            resp = await _post(app, {
+                "model":    "ollama/llama3",
+                "messages": [{"role": "user", "content": "hi"}],
+            })
+
+        assert resp.status_code == 400
+        assert created == [], "a refusal that was never inspected reached the decision trail"

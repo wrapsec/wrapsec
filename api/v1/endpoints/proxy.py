@@ -68,7 +68,11 @@ from engine.proxy.router import (
 )
 from errors.catalog import ErrorCode
 from errors.response import error_response as _catalog_error_response
-from observability.metrics import record_proxy_request, record_request
+from observability.metrics import (
+    record_proxy_rejection,
+    record_proxy_request,
+    record_request,
+)
 from security.ip_allowlist import is_allowed
 from services.gateway.fanout import (
     DetectionPolicy,
@@ -397,6 +401,43 @@ def _error_response(
     )
 
 
+def _reject(
+    *,
+    request,
+    trace_id:    str,
+    status_code: int,
+    message:     str,
+    error_type:  str,
+    error_code:  str,
+) -> JSONResponse:
+    """
+    Refuse a request before anything has been inspected, and leave a trace of it.
+
+    One path for every such refusal so the record and the response cannot drift:
+    a counter for the shape of the problem, and a log line carrying the trace id
+    and tenant for the individual case. Deliberately no row in the decision
+    trail -- nothing was scanned, so any decision recorded there would be
+    invented, and that trail's numbers are what block-rate and threat analytics
+    are built from.
+    """
+    record_proxy_rejection(error_code)
+    logger.warning(
+        "Proxy request refused reason=%s trace_id=%s tenant=%s key=%s",
+        error_code,
+        trace_id,
+        getattr(request.state, "tenant_id", None),
+        getattr(request.state, "key_id", None),
+    )
+    return _error_response(
+        status_code  = status_code,
+        message      = message,
+        error_type   = error_type,
+        error_code   = error_code,
+        wrapsec_meta = {"trace_id": trace_id},
+        headers      = {"X-WrapSec-Trace-Id": trace_id},
+    )
+
+
 def _bare_key_id(state_key_id: str | None) -> str | None:
     """
     The credential id as stored on the key, from the prefixed form request state
@@ -679,25 +720,25 @@ async def proxy_chat_completions(
             trace_id, key_id, ip_address,
         )
         await _record_allowlist_denial(request, ip_address, user_agent)
-        return _error_response(
-            status_code  = 403,
-            message      = "This credential is not permitted from your network address.",
-            error_type   = "forbidden",
-            error_code   = "ip_not_allowed",
-            wrapsec_meta = {"trace_id": trace_id},
-            headers      = {"X-WrapSec-Trace-Id": trace_id},
+        return _reject(
+            request     = request,
+            trace_id    = trace_id,
+            status_code = 403,
+            message     = "This credential is not permitted from your network address.",
+            error_type  = "forbidden",
+            error_code  = "ip_not_allowed",
         )
 
     # -- 0. Trial key check - proxy mode not available for trial keys --
     key_type = getattr(request.state, "key_type", "live")
     if key_type == "trial":
-        return _error_response(
-            status_code  = 403,
-            message      = "Proxy mode is not available for trial keys. Upgrade to a live key.",
-            error_type   = "forbidden",
-            error_code   = "trial_proxy_disabled",
-            wrapsec_meta = {"trace_id": trace_id},
-            headers      = {"X-WrapSec-Trace-Id": trace_id},
+        return _reject(
+            request     = request,
+            trace_id    = trace_id,
+            status_code = 403,
+            message     = "Proxy mode is not available for trial keys. Upgrade to a live key.",
+            error_type  = "forbidden",
+            error_code  = "trial_proxy_disabled",
         )
 
     # -- 1. Parse model string if provided; deferred resolution happens after step 3 --
@@ -706,13 +747,13 @@ async def proxy_chat_completions(
         try:
             provider_name, model_name = parse_model_string(body.model)
         except ValueError as exc:
-            return _error_response(
-                status_code  = 400,
-                message      = str(exc),
-                error_type   = "invalid_request_error",
-                error_code   = "invalid_model_format",
-                wrapsec_meta = {"trace_id": trace_id},
-                headers      = {"X-WrapSec-Trace-Id": trace_id},
+            return _reject(
+                request     = request,
+                trace_id    = trace_id,
+                status_code = 400,
+                message     = str(exc),
+                error_type  = "invalid_request_error",
+                error_code  = "invalid_model_format",
             )
 
     # -- 2. Resolve policy (moved early - used for both detection and proxy fallback) --
@@ -735,16 +776,16 @@ async def proxy_chat_completions(
         config = result.scalar_one_or_none()
 
     if not config and not dept_proxy_cfg:
-        return _error_response(
-            status_code  = 400,
-            message      = (
+        return _reject(
+            request     = request,
+            trace_id    = trace_id,
+            status_code = 400,
+            message     = (
                         "No proxy provider configured for this API key or department. "
                         "Configure a provider via PUT /v1/settings/proxy or the department policy."
                     ),
-            error_type   = "invalid_request_error",
-            error_code   = "proxy_not_configured",
-            wrapsec_meta = {"trace_id": trace_id},
-            headers      = {"X-WrapSec-Trace-Id": trace_id},
+            error_type  = "invalid_request_error",
+            error_code  = "proxy_not_configured",
         )
 
     # -- 3b. Resolve model from default_model if not supplied in request --
@@ -754,27 +795,27 @@ async def proxy_chat_completions(
             else (dept_proxy_cfg or {}).get("default_model")
         )
         if not default_model:
-            return _error_response(
-                status_code  = 400,
-                message      = (
+            return _reject(
+                request     = request,
+                trace_id    = trace_id,
+                status_code = 400,
+                message     = (
                             "No model specified and no default_model configured. "
                             "Pass 'model' in the request body or set a default_model in proxy settings."
                         ),
-                error_type   = "invalid_request_error",
-                error_code   = "model_required",
-                wrapsec_meta = {"trace_id": trace_id},
-                headers      = {"X-WrapSec-Trace-Id": trace_id},
+                error_type  = "invalid_request_error",
+                error_code  = "model_required",
             )
         try:
             provider_name, model_name = parse_model_string(default_model)
         except ValueError as exc:
-            return _error_response(
-                status_code  = 400,
-                message      = str(exc),
-                error_type   = "invalid_request_error",
-                error_code   = "invalid_model_format",
-                wrapsec_meta = {"trace_id": trace_id},
-                headers      = {"X-WrapSec-Trace-Id": trace_id},
+            return _reject(
+                request     = request,
+                trace_id    = trace_id,
+                status_code = 400,
+                message     = str(exc),
+                error_type  = "invalid_request_error",
+                error_code  = "invalid_model_format",
             )
 
     # -- 3c. Reject a provider the tenant has not configured --
@@ -792,18 +833,18 @@ async def proxy_chat_completions(
             "Provider mismatch trace_id=%s requested=%s configured=%s",
             trace_id, provider_name, _configured_provider,
         )
-        return _error_response(
-            status_code  = 400,
-            message      = (
+        return _reject(
+            request     = request,
+            trace_id    = trace_id,
+            status_code = 400,
+            message     = (
                 f"This deployment is configured for the '{_configured_provider}' provider, "
                 f"but the request asked for '{provider_name}'. Use a "
                 f"'{_configured_provider}/<model>' model string, or update the proxy "
                 f"provider configuration."
             ),
-            error_type   = "invalid_request_error",
-            error_code   = "provider_mismatch",
-            wrapsec_meta = {"trace_id": trace_id},
-            headers      = {"X-WrapSec-Trace-Id": trace_id},
+            error_type  = "invalid_request_error",
+            error_code  = "provider_mismatch",
         )
 
     # -- 4. Read WrapSec request headers --
@@ -818,13 +859,13 @@ async def proxy_chat_completions(
     try:
         segments = _eligible_segments(body.messages, scan_all)
     except ValueError as exc:
-        return _error_response(
-            status_code  = 400,
-            message      = str(exc),
-            error_type   = "invalid_request_error",
-            error_code   = "invalid_messages",
-            wrapsec_meta = {"trace_id": trace_id},
-            headers      = {"X-WrapSec-Trace-Id": trace_id},
+        return _reject(
+            request     = request,
+            trace_id    = trace_id,
+            status_code = 400,
+            message     = str(exc),
+            error_type  = "invalid_request_error",
+            error_code  = "invalid_messages",
         )
 
     # Bound the fan-out. Each scanned message costs a detection run and an audit
@@ -833,17 +874,17 @@ async def proxy_chat_completions(
     # conversation would report a decision that did not cover what was sent.
     _max_messages = get_settings().max_scan_all_messages
     if len(segments) > _max_messages:
-        return _error_response(
-            status_code  = 400,
-            message      = (
+        return _reject(
+            request     = request,
+            trace_id    = trace_id,
+            status_code = 400,
+            message     = (
                         f"Scanning all messages is limited to {_max_messages} eligible "
                         f"messages per request; this request has {len(segments)}. "
                         f"Send fewer messages or omit the scan-all header."
                     ),
-            error_type   = "invalid_request_error",
-            error_code   = "too_many_messages",
-            wrapsec_meta = {"trace_id": trace_id},
-            headers      = {"X-WrapSec-Trace-Id": trace_id},
+            error_type  = "invalid_request_error",
+            error_code  = "too_many_messages",
         )
 
     # Charge the extra detection units this request consumes. One unit was
