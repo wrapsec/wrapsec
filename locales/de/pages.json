@@ -230,7 +230,7 @@
       "blocked": "Blockiert",
       "sanitized": "Bereinigt",
       "allowed": "Zugelassen",
-      "hover_hint": "Für Details über einen Balken fahren",
+      "hover_hint": "Für Einzelheiten über einen Balken fahren",
       "hover_blocked": "{count} blockiert",
       "hover_sanitized": "{count} bereinigt",
       "hover_allowed": "{count} zugelassen",
@@ -789,7 +789,7 @@
       "rotated_banner": "Schlüssel rotiert - kopieren Sie den neuen Schlüssel jetzt. Er wird nicht erneut angezeigt.",
       "dismiss": "Schließen",
       "rotated_hint": "Der alte Schlüssel läuft nach der Kulanzzeit ab. Aktualisieren Sie Ihre Integrationen, bevor er abläuft.",
-      "details": "Details"
+      "details": "Einzelheiten"
     },
     "create_modal": {
       "title": "API-Schlüssel erstellen",
@@ -819,8 +819,8 @@
       "done": "Fertig"
     },
     "drawer": {
-      "label": "Schlüsseldetails",
-      "title": "Schlüsseldetails",
+      "label": "Einzelheiten zum Schlüssel",
+      "title": "Einzelheiten zum Schlüssel",
       "load_error": "Dieser Schlüssel konnte nicht geladen werden.",
       "save": "Änderungen speichern",
       "saving": "Wird gespeichert ...",
