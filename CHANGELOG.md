@@ -2,6 +2,92 @@
 
 All notable changes to WrapSec are documented here.
 
+## [Unreleased]
+
+Hardens the OpenAI-compatible proxy. Three of these change behaviour a caller can
+observe, and one is a breaking contract change; they are listed first.
+
+### Security
+
+- **A key's source-network restriction is now enforced on every endpoint.** It was
+  applied on `POST /v1/chat/completions` only, so a key restricted to one network was
+  still accepted from any address on `/v1/ai/request`, `/v1/ai/scan-batch`, and every
+  other route that takes an API key. Enforcement moved to authentication, where it
+  runs before routing and therefore covers routes added later. A refused request
+  reaches no handler: no policy resolution, no detection, no upstream call. Dashboard
+  sessions and the platform admin key are unaffected - a restriction belongs to an
+  API key, and neither of those is one.
+- **Message roles are validated, and unsupported roles are refused.** `user`,
+  `assistant`, and `system` are accepted; any other role, `tool` included, is
+  rejected with `422`. A `tool` message was previously accepted and forwarded to the
+  provider without being inspected. This is a **breaking change** for any caller that
+  was sending one. Rejecting tool-calling parameters (`tools`, `tool_choice`,
+  `functions`) is a separate control; a request presenting either is refused.
+- **Scanning assistant turns is available as an opt-in capability,
+  `SCAN_ASSISTANT_MESSAGES`, disabled by default.** A conversation history is an
+  injection surface: text a previous turn returned, or that a caller placed in an
+  assistant turn, reaches the model exactly as a user turn does. Enabling it is a
+  real gain, but measured against a corpus of ordinary assistant prose the current
+  detector flags a high proportion of legitimate replies, so it ships off and the
+  default posture is unchanged - user turns only. Measure against your own traffic
+  before enabling.
+
+### Added
+
+- Source networks can be set per key from the dashboard, with the addresses the key
+  has recently been used from and recently been refused from shown alongside, so a
+  restriction can be built from evidence rather than recollection. Saving a list that
+  would refuse an address the key is currently using warns first and names it.
+- `GET /v1/keys/{key_id}/addresses` returns those two lists. Administrator only, and
+  scoped to the owning tenant.
+- Setting, changing, or removing a source-network restriction is recorded as an
+  administrative event. The change is the security event, since whoever can add a
+  restriction can also remove one. The key secret never appears in it.
+- Refusals that happen before inspection are counted by reason
+  (`wrapsec_proxy_rejected_total`), and source-network denials by
+  `wrapsec_api_key_ip_denied_total`.
+- Proxy responses carry the provider's `usage` block when the provider returns one.
+  Observability only; nothing prices or bills against it.
+- Per-request security overhead is recorded separately from provider time.
+
+### Changed
+
+- Scanning every message of a conversation is bounded at 10 eligible messages,
+  configurable with `MAX_SCAN_ALL_MESSAGES`. Over the bound the request is rejected
+  rather than partly scanned: silently scanning some of a conversation would report a
+  decision that did not cover what was sent. The bound was set from measurement -
+  each scanned message costs a detection run and an append to a per-tenant audit
+  chain, and the queueing that causes is what a caller experiences as latency.
+- Each scanned message is inspected on its own and carries its own trust
+  classification, rather than being joined into one scan. The strictest message
+  decides the request, and a message that comes back sanitized is rewritten in place.
+- N scanned messages consume N rate-limit units rather than one.
+- Provider failures are reported as distinct conditions rather than collapsing into a
+  single unreachable error, and the provider's own error text is never echoed back.
+- Rotating a key preserves its source networks.
+
+### Fixed
+
+- Rotation previously dropped a key's source-network restriction, silently widening
+  the new key to any address.
+- A source-network denial did not record which key was refused, which turned revoking
+  one key into auditing all of them.
+- The proxy returned `500` when a message carried a null `content`, which is legal
+  for an assistant turn.
+- `GET /v1/admin/tenant/usage` described its figures as complete for every request
+  path. Requests refused before inspection write no audit row, so the figures cover
+  inspected traffic; the refusal counters above are where turned-away traffic is
+  counted.
+
+### Documentation
+
+- The proxy section of the API reference now states what is actually scanned: the
+  role-to-trust mapping, that `system` messages are forwarded without inspection,
+  that messages are scanned individually rather than concatenated, the bound on
+  scanning and its rejection, and that N messages cost N rate-limit units. The
+  scan-all header was previously described as scanning all user messages, which
+  understated it in one direction and overstated it in another.
+
 ## [1.9.1] - 2026-08-20
 
 Repairs the bundled metrics scrape, which had been failing silently, and makes the

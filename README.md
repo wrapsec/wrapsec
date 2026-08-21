@@ -164,7 +164,7 @@ POST /v1/ai/request
 POST /v1/chat/completions
 ```
 
-Use `/v1/ai/request` for scan-only integration. Use `/v1/chat/completions` for proxy mode - OpenAI-compatible for single-turn, non-streaming chat completions. It accepts `model`, `messages`, `temperature`, `max_tokens`, and `top_p`; streaming (`stream: true`), tool/function calling, `response_format`, and the other OpenAI parameters are not supported and are rejected, and the response does not include a `usage` block.
+Use `/v1/ai/request` for scan-only integration. Use `/v1/chat/completions` for proxy mode - OpenAI-compatible for non-streaming chat completions. It accepts `model`, `messages`, `temperature`, `max_tokens`, and `top_p`; streaming (`stream: true`), tool/function calling, `response_format`, and the other OpenAI parameters are not supported and are rejected. Message roles are validated: `user`, `assistant`, and `system` are accepted, and any other role - including `tool` - is rejected with `422`. The response carries the provider's `usage` block when the provider returns one and omits it otherwise, so treat the field as optional.
 
 A batch variant, `POST /v1/ai/scan-batch`, scans many items in one call. `GET /v1/capabilities` reports the capability set effective for the tenant.
 
@@ -280,7 +280,7 @@ response = client.chat.completions.create(
 )
 ```
 
-Proxy mode enforces both input and output security and removes the need for application-level integration. Streaming and tool calling are not supported on this path (see [API](#api) for the accepted parameters). Provider API keys are stored encrypted (AES-256-GCM) and never returned in full after creation.
+Proxy mode enforces both input and output security and removes the need for application-level integration. Streaming and tool calling are not supported on this path, and neither are `tool` messages within a conversation (see [API](#api) for the accepted parameters and roles). The proxy inspects `user` turns by default. Inspecting assistant turns as well is available as an opt-in capability, `SCAN_ASSISTANT_MESSAGES`, which ships disabled. Provider API keys are stored encrypted (AES-256-GCM) and never returned in full after creation.
 
 
 ## Auth and Access Control

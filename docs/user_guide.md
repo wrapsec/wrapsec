@@ -145,6 +145,21 @@ Click **Rotate** on any key. A new key is created and the old key remains valid 
 
 Click **Revoke**. The key is immediately invalidated. Any application using it will start receiving 401 errors.
 
+### Restricting a key to your own networks
+
+Click a key to open its details. Under **Source networks**, list the addresses or CIDR blocks the key may be used from - one per line, for example `203.0.113.7/32` or `10.0.0.0/8`. Leave the field empty to allow the key from any address, which is the default.
+
+The restriction applies to every request that presents the key, not only to proxy traffic, and a request from an address outside the list is refused before it reaches the detection pipeline. Signing in to the dashboard is unaffected: the restriction belongs to a key, and your session is not one.
+
+Two things make this safe to set up:
+
+- **Recently used from** lists the addresses the key has actually authenticated from over the last 30 days, with a count and the time last seen. Click **Add** to add one to the list.
+- **Recently refused** lists addresses the key was turned away from. That is what you check when a service moves to a new address and its key starts failing. Adding one takes an extra confirmation, because an address that was refused is not necessarily one of yours.
+
+If the list you have entered would refuse an address the key is currently using, a warning names that address before you save, and the button changes to **Save anyway**. Rotating a key keeps its source networks.
+
+Viewing and changing source networks is admin-only, including viewing - the networks a credential is confined to describe where your organisation operates.
+
 ---
 
 ## Requests

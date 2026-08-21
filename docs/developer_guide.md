@@ -1020,6 +1020,10 @@ These rules must be followed in all new code. Violation creates real production 
 | `DEBUG_RATE_LIMIT_PER_MINUTE` | `10` | Rate limit for debug mode requests - env-only, security control |
 | `LOGIN_RATE_LIMIT_PER_MINUTE` | `10` | Per-IP rate limit on `POST /v1/auth/login` - env-only, security control. Complements per-email lockout |
 | `COOKIE_SECURE` | `true` | Adds `Secure` flag to refresh token cookie. Set `false` only for local HTTP dev - must be `true` in all deployed environments |
+| `DETECTOR_TIMEOUT_SECONDS` | `2.0` | Per-detector, per-message execution bound. A detector that exceeds it is treated as a failure, which fails closed to `BLOCK` with `primary_reason=SYSTEM_ERROR` |
+| `BATCH_CONCURRENCY` | `8` | Concurrent detector runs **per request** for multi-input scans. Not a process-wide bound: N concurrent requests can run up to N times this many pipelines |
+| `MAX_SCAN_ALL_MESSAGES` | `10` | Eligible messages the proxy will scan in one request when scan-all is requested. Over this the request is rejected rather than partly scanned. Each scanned message costs a detection run, an audit-chain append against a per-tenant lock, and a rate-limit unit |
+| `SCAN_ASSISTANT_MESSAGES` | `false` | Whether the proxy inspects `assistant` turns as well as `user` turns. Assistant turns are accepted and forwarded either way; when disabled they are not inspected. Global, not per tenant |
 
 **Load test env vars** - required when running `tests/load/` scripts:
 
