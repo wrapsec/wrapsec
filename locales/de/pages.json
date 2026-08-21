@@ -851,7 +851,14 @@
       "addresses_confirm_no": "Abbrechen",
       "lockout_warning_title": "Damit würde laufender Datenverkehr gestoppt",
       "lockout_warning_body": "{count, plural, one {# Adresse, die dieser Schlüssel} other {# Adressen, die dieser Schlüssel}} in {days, plural, one {# Tag} other {den letzten # Tagen}} verwendet hat, würde abgelehnt: {values}.",
-      "save_anyway": "Trotzdem speichern"
+      "save_anyway": "Trotzdem speichern",
+      "summary": "Übersicht",
+      "key_type": "Typ",
+      "department": "Abteilung",
+      "application": "Anwendung",
+      "created": "Erstellt",
+      "last_used": "Zuletzt verwendet",
+      "expires": "Läuft ab"
     }
   },
   "users": {

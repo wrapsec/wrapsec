@@ -8,6 +8,7 @@ import { useTranslations } from "next-intl"
 import useSWR from "swr"
 
 import { Button } from "@/components/ui/Button"
+import { DetailGrid, DetailRow, SectionLabel } from "@/components/ui/DetailRow"
 import { Drawer } from "@/components/ui/Drawer"
 import { Input } from "@/components/ui/Input"
 import { Spinner } from "@/components/ui/Spinner"
@@ -48,10 +49,12 @@ export function KeyDetailDrawer({
 
   const { data, isLoading, error } = useSWR(["api-key", keyId], () => getApiKey(keyId))
 
+  // The drawer shell adds no padding of its own, so each slot brings its own.
+  // pr-12 keeps the title clear of the close button pinned at the top right.
   const header = (
-    <div>
+    <div className="px-6 py-4 pr-12">
       <h2 className="text-sm font-semibold text-slate-900">{t("title")}</h2>
-      <p className="mt-0.5 text-xs text-slate-600">{keyId}</p>
+      <p className="mt-0.5 font-mono text-xs text-slate-600">{keyId}</p>
     </div>
   )
 
@@ -59,12 +62,12 @@ export function KeyDetailDrawer({
     return (
       <Drawer onClose={onClose} header={header} label={t("label")}>
         {error != null ? (
-          <div className="py-10 text-center">
-            <p className="mb-1 text-sm font-semibold text-red-600">{t("load_error")}</p>
-            <p className="text-xs text-slate-600">{errorMessage(error)}</p>
+          <div className="m-6 rounded-lg border border-red-200 bg-red-50 px-4 py-3">
+            <p className="mb-1 text-sm font-semibold text-red-700">{t("load_error")}</p>
+            <p className="text-xs text-red-700">{errorMessage(error)}</p>
           </div>
         ) : (
-          <div className="py-10 text-center"><Spinner /></div>
+          <div className="flex items-center justify-center py-16"><Spinner className="h-6 w-6" /></div>
         )}
       </Drawer>
     )
@@ -97,8 +100,9 @@ function KeyDetailForm({
   onSaved?: () => void
   header:   React.ReactNode
 }) {
-  const t  = useTranslations("pages.keys.drawer")
-  const tc = useTranslations("common")
+  const t   = useTranslations("pages.keys.drawer")
+  const tc  = useTranslations("common")
+  const fmt = useFormat()
 
   const [name,      setName]      = useState(detail.name)
   const [entryText, setEntryText] = useState((detail.ip_allowlist ?? []).join("\n"))
@@ -156,7 +160,7 @@ function KeyDetailForm({
   }
 
   const footer = canWrite && allowlistVisible ? (
-    <div className="flex items-center justify-end gap-2">
+    <div className="flex items-center justify-end gap-2 px-6 py-3">
       {saved     && <span className="mr-auto text-xs text-emerald-700">{t("saved")}</span>}
       {saveError && <span className="mr-auto text-xs text-red-600">{saveError}</span>}
       <Button size="sm" variant="secondary" onClick={onClose}>{t("cancel")}</Button>
@@ -172,7 +176,23 @@ function KeyDetailForm({
 
   return (
     <Drawer onClose={onClose} header={header} footer={footer} label={t("label")}>
-      <div className="space-y-5">
+      <div className="px-6 py-5 space-y-6">
+        <div>
+          <SectionLabel>{t("summary")}</SectionLabel>
+          <DetailGrid>
+            <DetailRow label={t("key_type")}>{detail.key_type}</DetailRow>
+            <DetailRow label={t("department")}>{detail.dept_name ?? "--"}</DetailRow>
+            <DetailRow label={t("application")}>{detail.app_name ?? "--"}</DetailRow>
+            <DetailRow label={t("created")}>{fmt.timestamp(detail.created_at)}</DetailRow>
+            <DetailRow label={t("last_used")}>
+              {detail.last_used_at ? fmt.timestamp(detail.last_used_at) : "--"}
+            </DetailRow>
+            <DetailRow label={t("expires")}>
+              {detail.expires_at ? fmt.timestamp(detail.expires_at) : "--"}
+            </DetailRow>
+          </DetailGrid>
+        </div>
+
         <Input
           label={t("name")}
           value={name}
@@ -181,13 +201,13 @@ function KeyDetailForm({
         />
 
         <div>
-          <h3 className="text-xs font-medium text-slate-700">{t("allowlist_title")}</h3>
+          <SectionLabel>{t("allowlist_title")}</SectionLabel>
 
           {!allowlistVisible ? (
-            <p className="mt-2 text-xs text-slate-600">{t("allowlist_hidden")}</p>
+            <p className="text-xs text-slate-600">{t("allowlist_hidden")}</p>
           ) : (
             <>
-              <p className="mt-1 text-xs text-slate-600">{t("allowlist_hint")}</p>
+              <p className="text-xs text-slate-600">{t("allowlist_hint")}</p>
 
               <textarea
                 aria-label={t("allowlist_title")}
@@ -243,7 +263,9 @@ function KeyDetailForm({
 
         {allowlistVisible && (
           addressError != null ? (
-            <p className="text-xs text-amber-800">{t("addresses_error")}</p>
+            <div className="rounded-md border border-amber-300 bg-amber-50 px-3 py-2">
+              <p className="text-xs text-amber-900">{t("addresses_error")}</p>
+            </div>
           ) : (
             <>
               <AddressList
@@ -323,19 +345,19 @@ function AddressList({
 
   return (
     <div>
-      <h3 className="text-xs font-medium text-slate-700">{title}</h3>
-      {hint && <p className="mt-1 text-xs text-slate-600">{hint}</p>}
+      <SectionLabel>{title}</SectionLabel>
+      {hint && <p className="-mt-2 mb-2 text-xs text-slate-600">{hint}</p>}
 
       {rows === undefined ? (
-        <div className="mt-2 py-3 text-center"><Spinner /></div>
+        <div className="py-3 text-center"><Spinner /></div>
       ) : rows.length === 0 ? (
-        <p className="mt-2 text-xs text-slate-600">{empty}</p>
+        <p className="text-xs text-slate-600">{empty}</p>
       ) : (
-        <ul className="mt-2 divide-y divide-slate-100 border-y border-slate-100">
+        <ul className="divide-y divide-slate-100 border-y border-slate-100">
           {rows.map((row) => {
             const added = isAdded(row.ip_address)
             return (
-              <li key={row.ip_address} className="flex items-center gap-3 py-2">
+              <li key={row.ip_address} className="flex flex-wrap items-center gap-3 py-2">
                 <div className="min-w-0 flex-1">
                   <p className="truncate font-mono text-xs text-slate-900">{row.ip_address}</p>
                   <p className="mt-0.5 flex gap-2 text-xs text-slate-600">

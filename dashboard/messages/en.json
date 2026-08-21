@@ -1056,7 +1056,14 @@
         "addresses_confirm_no": "Cancel",
         "lockout_warning_title": "This would stop traffic that is running now",
         "lockout_warning_body": "{count, plural, one {# address this key used} other {# addresses this key used}} in the last {days, plural, one {# day} other {# days}} would be refused: {values}.",
-        "save_anyway": "Save anyway"
+        "save_anyway": "Save anyway",
+        "summary": "Summary",
+        "key_type": "Type",
+        "department": "Department",
+        "application": "Application",
+        "created": "Created",
+        "last_used": "Last used",
+        "expires": "Expires"
       }
     },
     "users": {
