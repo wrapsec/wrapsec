@@ -254,6 +254,27 @@ export interface ApiKeyDetail extends ApiKey {
   ip_allowlist?: string[]
 }
 
+/** One address, with how often it was seen and when it was last seen. */
+export interface KeyAddress {
+  ip_address: string
+  count:      number
+  last_seen:  string
+}
+
+/**
+ * Evidence for setting a source restriction.
+ *
+ * observed is where the credential has actually authenticated from; denied is
+ * where it was turned away. The second is what an operator reads when a service
+ * moves to a new egress address and its key starts failing.
+ */
+export interface KeyAddressesResponse {
+  key_id:      string
+  window_days: number
+  observed:    KeyAddress[]
+  denied:      KeyAddress[]
+}
+
 // ── Health ────────────────────────────────────────────────────
 export interface HealthResponse {
   status:  string

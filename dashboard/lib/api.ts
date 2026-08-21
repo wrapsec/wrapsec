@@ -17,6 +17,7 @@ import {
   ApiKeysResponse,
   ApiKeyCreated,
   ApiKeyDetail,
+  KeyAddressesResponse,
   HealthReadyResponse,
   RequestDetail,
   RequestFilters,
@@ -460,6 +461,20 @@ export async function updateApiKey(
       ...(ipAllowlist === undefined ? {} : { ip_allowlist: ipAllowlist }),
     }),
   })
+}
+
+/**
+ * Where a key has been used from, and where it has been refused.
+ *
+ * Administrator only, like the restriction itself. A non-administrator gets a
+ * 403 rather than an empty list, so the caller must not present a failure here
+ * as "this key has never been used".
+ */
+export async function getKeyAddresses(
+  keyId: string,
+  days:  number = 30,
+): Promise<KeyAddressesResponse> {
+  return request<KeyAddressesResponse>(`/v1/keys/${keyId}/addresses?days=${days}`)
 }
 
 export async function revokeApiKey(keyId: string): Promise<void> {

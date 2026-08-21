@@ -11,10 +11,19 @@ import { Button } from "@/components/ui/Button"
 import { Drawer } from "@/components/ui/Drawer"
 import { Input } from "@/components/ui/Input"
 import { Spinner } from "@/components/ui/Spinner"
-import { getApiKey, updateApiKey } from "@/lib/api"
+import { useFormat } from "@/hooks/useFormat"
+import { getApiKey, getKeyAddresses, updateApiKey } from "@/lib/api"
 import { errorMessage } from "@/lib/apiError"
-import { checkEntries, parseEntries } from "@/lib/ipAllowlist"
-import type { ApiKeyDetail } from "@/lib/types"
+import {
+  checkEntries,
+  parseEntries,
+  suggestEntry,
+  uncoveredAddresses,
+} from "@/lib/ipAllowlist"
+import type { ApiKeyDetail, KeyAddress } from "@/lib/types"
+
+/** How far back the observed and refused lists look. */
+const ADDRESS_WINDOW_DAYS = 30
 
 /**
  * A key's details, and the networks it may be used from.
@@ -105,6 +114,30 @@ function KeyDetailForm({
   // the same as empty: one means "not yours to see", the other "no restriction".
   const allowlistVisible = detail.ip_allowlist !== undefined
 
+  // Only fetched when the operator can act on it. The endpoint is administrator
+  // only, so asking as anyone else would produce a refusal that has to be told
+  // apart from an empty list.
+  const { data: addresses, error: addressError } = useSWR(
+    allowlistVisible ? ["key-addresses", detail.key_id] : null,
+    () => getKeyAddresses(detail.key_id, ADDRESS_WINDOW_DAYS),
+  )
+
+  const addEntry = (address: string) => {
+    const entry = suggestEntry(address)
+    if (entries.includes(entry)) return
+    setEntryText([...entries, entry].join("\n"))
+    setSaved(false)
+  }
+
+  // The warning that makes this feature safe to use. An operator setting a
+  // restriction is working from what they believe the traffic is; this compares
+  // that belief against what the key has actually been doing. Addresses the list
+  // cannot parse count as stopped, so an unreadable one produces a warning
+  // rather than silence.
+  const wouldStop = addresses
+    ? uncoveredAddresses(entries, addresses.observed.map((a) => a.ip_address))
+    : []
+
   const handleSave = async () => {
     if (invalid.length > 0) return
     setSaving(true)
@@ -132,7 +165,7 @@ function KeyDetailForm({
         onClick={handleSave}
         disabled={saving || invalid.length > 0 || !name.trim()}
       >
-        {saving ? t("saving") : t("save")}
+        {saving ? t("saving") : wouldStop.length > 0 ? t("save_anyway") : t("save")}
       </Button>
     </div>
   ) : undefined
@@ -185,10 +218,58 @@ function KeyDetailForm({
                 </p>
               )}
 
+              {wouldStop.length > 0 && (
+                <div
+                  role="alert"
+                  className="mt-3 rounded-md border border-amber-300 bg-amber-50 px-3 py-2"
+                >
+                  <p className="text-xs font-semibold text-amber-900">
+                    {t("lockout_warning_title")}
+                  </p>
+                  <p className="mt-1 text-xs text-amber-900">
+                    {t("lockout_warning_body", {
+                      count:  wouldStop.length,
+                      days:   ADDRESS_WINDOW_DAYS,
+                      values: wouldStop.join(", "),
+                    })}
+                  </p>
+                </div>
+              )}
+
               <p className="mt-2 text-xs text-slate-600">{t("rotate_note")}</p>
             </>
           )}
         </div>
+
+        {allowlistVisible && (
+          addressError != null ? (
+            <p className="text-xs text-amber-800">{t("addresses_error")}</p>
+          ) : (
+            <>
+              <AddressList
+                title={t("addresses_observed_title")}
+                empty={t("addresses_observed_empty", { days: ADDRESS_WINDOW_DAYS })}
+                rows={addresses?.observed}
+                label={(count) => t("addresses_requests", { count })}
+                canAdd={canWrite}
+                onAdd={addEntry}
+                isAdded={(ip) => entries.includes(suggestEntry(ip))}
+              />
+
+              <AddressList
+                title={t("addresses_denied_title")}
+                empty={t("addresses_denied_empty")}
+                hint={t("addresses_denied_hint")}
+                rows={addresses?.denied}
+                label={(count) => t("addresses_refusals", { count })}
+                canAdd={canWrite}
+                confirmBeforeAdd
+                onAdd={addEntry}
+                isAdded={(ip) => entries.includes(suggestEntry(ip))}
+              />
+            </>
+          )
+        )}
 
         {!canWrite && (
           <p className="text-xs text-slate-600">
@@ -201,5 +282,102 @@ function KeyDetailForm({
         )}
       </div>
     </Drawer>
+  )
+}
+
+/**
+ * One list of addresses, with a way to add each to the field above.
+ *
+ * The refused list adds a confirmation step, and that difference is the point:
+ * an address in the observed list is one this credential already authenticated
+ * from, while an address in the refused list is by definition one the current
+ * restriction rejected. That may be a service that moved, or it may be someone
+ * else holding the key. Adding it must be a deliberate act, not a stray click
+ * next to the list an operator is used to clicking through.
+ */
+function AddressList({
+  title,
+  empty,
+  hint,
+  rows,
+  label,
+  canAdd,
+  confirmBeforeAdd = false,
+  onAdd,
+  isAdded,
+}: {
+  title:             string
+  empty:             string
+  hint?:             string
+  rows:              KeyAddress[] | undefined
+  label:             (count: number) => string
+  canAdd:            boolean
+  confirmBeforeAdd?: boolean
+  onAdd:             (ip: string) => void
+  isAdded:           (ip: string) => boolean
+}) {
+  const t   = useTranslations("pages.keys.drawer")
+  const fmt = useFormat()
+
+  const [confirming, setConfirming] = useState<string | null>(null)
+
+  return (
+    <div>
+      <h3 className="text-xs font-medium text-slate-700">{title}</h3>
+      {hint && <p className="mt-1 text-xs text-slate-600">{hint}</p>}
+
+      {rows === undefined ? (
+        <div className="mt-2 py-3 text-center"><Spinner /></div>
+      ) : rows.length === 0 ? (
+        <p className="mt-2 text-xs text-slate-600">{empty}</p>
+      ) : (
+        <ul className="mt-2 divide-y divide-slate-100 border-y border-slate-100">
+          {rows.map((row) => {
+            const added = isAdded(row.ip_address)
+            return (
+              <li key={row.ip_address} className="flex items-center gap-3 py-2">
+                <div className="min-w-0 flex-1">
+                  <p className="truncate font-mono text-xs text-slate-900">{row.ip_address}</p>
+                  <p className="mt-0.5 flex gap-2 text-xs text-slate-600">
+                    <span>{label(row.count)}</span>
+                    <span>{fmt.timestamp(row.last_seen)}</span>
+                  </p>
+                </div>
+
+                {!canAdd ? null : added ? (
+                  <span className="shrink-0 text-xs text-slate-600">{t("addresses_added")}</span>
+                ) : confirming === row.ip_address ? (
+                  <div className="flex shrink-0 items-center gap-2">
+                    <span className="text-xs text-slate-700">
+                      {t("addresses_confirm", { value: suggestEntry(row.ip_address) })}
+                    </span>
+                    <Button
+                      size="sm"
+                      onClick={() => { onAdd(row.ip_address); setConfirming(null) }}
+                    >
+                      {t("addresses_confirm_yes")}
+                    </Button>
+                    <Button size="sm" variant="secondary" onClick={() => setConfirming(null)}>
+                      {t("addresses_confirm_no")}
+                    </Button>
+                  </div>
+                ) : (
+                  <Button
+                    size="sm"
+                    variant="secondary"
+                    className="shrink-0"
+                    onClick={() =>
+                      confirmBeforeAdd ? setConfirming(row.ip_address) : onAdd(row.ip_address)
+                    }
+                  >
+                    {t("addresses_add")}
+                  </Button>
+                )}
+              </li>
+            )
+          })}
+        </ul>
+      )}
+    </div>
   )
 }

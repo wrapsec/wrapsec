@@ -835,7 +835,23 @@
       "allowlist_hidden": "Nur Administratoren können Quellnetzwerke einsehen oder ändern.",
       "error_malformed": "{value} ist keine gültige IP-Adresse und kein gültiger CIDR-Block.",
       "error_allows_everything": "{value} erlaubt jede Adresse und ist damit keine Einschränkung. Lassen Sie das Feld leer, um alle Adressen zuzulassen.",
-      "rotate_note": "Beim Rotieren dieses Schlüssels bleiben die Quellnetzwerke erhalten."
+      "rotate_note": "Beim Rotieren dieses Schlüssels bleiben die Quellnetzwerke erhalten.",
+      "addresses_observed_title": "Zuletzt verwendet von",
+      "addresses_observed_empty": "Keine Anfragen von diesem Schlüssel in {days, plural, one {# Tag} other {den letzten # Tagen}}.",
+      "addresses_denied_title": "Zuletzt abgelehnt",
+      "addresses_denied_empty": "Es wurden keine Anfragen von diesem Schlüssel abgelehnt.",
+      "addresses_denied_hint": "Diese Adressen wurden durch die aktuelle Einschränkung abgewiesen. Fügen Sie eine nur hinzu, wenn Sie sie als Ihre eigene erkennen.",
+      "addresses_error": "Die zuletzt verwendeten Adressen konnten nicht geladen werden. Legen Sie die Netzwerke anhand Ihrer eigenen Unterlagen fest, statt anzunehmen, dass dieser Schlüssel unbenutzt ist.",
+      "addresses_requests": "{count, plural, one {# Anfrage} other {# Anfragen}}",
+      "addresses_refusals": "{count, plural, one {# Ablehnung} other {# Ablehnungen}}",
+      "addresses_add": "Hinzufügen",
+      "addresses_added": "Hinzugefügt",
+      "addresses_confirm": "{value} hinzufügen?",
+      "addresses_confirm_yes": "Hinzufügen",
+      "addresses_confirm_no": "Abbrechen",
+      "lockout_warning_title": "Damit würde laufender Datenverkehr gestoppt",
+      "lockout_warning_body": "{count, plural, one {# Adresse, die dieser Schlüssel} other {# Adressen, die dieser Schlüssel}} in {days, plural, one {# Tag} other {den letzten # Tagen}} verwendet hat, würde abgelehnt: {values}.",
+      "save_anyway": "Trotzdem speichern"
     }
   },
   "users": {

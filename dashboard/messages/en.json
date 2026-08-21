@@ -1040,7 +1040,23 @@
         "allowlist_hidden": "Only an administrator can view or change source networks.",
         "error_malformed": "{value} is not a valid IP address or CIDR block.",
         "error_allows_everything": "{value} allows every address, which is not a restriction. Leave the field empty to allow all.",
-        "rotate_note": "Rotating this key keeps its source networks."
+        "rotate_note": "Rotating this key keeps its source networks.",
+        "addresses_observed_title": "Recently used from",
+        "addresses_observed_empty": "No requests from this key in the last {days, plural, one {# day} other {# days}}.",
+        "addresses_denied_title": "Recently refused",
+        "addresses_denied_empty": "No requests from this key have been refused.",
+        "addresses_denied_hint": "These addresses were turned away by the current restriction. Add one only if you recognise it as yours.",
+        "addresses_error": "Could not load recent addresses. Set the networks from your own records instead of assuming this key is unused.",
+        "addresses_requests": "{count, plural, one {# request} other {# requests}}",
+        "addresses_refusals": "{count, plural, one {# refusal} other {# refusals}}",
+        "addresses_add": "Add",
+        "addresses_added": "Added",
+        "addresses_confirm": "Add {value}?",
+        "addresses_confirm_yes": "Add it",
+        "addresses_confirm_no": "Cancel",
+        "lockout_warning_title": "This would stop traffic that is running now",
+        "lockout_warning_body": "{count, plural, one {# address this key used} other {# addresses this key used}} in the last {days, plural, one {# day} other {# days}} would be refused: {values}.",
+        "save_anyway": "Save anyway"
       }
     },
     "users": {
