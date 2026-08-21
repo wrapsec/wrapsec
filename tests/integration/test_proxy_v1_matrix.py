@@ -122,6 +122,38 @@ async def _post_capturing_provider(app, body):
         app.dependency_overrides = {}
 
 
+async def _post_capturing_forwarded(app, body, headers=None):
+    """
+    Post, and hand back what was actually forwarded to the provider.
+
+    Asserting on the response says what the caller saw. The question here is
+    what the MODEL saw, and only the provider call answers that.
+    """
+    from api.v1.dependencies.db import get_db
+
+    fake_get_db, _ = _patch_config()
+    app.dependency_overrides[get_db] = fake_get_db
+    try:
+        with patch("httpx.AsyncClient") as mock_cls:
+            mock_client      = AsyncMock()
+            mock_client.post = AsyncMock(return_value=_provider_response("fine"))
+            mock_cls.return_value.__aenter__ = AsyncMock(return_value=mock_client)
+            mock_cls.return_value.__aexit__  = AsyncMock(return_value=False)
+
+            async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as client:
+                resp = await client.post(
+                    "/v1/chat/completions",
+                    headers={"x-api-key": settings.admin_api_key, **(headers or {})},
+                    json=body,
+                )
+            forwarded = None
+            if mock_client.post.call_args is not None:
+                forwarded = mock_client.post.call_args.kwargs.get("json")
+            return resp, forwarded
+    finally:
+        app.dependency_overrides = {}
+
+
 # ── Unsupported features are refused, never downgraded ────────────────────────
 
 class TestUnsupportedFeatures:
@@ -246,12 +278,32 @@ class TestUnsupportedFeatures:
 
     @pytest.mark.asyncio
     @pytest.mark.parametrize("role", ["user", "assistant"])
-    async def test_a_scanned_role_is_accepted(self, app, role):
+    async def test_a_supported_role_is_not_refused_as_unsupported(self, app, role):
+        """
+        Being an accepted ROLE and having something SCANNABLE are different
+        questions, and only the first is this section's. An assistant-only
+        conversation is refused under the default posture because nothing in it
+        is inspected -- but with 400, not the 422 that means "we do not accept
+        this role at all".
+        """
         resp = await _post(app, {
             "model":    "openai/gpt-4o",
             "messages": [{"role": role, "content": "what is the capital of France?"}],
         })
-        assert resp.status_code == 200
+        assert resp.status_code != 422, f"{role} was refused as an unsupported role"
+
+    @pytest.mark.asyncio
+    async def test_an_ordinary_conversation_with_an_assistant_turn_is_served(self, app):
+        """The shape a real caller sends: history, ending on the new question."""
+        resp = await _post(app, {
+            "model":    "openai/gpt-4o",
+            "messages": [
+                {"role": "user",      "content": "what is the capital of France?"},
+                {"role": "assistant", "content": "Paris."},
+                {"role": "user",      "content": "and of Spain?"},
+            ],
+        })
+        assert resp.status_code == 200, resp.text
 
     @pytest.mark.asyncio
     async def test_a_system_message_is_still_accepted(self, app):
@@ -523,3 +575,153 @@ class TestPreInspectionRefusals:
 
         assert resp.status_code == 400
         assert created == [], "a refusal that was never inspected reached the decision trail"
+
+
+# ── Assistant scanning, the opt-in capability ─────────────────────────────────
+
+class TestAssistantScanning:
+    """
+    Off by default, so both postures are pinned: what ships, and what the
+    capability does when an operator turns it on.
+
+    The enabled path is exercised with the flag actually set rather than by
+    calling the extraction helper directly. A capability that is only ever
+    tested through its internals is one nobody has confirmed is reachable.
+    """
+
+    @staticmethod
+    def _conversation():
+        # The email is what makes this deterministic: the PII guardrail redacts
+        # it, so the decision is SANITIZE without depending on a model's score.
+        return [
+            {"role": "system",    "content": "You are terse."},
+            {"role": "user",      "content": "what did we agree?"},
+            {"role": "assistant", "content": "Contact me at alice@example.com about the invoice"},
+        ]
+
+    @pytest.mark.asyncio
+    async def test_the_default_does_not_scan_an_assistant_turn(self, app, monkeypatch):
+        """
+        The shipped posture. The assistant turn reaches the model exactly as it
+        was sent, which is the known gap the capability exists to close.
+        """
+        monkeypatch.setenv("SCAN_ASSISTANT_MESSAGES", "false")
+        get_settings.cache_clear()
+        try:
+            resp, forwarded = await _post_capturing_forwarded(app, {
+                "model": "openai/gpt-4o", "messages": self._conversation(),
+            })
+            assert resp.status_code == 200, resp.text
+            assert forwarded is not None, "nothing reached the provider"
+            assert forwarded["messages"][2]["content"] == self._conversation()[2]["content"]
+            assert "alice@example.com" in forwarded["messages"][2]["content"]
+        finally:
+            get_settings.cache_clear()
+
+    @pytest.mark.asyncio
+    async def test_enabling_it_rewrites_the_assistant_turn_in_place(self, app, monkeypatch):
+        """
+        The capability's whole point: what was scanned is what gets forwarded.
+        Forwarding the original after deciding to sanitize it would make the
+        decision cosmetic.
+        """
+        monkeypatch.setenv("SCAN_ASSISTANT_MESSAGES", "true")
+        get_settings.cache_clear()
+        try:
+            resp, forwarded = await _post_capturing_forwarded(app, {
+                "model": "openai/gpt-4o", "messages": self._conversation(),
+            })
+            assert resp.status_code == 200, resp.text
+            assistant = forwarded["messages"][2]["content"]
+            assert "alice@example.com" not in assistant, "the original reached the model"
+            assert "REDACTED" in assistant
+        finally:
+            get_settings.cache_clear()
+
+    @pytest.mark.asyncio
+    async def test_the_rewrite_lands_on_that_message_and_no_other(self, app, monkeypatch):
+        """
+        Position matters: the index addresses the original array, which contains
+        roles that were never scanned. An off-by-one would rewrite the system
+        prompt with the assistant's redacted text.
+        """
+        monkeypatch.setenv("SCAN_ASSISTANT_MESSAGES", "true")
+        get_settings.cache_clear()
+        try:
+            original = self._conversation()
+            _resp, forwarded = await _post_capturing_forwarded(app, {
+                "model": "openai/gpt-4o", "messages": original,
+            })
+            assert forwarded["messages"][0] == original[0], "the system prompt was altered"
+            assert forwarded["messages"][1] == original[1], "the user turn was altered"
+            assert [m["role"] for m in forwarded["messages"]] == \
+                   [m["role"] for m in original], "roles were reordered or dropped"
+        finally:
+            get_settings.cache_clear()
+
+    @pytest.mark.asyncio
+    async def test_the_caller_array_is_not_mutated(self, app, monkeypatch):
+        """The rewrite builds a new array; the request body is left alone."""
+        monkeypatch.setenv("SCAN_ASSISTANT_MESSAGES", "true")
+        get_settings.cache_clear()
+        try:
+            original = self._conversation()
+            sent     = [dict(m) for m in original]
+            await _post_capturing_forwarded(app, {
+                "model": "openai/gpt-4o", "messages": sent,
+            })
+            assert sent == original
+        finally:
+            get_settings.cache_clear()
+
+    @pytest.mark.asyncio
+    async def test_a_conversation_ending_on_an_assistant_turn_still_scans(self, app, monkeypatch):
+        """
+        With the capability off the last scanned message is the last USER turn,
+        not the last message. Falling through to nothing would refuse an
+        ordinary conversation.
+        """
+        monkeypatch.setenv("SCAN_ASSISTANT_MESSAGES", "false")
+        get_settings.cache_clear()
+        try:
+            resp, forwarded = await _post_capturing_forwarded(app, {
+                "model": "openai/gpt-4o",
+                "messages": [
+                    {"role": "user",      "content": "what is the capital of France?"},
+                    {"role": "assistant", "content": "Paris."},
+                ],
+            })
+            assert resp.status_code == 200, resp.text
+            assert forwarded is not None
+        finally:
+            get_settings.cache_clear()
+
+    @pytest.mark.asyncio
+    async def test_an_assistant_only_conversation_is_refused_by_default(self, app, monkeypatch):
+        """
+        Nothing scannable means nothing to forward. Passing it through would
+        send the model content the proxy never inspected.
+        """
+        monkeypatch.setenv("SCAN_ASSISTANT_MESSAGES", "false")
+        get_settings.cache_clear()
+        try:
+            resp = await _post(app, {
+                "model": "openai/gpt-4o",
+                "messages": [{"role": "assistant", "content": "hello"}],
+            })
+            assert resp.status_code == 400
+        finally:
+            get_settings.cache_clear()
+
+    @pytest.mark.asyncio
+    async def test_the_same_conversation_is_accepted_when_enabled(self, app, monkeypatch):
+        monkeypatch.setenv("SCAN_ASSISTANT_MESSAGES", "true")
+        get_settings.cache_clear()
+        try:
+            resp = await _post(app, {
+                "model": "openai/gpt-4o",
+                "messages": [{"role": "assistant", "content": "hello"}],
+            })
+            assert resp.status_code == 200, resp.text
+        finally:
+            get_settings.cache_clear()

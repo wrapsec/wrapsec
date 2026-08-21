@@ -189,6 +189,29 @@ class Settings(BaseSettings):
     # fits the audit trace column.
     max_scan_all_messages: int = 10
 
+    # Whether the proxy scans assistant turns as well as user turns.
+    #
+    # Off by default, and that default is the whole point rather than caution.
+    # A conversation history is an injection surface -- text a previous turn
+    # returned, or that a caller placed in an assistant turn, reaches the model
+    # exactly as a user turn does -- so scanning it is a real security gain. But
+    # the detector currently flags 68% of ordinary assistant prose (measured:
+    # `python tests/eval/run_assistant_eval.py`), because an assistant turn
+    # quotes and explains what was asked, and a refusal to a jailbreak contains
+    # the jailbreak. Turning this on today would block roughly two thirds of
+    # normal replies.
+    #
+    # So it ships as a capability rather than a default, and the default posture
+    # stays what it was before assistant scanning existed: user turns only. Turn
+    # it on only if you have measured what it does to YOUR traffic. It defaults
+    # on once the measured false-positive rate reaches 12%.
+    #
+    # Global rather than per-tenant for V1: this is a detector-quality question,
+    # not a per-customer policy one, and a per-tenant switch would imply the
+    # answer differs by tenant when it does not. Policy-scoped control is
+    # deferred until the rate is low enough for enabling it to be a real choice.
+    scan_assistant_messages: bool = False
+
     # ── LLM Provider ──────────────────────────────────────────
     llm_provider:             str = Field(default="ollama")  # ollama | openai | groq
     llm_model:                str = Field(default="llama3.2")

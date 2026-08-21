@@ -235,25 +235,50 @@ def _message_text(message: dict) -> str:
     return content if isinstance(content, str) else ""
 
 
-def _eligible_segments(messages: list[dict], scan_all: bool) -> list[MessageSegment]:
+def scannable_roles(scan_assistant: bool) -> frozenset[str]:
+    """
+    The roles that get scanned under a given configuration.
+
+    Deliberately separate from `_ROLE_SOURCES`. That mapping says how far each
+    role is trusted and does not change; this says which roles are inspected,
+    and does. Folding the two together would mean turning assistant scanning off
+    by deleting its provenance, which is the wrong thing to lose: the
+    classification stays correct whether or not the content is currently being
+    scanned, and is what the capability switches back on.
+    """
+    return frozenset(_ROLE_SOURCES) if scan_assistant else frozenset({"user"})
+
+
+def _eligible_segments(
+    messages:       list[dict],
+    scan_all:       bool,
+    scan_assistant: bool,
+) -> list[MessageSegment]:
     """
     Select the messages to scan, each carrying its own trust source.
 
     scan_all=False: the last eligible message only.
     scan_all=True:  every eligible message, in conversation order.
 
+    scan_assistant=False (the default) makes only `user` turns eligible, which
+    is the posture that predates assistant scanning. Assistant turns are still
+    accepted and forwarded; they are simply not inspected. See the setting for
+    why the default is off.
+
     Messages are NOT concatenated. A joined scan would force one trust
     classification onto content of differing origins, and would misreport
     provenance whichever source it chose.
 
-    Roles outside `_ROLE_SOURCES` are skipped here, but skipping is not the
-    policy: an unsupported role is refused by the request schema before this
-    runs, and `system` is the only unscanned role that can reach it. The filter
-    stays as a second layer, so a role added to the schema without a trust
-    classification is left unscanned rather than scanned as something it is not.
+    A role outside the eligible set is skipped here, but skipping is not the
+    policy: a role the proxy does not support is refused by the request schema
+    before this runs. The filter stays as a second layer, so a role added to the
+    schema without a trust classification is left unscanned rather than scanned
+    as something it is not.
 
     Raises ValueError when nothing scannable is present.
     """
+    eligible = scannable_roles(scan_assistant)
+
     segments = [
         MessageSegment(
             index  = idx,
@@ -262,12 +287,18 @@ def _eligible_segments(messages: list[dict], scan_all: bool) -> list[MessageSegm
             source = _ROLE_SOURCES[role],
         )
         for idx, message in enumerate(messages)
-        if (role := message.get("role")) in _ROLE_SOURCES
+        if (role := message.get("role")) in eligible
         and (text := _message_text(message))
     ]
 
     if not segments:
-        raise ValueError("No scannable user or assistant message found in messages array.")
+        # Names what would have been scannable, so a caller whose conversation
+        # ends on an assistant turn is not left guessing why a request with
+        # messages in it reports having none.
+        raise ValueError(
+            "No scannable message found in messages array; expected at least one "
+            f"non-empty message with role: {', '.join(sorted(eligible))}."
+        )
 
     return segments if scan_all else [segments[-1]]
 
@@ -826,8 +857,11 @@ async def proxy_chat_completions(
         mode = "fast"
 
     # -- 5. Select the messages to scan --
+    # Read per call, never cached at module level: the capability has to be
+    # switchable without a code change, and tests set it per case.
+    scan_assistant = get_settings().scan_assistant_messages
     try:
-        segments = _eligible_segments(body.messages, scan_all)
+        segments = _eligible_segments(body.messages, scan_all, scan_assistant)
     except ValueError as exc:
         return _reject(
             request     = request,

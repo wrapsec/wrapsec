@@ -962,14 +962,31 @@ far its content is trusted:
 | Role | Accepted | Scanned | Trust classification |
 |---|---|---|---|
 | `user` | yes | yes | `user_prompt` |
-| `assistant` | yes | yes | `external_content` |
+| `assistant` | yes | **only when assistant scanning is enabled** | `external_content` |
 | `system` | yes | no | - |
 | anything else, `tool` included | **no - `422`** | - | - |
 
-Assistant turns are scanned because a conversation history is an injection surface: text
-a previous turn returned, or that a caller placed in an assistant turn, reaches the model
-exactly as a user turn does. A message whose `content` is null or not a string carries no
-text and is skipped.
+**Assistant scanning is off by default.** With the default configuration the proxy scans
+`user` turns only, and assistant turns are accepted and forwarded without being inspected.
+A message whose `content` is null or not a string carries no text and is skipped.
+
+Set `SCAN_ASSISTANT_MESSAGES=true` to enable it. It is a global setting, not per tenant.
+
+Enabling it is a real security gain: a conversation history is an injection surface, since
+text a previous turn returned -- or that a caller placed in an assistant turn -- reaches
+the model exactly as a user turn does, and an agent replaying tool output or a retrieved
+page into an assistant turn is putting attacker-reachable content there.
+
+It is off by default because of a measured cost, not caution. **The current detector flags
+68% of ordinary assistant prose (15 of 22 benign cases; run
+`python tests/eval/run_assistant_eval.py`).** An assistant turn quotes and explains what
+was asked, so a refusal to a jailbreak contains the jailbreak and an answer about prompt
+injection contains prompt injection. Turning this on today would refuse roughly two thirds
+of normal replies. It will default on once that rate reaches 12%; until then, enable it
+only after measuring what it does to your own traffic.
+
+When enabled, an assistant turn that comes back `SANITIZE` is rewritten **in place** --
+that message and no other -- and the rewritten text is what reaches the model.
 
 **A role outside that table is refused with `422`, and the whole request is refused with
 it** - the offending message is not dropped so the rest can proceed, because sending a
