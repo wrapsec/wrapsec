@@ -1628,6 +1628,12 @@ Provide `app_id` for app-scoped keys (dept and tenant derived from app). Provide
 
 Optional `ip_allowlist`: the source addresses or CIDR blocks this key may be used from. Omitted, `null`, or `[]` means no restriction. Entries are canonicalised on the way in, and a malformed entry is rejected with `422` rather than stored and silently skipped at enforcement time. A prefix length of zero (`0.0.0.0/0`, `::/0`) is rejected: it is a restriction that restricts nothing, so an empty list is the way to allow every address. A request presenting the key from an address outside the list is refused with `403`, and the refusal is recorded against that key. Rotation preserves the list.
 
+The restriction is enforced at **authentication**, so it applies to **every** request that presents the key, on every endpoint, and a refused request reaches no handler: no policy resolution, no detection, no upstream call. The address is the one the connection actually came from -- a forwarded header is believed only when the immediate peer is a configured trusted proxy (`TRUSTED_PROXY_IPS`), so a caller cannot present an approved address by claiming one.
+
+Two credentials are not subject to it: a dashboard session (JWT), because an allowlist belongs to an API key and a signed-in user has none; and the platform-operator admin key, which is not an `api_keys` row and has no list to enforce.
+
+The refusal is shaped for the caller it is sent to. On `POST /v1/chat/completions` it is an OpenAI-shaped error (`code: ip_not_allowed`, `type: forbidden`) because the callers there are OpenAI client libraries that parse the body before the status; everywhere else it is the standard envelope with `code: FORBIDDEN`. Neither names the permitted networks: whoever holds the key is not necessarily whoever may know the network layout.
+
 **Response 201:**
 ```json
 {

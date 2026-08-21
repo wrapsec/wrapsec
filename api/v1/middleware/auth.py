@@ -21,6 +21,8 @@ from cache import keyspace
 from config.settings import get_settings
 from errors.catalog import ErrorCode
 from errors.response import error_response
+from observability.metrics import record_api_key_ip_denied
+from security.ip_allowlist import is_allowed
 from services.time import utc_now
 
 if TYPE_CHECKING:
@@ -138,6 +140,95 @@ def _unauthorized(request: Request, reason: str) -> JSONResponse:
     return error_response(
         ErrorCode.UNAUTHORIZED,
         trace_id=getattr(request.state, "trace_id", "") or "",
+    )
+
+
+# The one route whose callers are OpenAI clients. A refusal there has to be
+# shaped like an OpenAI error or the client library raises on the body instead
+# of surfacing the status, and the caller never learns why they were refused.
+_OPENAI_COMPATIBLE_PATHS = frozenset({"/v1/chat/completions"})
+
+
+def bare_key_id(state_key_id: str | None) -> str | None:
+    """
+    The credential id as stored on the key, from the prefixed form request state
+    carries. State distinguishes credential kinds ("key:wsk_...", "key:admin",
+    "user:<uuid>"); the stored id has no prefix, and only a machine credential
+    has one to record.
+    """
+    if not state_key_id or not state_key_id.startswith("key:"):
+        return None
+    bare = state_key_id[len("key:"):]
+    return bare or None
+
+
+async def _record_ip_denial(request: Request) -> None:
+    """
+    Record a credential refused for the address it was presented from.
+
+    Goes to the credential event log rather than the request trail: nothing was
+    scanned and no decision was made, so a row in the decision trail would need
+    an invented decision, and those numbers feed block-rate and threat
+    analytics.
+
+    Written on its own session, and best-effort. Recording must never delay or
+    fail the request it describes, and a refusal that cannot be recorded is
+    still a refusal. The credential is named so revoking one key does not mean
+    auditing all of them.
+    """
+    from domain.enums import AuthEventAction, AuthFailureReason
+    from services.auth.service import _log_auth_event
+
+    tenant_id = getattr(request.state, "tenant_id", None)
+    try:
+        await _log_auth_event(
+            action         = AuthEventAction.API_KEY_IP_DENIED.value,
+            success        = False,
+            tenant_id      = UUID(tenant_id) if tenant_id else None,
+            user_id        = None,
+            failure_reason = AuthFailureReason.IP_NOT_ALLOWED.value,
+            ip_address     = getattr(request.state, "ip_address", None),
+            user_agent     = (getattr(request.state, "user_agent", None) or "")[:500] or None,
+            key_id         = bare_key_id(getattr(request.state, "key_id", None)),
+        )
+    except Exception as exc:
+        logger.error("Could not record a source-network denial: %s", exc)
+
+
+def _ip_denied_response(request: Request) -> Response:
+    """
+    Refuse the request in the shape its caller can read.
+
+    The proxy is consumed by OpenAI client libraries, which parse the body
+    before the status; everything else is consumed by callers that expect the
+    standard envelope. One control, two renderings, because a refusal nobody
+    can interpret is a support ticket rather than a security signal.
+
+    The message says the credential is not permitted from this address without
+    naming what is permitted. Whoever is holding the key is not necessarily
+    whoever is allowed to know the network layout.
+    """
+    trace_id = getattr(request.state, "trace_id", "") or ""
+    message  = "This credential is not permitted from your network address."
+
+    if request.url.path in _OPENAI_COMPATIBLE_PATHS:
+        return JSONResponse(
+            status_code = 403,
+            content     = {
+                "error": {
+                    "message": message,
+                    "type":    "forbidden",
+                    "code":    "ip_not_allowed",
+                },
+                "wrapsec": {"trace_id": trace_id},
+            },
+            headers     = {"X-WrapSec-Trace-Id": trace_id},
+        )
+
+    return error_response(
+        ErrorCode.FORBIDDEN,
+        trace_id = trace_id,
+        message  = message,
     )
 
 
@@ -436,10 +527,40 @@ class AuthMiddleware(BaseHTTPMiddleware):
                 request.state.tenant_id      = str(key_record.tenant_id) if key_record.tenant_id else None
                 request.state.user_id        = None
                 request.state.user_role      = None
-                # Source networks this credential is restricted to, carried on
-                # the request so an endpoint enforcing it does not re-read the
-                # key. Null or empty means unrestricted.
+                # Source networks this credential is restricted to. Null or
+                # empty means unrestricted; the feature is off for that key.
                 request.state.ip_allowlist   = getattr(key_record, "ip_allowlist", None)
+
+                # Enforced here rather than in an endpoint, because the
+                # restriction belongs to the credential and not to a route. In
+                # a handler it would only ever cover the handlers that
+                # remembered to check, and a credential confined to one network
+                # would still be accepted everywhere else. Here it covers every
+                # request that presents an API key, including routes added
+                # later, and a denied request reaches no handler at all: no
+                # policy resolution, no detection, no upstream call.
+                #
+                # Ahead of the suspension check because it is the cheaper
+                # refusal -- no cache or database round trip for a request that
+                # is not going to be served.
+                #
+                # The address comes from get_client_ip, which believes a
+                # forwarded header only when the immediate peer is a configured
+                # trusted proxy, so a caller cannot present an approved address
+                # by claiming one.
+                if request.state.ip_allowlist and not is_allowed(
+                    request.state.ip_address, request.state.ip_allowlist
+                ):
+                    logger.warning(
+                        "auth rejected reason=ip_not_allowed path=%s key=%s ip=%s",
+                        request.url.path,
+                        request.state.key_id,
+                        request.state.ip_address,
+                    )
+                    record_api_key_ip_denied()
+                    await _record_ip_denial(request)
+                    return _ip_denied_response(request)
+
                 if await _tenant_suspended(request.state.tenant_id):
                     return _tenant_suspended_response(request)
                 return await call_next(request)

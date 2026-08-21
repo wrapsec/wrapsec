@@ -52,6 +52,8 @@ test-e2e:
 	  || { echo "dashboard never served /login"; $$P logs --tail 50 dashboard; exit 1; }; \
 	echo "seeding the e2e accounts..."; \
 	$$P exec -T api python scripts/seed_e2e_user.py; \
+	echo "running the source-network round trip..."; \
+	$$P exec -T api python - < $$R/scripts/e2e_ip_allowlist.py; \
 	echo "running the e2e suite..."; \
 	( cd dashboard && PLAYWRIGHT_BASE_URL=http://localhost:3100 npx playwright test )'
 

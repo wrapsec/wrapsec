@@ -13,6 +13,10 @@ so the destinations that matter are checked by reading the table back.
 Covered: a proxy decision in the hash-chained request trail, a rejected sign-in
 and a rejected source address among the credential events, and a change to a
 credential's source restriction among the administrative events.
+
+The source-address refusal is recorded by the authentication layer, which is
+where the restriction is enforced: it applies to every request presenting an
+API key, not to one endpoint.
 """
 
 import uuid
@@ -114,18 +118,19 @@ class TestAuthEventPersistence:
         """
         from types import SimpleNamespace
 
-        from api.v1.endpoints.proxy import _record_allowlist_denial
+        from api.v1.middleware.auth import _record_ip_denial
 
         tenant_id = uuid.uuid4()
         request   = SimpleNamespace(
             state   = SimpleNamespace(
-                tenant_id = str(tenant_id),
-                key_id    = "key:wsk_abc123",   # the prefixed form request state carries
+                tenant_id  = str(tenant_id),
+                key_id     = "key:wsk_abc123",  # the prefixed form request state carries
+                ip_address = "203.0.113.9",
+                user_agent = "probe",
             ),
-            headers = {"user-agent": "probe"},
         )
 
-        await _record_allowlist_denial(request, "203.0.113.9", "probe")
+        await _record_ip_denial(request)
 
         row = (await test_db.execute(
             select(AuthEventModel).where(AuthEventModel.tenant_id == tenant_id)
@@ -152,20 +157,24 @@ class TestAuthEventPersistence:
         from types import SimpleNamespace
         from unittest.mock import AsyncMock
 
-        from api.v1.endpoints.proxy import _record_allowlist_denial
+        from api.v1.middleware.auth import _record_ip_denial
 
         # the signature cannot accept one
-        assert "db" not in inspect.signature(_record_allowlist_denial).parameters
+        assert "db" not in inspect.signature(_record_ip_denial).parameters
 
         # and a session handed in some other way is never touched
         sentinel = AsyncMock()
         request  = SimpleNamespace(
-            state   = SimpleNamespace(tenant_id=str(uuid.uuid4()), key_id="key:wsk_x"),
-            headers = {"user-agent": "probe"},
+            state   = SimpleNamespace(
+                tenant_id  = str(uuid.uuid4()),
+                key_id     = "key:wsk_x",
+                ip_address = "203.0.113.9",
+                user_agent = "probe",
+            ),
             session = sentinel,
         )
 
-        await _record_allowlist_denial(request, "203.0.113.9", "probe")
+        await _record_ip_denial(request)
 
         sentinel.add.assert_not_called()
         sentinel.commit.assert_not_called()

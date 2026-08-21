@@ -58,6 +58,19 @@ PROXY_EXECUTION = Counter(
     # execution_status: SUCCESS | BLOCKED | OUTPUT_BLOCKED | FAILED | TIMEOUT
 )
 
+API_KEY_IP_DENIED = Counter(
+    "wrapsec_api_key_ip_denied_total",
+    "Requests refused because the credential was presented from an address "
+    "outside its source-network list",
+    # Deliberately unlabelled by endpoint. The restriction belongs to the
+    # credential, not to a route, so "how often is this credential being used
+    # from somewhere it should not be" is the question worth answering; which
+    # route it happened to hit is in the credential event log, which also
+    # carries the key and the address. A label per route would also make this
+    # counter grow with the API surface.
+)
+
+
 PROXY_REJECTED = Counter(
     "wrapsec_proxy_rejected_total",
     "Proxy requests refused before any inspection, by reason",
@@ -215,7 +228,6 @@ def record_request(
 # fed from arbitrary strings turns one metric into unbounded time series.
 _REJECTION_REASONS = frozenset({
     "trial_proxy_disabled",
-    "ip_not_allowed",
     "invalid_model_format",
     "proxy_not_configured",
     "model_required",
@@ -235,6 +247,19 @@ def record_proxy_rejection(reason: str) -> None:
     """
     label = reason if reason in _REJECTION_REASONS else "other"
     PROXY_REJECTED.labels(reason=label).inc()
+
+
+def record_api_key_ip_denied() -> None:
+    """
+    Count a credential refused for the address it was presented from.
+
+    Separate from the proxy rejection counter because the control is not the
+    proxy's: it is enforced at authentication and applies to every request that
+    presents an API key. Counting it as a proxy rejection would attribute
+    denials on other endpoints to the proxy, and would leave a denial on a
+    non-proxy route with nowhere to be counted at all.
+    """
+    API_KEY_IP_DENIED.inc()
 
 
 def record_proxy_request(

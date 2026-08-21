@@ -73,7 +73,6 @@ from observability.metrics import (
     record_proxy_request,
     record_request,
 )
-from security.ip_allowlist import is_allowed
 from services.gateway.fanout import (
     DetectionPolicy,
     ScanItem,
@@ -477,55 +476,6 @@ def _reject(
     )
 
 
-def _bare_key_id(state_key_id: str | None) -> str | None:
-    """
-    The credential id as stored on the key, from the prefixed form request state
-    carries. State distinguishes credential kinds ("key:wsk_...", "key:admin",
-    "user:<uuid>"); the stored id has no prefix, and only a machine credential
-    has one to record.
-    """
-    if not state_key_id or not state_key_id.startswith("key:"):
-        return None
-    bare = state_key_id[len("key:"):]
-    return bare or None
-
-
-async def _record_allowlist_denial(
-    request,
-    ip_address: str | None,
-    user_agent: str | None,
-) -> None:
-    """
-    Record a credential refused because of where it was presented from.
-
-    Goes to the credential event log rather than the request trail: nothing was
-    scanned and no decision was made, so a row in the decision trail would need
-    an invented decision, and those numbers feed block-rate and threat analytics.
-
-    Deliberately does NOT take the request session. That log is written on its
-    own session so recording can never delay or fail the request it describes,
-    and the write is best-effort for the same reason: a refusal that cannot be
-    recorded is still a refusal.
-    """
-    from domain.enums import AuthEventAction, AuthFailureReason
-    from services.auth.service import _log_auth_event
-
-    tenant_id = getattr(request.state, "tenant_id", None)
-    try:
-        await _log_auth_event(
-            action         = AuthEventAction.API_KEY_IP_DENIED.value,
-            success        = False,
-            tenant_id      = uuid.UUID(tenant_id) if tenant_id else None,
-            user_id        = None,
-            failure_reason = AuthFailureReason.IP_NOT_ALLOWED.value,
-            ip_address     = ip_address,
-            user_agent     = (user_agent or "")[:500] or None,
-            key_id         = _bare_key_id(getattr(request.state, "key_id", None)),
-        )
-    except Exception as exc:
-        logger.error("Could not record a source-network denial: %s", exc)
-
-
 async def _log_interaction(
     db:               AsyncSession,
     trace_id:         str,
@@ -746,27 +696,8 @@ async def proxy_chat_completions(
     ip_address = getattr(request.state, "ip_address", None)
     user_agent = getattr(request.state, "user_agent", None)
 
-    # -- 0a. Source network check --
-    # Runs before every other check so a credential used from an unapproved
-    # network costs nothing: no policy resolution, no detection, no upstream
-    # call. The address comes from get_client_ip, which only believes a
-    # forwarded header when the immediate peer is a configured trusted proxy,
-    # so a caller cannot present an approved address by claiming one.
-    _allowlist = getattr(request.state, "ip_allowlist", None)
-    if _allowlist and not is_allowed(ip_address, _allowlist):
-        logger.warning(
-            "Source network denied trace_id=%s key=%s ip=%s",
-            trace_id, key_id, ip_address,
-        )
-        await _record_allowlist_denial(request, ip_address, user_agent)
-        return _reject(
-            request     = request,
-            trace_id    = trace_id,
-            status_code = 403,
-            message     = "This credential is not permitted from your network address.",
-            error_type  = "forbidden",
-            error_code  = "ip_not_allowed",
-        )
+    # A credential presented from an address outside its source-network list is
+    # refused at authentication, before this handler runs. Nothing to do here.
 
     # -- 0. Trial key check - proxy mode not available for trial keys --
     key_type = getattr(request.state, "key_type", "live")
