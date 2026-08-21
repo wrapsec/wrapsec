@@ -12,17 +12,19 @@ from enum import Enum
 from fastapi import APIRouter, Depends, Request
 from fastapi.responses import JSONResponse
 from pydantic import BaseModel, Field, field_validator
+from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from api.v1.dependencies.auth import get_current_principal, require_admin
 from api.v1.dependencies.db import get_db
 from api.v1.middleware.auth import get_client_ip
+from db.models import AuditLogModel, AuthEventModel
 from db.repositories.admin_event import AdminEventRepository
 from db.repositories.api_key import ApiKeyRepository
 from db.repositories.application import ApplicationRepository
 from db.repositories.department import DepartmentRepository
 from domain.entities.principal import Principal
-from domain.enums import AdminEventAction
+from domain.enums import AdminEventAction, AuthEventAction
 from errors.exceptions import NotFoundError
 from services.time import parse_utc_iso, to_iso_z, utc_now
 
@@ -466,6 +468,101 @@ async def delete_key(
 
 class RotateKeySchema(BaseModel):
     grace_period_minutes: int = Field(60, ge=0, le=10080)  # 0 = immediate, max 7 days
+
+
+@router.get("/{key_id}/addresses")
+async def get_key_addresses(
+    key_id:    str,
+    request:   Request,
+    days:      int = 30,
+    db:        AsyncSession = Depends(get_db),
+    principal: Principal    = Depends(require_admin()),
+):
+    """
+    Where this credential has been used from, and where it has been refused.
+
+    Building a source-network list from memory is how an operator locks out
+    production. These are the two lists that make it an informed decision:
+    addresses the credential actually authenticated from, and addresses it was
+    turned away from -- the second being what an operator needs when production
+    moves to a new egress address and the key starts failing.
+
+    Administrator only, matching the write path. The networks a credential is
+    confined to, and the addresses it is used from, describe where an
+    organisation operates; they are shown only to whoever can change them.
+
+    Auth: JWT + ADMIN required. 404 if the key belongs to another tenant.
+    """
+    repo   = ApiKeyRepository(db)
+    record = await repo.get_active_by_key_id(key_id)
+    if not record or str(record.tenant_id) != request.state.tenant_id:
+        raise NotFoundError("key", key_id)
+
+    window = max(1, min(days, 365))
+    since  = utc_now() - timedelta(days=window)
+
+    # The two tables record the credential differently. Request state carries a
+    # prefixed form to distinguish credential kinds, and the request trail stores
+    # it verbatim, while the credential log stores the bare id so it joins the
+    # key table. Querying either with the other's format silently returns
+    # nothing, which reads as "never used" rather than as a bug.
+    #
+    # Both reads carry the tenant as well. The key was already resolved and
+    # confirmed to belong to this tenant, and key ids are unique, so the filter
+    # is redundant today -- it is here so that a future id collision, or a
+    # lookup that stops checking ownership, cannot turn this into a window onto
+    # another organisation's infrastructure.
+    used = (await db.execute(
+        select(
+            AuditLogModel.ip_address,
+            func.count().label("hits"),
+            func.max(AuditLogModel.created_at).label("last_seen"),
+        )
+        .where(
+            AuditLogModel.tenant_id  == request.state.tenant_id,
+            AuditLogModel.key_id     == f"key:{key_id}",
+            AuditLogModel.ip_address.is_not(None),
+            AuditLogModel.created_at >= since,
+        )
+        .group_by(AuditLogModel.ip_address)
+        .order_by(func.max(AuditLogModel.created_at).desc())
+        .limit(20)
+    )).all()
+
+    denied = (await db.execute(
+        select(
+            AuthEventModel.ip_address,
+            func.count().label("hits"),
+            func.max(AuthEventModel.created_at).label("last_seen"),
+        )
+        .where(
+            AuthEventModel.tenant_id  == uuid.UUID(request.state.tenant_id),
+            AuthEventModel.key_id     == key_id,
+            AuthEventModel.action     == AuthEventAction.API_KEY_IP_DENIED.value,
+            AuthEventModel.ip_address.is_not(None),
+            AuthEventModel.created_at >= since,
+        )
+        .group_by(AuthEventModel.ip_address)
+        .order_by(func.max(AuthEventModel.created_at).desc())
+        .limit(20)
+    )).all()
+
+    def _rows(rows):
+        return [
+            {
+                "ip_address": row.ip_address,
+                "count":      int(row.hits),
+                "last_seen":  to_iso_z(row.last_seen),
+            }
+            for row in rows
+        ]
+
+    return JSONResponse(content={
+        "key_id":      key_id,
+        "window_days": window,
+        "observed":    _rows(used),
+        "denied":      _rows(denied),
+    })
 
 
 @router.post("/{key_id}/rotate")

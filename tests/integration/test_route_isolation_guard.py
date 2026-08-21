@@ -56,6 +56,7 @@ PLATFORM_OPERATOR = {
 TENANT_SCOPED = {
     # API keys
     "/v1/keys", "/v1/keys/{key_id}", "/v1/keys/{key_id}/rotate",
+    "/v1/keys/{key_id}/addresses",
     # Departments
     "/v1/admin/departments", "/v1/admin/departments/{dept_id}",
     "/v1/admin/departments/{dept_id}/policy",

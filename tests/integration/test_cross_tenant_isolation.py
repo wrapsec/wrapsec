@@ -64,6 +64,21 @@ async def test_rotate_key_cross_tenant_returns_404(auth_client, two_tenant_setup
 
 
 @pytest.mark.asyncio
+async def test_key_addresses_cross_tenant_returns_404(auth_client, two_tenant_setup):
+    """
+    The addresses a credential is used from describe where another organisation
+    operates, so this reads as a directory of their infrastructure. It is masked
+    the same way the key itself is.
+    """
+    a, b = two_tenant_setup["A"], two_tenant_setup["B"]
+    response = await auth_client.get(
+        f"/v1/keys/{b['api_key_id']}/addresses",
+        headers={"Authorization": f"Bearer {a['admin_token']}"},
+    )
+    assert response.status_code == 404
+
+
+@pytest.mark.asyncio
 async def test_list_keys_scoped_to_own_tenant(auth_client, two_tenant_setup):
     a, b = two_tenant_setup["A"], two_tenant_setup["B"]
     response = await auth_client.get(

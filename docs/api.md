@@ -74,6 +74,7 @@ Used by dashboard users. Issued via `POST /v1/auth/login`.
 | `GET /v1/keys` | yes | yes any role |
 | `GET /v1/keys/{id}` | yes | yes any role |
 | `POST /v1/keys`, `PUT /v1/keys/{id}`, `DELETE /v1/keys/{id}`, `POST /v1/keys/{id}/rotate` | no | yes ADMIN only |
+| `GET /v1/keys/{id}/addresses` | no | yes ADMIN only |
 | `GET /v1/admin/tenant`, `GET /v1/admin/departments/*`, `GET /v1/admin/applications/*` | yes | yes any role |
 | `PUT /v1/admin/tenant` | no | yes ADMIN only |
 | `POST/PUT/DELETE /v1/admin/departments/*` | no | yes ADMIN only |
@@ -1535,11 +1536,14 @@ Creates a new API key. Returns the raw key value once - store it securely, it ca
   "name":     "Production Key",
   "dept_id":  "4111d663-47e3-4632-bf92-46a6b24a92f8",
   "app_id":   null,
-  "key_type": "live"
+  "key_type": "live",
+  "ip_allowlist": ["10.0.0.0/8", "203.0.113.7/32"]
 }
 ```
 
 Provide `app_id` for app-scoped keys (dept and tenant derived from app). Provide `dept_id` for dept-scoped keys. `key_type`: `live` (default) or `trial`. Optional `expires_at` (ISO-8601): the key stops authenticating after this instant; omitted or `null` means no expiry. The response echoes the stored value.
+
+Optional `ip_allowlist`: the source addresses or CIDR blocks this key may be used from. Omitted, `null`, or `[]` means no restriction. Entries are canonicalised on the way in, and a malformed entry is rejected with `422` rather than stored and silently skipped at enforcement time. A prefix length of zero (`0.0.0.0/0`, `::/0`) is rejected: it is a restriction that restricts nothing, so an empty list is the way to allow every address. A request presenting the key from an address outside the list is refused with `403`, and the refusal is recorded against that key. Rotation preserves the list.
 
 **Response 201:**
 ```json
@@ -1597,21 +1601,49 @@ Returns a single key by `key_id`. `404 NOT_FOUND` if not found.
   "revoked":      false,
   "created_at":   "2026-04-25T10:00:00",
   "expires_at":   null,
-  "last_used_at": "2026-04-25T10:05:00"
+  "last_used_at": "2026-04-25T10:05:00",
+  "ip_allowlist": ["10.0.0.0/8"]
 }
 ```
 
+`ip_allowlist` is returned to an ADMIN only. For any other role the field is absent from the response, which is not the same as `[]`: absent means "not shown to you", `[]` means the key is unrestricted.
+
 ### PUT /v1/keys/{key_id}
 
-Updates the key name.
+Updates the key name, and optionally the addresses it may be used from.
 
-**Request:** `{"name": "New Name"}`
+**Request:** `{"name": "New Name", "ip_allowlist": ["10.0.0.0/8"]}`
+
+`ip_allowlist` is optional and its absence is meaningful: omitting the field leaves the existing restriction untouched, while sending `[]` removes it. Both setting and removing a restriction are recorded as administrative events; the key secret never appears in them. ADMIN only.
 
 **Response 200:**
 ```json
-{"key_id": "key_abc123", "name": "New Name", "updated_at": "..."}
+{"key_id": "key_abc123", "name": "New Name", "ip_allowlist": ["10.0.0.0/8"], "updated_at": "..."}
 ```
 
+### GET /v1/keys/{key_id}/addresses
+
+Where this key has recently been used from, and where it has been refused. This is the evidence for setting `ip_allowlist`: setting one from memory is how a working deployment gets locked out.
+
+ADMIN only, and scoped to the caller's tenant (`404 NOT_FOUND` otherwise, matching the other key endpoints). A revoked key is not found.
+
+**Query:** `days` (default 30, clamped to 1..365).
+
+**Response 200:**
+```json
+{
+  "key_id":      "key_abc123",
+  "window_days": 30,
+  "observed": [
+    {"ip_address": "203.0.113.10", "count": 412, "last_seen": "2026-04-25T10:05:00.000Z"}
+  ],
+  "denied": [
+    {"ip_address": "198.51.100.9", "count": 3, "last_seen": "2026-04-25T09:00:00.000Z"}
+  ]
+}
+```
+
+`observed` is drawn from the request trail and `denied` from the credential event log, each aggregated to one row per address, most recent first, capped at 20 rows per list. An address appearing in `denied` was turned away by the current restriction: it may be a service that moved to a new egress address, or it may be someone else holding the key, so it is not evidence that the address should be allowed.
 ### DELETE /v1/keys/{key_id}
 
 Revokes a key immediately. If the key was in a grace period (from a rotation), it is revoked immediately with a warning.
