@@ -6,6 +6,7 @@
 import { useState } from "react"
 import { useTranslations } from "next-intl"
 import { useAuthMode } from "@/hooks/useAuthMode"
+import { useDrawerParam } from "@/hooks/useDrawerParam"
 import useSWR from "swr"
 import { Shell } from "@/components/layout/Shell"
 import { PageHeader } from "@/components/ui/PageHeader"
@@ -13,6 +14,7 @@ import { Card } from "@/components/ui/Card"
 import { Button, PlusIcon } from "@/components/ui/Button"
 import { ApiKeyTable } from "@/components/settings/ApiKeyTable"
 import { CreateKeyModal } from "@/components/settings/CreateKeyModal"
+import { KeyDetailDrawer } from "@/components/settings/KeyDetailDrawer"
 import { PageSpinner } from "@/components/ui/Spinner"
 import { getApiKeys, revokeApiKey, rotateApiKey } from "@/lib/api"
 import { ApiKeyCreated } from "@/lib/types"
@@ -24,6 +26,9 @@ export default function ApiKeysPage() {
   const [revoking,  setRevoking]  = useState<string | null>(null)
   const [search,    setSearch]    = useState("")
   const { isAdmin } = useAuthMode()
+  // The open key lives in the URL, so a detail view can be linked, reloaded,
+  // and dismissed with the back button.
+  const { openId: openKeyId, open: openKey, close: closeKey } = useDrawerParam("key")
 
   const { data, isLoading, mutate, error: fetchError } = useSWR("api-keys", getApiKeys)
 
@@ -103,6 +108,7 @@ export default function ApiKeysPage() {
                 })}
                 onRevoke={handleRevoke}
                 onRotate={handleRotate}
+                onOpen={openKey}
                 revoking={revoking}
                 canWrite={isAdmin}
               />
@@ -113,6 +119,15 @@ export default function ApiKeysPage() {
 
       </div>
 
+      {openKeyId && (
+        <KeyDetailDrawer
+          keyId={openKeyId}
+          canWrite={isAdmin}
+          onClose={closeKey}
+          onSaved={() => mutate()}
+        />
+      )}
+
       {showModal && isAdmin && (
         <CreateKeyModal
           onCreated={handleCreated}
@@ -121,4 +136,4 @@ export default function ApiKeysPage() {
       )}
     </Shell>
   )
-}
+}

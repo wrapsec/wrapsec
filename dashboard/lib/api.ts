@@ -16,6 +16,7 @@ import {
   LLMSettings,
   ApiKeysResponse,
   ApiKeyCreated,
+  ApiKeyDetail,
   HealthReadyResponse,
   RequestDetail,
   RequestFilters,
@@ -416,10 +417,11 @@ export async function getApiKeys(): Promise<ApiKeysResponse> {
 }
 
 export async function createApiKey(
-  name:    string,
-  appId?:  string,
-  deptId?: string,
+  name:         string,
+  appId?:       string,
+  deptId?:      string,
   keyType: "live" | "trial" = "live",
+  ipAllowlist?: string[],
 ): Promise<ApiKeyCreated> {
   return request<ApiKeyCreated>("/v1/keys", {
     method: "POST",
@@ -428,6 +430,34 @@ export async function createApiKey(
       key_type: keyType,
       ...(appId  ? { app_id:  appId  } : {}),
       ...(deptId ? { dept_id: deptId } : {}),
+      // Omitted rather than sent empty: the server treats an absent list as no
+      // restriction, and sending [] would say the same thing less clearly.
+      ...(ipAllowlist && ipAllowlist.length ? { ip_allowlist: ipAllowlist } : {}),
+    }),
+  })
+}
+
+export async function getApiKey(keyId: string): Promise<ApiKeyDetail> {
+  return request<ApiKeyDetail>(`/v1/keys/${keyId}`)
+}
+
+/**
+ * Update a key.
+ *
+ * ipAllowlist follows the server's distinction exactly: undefined leaves the
+ * restriction untouched, an empty array clears it. Collapsing the two would mean
+ * a rename could silently remove a restriction.
+ */
+export async function updateApiKey(
+  keyId:        string,
+  name:         string,
+  ipAllowlist?: string[],
+): Promise<{ key_id: string; name: string; ip_allowlist: string[] }> {
+  return request(`/v1/keys/${keyId}`, {
+    method: "PUT",
+    body:   JSON.stringify({
+      name,
+      ...(ipAllowlist === undefined ? {} : { ip_allowlist: ipAllowlist }),
     }),
   })
 }

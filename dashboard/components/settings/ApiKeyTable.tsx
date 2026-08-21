@@ -14,12 +14,13 @@ import { useFormat } from "@/hooks/useFormat"
 interface ApiKeyTableProps {
   keys:      ApiKey[]
   onRevoke:  (keyId: string) => void
+  onOpen?:   (keyId: string) => void   // open the detail drawer; viewing is not admin-gated
   onRotate:  (keyId: string, gracePeriodMinutes: number) => Promise<string>
   revoking:  string | null
   canWrite?: boolean   // false = API key session, hide write actions
 }
 
-export function ApiKeyTable({ keys, onRevoke, onRotate, revoking, canWrite = true }: ApiKeyTableProps) {
+export function ApiKeyTable({ keys, onRevoke, onRotate, onOpen, revoking, canWrite = true }: ApiKeyTableProps) {
   const fmt = useFormat()
   const t   = useTranslations("pages.keys.table")
   const [rotating,       setRotating]       = useState<string | null>(null)
@@ -163,6 +164,19 @@ export function ApiKeyTable({ keys, onRevoke, onRotate, revoking, canWrite = tru
                   {/* Actions */}
                   <td className="px-4 py-3 text-right">
                     <div className="flex items-center justify-end gap-2">
+                      {/* Details - viewing is open to any signed-in role; only
+                          editing inside the drawer is confined to admins. */}
+                      {onOpen && (
+                        <button
+                          onClick={() => onOpen(key.key_id)}
+                          title={t("details")}
+                          style={{ fontSize: "12px", color: "#1d4ed8", background: "none", border: "none", cursor: "pointer", padding: 0 }}
+                          onMouseEnter={e => { (e.currentTarget as HTMLElement).style.textDecoration = "underline" }}
+                          onMouseLeave={e => { (e.currentTarget as HTMLElement).style.textDecoration = "none" }}
+                        >
+                          {t("details")}
+                        </button>
+                      )}
                       {/* Rotate - hidden for API key sessions */}
                       {canWrite && <button
                         onClick={() => { setConfirmRevoke(null); setGraceInput(key.key_id) }}

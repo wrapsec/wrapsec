@@ -241,6 +241,19 @@ export interface ApiKeysResponse {
   keys: ApiKey[]
 }
 
+/**
+ * A single key as returned by the detail endpoint.
+ *
+ * ip_allowlist is present only for an administrator: the networks a credential
+ * is confined to describe where an organisation operates from, so they are shown
+ * only to whoever can change them, and the key listing omits them entirely.
+ * Absent means "not shown to you", which is not the same as "unrestricted".
+ */
+export interface ApiKeyDetail extends ApiKey {
+  tenant_id?:    string | null
+  ip_allowlist?: string[]
+}
+
 // ── Health ────────────────────────────────────────────────────
 export interface HealthResponse {
   status:  string

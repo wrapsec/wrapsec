@@ -993,7 +993,8 @@
         },
         "rotated_banner": "Key rotated - copy the new key now. It will not be shown again.",
         "dismiss": "Dismiss",
-        "rotated_hint": "Old key will expire after the grace period. Update your integrations before it expires."
+        "rotated_hint": "Old key will expire after the grace period. Update your integrations before it expires.",
+        "details": "Details"
       },
       "create_modal": {
         "title": "Create API Key",
@@ -1021,6 +1022,25 @@
         "dept_label": "Department:",
         "app_label": "Application:",
         "done": "Done"
+      },
+      "drawer": {
+        "label": "Key details",
+        "title": "Key details",
+        "load_error": "Failed to load this key",
+        "save": "Save changes",
+        "saving": "Saving...",
+        "saved": "Changes saved",
+        "cancel": "Cancel",
+        "name": "Name",
+        "allowlist_title": "Source networks",
+        "allowlist_hint": "One address or CIDR block per line. Leave empty to allow this key from any address.",
+        "allowlist_placeholder": "10.0.0.0/8\n203.0.113.7",
+        "allowlist_unrestricted": "This key may be used from any address.",
+        "allowlist_restricted": "This key may only be used from {count, plural, one {# network} other {# networks}}.",
+        "allowlist_hidden": "Only an administrator can view or change source networks.",
+        "error_malformed": "{value} is not a valid IP address or CIDR block.",
+        "error_allows_everything": "{value} allows every address, which is not a restriction. Leave the field empty to allow all.",
+        "rotate_note": "Rotating this key keeps its source networks."
       }
     },
     "users": {

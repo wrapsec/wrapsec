@@ -993,7 +993,8 @@
         },
         "rotated_banner": "Schlüssel rotiert - kopieren Sie den neuen Schlüssel jetzt. Er wird nicht erneut angezeigt.",
         "dismiss": "Schließen",
-        "rotated_hint": "Der alte Schlüssel läuft nach der Kulanzzeit ab. Aktualisieren Sie Ihre Integrationen, bevor er abläuft."
+        "rotated_hint": "Der alte Schlüssel läuft nach der Kulanzzeit ab. Aktualisieren Sie Ihre Integrationen, bevor er abläuft.",
+        "details": "Details"
       },
       "create_modal": {
         "title": "API-Schlüssel erstellen",
@@ -1021,6 +1022,25 @@
         "dept_label": "Abteilung:",
         "app_label": "Anwendung:",
         "done": "Fertig"
+      },
+      "drawer": {
+        "label": "Schlüsseldetails",
+        "title": "Schlüsseldetails",
+        "load_error": "Dieser Schlüssel konnte nicht geladen werden.",
+        "save": "Änderungen speichern",
+        "saving": "Wird gespeichert ...",
+        "saved": "Änderungen gespeichert",
+        "cancel": "Abbrechen",
+        "name": "Name",
+        "allowlist_title": "Quellnetzwerke",
+        "allowlist_hint": "Eine Adresse oder ein CIDR-Block pro Zeile. Leer lassen, um diesen Schlüssel von jeder Adresse aus zuzulassen.",
+        "allowlist_placeholder": "10.0.0.0/8\n203.0.113.7",
+        "allowlist_unrestricted": "Dieser Schlüssel kann von jeder Adresse aus verwendet werden.",
+        "allowlist_restricted": "Dieser Schlüssel kann nur aus {count, plural, one {# Netzwerk} other {# Netzwerken}} verwendet werden.",
+        "allowlist_hidden": "Nur Administratoren können Quellnetzwerke einsehen oder ändern.",
+        "error_malformed": "{value} ist keine gültige IP-Adresse und kein gültiger CIDR-Block.",
+        "error_allows_everything": "{value} erlaubt jede Adresse und ist damit keine Einschränkung. Lassen Sie das Feld leer, um alle Adressen zuzulassen.",
+        "rotate_note": "Beim Rotieren dieses Schlüssels bleiben die Quellnetzwerke erhalten."
       }
     },
     "users": {

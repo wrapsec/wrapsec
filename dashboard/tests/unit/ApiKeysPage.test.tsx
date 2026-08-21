@@ -19,6 +19,14 @@ vi.mock("@/components/layout/Shell", () => ({
 let session = { isAdmin: true }
 vi.mock("@/hooks/useAuthMode", () => ({ useAuthMode: () => session }))
 
+// The open key lives in the URL, so the page reads router state. Nothing here
+// asserts navigation; this only supplies the context those hooks require.
+vi.mock("next/navigation", () => ({
+  useRouter:       () => ({ push: vi.fn(), replace: vi.fn() }),
+  usePathname:     () => "/settings/keys",
+  useSearchParams: () => new URLSearchParams(),
+}))
+
 vi.mock("@/lib/api", () => ({
   getApiKeys:            vi.fn(),
   revokeApiKey:          vi.fn(),
