@@ -1839,7 +1839,9 @@ Policy configuration is NOT part of the tenant profile. Detection thresholds, la
 
 ### GET /v1/admin/tenant/usage
 
-Tenant-scoped usage aggregate over the audit trail: scan and proxy request counts and blocked/sanitized decisions, totalled and broken down by day. Every request path (scan, batch, proxy, cache hit) writes an audit row, so these figures are complete.
+Tenant-scoped usage aggregate over the audit trail: scan and proxy request counts and blocked/sanitized decisions, totalled and broken down by day. Every request that was **inspected** writes an audit row -- scan, batch, proxy, and cache hit alike -- so these figures are complete for inspected traffic.
+
+They deliberately exclude requests refused **before** inspection: a malformed model string, an unconfigured provider, a conversation over the scan-all maximum, a trial key on the proxy, an unsupported message role, or a credential presented from an address outside its source-network list. Those have no decision, no risk score and no input hash, so a row would have to invent them, and `decision` feeds the blocked/sanitized figures directly. They are counted on `wrapsec_proxy_rejected_total` (labelled by reason) and `wrapsec_api_key_ip_denied_total` instead, so if you need "how many requests did we turn away", read those rather than expecting them here.
 
 **Auth:** any valid principal (API key or JWT).
 
