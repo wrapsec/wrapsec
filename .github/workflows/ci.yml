@@ -197,6 +197,17 @@ jobs:
       - name: Seed E2E users (e2e-admin, e2e-viewer)
         run: docker compose -f infrastructure/docker/docker-compose.yml exec -T api python scripts/seed_e2e_user.py
 
+      # Runs against the same live stack, before the browser suite. It is the
+      # only check that exercises the source-network restriction over a real
+      # socket: everything else supplies the client address, and the defect this
+      # was written for was invisible to tests that do. Piped over stdin so it
+      # runs the checked-out source rather than whatever the image was built
+      # with.
+      - name: Verify the source-network restriction end to end
+        run: |
+          docker compose -f infrastructure/docker/docker-compose.yml \
+            exec -T api python - < scripts/e2e_ip_allowlist.py
+
       - name: Install Playwright + Chromium
         working-directory: dashboard
         # No --with-deps: the ubuntu runner already ships Chromium's system libs,
