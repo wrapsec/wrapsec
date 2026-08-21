@@ -38,6 +38,7 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
 
+from sqlalchemy import text
 from sqlalchemy.ext.asyncio import (
     AsyncSession,
     async_sessionmaker,
@@ -80,13 +81,29 @@ async def _one_request(
     tenant_id: str,
     n_messages: int,
     trace_seed: str,
-) -> tuple[float, float, float, int]:
+) -> tuple[float, float, float, float, float, int]:
     """
     One Scan-All request: scan N messages, then append N audit rows in order.
 
-    Returns (total_ms, scan_ms, audit_ms, errors). Audit rows are written
-    sequentially on purpose -- that is what the proxy does, because the chain
-    cannot be built from concurrent writers.
+    Returns (total_ms, scan_ms, audit_ms, lock_wait_ms, lock_hold_ms, errors).
+    Audit rows are written sequentially on purpose -- that is what the proxy
+    does, because the chain cannot be built from concurrent writers.
+
+    The two lock figures are the ones the maximum has to be chosen on, and a
+    mean latency hides both. The chain takes a per-tenant advisory lock that is
+    held until commit, so:
+
+      lock_wait_ms  how long this request sat behind other requests from the
+                    same tenant before it could start writing -- head-of-line
+                    blocking, which is what a caller experiences as a stall
+                    caused by somebody else's long conversation.
+      lock_hold_ms  how long this request kept every other request in the
+                    tenant out. This is the figure that scales with N, and one
+                    request's hold is every other request's wait.
+
+    The lock is taken explicitly first so acquisition can be timed on its own.
+    It is the same lock the repository takes, and advisory locks re-enter freely
+    within a transaction, so the writes below add no further waiting.
     """
     errors = 0
     started = time.monotonic()
@@ -107,11 +124,20 @@ async def _one_request(
             metadata       = RequestMetadata(tenant_id=tenant_id),
         )
     except Exception:
-        return (0.0, 0.0, 0.0, n_messages)
+        return (0.0, 0.0, 0.0, 0.0, 0.0, n_messages)
     scan_ms = (time.monotonic() - scan_started) * 1000
 
     audit_started = time.monotonic()
+    lock_wait_ms  = 0.0
+    lock_hold_ms  = 0.0
     async with session_factory() as session:
+        lock_requested = time.monotonic()
+        await session.execute(
+            text("SELECT pg_advisory_xact_lock(hashtext(:tid))"), {"tid": tenant_id},
+        )
+        lock_acquired = time.monotonic()
+        lock_wait_ms  = (lock_acquired - lock_requested) * 1000
+
         repo = AuditRepository(session)
         for incoming, result in scanned:
             try:
@@ -138,9 +164,22 @@ async def _one_request(
                 })
             except Exception:
                 errors += 1
+
+        # Commit rather than letting the block roll back. The lock is held until
+        # the transaction ends either way, but only a commit pays the write cost
+        # a real request pays, and that cost is inside the hold.
+        try:
+            await session.commit()
+        except Exception:
+            errors += 1
+        lock_hold_ms = (time.monotonic() - lock_acquired) * 1000
+
     audit_ms = (time.monotonic() - audit_started) * 1000
 
-    return ((time.monotonic() - started) * 1000, scan_ms, audit_ms, errors)
+    return (
+        (time.monotonic() - started) * 1000,
+        scan_ms, audit_ms, lock_wait_ms, lock_hold_ms, errors,
+    )
 
 
 async def _measure(
@@ -153,6 +192,8 @@ async def _measure(
     totals: list[float] = []
     scans:  list[float] = []
     audits: list[float] = []
+    waits:  list[float] = []
+    holds:  list[float] = []
     errors = 0
 
     semaphore = asyncio.Semaphore(concurrency)
@@ -160,13 +201,15 @@ async def _measure(
     async def worker(index: int):
         nonlocal errors
         async with semaphore:
-            total_ms, scan_ms, audit_ms, failed = await _one_request(
+            total_ms, scan_ms, audit_ms, wait_ms, hold_ms, failed = await _one_request(
                 session_factory, tenant_id, n_messages,
                 trace_seed=f"req_{uuid.uuid4().hex}",
             )
             totals.append(total_ms)
             scans.append(scan_ms)
             audits.append(audit_ms)
+            waits.append(wait_ms)
+            holds.append(hold_ms)
             errors += failed
 
     wall_started = time.monotonic()
@@ -185,6 +228,13 @@ async def _measure(
         "scan_mean":    statistics.fmean(scans)  if scans  else 0.0,
         "audit_mean":   statistics.fmean(audits) if audits else 0.0,
         "audit_per_row": (statistics.fmean(audits) / n_messages) if audits and n_messages else 0.0,
+        # One request's hold is every other request's wait, so the worst hold is
+        # the ceiling on what a queued caller can be made to wait for each
+        # request ahead of it. The worst wait is what somebody actually waited.
+        "lock_wait_mean": statistics.fmean(waits) if waits else 0.0,
+        "lock_wait_max":  max(waits) if waits else 0.0,
+        "lock_hold_mean": statistics.fmean(holds) if holds else 0.0,
+        "lock_hold_max":  max(holds) if holds else 0.0,
         "throughput":   scanned_messages / wall if wall else 0.0,
         "errors":       errors,
     }
@@ -214,8 +264,10 @@ async def main() -> int:
 
     print(f"\nScan-All cost, single tenant, {args.requests} requests per point\n")
     print(f"{'msgs':>5} {'conc':>5} {'p50 ms':>9} {'p95 ms':>9} {'p99 ms':>9} "
-          f"{'scan ms':>9} {'audit ms':>9} {'ms/row':>8} {'msg/s':>8} {'err':>5}")
-    print("-" * 92)
+          f"{'scan ms':>9} {'audit ms':>9} {'ms/row':>8} "
+          f"{'wait avg':>9} {'wait max':>9} {'hold avg':>9} {'hold max':>9} "
+          f"{'msg/s':>8} {'err':>5}")
+    print("-" * 132)
 
     try:
         for n in message_counts:
@@ -224,13 +276,26 @@ async def main() -> int:
                 print(f"{row['messages']:>5} {row['concurrency']:>5} "
                       f"{row['p50']:>9.1f} {row['p95']:>9.1f} {row['p99']:>9.1f} "
                       f"{row['scan_mean']:>9.1f} {row['audit_mean']:>9.1f} "
-                      f"{row['audit_per_row']:>8.1f} {row['throughput']:>8.1f} "
-                      f"{row['errors']:>5}")
+                      f"{row['audit_per_row']:>8.1f} "
+                      f"{row['lock_wait_mean']:>9.1f} {row['lock_wait_max']:>9.1f} "
+                      f"{row['lock_hold_mean']:>9.1f} {row['lock_hold_max']:>9.1f} "
+                      f"{row['throughput']:>8.1f} {row['errors']:>5}")
     finally:
         await engine.dispose()
 
-    print("\nThe audit column is the one that grows with concurrency: chain writes\n"
-          "serialise per tenant, so N appends per request queue behind each other.\n")
+    print("\nRead the two lock columns first. `hold` is how long one request keeps every\n"
+          "other request in the tenant out, and it is what grows with the message count.\n"
+          "`wait` is what a request spent queued behind the ones ahead of it, and it is\n"
+          "what a caller experiences as a stall somebody else caused. At concurrency 1\n"
+          "there is nothing to wait for, so a non-trivial wait there means contention\n"
+          "from outside this run.\n\n"
+          "The maximum message count is a bound on hold time. Raising it raises what one\n"
+          "tenant can do to its own other requests.\n")
+
+    # The run commits, so it leaves rows behind. Chain rows are append-only by
+    # trigger, but a synthetic tenant should not linger in a real database.
+    print(f"Rows were committed under tenant_id={tenant_id}. To remove them:\n"
+          f"  DELETE FROM audit_logs WHERE tenant_id = '{tenant_id}';\n")
     return 0
 
 
