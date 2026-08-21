@@ -519,3 +519,132 @@ async def test_list_keys_enriched_with_dept_and_app_names(client, admin_jwt_head
     assert match[0]["dept_id"] == did
     assert match[0]["dept_name"] == "Dept"
     assert match[0]["app_name"] == "App"
+
+
+# ---------------------------------------------------------------------------
+# The source-network restriction across a credential's whole life
+# ---------------------------------------------------------------------------
+
+@pytest.mark.asyncio
+async def test_rotation_carries_the_source_restriction(
+    client, admin_jwt_headers, admin_key_scope,
+):
+    """
+    Rotation is a security action, often taken because a credential is suspected
+    compromised. A replacement that quietly loses the restriction would work from
+    anywhere at the exact moment someone was tightening things, and nothing would
+    say so.
+    """
+    created = await client.post(
+        "/v1/keys",
+        json={
+            "name":         "restricted",
+            "dept_id":      admin_key_scope,
+            "ip_allowlist": ["10.0.0.0/8", "192.0.2.7"],
+        },
+        headers=admin_jwt_headers,
+    )
+    assert created.status_code == 201, created.text
+    original_id = created.json()["key_id"]
+
+    rotated = await client.post(
+        f"/v1/keys/{original_id}/rotate",
+        json={"grace_period_minutes": 60},
+        headers=admin_jwt_headers,
+    )
+    assert rotated.status_code in (200, 201), rotated.text
+    new_id = rotated.json()["new_key_id"]
+    assert new_id != original_id
+
+    fetched = await client.get(f"/v1/keys/{new_id}", headers=admin_jwt_headers)
+    assert fetched.status_code == 200, fetched.text
+    assert fetched.json()["ip_allowlist"] == ["10.0.0.0/8", "192.0.2.7/32"]
+
+
+@pytest.mark.asyncio
+async def test_rotating_an_unrestricted_key_leaves_it_unrestricted(
+    client, admin_jwt_headers, admin_key_scope,
+):
+    """Carrying the restriction must not invent one where there was none."""
+    created = await client.post(
+        "/v1/keys",
+        json={"name": "open", "dept_id": admin_key_scope},
+        headers=admin_jwt_headers,
+    )
+    assert created.status_code == 201, created.text
+
+    rotated = await client.post(
+        f"/v1/keys/{created.json()['key_id']}/rotate",
+        json={"grace_period_minutes": 0},
+        headers=admin_jwt_headers,
+    )
+    assert rotated.status_code in (200, 201), rotated.text
+
+    fetched = await client.get(
+        f"/v1/keys/{rotated.json()['new_key_id']}", headers=admin_jwt_headers,
+    )
+    assert fetched.json()["ip_allowlist"] == []
+
+
+@pytest.mark.asyncio
+async def test_the_restriction_survives_create_update_rotate_and_revoke(
+    client, admin_jwt_headers, admin_key_scope,
+):
+    """
+    The whole life of a credential in one pass, because the restriction is only
+    as good as its weakest transition and each of these is a separate write path.
+    """
+    # create, restricted
+    created = await client.post(
+        "/v1/keys",
+        json={"name": "lifecycle", "dept_id": admin_key_scope,
+              "ip_allowlist": ["10.0.0.0/8"]},
+        headers=admin_jwt_headers,
+    )
+    assert created.status_code == 201, created.text
+    key_id = created.json()["key_id"]
+
+    # update: replace the networks
+    updated = await client.put(
+        f"/v1/keys/{key_id}",
+        json={"name": "lifecycle", "ip_allowlist": ["192.0.2.0/24"]},
+        headers=admin_jwt_headers,
+    )
+    assert updated.status_code == 200, updated.text
+    assert updated.json()["ip_allowlist"] == ["192.0.2.0/24"]
+
+    # rename only: an omitted list must not silently drop the restriction
+    renamed = await client.put(
+        f"/v1/keys/{key_id}",
+        json={"name": "lifecycle-renamed"},
+        headers=admin_jwt_headers,
+    )
+    assert renamed.status_code == 200, renamed.text
+    assert renamed.json()["ip_allowlist"] == ["192.0.2.0/24"]
+
+    # rotate: the replacement keeps it
+    rotated = await client.post(
+        f"/v1/keys/{key_id}/rotate",
+        json={"grace_period_minutes": 0},
+        headers=admin_jwt_headers,
+    )
+    assert rotated.status_code in (200, 201), rotated.text
+    new_id = rotated.json()["new_key_id"]
+
+    fetched = await client.get(f"/v1/keys/{new_id}", headers=admin_jwt_headers)
+    assert fetched.json()["ip_allowlist"] == ["192.0.2.0/24"]
+
+    # clearing is explicit, and possible
+    cleared = await client.put(
+        f"/v1/keys/{new_id}",
+        json={"name": "lifecycle-renamed", "ip_allowlist": []},
+        headers=admin_jwt_headers,
+    )
+    assert cleared.status_code == 200, cleared.text
+    assert cleared.json()["ip_allowlist"] == []
+
+    # revoke: the credential goes away entirely
+    revoked = await client.delete(f"/v1/keys/{new_id}", headers=admin_jwt_headers)
+    assert revoked.status_code in (200, 204), revoked.text
+    gone = await client.get(f"/v1/keys/{new_id}", headers=admin_jwt_headers)
+    assert gone.status_code == 404

@@ -523,22 +523,40 @@ async def rotate_key(
     # Calculate grace period expiry for old key (aware UTC; column is TIMESTAMPTZ)
     grace_expires = utc_now() + timedelta(minutes=body.grace_period_minutes)
 
-    # Create new key with same metadata - key_type is preserved on rotation
+    # Create new key with same metadata - key_type is preserved on rotation.
+    #
+    # The source-network restriction carries too. Rotation is a security action,
+    # often taken because a credential is suspected compromised, so dropping the
+    # restriction here would remove a control at the exact moment someone is
+    # tightening things, and the new key would work from anywhere without anyone
+    # being told. An operator who wants the replacement unrestricted clears it
+    # afterwards, which is a deliberate act that leaves its own record.
+    carried_allowlist = list(record.ip_allowlist or []) or None
     new_record = await repo.create({
-        "key_id":    new_key_id,
-        "name":      record.name,
-        "key_hash":  new_hash,
-        "key_type":  key_type,
-        "is_admin":  record.is_admin,
-        "revoked":   False,
-        "app_id":    record.app_id,
-        "dept_id":   record.dept_id,
-        "tenant_id": record.tenant_id,
+        "key_id":       new_key_id,
+        "name":         record.name,
+        "key_hash":     new_hash,
+        "key_type":     key_type,
+        "is_admin":     record.is_admin,
+        "revoked":      False,
+        "app_id":       record.app_id,
+        "dept_id":      record.dept_id,
+        "tenant_id":    record.tenant_id,
+        "ip_allowlist": carried_allowlist,
     })
 
     # Set old key to expire at end of grace period - both changes in one commit
     record.expires_at = grace_expires
     await db.commit()
+
+    # Record that the restriction moved to the replacement. Without this a
+    # restriction could appear on a credential with nothing saying how it got
+    # there, and its absence after a rotation would be equally unexplained.
+    if carried_allowlist:
+        await _record_allowlist_change(
+            db, request, principal, new_key_id, record.dept_id,
+            previous=None, current=carried_allowlist,
+        )
 
     return JSONResponse(content={
         "new_key_id":       new_key_id,
