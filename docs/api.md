@@ -1050,6 +1050,16 @@ The maximum is deliberately low. The audit chain takes a per-tenant lock, so con
 requests from one tenant serialise on it, and the cost of a large fan-out lands on the
 caller's own latency. Raise it only against a measurement of your own traffic.
 
+**If you run the optional transformer build, measure before relying on Scan-All under
+concurrency.** Detection is fail-closed: a detector that runs out of time is treated as a
+failure and the message is blocked, and that block is indistinguishable from one caused by
+the content. On the default build this does not arise -- 240 of 240 messages served at up
+to 8 concurrent 10-message requests. With the Tier-2 transformer installed, the same load
+blocked 30.8% of messages that way, rising to 58% at 8 concurrent requests, with nothing
+blocked on content. The lever is `BATCH_CONCURRENCY`, `DETECTOR_TIMEOUT_SECONDS`, or a
+lower `MAX_SCAN_ALL_MESSAGES`; `tests/load/scan_all_load.py` reports the rate for your own
+hardware, and takes `--no-transformer` to compare build shapes.
+
 **WrapSec response headers:**
 
 `X-WrapSec-Trace-Id` is present on **every** response from this endpoint - including early error exits (invalid model format, trial key rejection, provider config errors). All other headers are present only when the request reached the detection pipeline.

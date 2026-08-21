@@ -15,9 +15,17 @@ This measures both halves separately so the limit can be chosen on evidence
 rather than inherited from the batch endpoint, whose writes do not contend the
 same way.
 
+MEASURE THE BUILD YOU RUN. The Tier-2 transformer ships only in the optional
+build, and it dominates this measurement: with it the detectors contend for CPU
+and time out, and fail-closed turns each timeout into a BLOCK the caller cannot
+tell from a content block. Without it the same load produces none. Measuring a
+development machine that happens to have Tier 2 installed would report a cost
+most deployments never pay, and would tune the timeouts against the wrong shape.
+
 Usage (needs a Postgres with the schema applied):
 
     DATABASE_URL=postgresql+asyncpg://... python tests/load/scan_all_load.py
+    DATABASE_URL=... python tests/load/scan_all_load.py --no-transformer
 
 Options:
     --messages 1,5,10,20,50     eligible messages per request
@@ -29,6 +37,8 @@ from __future__ import annotations
 
 import argparse
 import asyncio
+import collections
+import logging
 import os
 import statistics
 import sys
@@ -37,6 +47,15 @@ import uuid
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
+
+# --no-transformer has to be handled before the gateway is imported, because the
+# Tier-2 detector loads its model at construction. Blocking the import makes it
+# fail to load and degrade, which is exactly the state of a default deployment:
+# the transformer ships only in the optional build (BUILD_ENV=transformer), so
+# measuring a dev box that happens to have it installed would report a cost most
+# deployments do not pay, and would tune the timeouts against the wrong shape.
+if "--no-transformer" in sys.argv:
+    sys.modules["transformers"] = None  # type: ignore[assignment]
 
 from sqlalchemy import text
 from sqlalchemy.ext.asyncio import (
@@ -64,6 +83,57 @@ _SAMPLE = (
 )
 
 
+# Which detector timed out, counted from the log the pipeline already emits.
+#
+# The timeout is not reported on the result -- the pipeline swaps in a clean
+# result and records the failure by logging it -- so the log is the only place
+# that says WHICH detector gave up. Without that, a timeout-induced block is
+# indistinguishable from a content block in the numbers, and the tuning question
+# ("which detector needs more time, or less work") has no answer.
+_TIMEOUT_SOURCES = {
+    "Input guard timeout":   "input_guard",
+    "Rule detector timeout": "rule_detector",
+    "ML pipeline timeout":   "ml_pipeline",
+    "Transformer inference": "transformer",
+}
+
+
+class _TimeoutCounter(logging.Handler):
+    """Counts detector-timeout log lines by source, for the run's duration."""
+
+    def __init__(self) -> None:
+        super().__init__(level=logging.WARNING)
+        self.counts: collections.Counter[str] = collections.Counter()
+
+    def emit(self, record: logging.LogRecord) -> None:
+        try:
+            message = record.getMessage()
+        except Exception:
+            return
+        for needle, source in _TIMEOUT_SOURCES.items():
+            if needle in message:
+                self.counts[source] += 1
+                return
+
+
+def _classify(result) -> str:
+    """
+    What actually happened to one scanned message.
+
+    A fail-closed block is a BLOCK with SYSTEM_ERROR as its reason: the detector
+    did not decide anything, the request was refused because it could not be
+    inspected. It reaches the caller looking exactly like a content block, which
+    is why counting only transport errors reports a run where every message was
+    refused as a run with no errors at all.
+    """
+    decision = result.decision.decision.value
+    reason   = getattr(result.decision, "primary_reason", None)
+
+    if decision == "BLOCK":
+        return "blocked_by_failure" if reason == "SYSTEM_ERROR" else "blocked_by_content"
+    return "served"
+
+
 def _percentiles(values: list[float]) -> tuple[float, float, float]:
     if not values:
         return (0.0, 0.0, 0.0)
@@ -81,11 +151,13 @@ async def _one_request(
     tenant_id: str,
     n_messages: int,
     trace_seed: str,
-) -> tuple[float, float, float, float, float, int]:
+) -> tuple[float, float, float, float, float, int, collections.Counter]:
     """
     One Scan-All request: scan N messages, then append N audit rows in order.
 
-    Returns (total_ms, scan_ms, audit_ms, lock_wait_ms, lock_hold_ms, errors).
+    Returns (total_ms, scan_ms, audit_ms, lock_wait_ms, lock_hold_ms, errors,
+    outcomes), where outcomes counts what happened to each scanned MESSAGE:
+    served, blocked_by_content, or blocked_by_failure.
     Audit rows are written sequentially on purpose -- that is what the proxy
     does, because the chain cannot be built from concurrent writers.
 
@@ -124,8 +196,13 @@ async def _one_request(
             metadata       = RequestMetadata(tenant_id=tenant_id),
         )
     except Exception:
-        return (0.0, 0.0, 0.0, 0.0, 0.0, n_messages)
+        return (0.0, 0.0, 0.0, 0.0, 0.0, n_messages,
+                collections.Counter({"transport_error": n_messages}))
     scan_ms = (time.monotonic() - scan_started) * 1000
+
+    outcomes: collections.Counter[str] = collections.Counter(
+        _classify(result) for _incoming, result in scanned
+    )
 
     audit_started = time.monotonic()
     lock_wait_ms  = 0.0
@@ -178,7 +255,7 @@ async def _one_request(
 
     return (
         (time.monotonic() - started) * 1000,
-        scan_ms, audit_ms, lock_wait_ms, lock_hold_ms, errors,
+        scan_ms, audit_ms, lock_wait_ms, lock_hold_ms, errors, outcomes,
     )
 
 
@@ -195,13 +272,14 @@ async def _measure(
     waits:  list[float] = []
     holds:  list[float] = []
     errors = 0
+    outcomes: collections.Counter[str] = collections.Counter()
 
     semaphore = asyncio.Semaphore(concurrency)
 
     async def worker(index: int):
         nonlocal errors
         async with semaphore:
-            total_ms, scan_ms, audit_ms, wait_ms, hold_ms, failed = await _one_request(
+            total_ms, scan_ms, audit_ms, wait_ms, hold_ms, failed, counts = await _one_request(
                 session_factory, tenant_id, n_messages,
                 trace_seed=f"req_{uuid.uuid4().hex}",
             )
@@ -211,6 +289,7 @@ async def _measure(
             waits.append(wait_ms)
             holds.append(hold_ms)
             errors += failed
+            outcomes.update(counts)
 
     wall_started = time.monotonic()
     await asyncio.gather(*[worker(i) for i in range(requests)])
@@ -237,6 +316,15 @@ async def _measure(
         "lock_hold_max":  max(holds) if holds else 0.0,
         "throughput":   scanned_messages / wall if wall else 0.0,
         "errors":       errors,
+        # What happened to each scanned message, so a run in which everything
+        # was refused cannot report itself as a run with no errors.
+        "served":             outcomes["served"],
+        "blocked_by_content": outcomes["blocked_by_content"],
+        "blocked_by_failure": outcomes["blocked_by_failure"],
+        "transport_error":    outcomes["transport_error"],
+        "failure_block_rate": (
+            outcomes["blocked_by_failure"] / scanned_messages if scanned_messages else 0.0
+        ),
     }
 
 
@@ -245,6 +333,10 @@ async def main() -> int:
     parser.add_argument("--messages",    default="1,5,10,20,50")
     parser.add_argument("--concurrency", default="1,4,8")
     parser.add_argument("--requests",    type=int, default=10)
+    parser.add_argument(
+        "--no-transformer", action="store_true",
+        help="measure the default build, where Tier 2 is not installed",
+    )
     args = parser.parse_args()
 
     database_url = os.environ.get("DATABASE_URL")
@@ -262,26 +354,43 @@ async def main() -> int:
     message_counts = [int(v) for v in args.messages.split(",")]
     concurrencies  = [int(v) for v in args.concurrency.split(",")]
 
-    print(f"\nScan-All cost, single tenant, {args.requests} requests per point\n")
+    timeouts = _TimeoutCounter()
+    logging.getLogger("wrapsec").addHandler(timeouts)
+    logging.getLogger("wrapsec").setLevel(logging.WARNING)
+
+    from engine.detection.transformer_detector import TransformerDetector
+    tier2 = "off (default build)" if not TransformerDetector._class_ready else "ON (optional build)"
+
+    print(f"\nScan-All cost, single tenant, {args.requests} requests per point")
+    print(f"Tier-2 transformer: {tier2}\n")
     print(f"{'msgs':>5} {'conc':>5} {'p50 ms':>9} {'p95 ms':>9} {'p99 ms':>9} "
           f"{'scan ms':>9} {'audit ms':>9} {'ms/row':>8} "
           f"{'wait avg':>9} {'wait max':>9} {'hold avg':>9} {'hold max':>9} "
-          f"{'msg/s':>8} {'err':>5}")
-    print("-" * 132)
+          f"{'msg/s':>8} {'served':>7} {'blk:cnt':>8} {'blk:FAIL':>9} {'err':>5}")
+    print("-" * 160)
 
+    rows: list[dict] = []
     try:
         for n in message_counts:
             for c in concurrencies:
                 row = await _measure(factory, tenant_id, n, c, args.requests)
+                rows.append(row)
                 print(f"{row['messages']:>5} {row['concurrency']:>5} "
                       f"{row['p50']:>9.1f} {row['p95']:>9.1f} {row['p99']:>9.1f} "
                       f"{row['scan_mean']:>9.1f} {row['audit_mean']:>9.1f} "
                       f"{row['audit_per_row']:>8.1f} "
                       f"{row['lock_wait_mean']:>9.1f} {row['lock_wait_max']:>9.1f} "
                       f"{row['lock_hold_mean']:>9.1f} {row['lock_hold_max']:>9.1f} "
-                      f"{row['throughput']:>8.1f} {row['errors']:>5}")
+                      f"{row['throughput']:>8.1f} "
+                      f"{row['served']:>7} {row['blocked_by_content']:>8} "
+                      f"{row['blocked_by_failure']:>9} {row['errors']:>5}")
     finally:
         await engine.dispose()
+
+    scanned = sum(r["served"] + r["blocked_by_content"] + r["blocked_by_failure"]
+                  for r in rows)
+    failed  = sum(r["blocked_by_failure"] for r in rows)
+    rate    = (failed / scanned) if scanned else 0.0
 
     print("\nRead the two lock columns first. `hold` is how long one request keeps every\n"
           "other request in the tenant out, and it is what grows with the message count.\n"
@@ -291,6 +400,23 @@ async def main() -> int:
           "from outside this run.\n\n"
           "The maximum message count is a bound on hold time. Raising it raises what one\n"
           "tenant can do to its own other requests.\n")
+
+    print("Outcome of every scanned message")
+    print(f"  served                    {scanned - failed - sum(r['blocked_by_content'] for r in rows):>7}")
+    print(f"  blocked on content        {sum(r['blocked_by_content'] for r in rows):>7}")
+    print(f"  blocked by DETECTOR FAILURE {failed:>5}   <- {rate:.1%} of all scanned messages")
+    print(f"  transport errors          {sum(r['transport_error'] for r in rows):>7}")
+
+    if timeouts.counts:
+        print("\nDetector timeouts, by source")
+        for source, count in timeouts.counts.most_common():
+            print(f"  {source:<16} {count:>7}")
+
+    print("\nThe failure-block line is the one to act on. Those requests were refused\n"
+          "because a detector ran out of time, not because anything was found in them,\n"
+          "and the caller cannot tell the two apart -- both arrive as a BLOCK. A run\n"
+          "with a high rate here is legitimate traffic being turned away under load,\n"
+          "which counting transport errors alone would report as a clean run.\n")
 
     # The run commits, so it leaves rows behind. Chain rows are append-only by
     # trigger, but a synthetic tenant should not linger in a real database.
