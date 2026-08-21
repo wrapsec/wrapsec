@@ -29,6 +29,7 @@ What this module deliberately does NOT own:
 from __future__ import annotations
 
 import asyncio
+import logging
 from dataclasses import dataclass
 from typing import Any
 
@@ -38,6 +39,8 @@ from domain.enums import DetectionMode, ExecutionMode
 from domain.value_objects.trace_id import TraceId
 from errors.exceptions import RateLimitError
 from services.gateway.service import GatewayService
+
+logger = logging.getLogger("wrapsec.gateway.fanout")
 
 
 @dataclass(frozen=True)
@@ -94,21 +97,35 @@ async def charge_additional_units(request: Any, n: int) -> None:
     if n <= 1:
         return
 
-    try:
-        from cache.rate_limit_store import is_rate_limited
+    from cache.rate_limit_store import is_rate_limited
 
-        key_id = getattr(request.state, "key_id", None)
-        rl_id  = (
-            f"key:{key_id}" if key_id
-            else f"ip:{getattr(request.state, 'ip_address', None) or 'unknown'}"
+    # The identifier the ENFORCING limiter used for this request, published by
+    # it. Deriving a second one here is what made these units land in a bucket
+    # nothing reads: the limiter buckets on a hash of the presented key, while
+    # request.state.key_id is the key record's id and already prefixed.
+    # Absent attribute and None mean different things: the first is a broken
+    # contract, the second is limiting that does not apply to this path.
+    if not hasattr(request.state, "rate_limit_id"):
+        # The limiter runs ahead of every path that reaches here, so its absence
+        # means the contract was broken rather than that limiting was skipped.
+        # Loud, because the symptom otherwise is silently unmetered fan-out.
+        logger.error(
+            "No rate-limit identifier on the request; %d additional units were "
+            "not charged. The rate-limit middleware must publish one.", n - 1,
         )
-        is_limited, _, _ = await is_rate_limited(rl_id, cost=n - 1)
-        if is_limited:
-            raise RateLimitError()
-    except RateLimitError:
-        raise
-    except Exception:
-        pass  # Store unavailable - fail open, as the limiter does elsewhere.
+        return
+
+    rate_limit_id = request.state.rate_limit_id
+    if rate_limit_id is None:
+        return  # Limiting is off, or does not cover this path. Nothing to charge.
+
+    # No broad exception handling here. The store already fails open on its own
+    # outages, logging as it does so, which is the only failure this had any
+    # business absorbing. Catching more would hide the caller's own defects --
+    # and did: it swallowed the wrong-bucket bug above for as long as it existed.
+    is_limited, _, _ = await is_rate_limited(rate_limit_id, cost=n - 1)
+    if is_limited:
+        raise RateLimitError()
 
 
 async def scan_items(

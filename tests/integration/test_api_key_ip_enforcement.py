@@ -393,3 +393,103 @@ class TestDenialEnvelope:
         resp = await _request(app, api_key=raw, peer_ip=DENIED_IP)
         assert ALLOWED_NET not in resp.text
         assert "10.0.0.0" not in resp.text
+
+
+# ── The fan-out charges the bucket the limiter enforces ───────────────────────
+
+class TestRateLimitAccounting:
+    """
+    A multi-input scan charges its extra units against a bucket. The only thing
+    that matters is that it is the SAME bucket the limiter enforces on.
+
+    This was wrong, and the tests that covered it could not see the difference:
+    they mocked the store and asserted it was CALLED with the right cost, which
+    is true whichever bucket the units land in. So the assertion here is not
+    about the call but about the identifier, compared against the one the
+    enforcing middleware computed for the very same request.
+    """
+
+    @staticmethod
+    def _canonical(raw_key: str) -> str:
+        """The identifier the limiter buckets on, derived independently here."""
+        return "key:" + hashlib.sha256(raw_key.encode()).hexdigest()[:16]
+
+    @pytest.mark.asyncio
+    async def test_extra_units_land_in_the_enforced_bucket(self, app, test_db, monkeypatch):
+        from unittest.mock import AsyncMock, patch
+
+        monkeypatch.setenv("RATE_LIMIT_ENABLED", "true")
+        get_settings.cache_clear()
+        try:
+            raw, _ = await _seed_key(test_db, None)
+
+            calls = []
+
+            async def _spy(identifier, *args, **kwargs):
+                calls.append({"id": identifier, "cost": kwargs.get("cost", 1)})
+                return (False, 100, 0)
+
+            with patch("cache.rate_limit_store.is_rate_limited", new=AsyncMock(side_effect=_spy)):
+                resp = await _request(
+                    app, api_key=raw, peer_ip=ALLOWED_IP,
+                    path="/v1/ai/scan-batch",
+                    json_body={"items": [{"input": "one"}, {"input": "two"},
+                                         {"input": "three"}]},
+                )
+
+            assert resp.status_code == 200, resp.text
+            assert len(calls) >= 2, (
+                "expected the limiter's own check and the fan-out's charge; "
+                f"saw {calls}"
+            )
+
+            buckets = {c["id"] for c in calls}
+            assert len(buckets) == 1, (
+                f"the fan-out charged a different bucket than the limiter enforces: {buckets}"
+            )
+            assert buckets == {self._canonical(raw)}, (
+                f"not the canonical bucket: {buckets}"
+            )
+
+            # and the extra units really were the extra ones
+            assert max(c["cost"] for c in calls) == 2, calls
+        finally:
+            get_settings.cache_clear()
+
+    @pytest.mark.asyncio
+    async def test_the_charged_bucket_is_not_derived_from_the_key_record(
+        self, app, test_db, monkeypatch,
+    ):
+        """
+        The specific shape of the old defect: an identifier built from
+        request.state.key_id, which is the key RECORD's id and already prefixed,
+        giving "key:key_...". Nothing reads that bucket, so the fan-out was
+        unmetered while appearing to charge.
+        """
+        from unittest.mock import AsyncMock, patch
+
+        monkeypatch.setenv("RATE_LIMIT_ENABLED", "true")
+        get_settings.cache_clear()
+        try:
+            raw, _ = await _seed_key(test_db, None)
+            seen = []
+
+            async def _spy(identifier, *args, **kwargs):
+                seen.append(identifier)
+                return (False, 100, 0)
+
+            with patch("cache.rate_limit_store.is_rate_limited", new=AsyncMock(side_effect=_spy)):
+                await _request(
+                    app, api_key=raw, peer_ip=ALLOWED_IP, path="/v1/ai/scan-batch",
+                    json_body={"items": [{"input": "a"}, {"input": "b"}]},
+                )
+
+            for identifier in seen:
+                assert not identifier.startswith("key:key"), (
+                    f"double-prefixed bucket: {identifier}"
+                )
+                assert "key_" not in identifier, (
+                    f"bucket derived from the key record id: {identifier}"
+                )
+        finally:
+            get_settings.cache_clear()

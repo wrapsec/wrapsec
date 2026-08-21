@@ -74,6 +74,14 @@ class RateLimitMiddleware(BaseHTTPMiddleware):
     """
 
     async def dispatch(self, request: Request, call_next) -> Response:
+        # Published for anything later in the request that has to charge the
+        # SAME bucket -- a multi-input scan charges its extra units after auth
+        # has run. Set to None first so "the limiter did not run for this
+        # request" is distinguishable from "nobody published the id", and
+        # derived in exactly one place: two derivations is how the endpoint and
+        # the enforcer came to be charging different buckets.
+        request.state.rate_limit_id = None
+
         if request.url.path in PUBLIC_PATHS:
             return await call_next(request)
 
@@ -100,6 +108,8 @@ class RateLimitMiddleware(BaseHTTPMiddleware):
             rate_limit_id = f"key:{hashlib.sha256(api_key.encode()).hexdigest()[:16]}"
         else:
             rate_limit_id = f"ip:{client_ip}"
+
+        request.state.rate_limit_id = rate_limit_id
 
         trace_id = getattr(request.state, "trace_id", "")
 
