@@ -947,8 +947,76 @@ explicitly.
 | Header | Default | Description |
 |---|---|---|
 | `X-WrapSec-Mode` | `fast` | Detection mode: `fast` or `full` |
-| `X-WrapSec-Scan-All-Messages` | `false` | Scan all user messages vs last only |
+| `X-WrapSec-Scan-All-Messages` | `false` | Scan every eligible message rather than the last one only (see "What gets scanned") |
 | `X-WrapSec-Inline-Meta` | `false` | Include `wrapsec` key in response body |
+
+**What gets scanned:**
+
+A message is scanned according to the role that carries it, and the role also fixes how
+far its content is trusted:
+
+| Role | Scanned | Trust classification |
+|---|---|---|
+| `user` | yes | `user_prompt` |
+| `assistant` | yes | `external_content` |
+| `system` | no | - |
+| `tool` | no | - |
+
+Assistant turns are scanned because a conversation history is an injection surface: text
+a previous turn returned, or that a caller placed in an assistant turn, reaches the model
+exactly as a user turn does. A message whose `content` is null or not a string carries no
+text and is skipped.
+
+`system` and `tool` messages are **accepted and forwarded to the provider without being
+inspected**. `system` is treated as written by the application operator rather than
+supplied by an end user. `tool` is not scanned in this version: native tool calling is
+rejected at the request schema (`tools`, `tool_choice`, `functions` all return `422`), but
+a `tool` message placed in the `messages` array is passed through.
+
+Both are worth knowing before you build on them. If your application forwards
+user-controlled text into a system message, or replays tool results into the conversation,
+that content reaches the model uninspected. Put such content in a `user` or `assistant`
+message if you want it scanned.
+
+Messages are scanned **individually and never concatenated**. Joining them would force
+one trust classification onto content of differing origins, and would misreport
+provenance whichever origin it picked.
+
+- **Without** `X-WrapSec-Scan-All-Messages` (the default): the **last eligible** message
+  is scanned. That is the last `user` or `assistant` message, whichever comes last -- not
+  necessarily the last `user` message.
+- **With** the header: every eligible message is scanned, in conversation order.
+
+Each scanned message produces its own audit row carrying its own trust classification, so
+a decision can be traced to the message that caused it. Those rows use a trace id derived
+from the request's, suffixed with the message's position; `X-WrapSec-Trace-Id` remains the
+request-level id.
+
+**How several messages become one decision:**
+
+The **strictest** message decides the request: `BLOCK` beats `SANITIZE` beats `ALLOW`, and
+a higher risk score breaks a tie so the reported evidence names the most severe finding
+rather than the first one seen. The response headers describe that message. A request is
+only as safe as its worst message.
+
+`SANITIZE` rewrites the offending message **in place**, assistant messages included; the
+rest of the conversation is forwarded unchanged.
+
+**Limits when scanning every message:**
+
+Scanning is bounded at **10 eligible messages** per request (`MAX_SCAN_ALL_MESSAGES`).
+Over that, the request is **rejected** with `400 too_many_messages` rather than truncated:
+silently scanning part of a conversation would report a decision that did not cover what
+was sent. A conversation with no eligible message at all is rejected with
+`400 invalid_messages`.
+
+Each scanned message costs a detection run and an audit-chain append, so **N scanned
+messages consume N rate-limit units**, not one. A request scanning ten messages draws ten
+units from the bucket for the presented key.
+
+The maximum is deliberately low. The audit chain takes a per-tenant lock, so concurrent
+requests from one tenant serialise on it, and the cost of a large fan-out lands on the
+caller's own latency. Raise it only against a measurement of your own traffic.
 
 **WrapSec response headers:**
 
