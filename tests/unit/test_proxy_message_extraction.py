@@ -316,3 +316,65 @@ class TestSupportedRoles:
 
         assert get_settings().scan_assistant_messages is False
         assert scannable_roles(get_settings().scan_assistant_messages) == {"user"}
+
+
+class TestUnknownDecisionsFailClosed:
+    """
+    What happens when the engine returns a decision this endpoint has never
+    heard of.
+
+    Latent today: the three current values are all mapped. It matters because
+    the failure is silent and in the wrong direction -- a fourth decision type
+    added to the engine (a REVIEW or QUARANTINE state, say) without being taught
+    here would not be mishandled loudly. It would rank below ALLOW, lose every
+    comparison, and the message the engine wanted held back would be forwarded
+    on the strength of the other messages' verdicts.
+    """
+
+    @staticmethod
+    def _result(value: str, risk: float = 0.0):
+        from types import SimpleNamespace
+        return SimpleNamespace(decision=SimpleNamespace(
+            decision   = SimpleNamespace(value=value),
+            risk_score = SimpleNamespace(value=risk),
+        ))
+
+    def test_an_unknown_decision_outranks_every_known_one(self):
+        from api.v1.endpoints.proxy import _strictest_index
+
+        results = [
+            self._result("ALLOW"),
+            self._result("REVIEW"),      # not in the vocabulary
+            self._result("BLOCK", 1.0),
+        ]
+        assert _strictest_index(results) == 1, (
+            "an unrecognised decision lost to a known one; the reducer's safe "
+            "default is 'worst', not 'best'"
+        )
+
+    def test_it_outranks_a_block_even_at_a_lower_risk_score(self):
+        """
+        Risk score only breaks ties within a rank. An unknown decision must not
+        be beaten by a high-scoring BLOCK, because the point is that its
+        severity is unknown rather than low.
+        """
+        from api.v1.endpoints.proxy import _strictest_index
+
+        results = [self._result("BLOCK", 1.0), self._result("REVIEW", 0.0)]
+        assert _strictest_index(results) == 1
+
+    def test_known_decisions_still_rank_in_the_documented_order(self):
+        from api.v1.endpoints.proxy import _strictest_index
+
+        assert _strictest_index([self._result("ALLOW"), self._result("SANITIZE")]) == 1
+        assert _strictest_index([self._result("SANITIZE"), self._result("BLOCK")]) == 1
+        assert _strictest_index([self._result("ALLOW"), self._result("BLOCK")])    == 1
+
+    def test_the_unknown_rank_is_derived_from_the_vocabulary(self):
+        """
+        Pinned so adding a fourth known decision cannot leave the unknown rank
+        below it. A hardcoded 3 would stop outranking anything mapped to 3.
+        """
+        from api.v1.endpoints.proxy import _DECISION_RANK, _UNKNOWN_DECISION_RANK
+
+        assert _UNKNOWN_DECISION_RANK > max(_DECISION_RANK.values())

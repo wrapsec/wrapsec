@@ -307,6 +307,19 @@ def _eligible_segments(
 # only as safe as its worst message.
 _DECISION_RANK = {"ALLOW": 0, "SANITIZE": 1, "BLOCK": 2}
 
+# A decision this endpoint does not recognise outranks every one it does.
+#
+# The reducer exists because a request is only as safe as its worst message, so
+# the safe default for something it cannot weigh is "worst", not "best".
+# Defaulting to zero ranked an unrecognised decision below ALLOW, where it lost
+# every comparison and the request was decided by the other messages' verdicts.
+#
+# Winning the comparison is not sufficient on its own -- the handler refuses on
+# an exact match against BLOCK, so an unrecognised value would still fall
+# through and be forwarded. It is coerced to a fail-closed BLOCK there for that
+# reason. Both halves are needed: this one picks the message, that one refuses.
+_UNKNOWN_DECISION_RANK = max(_DECISION_RANK.values()) + 1
+
 
 def _strictest_index(results: list) -> int:
     """
@@ -319,7 +332,7 @@ def _strictest_index(results: list) -> int:
         _idx, result = pair
         decision = result.decision
         return (
-            _DECISION_RANK.get(decision.decision.value, 0),
+            _DECISION_RANK.get(decision.decision.value, _UNKNOWN_DECISION_RANK),
             decision.risk_score.value,
         )
 
@@ -947,6 +960,26 @@ async def proxy_chat_completions(
     gd             = gateway_result.decision
     input_decision = gd.decision.value          # ALLOW / BLOCK / SANITIZE
     input_reason   = gd.primary_reason if gd.primary_reason is not None else "NO_THREAT_DETECTED"
+
+    # A decision this endpoint cannot interpret is refused, not forwarded.
+    #
+    # Everything downstream branches on an exact match: BLOCK refuses, SANITIZE
+    # rewrites, anything else is forwarded. So a decision type added to the
+    # engine without being taught here would not merely be mishandled -- it
+    # would take the ALLOW branch by default, and a message the engine wanted
+    # held back would reach the provider.
+    #
+    # Coerced into the existing fail-closed shape rather than given a path of
+    # its own, so it produces the same refusal, audit row and headers as any
+    # other detection failure.
+    if input_decision not in _DECISION_RANK:
+        logger.error(
+            "Unrecognised decision %r on trace_id=%s; refusing. A decision type "
+            "was added to the engine without being mapped here.",
+            input_decision, trace_id,
+        )
+        input_decision = "BLOCK"
+        input_reason   = "SYSTEM_ERROR"
     input_conf     = gd.confidence if gd.confidence is not None else 0.0
     input_threats  = [t.value for t in gd.threats]
     input_attack   = input_threats[0] if input_threats else None

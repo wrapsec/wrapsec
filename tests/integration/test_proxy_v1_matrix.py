@@ -13,6 +13,7 @@ only an administrator of the owning tenant can change where a credential may be
 used.
 """
 
+from types import SimpleNamespace
 from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
@@ -725,3 +726,74 @@ class TestAssistantScanning:
             assert resp.status_code == 200, resp.text
         finally:
             get_settings.cache_clear()
+
+
+# ── A decision the endpoint cannot interpret is refused ───────────────────────
+
+class TestUnknownDecisionIsRefused:
+    """
+    Ranking an unrecognised decision highest picks the right message; it does
+    not by itself refuse the request. Everything downstream branches on an exact
+    match, so an unrecognised value takes the ALLOW path by default and reaches
+    the provider. Both halves are needed, and this is the half that decides
+    whether the content is forwarded.
+    """
+
+    @staticmethod
+    def _scan_returning(value: str):
+        """Stand in for an engine that has grown a decision type this endpoint
+        has not been taught."""
+        from services.gateway import fanout as _fanout
+
+        original = _fanout.scan_items
+
+        async def _spy(items, **kwargs):
+            scanned = await original(items, **kwargs)
+            out = []
+            for incoming, result in scanned:
+                result.decision.decision = SimpleNamespace(value=value)
+                out.append((incoming, result))
+            return out
+
+        return _spy
+
+    @pytest.mark.asyncio
+    async def test_an_unknown_decision_never_reaches_the_provider(self, app):
+        with patch("api.v1.endpoints.proxy.scan_items",
+                   new=self._scan_returning("REVIEW")):
+            resp, provider = await _post_capturing_provider(app, {
+                "model":    "openai/gpt-4o",
+                "messages": [{"role": "user", "content": "hello"}],
+            })
+
+        provider.post.assert_not_called()
+        assert resp.status_code != 200, (
+            "a decision the endpoint cannot interpret was forwarded"
+        )
+
+    @pytest.mark.asyncio
+    async def test_it_is_refused_as_a_detection_failure(self, app):
+        """
+        Coerced into the established fail-closed shape rather than a path of its
+        own, so it reports the same way as any other case where the pipeline
+        could not produce a usable answer.
+        """
+        with patch("api.v1.endpoints.proxy.scan_items",
+                   new=self._scan_returning("QUARANTINE")):
+            resp = await _post(app, {
+                "model":    "openai/gpt-4o",
+                "messages": [{"role": "user", "content": "hello"}],
+            })
+
+        assert resp.headers.get("X-WrapSec-Input-Decision") == "BLOCK"
+        assert resp.headers.get("X-WrapSec-Input-Primary-Reason") == "SYSTEM_ERROR"
+
+    @pytest.mark.asyncio
+    async def test_a_known_decision_is_unaffected(self, app):
+        """The guard must not refuse traffic the endpoint does understand."""
+        resp, provider = await _post_capturing_provider(app, {
+            "model":    "openai/gpt-4o",
+            "messages": [{"role": "user", "content": "what is the capital of France?"}],
+        })
+        assert resp.status_code == 200, resp.text
+        provider.post.assert_called_once()
