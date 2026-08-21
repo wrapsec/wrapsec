@@ -22,5 +22,6 @@
   "IDEMPOTENCY_CONFLICT": "Diese Anfrage konnte nicht abgeschlossen werden, da derselbe Idempotenzschlüssel bereits verwendet wurde.",
   "RATE_LIMIT_EXCEEDED": "Zu viele Anfragen. Bitte versuchen Sie es nach {retry_after} Sekunden erneut.",
   "DETECTION_ERROR": "Die Sicherheitserkennung konnte nicht abgeschlossen werden.",
-  "LLM_UNAVAILABLE": "Der KI-Anbieter ist derzeit nicht verfügbar."
+  "LLM_UNAVAILABLE": "Der KI-Anbieter ist derzeit nicht verfügbar.",
+  "IP_NOT_ALLOWED": "Diese Zugangsdaten sind von Ihrer Netzwerkadresse aus nicht zugelassen."
 }

@@ -405,7 +405,7 @@ class TestDenialEnvelope:
         )
         assert resp.status_code == 403
         body = resp.json()
-        assert body["error"]["code"] == "ip_not_allowed"
+        assert body["error"]["code"] == "IP_NOT_ALLOWED"
         assert body["error"]["type"] == "forbidden"
         assert resp.headers.get("X-WrapSec-Trace-Id")
 
@@ -414,7 +414,52 @@ class TestDenialEnvelope:
         raw, _ = await _seed_key(test_db, [ALLOWED_NET])
         resp = await _request(app, api_key=raw, peer_ip=DENIED_IP)
         assert resp.status_code == 403
-        assert resp.json()["error"]["code"] == "FORBIDDEN"
+        assert resp.json()["error"]["code"] == "IP_NOT_ALLOWED"
+
+    @pytest.mark.asyncio
+    @pytest.mark.parametrize("path,body", [
+        ("/v1/ai/request",       {"input": "hello"}),
+        ("/v1/ai/scan-batch",    {"items": [{"input": "hello"}]}),
+        ("/v1/chat/completions", {"model": "openai/gpt-4o",
+                                  "messages": [{"role": "user", "content": "hi"}]}),
+    ])
+    async def test_one_code_identifies_the_denial_wherever_it_happens(
+        self, app, test_db, path, body,
+    ):
+        """
+        The shape differs by protocol; the code must not. An alert keyed on the
+        code has to fire for this denial on every route, or its author learns
+        the wrong lesson: that the restriction only applies where their rule
+        happened to match.
+        """
+        raw, _ = await _seed_key(test_db, [ALLOWED_NET])
+        resp = await _request(app, api_key=raw, peer_ip=DENIED_IP, path=path,
+                              json_body=body)
+        assert resp.status_code == 403
+        assert resp.json()["error"]["code"] == "IP_NOT_ALLOWED", (
+            f"{path} identifies the denial differently"
+        )
+
+    @pytest.mark.asyncio
+    async def test_it_is_not_the_generic_permission_failure(self, app, test_db, auth_setup, auth_client):
+        """
+        Refused for WHERE you are is a different event from refused for WHO you
+        are. Sharing FORBIDDEN with every RBAC denial would bury the first in
+        the second.
+        """
+        raw, _ = await _seed_key(test_db, [ALLOWED_NET])
+        denied = await _request(app, api_key=raw, peer_ip=DENIED_IP)
+
+        # a genuine permission failure, for contrast
+        forbidden = await auth_client.post(
+            "/v1/keys",
+            headers={"Authorization": f"Bearer {auth_setup['viewer_token']}"},
+            json={"name": "x", "dept_id": str(auth_setup["dept"].id)},
+        )
+
+        assert denied.json()["error"]["code"] == "IP_NOT_ALLOWED"
+        assert forbidden.status_code == 403
+        assert forbidden.json()["error"]["code"] != "IP_NOT_ALLOWED"
 
     @pytest.mark.asyncio
     async def test_the_refusal_does_not_disclose_the_permitted_networks(self, app, test_db):

@@ -18,6 +18,7 @@
     "errors.INVALID_PASSWORD": "Current password is incorrect.",
     "errors.INVALID_REQUEST": "Invalid request.",
     "errors.INVALID_TOKEN": "Your session is no longer valid. Please sign in again.",
+    "errors.IP_NOT_ALLOWED": "This credential is not permitted from your network address.",
     "errors.LAST_ADMIN": "You cannot demote or deactivate the last active administrator. Create another administrator first.",
     "errors.LLM_UNAVAILABLE": "The AI provider is currently unavailable.",
     "errors.MODEL_REQUIRED": "A model is required when proxy execution is enabled.",

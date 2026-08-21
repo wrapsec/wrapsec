@@ -176,6 +176,7 @@ Security and proxy errors additionally include a `wrapsec` key:
 | `PASSWORD_CHANGE_REQUIRED` | 403 | Must change password before accessing this resource |
 | `TENANT_SUSPENDED` | 403 | The tenant has been suspended by the platform operator - all its traffic is rejected until reactivation |
 | `PROXY_REQUIRES_API_KEY` | 403 | `POST /v1/chat/completions` called with a JWT session - the proxy accepts API keys only |
+| `IP_NOT_ALLOWED` | 403 | The API key was presented from an address outside its `ip_allowlist`. Returned on every endpoint the key can reach, in that endpoint's envelope shape |
 | `NOT_FOUND` | 404 | Resource does not exist |
 | `CONFLICT` | 409 | Duplicate (e.g. email already registered) |
 | `IDEMPOTENCY_CONFLICT` | 409 | Same Idempotency-Key, different body |
@@ -1659,7 +1660,7 @@ The restriction is enforced at **authentication**, so it applies to **every** re
 
 Two credentials are not subject to it: a dashboard session (JWT), because an allowlist belongs to an API key and a signed-in user has none; and the platform-operator admin key, which is not an `api_keys` row and has no list to enforce.
 
-The refusal is shaped for the caller it is sent to. On `POST /v1/chat/completions` it is an OpenAI-shaped error (`code: ip_not_allowed`, `type: forbidden`) because the callers there are OpenAI client libraries that parse the body before the status; everywhere else it is the standard envelope with `code: FORBIDDEN`. Neither names the permitted networks: whoever holds the key is not necessarily whoever may know the network layout.
+The refusal is shaped for the caller it is sent to, but identified the same way everywhere. On `POST /v1/chat/completions` it is an OpenAI-shaped error, because the callers there are OpenAI client libraries that parse the body before the status; everywhere else it is the standard envelope. **Both carry `code: IP_NOT_ALLOWED`**, so a rule keyed on the code catches this denial on every route rather than only where its author happened to look. It is deliberately distinct from the generic `FORBIDDEN` used for permission failures: being refused for where you are is a different event from being refused for who you are. Neither shape names the permitted networks - whoever holds the key is not necessarily whoever may know the network layout.
 
 **Response 201:**
 ```json

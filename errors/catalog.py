@@ -63,6 +63,7 @@ class ErrorCode(str, Enum):
     PASSWORD_CHANGE_REQUIRED = "PASSWORD_CHANGE_REQUIRED"
     TENANT_SUSPENDED         = "TENANT_SUSPENDED"
     PROXY_REQUIRES_API_KEY   = "PROXY_REQUIRES_API_KEY"
+    IP_NOT_ALLOWED           = "IP_NOT_ALLOWED"
 
     INVALID_PASSWORD         = "INVALID_PASSWORD"
 
@@ -126,6 +127,11 @@ _ERROR_SPEC: dict[ErrorCode, tuple[int, ErrorSeverity]] = {
     ErrorCode.PASSWORD_CHANGE_REQUIRED: (403, ErrorSeverity.WARNING),
     ErrorCode.TENANT_SUSPENDED:         (403, ErrorSeverity.WARNING),
     ErrorCode.PROXY_REQUIRES_API_KEY:   (403, ErrorSeverity.WARNING),
+    # Distinct from FORBIDDEN on purpose. A generic permission failure and a
+    # credential used from an address it is not permitted from want different
+    # responses from whoever is watching, and only a distinct code lets an
+    # alert tell them apart.
+    ErrorCode.IP_NOT_ALLOWED:           (403, ErrorSeverity.WARNING),
     ErrorCode.INVALID_PASSWORD:         (401, ErrorSeverity.WARNING),
     # State conflicts, not RBAC-permission denials (the admin has the permission);
     # 409 = the requested state transition conflicts with the current system state.

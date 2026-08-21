@@ -17,6 +17,11 @@ observe, and one is a breaking contract change; they are listed first.
   reaches no handler: no policy resolution, no detection, no upstream call. Dashboard
   sessions and the platform admin key are unaffected - a restriction belongs to an
   API key, and neither of those is one.
+  The denial is identified by `IP_NOT_ALLOWED` on every endpoint, in that
+  endpoint's envelope shape, so a rule keyed on the code catches it wherever the
+  credential was presented. It is distinct from the generic `FORBIDDEN` used for
+  permission failures: being refused for where you are is a different event from
+  being refused for who you are.
 - **Message roles are validated, and unsupported roles are refused.** `user`,
   `assistant`, and `system` are accepted; any other role, `tool` included, is
   rejected with `422`. A `tool` message was previously accepted and forwarded to the

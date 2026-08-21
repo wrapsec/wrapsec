@@ -204,6 +204,17 @@ def _ip_denied_response(request: Request) -> Response:
     standard envelope. One control, two renderings, because a refusal nobody
     can interpret is a support ticket rather than a security signal.
 
+    The SHAPE varies by protocol; the CODE does not. Both carry
+    `IP_NOT_ALLOWED`, because an alert keyed on the code has to catch this
+    denial wherever the credential was presented -- and a rule written against
+    the proxy's code that silently misses the same denial on the scan endpoints
+    would teach its author that the restriction only applies to the proxy,
+    which is the misunderstanding this control was moved to remove.
+
+    It is also distinct from the generic permission failure. Being refused for
+    where you are is a different event from being refused for who you are, and
+    only a distinct code lets an alert tell them apart.
+
     The message says the credential is not permitted from this address without
     naming what is permitted. Whoever is holding the key is not necessarily
     whoever is allowed to know the network layout.
@@ -218,7 +229,7 @@ def _ip_denied_response(request: Request) -> Response:
                 "error": {
                     "message": message,
                     "type":    "forbidden",
-                    "code":    "ip_not_allowed",
+                    "code":    ErrorCode.IP_NOT_ALLOWED.value,
                 },
                 "wrapsec": {"trace_id": trace_id},
             },
@@ -226,7 +237,7 @@ def _ip_denied_response(request: Request) -> Response:
         )
 
     return error_response(
-        ErrorCode.FORBIDDEN,
+        ErrorCode.IP_NOT_ALLOWED,
         trace_id = trace_id,
         message  = message,
     )
