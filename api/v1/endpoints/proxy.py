@@ -45,7 +45,7 @@ from dataclasses import dataclass
 import httpx
 from fastapi import APIRouter, BackgroundTasks, Depends, Request
 from fastapi.responses import JSONResponse
-from pydantic import BaseModel
+from pydantic import BaseModel, field_validator
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -151,6 +151,19 @@ def _build_proxy_audit_dict(
 
 # ── Request schema ─────────────────────────────────────────────────────────────
 
+# Message roles this endpoint accepts.
+#
+# `user` and `assistant` are scanned. `system` is accepted and forwarded without
+# inspection, which is the existing behaviour and is not changed here.
+#
+# Every other role is refused, `tool` included. A role the scanner has no trust
+# classification for would otherwise reach the provider uninspected, which is
+# the one outcome the proxy exists to prevent. Refusing is also consistent with
+# native tool calling being refused: tool-mediated content is deferred, and a
+# deferred feature must fail loudly rather than pass through unchecked.
+_SUPPORTED_ROLES = frozenset({"user", "assistant", "system"})
+
+
 class ProxyChatRequest(BaseModel):
     model:       str | None    = None
     messages:    list[dict]
@@ -159,6 +172,26 @@ class ProxyChatRequest(BaseModel):
     top_p:       float | None  = None
 
     model_config = {"extra": "forbid"}
+
+    @field_validator("messages")
+    @classmethod
+    def _roles_are_supported(cls, messages: list[dict]) -> list[dict]:
+        """
+        Refuse any message whose role the proxy does not support.
+
+        Validated here rather than in the handler so the request is rejected
+        before anything else happens: no provider call, no detection run, no
+        audit row. A check further in would have to be repeated on every path
+        that reads a message, and the one that got missed would be the bypass.
+        """
+        for index, message in enumerate(messages):
+            role = message.get("role")
+            if role not in _SUPPORTED_ROLES:
+                raise ValueError(
+                    f"messages[{index}].role={role!r} is not supported; "
+                    f"use one of: {', '.join(sorted(_SUPPORTED_ROLES))}"
+                )
+        return messages
 
 
 # ── Helpers ────────────────────────────────────────────────────────────────────
@@ -213,6 +246,12 @@ def _eligible_segments(messages: list[dict], scan_all: bool) -> list[MessageSegm
     Messages are NOT concatenated. A joined scan would force one trust
     classification onto content of differing origins, and would misreport
     provenance whichever source it chose.
+
+    Roles outside `_ROLE_SOURCES` are skipped here, but skipping is not the
+    policy: an unsupported role is refused by the request schema before this
+    runs, and `system` is the only unscanned role that can reach it. The filter
+    stays as a second layer, so a role added to the schema without a trust
+    classification is left unscanned rather than scanned as something it is not.
 
     Raises ValueError when nothing scannable is present.
     """

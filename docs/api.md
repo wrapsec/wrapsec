@@ -928,6 +928,10 @@ Client libraries built for the OpenAI API often set some of these by default - m
 commonly `stream` - so a drop-in base-URL swap may need those options disabled
 explicitly.
 
+Message **roles** are validated too, and separately: `tool` and any unrecognised role are
+rejected with `422` even when no tool-calling parameter is present. See "What gets
+scanned" below.
+
 **Response differences from the OpenAI schema:**
 
 - `usage` is **optional**. The provider's own token counts are passed through
@@ -955,28 +959,39 @@ explicitly.
 A message is scanned according to the role that carries it, and the role also fixes how
 far its content is trusted:
 
-| Role | Scanned | Trust classification |
-|---|---|---|
-| `user` | yes | `user_prompt` |
-| `assistant` | yes | `external_content` |
-| `system` | no | - |
-| `tool` | no | - |
+| Role | Accepted | Scanned | Trust classification |
+|---|---|---|---|
+| `user` | yes | yes | `user_prompt` |
+| `assistant` | yes | yes | `external_content` |
+| `system` | yes | no | - |
+| anything else, `tool` included | **no - `422`** | - | - |
 
 Assistant turns are scanned because a conversation history is an injection surface: text
 a previous turn returned, or that a caller placed in an assistant turn, reaches the model
 exactly as a user turn does. A message whose `content` is null or not a string carries no
 text and is skipped.
 
-`system` and `tool` messages are **accepted and forwarded to the provider without being
-inspected**. `system` is treated as written by the application operator rather than
-supplied by an end user. `tool` is not scanned in this version: native tool calling is
-rejected at the request schema (`tools`, `tool_choice`, `functions` all return `422`), but
-a `tool` message placed in the `messages` array is passed through.
+**A role outside that table is refused with `422`, and the whole request is refused with
+it** - the offending message is not dropped so the rest can proceed, because sending a
+different conversation than the one asked for is not a safe default. The check is exact,
+so `Tool` and `TOOL` are refused too, and a message with no `role` at all is refused.
 
-Both are worth knowing before you build on them. If your application forwards
-user-controlled text into a system message, or replays tool results into the conversation,
-that content reaches the model uninspected. Put such content in a `user` or `assistant`
-message if you want it scanned.
+The refusal is the standard validation envelope, with `invalid_params[].field` set to
+`messages`. It does not name which message was at fault, so check the whole array against
+the table above.
+
+`tool` is refused rather than forwarded. Tool-mediated content is deferred in this
+version, and a deferred feature has to fail loudly: forwarding a `tool` message would put
+text the proxy never inspected in front of the model, which is the outcome the proxy
+exists to prevent. This is a separate control from the rejection of native tool calling
+(`tools`, `tool_choice`, `functions`) - each is refused on its own, and neither depends on
+the other being reached first.
+
+`system` is accepted and **forwarded to the provider without being inspected**, on the
+basis that it is written by the application operator rather than supplied by an end user.
+That is worth knowing before you build on it: if your application forwards
+user-controlled text into a system message, that content reaches the model uninspected.
+Put such content in a `user` or `assistant` message if you want it scanned.
 
 Messages are scanned **individually and never concatenated**. Joining them would force
 one trust classification onto content of differing origins, and would misreport

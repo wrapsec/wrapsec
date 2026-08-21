@@ -92,6 +92,36 @@ async def _post(app, body, provider_content="fine"):
         app.dependency_overrides = {}
 
 
+async def _post_capturing_provider(app, body):
+    """
+    Post, and hand back the provider client mock alongside the response.
+
+    "Rejected" is only half the requirement. The half that matters is that
+    nothing reached the provider on the way to the rejection, and that can only
+    be shown by inspecting the client that would have carried it.
+    """
+    from api.v1.dependencies.db import get_db
+
+    fake_get_db, _ = _patch_config()
+    app.dependency_overrides[get_db] = fake_get_db
+    try:
+        with patch("httpx.AsyncClient") as mock_cls:
+            mock_client      = AsyncMock()
+            mock_client.post = AsyncMock(return_value=_provider_response("fine"))
+            mock_cls.return_value.__aenter__ = AsyncMock(return_value=mock_client)
+            mock_cls.return_value.__aexit__  = AsyncMock(return_value=False)
+
+            async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as client:
+                resp = await client.post(
+                    "/v1/chat/completions",
+                    headers={"x-api-key": settings.admin_api_key},
+                    json=body,
+                )
+            return resp, mock_client
+    finally:
+        app.dependency_overrides = {}
+
+
 # ── Unsupported features are refused, never downgraded ────────────────────────
 
 class TestUnsupportedFeatures:
@@ -125,6 +155,131 @@ class TestUnsupportedFeatures:
             field:      value,
         })
         assert resp.status_code == 422
+
+    # ── Message roles ─────────────────────────────────────────────────────────
+
+    @pytest.mark.asyncio
+    @pytest.mark.parametrize("messages", [
+        pytest.param([{"role": "tool", "content": "tool output"}], id="alone"),
+        pytest.param(
+            [{"role": "user", "content": "hi"}, {"role": "tool", "content": "tool output"}],
+            id="mixed-with-valid",
+        ),
+        pytest.param(
+            [{"role": "tool", "content": "tool output"}, {"role": "user", "content": "hi"}],
+            id="before-valid",
+        ),
+    ])
+    async def test_a_tool_message_is_refused(self, app, messages):
+        """
+        A tool message carries content the scanner has no trust classification
+        for. Forwarding it would put text the proxy never inspected in front of
+        the model, which is the outcome the proxy exists to prevent. Refusing
+        also keeps this consistent with native tool calling being refused: one
+        deferred feature, not a rejected parameter beside an open side door.
+        """
+        resp = await _post(app, {"model": "openai/gpt-4o", "messages": messages})
+        assert resp.status_code == 422
+        # refused, not answered
+        assert "choices" not in resp.text
+
+    @pytest.mark.asyncio
+    async def test_a_tool_message_is_refused_with_scan_all(self, app):
+        """The header selects what is scanned; it cannot widen what is accepted."""
+        from api.v1.dependencies.db import get_db
+
+        fake_get_db, _ = _patch_config()
+        app.dependency_overrides[get_db] = fake_get_db
+        try:
+            async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as client:
+                resp = await client.post(
+                    "/v1/chat/completions",
+                    headers={
+                        "x-api-key":                     settings.admin_api_key,
+                        "X-WrapSec-Scan-All-Messages":   "true",
+                    },
+                    json={
+                        "model": "openai/gpt-4o",
+                        "messages": [
+                            {"role": "user",      "content": "hi"},
+                            {"role": "tool",      "content": "tool output"},
+                            {"role": "assistant", "content": "sure"},
+                        ],
+                    },
+                )
+        finally:
+            app.dependency_overrides = {}
+        assert resp.status_code == 422
+
+    @pytest.mark.asyncio
+    async def test_a_tool_message_never_reaches_the_provider(self, app):
+        """
+        The rejection has to happen before the request is acted on. A 422 that
+        still forwarded the conversation would refuse the caller while doing the
+        very thing the refusal is for.
+        """
+        resp, provider = await _post_capturing_provider(app, {
+            "model":    "openai/gpt-4o",
+            "messages": [{"role": "user", "content": "hi"},
+                         {"role": "tool", "content": "tool output"}],
+        })
+        assert resp.status_code == 422
+        provider.post.assert_not_called()
+
+    @pytest.mark.asyncio
+    @pytest.mark.parametrize("role", ["function", "developer", "TOOL", "User", "", None])
+    async def test_an_unrecognised_role_is_refused(self, app, role):
+        """
+        Refusing only the known-bad role would leave the next one to arrive
+        passing through. Anything the proxy cannot classify is refused, and the
+        comparison is exact: a differently-cased role is not a supported one.
+        """
+        message = {"content": "hello"} if role is None else {"role": role, "content": "hello"}
+        resp = await _post(app, {"model": "openai/gpt-4o", "messages": [message]})
+        assert resp.status_code == 422
+
+    @pytest.mark.asyncio
+    @pytest.mark.parametrize("role", ["user", "assistant"])
+    async def test_a_scanned_role_is_accepted(self, app, role):
+        resp = await _post(app, {
+            "model":    "openai/gpt-4o",
+            "messages": [{"role": role, "content": "what is the capital of France?"}],
+        })
+        assert resp.status_code == 200
+
+    @pytest.mark.asyncio
+    async def test_a_system_message_is_still_accepted(self, app):
+        """
+        System keeps its existing treatment: accepted, forwarded, not scanned.
+        Pinned so tightening the role contract cannot change it as a side
+        effect -- that would break callers whose prompt lives in a system turn.
+        """
+        resp = await _post(app, {
+            "model":    "openai/gpt-4o",
+            "messages": [{"role": "system",  "content": "You are terse."},
+                         {"role": "user",    "content": "hello"}],
+        })
+        assert resp.status_code == 200
+
+    @pytest.mark.asyncio
+    async def test_native_tool_calling_and_tool_messages_are_separate_controls(self, app):
+        """
+        Two doors, each closed on its own. A request may present either without
+        the other, so neither check may rely on the other being reached first.
+        """
+        # the parameter, with only supported roles present
+        by_param = await _post(app, {
+            "model":    "openai/gpt-4o",
+            "messages": [{"role": "user", "content": "hi"}],
+            "tools":    [],
+        })
+        # the role, with no tool-calling parameter present
+        by_role = await _post(app, {
+            "model":    "openai/gpt-4o",
+            "messages": [{"role": "tool", "content": "out"}],
+        })
+        assert by_param.status_code == 422
+        assert by_role.status_code  == 422
 
     @pytest.mark.asyncio
     async def test_a_supported_request_still_works(self, app):

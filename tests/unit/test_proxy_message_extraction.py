@@ -15,6 +15,7 @@ The security contract these pin:
 """
 
 import pytest
+from pydantic import ValidationError
 
 from api.v1.endpoints.proxy import _eligible_segments, _message_text
 
@@ -124,3 +125,82 @@ class TestEligibleSegments:
     def test_empty_messages_is_rejected(self):
         with pytest.raises(ValueError):
             _eligible_segments([], scan_all=False)
+
+
+class TestSupportedRoles:
+    """
+    The request schema is where an unsupported role is refused.
+
+    Placing it here means a refused role never reaches a provider, a detector or
+    an audit row, and that no path further in has to remember to re-check. The
+    role filter in _eligible_segments is a second layer, not the control.
+    """
+
+    @staticmethod
+    def _build(messages):
+        from api.v1.endpoints.proxy import ProxyChatRequest
+        return ProxyChatRequest(model="openai/gpt-4o", messages=messages)
+
+    @pytest.mark.parametrize("role", ["user", "assistant", "system"])
+    def test_a_supported_role_is_accepted(self, role):
+        assert self._build([{"role": role, "content": "hello"}]).messages
+
+    @pytest.mark.parametrize("role", [
+        "tool",       # deferred with native tool calling, not quietly forwarded
+        "function",   # its predecessor
+        "developer",
+        "TOOL",       # the comparison is exact
+        "User",
+        "",
+        "   ",
+    ])
+    def test_an_unsupported_role_is_refused(self, role):
+        with pytest.raises(ValidationError):
+            self._build([{"role": role, "content": "hello"}])
+
+    def test_a_message_without_a_role_is_refused(self):
+        """
+        An absent role is not a supported one. Treating it as scannable, or as
+        skippable, both end with content nobody classified reaching the model.
+        """
+        with pytest.raises(ValidationError):
+            self._build([{"content": "hello"}])
+
+    def test_one_unsupported_role_refuses_the_whole_request(self):
+        """
+        Not "drop the bad message and continue": the caller asked for a
+        conversation to be sent, and sending a different one is not a safe
+        default. Refusing tells them which message to fix.
+        """
+        with pytest.raises(ValidationError):
+            self._build([
+                {"role": "user",      "content": "hi"},
+                {"role": "tool",      "content": "tool output"},
+                {"role": "assistant", "content": "sure"},
+            ])
+
+    def test_the_refusal_names_the_offending_message(self):
+        """
+        The position is carried on the exception, which is what reaches the
+        server log. It does NOT reach the caller: the shared validation envelope
+        maps errors to form fields and drops the index, so the API response
+        names `messages` and no more. Asserted here so the log stays useful.
+        """
+        with pytest.raises(ValidationError) as exc:
+            self._build([
+                {"role": "user", "content": "hi"},
+                {"role": "tool", "content": "out"},
+            ])
+        assert "messages[1]" in str(exc.value)
+
+    def test_every_scanned_role_is_a_supported_one(self):
+        """
+        The two sets are declared separately and would drift apart silently: a
+        role could be given a trust classification without being accepted, and
+        would then be dead code that reads like working protection.
+        """
+        from api.v1.endpoints.proxy import _ROLE_SOURCES, _SUPPORTED_ROLES
+
+        assert set(_ROLE_SOURCES) <= _SUPPORTED_ROLES
+        # and the only supported role that is not scanned is the documented one
+        assert _SUPPORTED_ROLES - set(_ROLE_SOURCES) == {"system"}
