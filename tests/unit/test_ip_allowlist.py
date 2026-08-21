@@ -125,3 +125,75 @@ class TestZeroPrefixRejection:
 
     def test_a_narrow_network_is_still_accepted(self):
         assert normalize_entries(["0.0.0.0/8"]) == ["0.0.0.0/8"]
+
+
+class TestIpv4MappedIpv6:
+    """
+    An IPv4 address wearing IPv6 clothing is the same address.
+
+    uvicorn on a dual-stack socket reports an IPv4 client as
+    `::ffff:203.0.113.5`. Compared naively that is a different family from an
+    entry of `203.0.113.5/32`, so it never matches: the operator allowlists
+    their own address, is locked out, and the denial log shows the address they
+    believe they permitted. A lockout is the expensive direction of this
+    control, and this is the shape that causes one without anybody typing
+    anything wrong.
+    """
+
+    @pytest.mark.parametrize("client,entry", [
+        ("::ffff:203.0.113.5", "203.0.113.5/32"),
+        ("::ffff:203.0.113.5", "203.0.113.0/24"),
+        ("::ffff:10.1.2.3",    "10.0.0.0/8"),
+        ("::FFFF:10.1.2.3",    "10.0.0.0/8"),      # the form is case-insensitive
+    ])
+    def test_a_mapped_client_matches_an_ipv4_entry(self, client, entry):
+        assert is_allowed(client, [entry]) is True
+
+    def test_a_plain_client_matches_an_entry_stored_mapped(self):
+        """
+        The other direction. Unmapping only the client would move the mismatch
+        rather than remove it.
+        """
+        assert is_allowed("203.0.113.5", ["::ffff:203.0.113.5/128"]) is True
+
+    @pytest.mark.parametrize("client,entry", [
+        ("::ffff:198.51.100.7", "203.0.113.0/24"),   # outside the network
+        ("2001:db8::1",         "203.0.113.0/24"),   # genuinely a different family
+        ("::ffff:203.0.113.5",  "2001:db8::/32"),
+    ])
+    def test_it_still_denies_what_it_should(self, client, entry):
+        """The unmapping must not turn a denial into an allow."""
+        assert is_allowed(client, [entry]) is False
+
+    def test_real_ipv6_is_unaffected(self):
+        assert is_allowed("2001:db8::1", ["2001:db8::/32"]) is True
+        assert is_allowed("2001:db9::1", ["2001:db8::/32"]) is False
+
+    def test_a_mapped_entry_is_stored_in_its_ipv4_form(self):
+        """
+        Canonicalised on write, so what is stored is one thing rather than two
+        spellings of it.
+        """
+        assert normalize_entries(["::ffff:203.0.113.5"])     == ["203.0.113.5/32"]
+        assert normalize_entries(["::ffff:203.0.113.0/120"]) == ["203.0.113.0/24"]
+
+    def test_a_prefix_outside_the_mapped_range_is_left_alone(self):
+        """
+        `::/64` spans far more than the mapped range, so treating it as an IPv4
+        network would silently widen what the operator wrote. Only prefixes
+        inside `::ffff:0:0/96` are converted.
+        """
+        assert normalize_entries(["::/64"]) == ["::/64"]
+        assert normalize_entries(["2001:db8::/32"]) == ["2001:db8::/32"]
+
+    @pytest.mark.parametrize("everything", ["::ffff:0:0/96", "::ffff:0.0.0.0/96"])
+    def test_the_mapped_spelling_of_allow_everything_is_refused(self, everything):
+        """
+        `::ffff:0:0/96` is a 96-bit prefix as written and `0.0.0.0/0` once
+        unmapped. Validating the written form and storing the unmapped one lets
+        a restriction that restricts nothing in through the one door the
+        zero-prefix check exists to close, so the unmapping happens first and
+        the check sees what will actually be stored.
+        """
+        with pytest.raises(ValueError, match="allows every address"):
+            normalize_entries([everything])

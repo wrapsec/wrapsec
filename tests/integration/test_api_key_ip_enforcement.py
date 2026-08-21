@@ -131,6 +131,40 @@ class TestSourceNetworkEnforcement:
         assert (await _request(app, api_key=raw, peer_ip=DENIED_IP)).status_code == 403
 
 
+class TestDualStackClients:
+    """
+    On a dual-stack listener an IPv4 client arrives as `::ffff:203.0.113.9`.
+
+    Every other test here presents a plain IPv4 peer, which is what made this
+    invisible: the address is supplied by the harness, and a harness that only
+    ever supplies one form cannot see a control that mishandles the other. The
+    real e2e round trip missed it too, because Docker's bridge hands the API a
+    plain IPv4 peer.
+    """
+
+    @pytest.mark.asyncio
+    async def test_a_mapped_client_is_allowed_by_its_ipv4_entry(self, app, test_db):
+        """
+        The lockout case. The operator allowlists the address they see; without
+        unmapping, every request from it is refused.
+        """
+        raw, _ = await _seed_key(test_db, [ALLOWED_NET])
+        resp = await _request(app, api_key=raw, peer_ip=f"::ffff:{ALLOWED_IP}")
+        assert resp.status_code == 200, resp.text
+
+    @pytest.mark.asyncio
+    async def test_a_mapped_client_outside_the_list_is_still_refused(self, app, test_db):
+        raw, _ = await _seed_key(test_db, [ALLOWED_NET])
+        resp = await _request(app, api_key=raw, peer_ip=f"::ffff:{DENIED_IP}")
+        assert resp.status_code == 403
+
+    @pytest.mark.asyncio
+    async def test_a_genuine_ipv6_client_is_judged_as_ipv6(self, app, test_db):
+        raw, _ = await _seed_key(test_db, ["2001:db8::/32"])
+        assert (await _request(app, api_key=raw, peer_ip="2001:db8::1")).status_code == 200
+        assert (await _request(app, api_key=raw, peer_ip="2001:db9::1")).status_code == 403
+
+
 # ── The address that gets checked is the one that cannot be claimed ───────────
 
 class TestForwardedHeaders:
