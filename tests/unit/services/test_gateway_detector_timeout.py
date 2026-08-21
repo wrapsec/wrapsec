@@ -15,6 +15,7 @@ The important measurement is that the response comes back after the timeout
 - not after the full sleep - which is what proves the wait_for guard fired.
 """
 
+import asyncio
 import time
 from unittest.mock import patch
 
@@ -94,3 +95,41 @@ async def test_input_guard_hang_triggers_timeout_block(svc, benign_request):
     assert result.decision.decision       == DecisionType.BLOCK
     assert result.decision.risk_score.value == pytest.approx(1.0)
     assert result.decision.primary_reason == "SYSTEM_ERROR"
+
+
+async def test_ml_pipeline_hang_triggers_timeout_block(svc, benign_request):
+    """
+    The ML pipeline has a timeout test because it is the one that actually
+    fires. Load measurement at the Scan-All maximum attributed 50 of 74
+    fail-closed blocks to this path and 24 to the input guard, with none from
+    the rule detector -- under CPU contention the model inference is what runs
+    out of time, not a pathological regex.
+
+    Its exception path was covered; the timeout path was not, which left the
+    most frequently exercised route to a fail-closed BLOCK untested.
+    """
+    # Async, unlike the sleeps above. DetectionPipeline.run is passed to
+    # evaluate_views directly as the awaitable, where the rule detector and
+    # input guard are wrapped in asyncio.to_thread. A blocking stand-in here
+    # would stall the event loop so wait_for could never fire, and would be
+    # testing the mock rather than the guard.
+    async def _slow_run(*_args, **_kwargs):
+        await asyncio.sleep(5.0)
+        raise AssertionError("should have been aborted by timeout")
+
+    with patch("services.gateway.service.get_settings") as mock_settings:
+        mock_settings.return_value.block_threshold          = 0.7
+        mock_settings.return_value.sanitize_threshold       = 0.4
+        mock_settings.return_value.llm_trigger_threshold    = 1.0
+        mock_settings.return_value.llm_model                = "test-model"
+        mock_settings.return_value.detector_timeout_seconds = 0.2
+
+        with patch.object(svc._detection_pipeline, "run", side_effect=_slow_run):
+            start   = time.perf_counter()
+            result  = await svc.process(benign_request)
+            elapsed = time.perf_counter() - start
+
+    assert elapsed < 2.0, f"gateway took {elapsed:.2f}s - wait_for guard not firing"
+    assert result.decision.decision         == DecisionType.BLOCK
+    assert result.decision.risk_score.value == pytest.approx(1.0)
+    assert result.decision.primary_reason   == "SYSTEM_ERROR"
