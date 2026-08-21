@@ -237,3 +237,87 @@ class TestAllowlistChangePersistence:
         assert any(r.metadata_["change"] == "removed" for r in rows), (
             "removing the restriction left no trace"
         )
+
+
+# ── Only enum values reach the credential event log ───────────────────────────
+
+class TestAuthEventValueIntegrity:
+    """
+    Both writers coerce through the enums today, so a value outside them cannot
+    be stored. These pin that, because the protection lives in the writers rather
+    than in a database constraint: a third writer added later would bypass it
+    silently, and the damage is quiet -- a row that reads like an event but that
+    nothing built on the enums can find, in the log an incident depends on.
+    """
+
+    @pytest.mark.asyncio
+    async def test_an_unknown_action_writes_nothing(self, test_db):
+        """
+        The guarantee is that no row appears, not that an exception escapes. The
+        writer is best-effort by contract, so it swallows and logs: an audit
+        write must never break the sign-in it is describing. What matters is that
+        the bad value does not reach the table.
+        """
+        from services.auth.service import _log_auth_event
+
+        before = len((await test_db.execute(select(AuthEventModel))).scalars().all())
+
+        await _log_auth_event(action="not_a_real_action", success=False)
+
+        after = len((await test_db.execute(select(AuthEventModel))).scalars().all())
+        assert after == before, "a value outside the enum reached the table"
+
+    @pytest.mark.asyncio
+    async def test_an_unknown_failure_reason_writes_nothing(self, test_db):
+        from services.auth.service import _log_auth_event
+
+        before = len((await test_db.execute(select(AuthEventModel))).scalars().all())
+
+        await _log_auth_event(
+            action="login_failed", success=False, failure_reason="not_a_real_reason",
+        )
+
+        after = len((await test_db.execute(select(AuthEventModel))).scalars().all())
+        assert after == before, "a reason outside the enum reached the table"
+
+    @pytest.mark.asyncio
+    async def test_the_repository_will_not_take_a_raw_string(self, test_db):
+        """
+        The repository is typed to the enums and reads .value, so a string that
+        slipped past a caller raises instead of being written.
+        """
+        from db.repositories.auth_event import AuthEventRepository
+
+        with pytest.raises(AttributeError):
+            await AuthEventRepository(test_db).insert(
+                action  = "login_failed",   # a string, not the enum member
+                success = False,
+            )
+
+    @pytest.mark.asyncio
+    async def test_every_stored_value_is_one_the_enums_know(
+        self, test_db, auth_client, auth_setup,
+    ):
+        """
+        Read back what the writers actually produced. A value the enums do not
+        contain is unsearchable by anything built on them, including dashboard
+        filters and any alert keyed on a reason.
+        """
+        from domain.enums import AuthEventAction, AuthFailureReason
+
+        # produce a real rejection so there is something to inspect
+        await auth_client.post(
+            "/v1/auth/login",
+            json={"email": auth_setup["admin_user"].email, "password": "WrongPassword1!"},
+        )
+
+        rows = (await test_db.execute(select(AuthEventModel))).scalars().all()
+        assert rows, "no credential events were written"
+
+        # constructing the enum is the assertion: a stray value raises here
+        actions = {AuthEventAction(r.action) for r in rows}
+        reasons = {AuthFailureReason(r.failure_reason) for r in rows if r.failure_reason}
+
+        assert actions
+        assert all(isinstance(a, AuthEventAction)  for a in actions)
+        assert all(isinstance(r, AuthFailureReason) for r in reasons)
