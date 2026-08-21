@@ -47,7 +47,7 @@ export function KeyDetailDrawer({
 }) {
   const t = useTranslations("pages.keys.drawer")
 
-  const { data, isLoading, error } = useSWR(["api-key", keyId], () => getApiKey(keyId))
+  const { data, isLoading, error, mutate } = useSWR(["api-key", keyId], () => getApiKey(keyId))
 
   // The drawer shell adds no padding of its own, so each slot brings its own.
   // pr-12 keeps the title clear of the close button pinned at the top right.
@@ -82,6 +82,7 @@ export function KeyDetailDrawer({
       canWrite={canWrite}
       onClose={onClose}
       onSaved={onSaved}
+      onStored={mutate}
       header={header}
     />
   )
@@ -92,12 +93,15 @@ function KeyDetailForm({
   canWrite,
   onClose,
   onSaved,
+  onStored,
   header,
 }: {
   detail:   ApiKeyDetail
   canWrite: boolean
   onClose:  () => void
   onSaved?: () => void
+  onStored: (updater: (prev?: ApiKeyDetail) => ApiKeyDetail | undefined,
+             opts?: { revalidate: boolean }) => unknown
   header:   React.ReactNode
 }) {
   const t   = useTranslations("pages.keys.drawer")
@@ -149,7 +153,21 @@ function KeyDetailForm({
     try {
       // The parsed list is always sent, so emptying the field clears the
       // restriction. Omitting it would leave no way to remove one.
-      await updateApiKey(detail.key_id, name, entries)
+      const stored = await updateApiKey(detail.key_id, name, entries)
+
+      // Show what was stored, not what was typed. Entries are canonicalised on
+      // the way in, so the two can differ, and the operator should be looking at
+      // the restriction that is actually in force.
+      setEntryText((stored.ip_allowlist ?? []).join("\n"))
+
+      // Without this the drawer keeps serving the value it loaded before the
+      // save, so reopening it shows the old networks and the change reads as
+      // lost. The server's response is authoritative, so no refetch is needed.
+      onStored(
+        (prev) => (prev ? { ...prev, name: stored.name, ip_allowlist: stored.ip_allowlist } : prev),
+        { revalidate: false },
+      )
+
       setSaved(true)
       onSaved?.()
     } catch (e) {

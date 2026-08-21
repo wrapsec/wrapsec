@@ -8,7 +8,30 @@
 // would turn the control off must not reach the server looking deliberate.
 import { describe, it, expect, vi, beforeEach } from "vitest"
 import userEvent from "@testing-library/user-event"
+import { render } from "@testing-library/react"
+import { NextIntlClientProvider } from "next-intl"
+import { SWRConfig } from "swr"
+import messages from "@/messages/en.json"
 import { renderWithIntl, screen, waitFor } from "./_render"
+
+/**
+ * Render with an SWR cache that outlives an unmount.
+ *
+ * The shared helper gives every render a fresh cache, which is right for
+ * isolation but makes closing and reopening a drawer indistinguishable from
+ * opening it for the first time -- and the staleness worth testing only shows
+ * up on the second open.
+ */
+function renderWithSharedCache(node: React.ReactElement) {
+  const cache = new Map()
+  const wrap  = (n: React.ReactElement) => (
+    <SWRConfig value={{ provider: () => cache }}>
+      <NextIntlClientProvider locale="en" messages={messages}>{n}</NextIntlClientProvider>
+    </SWRConfig>
+  )
+  const result = render(wrap(node))
+  return { ...result, rerender: (n: React.ReactElement) => result.rerender(wrap(n)) }
+}
 
 vi.mock("@/lib/api", () => ({
   getApiKey:        vi.fn(),
@@ -287,5 +310,81 @@ describe("KeyDetailDrawer address panels", () => {
 
     await screen.findByText(/only an administrator/i)
     expect(getKeyAddresses).not.toHaveBeenCalled()
+  })
+})
+
+// A save that persists on the server but leaves the drawer showing the old
+// value is indistinguishable, to the operator, from a save that failed. It is
+// worse than a visible failure: they are told "Changes saved" and then shown
+// evidence that nothing changed.
+describe("KeyDetailDrawer after saving", () => {
+  it("shows the stored networks rather than the ones that were typed", async () => {
+    // The server canonicalises entries, so what comes back can differ from what
+    // was sent. The operator has to be looking at what is actually in force.
+    const user = userEvent.setup()
+    vi.mocked(updateApiKey).mockResolvedValue({
+      key_id: KEY.key_id, name: KEY.name, ip_allowlist: ["10.0.0.0/8"],
+    })
+    open({ ...KEY, ip_allowlist: [] })
+
+    const field = await screen.findByLabelText("Source networks")
+    await user.type(field, "10.0.0.1/8")
+    await user.click(screen.getByRole("button", { name: /save changes/i }))
+
+    await waitFor(() => {
+      expect((field as HTMLTextAreaElement).value).toBe("10.0.0.0/8")
+    })
+  })
+
+  it("does not go on showing the networks it loaded before the save", async () => {
+    // The close-and-reopen path, which is where this actually goes wrong. The
+    // form seeds its field once, from whatever the cache holds when it mounts,
+    // and a later refetch does not re-seed it (that would discard an operator's
+    // in-progress edits on every focus revalidation). So a cache left stale by
+    // a save is not corrected afterwards -- it is what the operator is shown.
+    const user = userEvent.setup()
+
+    vi.mocked(getApiKey)
+      .mockResolvedValueOnce({ ...KEY, ip_allowlist: [] } as never)
+      .mockResolvedValue({ ...KEY, ip_allowlist: ["203.0.113.10/32"] } as never)
+    vi.mocked(getKeyAddresses).mockResolvedValue({
+      ...NO_ADDRESSES, observed: [seen("203.0.113.10")],
+    } as never)
+    vi.mocked(updateApiKey).mockResolvedValue({
+      key_id: KEY.key_id, name: KEY.name, ip_allowlist: ["203.0.113.10/32"],
+    })
+
+    const drawer = (
+      <KeyDetailDrawer keyId={KEY.key_id} canWrite onClose={vi.fn()} onSaved={vi.fn()} />
+    )
+    const { rerender } = renderWithSharedCache(drawer)
+
+    await screen.findByText("203.0.113.10")
+    await user.click(screen.getByRole("button", { name: /^add$/i }))
+    await user.click(screen.getByRole("button", { name: /save/i }))
+    await screen.findByText(/changes saved/i)
+
+    rerender(<div />)          // close
+    rerender(drawer)           // reopen, against the same cache
+
+    const field = await screen.findByLabelText("Source networks")
+    expect((field as HTMLTextAreaElement).value).toBe("203.0.113.10/32")
+  })
+
+  it("leaves the cached detail alone when the save is refused", async () => {
+    const user = userEvent.setup()
+    vi.mocked(updateApiKey).mockRejectedValue(new Error("refused"))
+    open({ ...KEY, ip_allowlist: ["10.0.0.0/8"] })
+
+    const field = await screen.findByLabelText("Source networks")
+    await user.clear(field)
+    await user.type(field, "192.0.2.0/24")
+    await user.click(screen.getByRole("button", { name: /save changes/i }))
+
+    // the typed value stays so the edit is not lost, and nothing claims success
+    // (exact match: the refused-addresses heading also contains the word)
+    await screen.findByText("refused")
+    expect((field as HTMLTextAreaElement).value).toBe("192.0.2.0/24")
+    expect(screen.queryByText(/changes saved/i)).toBeNull()
   })
 })
