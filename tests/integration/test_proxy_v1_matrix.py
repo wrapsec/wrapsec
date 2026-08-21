@@ -144,9 +144,15 @@ class TestUnsupportedFeatures:
 
     @pytest.mark.asyncio
     @pytest.mark.parametrize("field,value", [
-        ("tools",       []),
-        ("tool_choice", "auto"),
-        ("functions",   []),
+        ("tools",                []),
+        ("tool_choice",          "auto"),
+        ("functions",            []),
+        # The deprecated spelling and the newer companion flag. Neither is named
+        # in the schema; the request contract forbids unknown fields, so the
+        # whole family is refused by construction rather than by a list somebody
+        # has to keep adding to as the provider API grows.
+        ("function_call",        "auto"),
+        ("parallel_tool_calls",  True),
     ])
     async def test_native_tool_calling_is_refused(self, app, field, value):
         resp = await _post(app, {
