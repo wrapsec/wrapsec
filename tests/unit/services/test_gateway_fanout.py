@@ -286,3 +286,111 @@ class TestScanItems:
         generated = str(out[1][0].trace_id)
         assert generated.startswith("req_")
         assert generated != str(out[0][0].trace_id)
+
+
+class TestProcessWideBound:
+    """
+    The bound has to hold ACROSS concurrent calls, not just within one.
+
+    A semaphore built per call bounds only the call that built it, so N
+    concurrent multi-input requests ran up to N times the limit between them.
+    That is not an efficiency question: detection is fail-closed, so detectors
+    pushed past their timeout produce BLOCKs that the caller cannot tell from a
+    decision about their content.
+    """
+
+    @staticmethod
+    async def _run(gateway, items, **kwargs):
+        return await scan_items(
+            [ScanItem(input=f"m{i}", input_source="user_prompt") for i in range(items)],
+            gateway        = gateway,
+            policy         = _policy(),
+            detection_mode = DetectionMode.FAST,
+            metadata       = RequestMetadata(tenant_id="t"),
+            **kwargs,
+        )
+
+    @pytest.mark.asyncio
+    async def test_concurrent_calls_share_one_bound(self, monkeypatch):
+        monkeypatch.setenv("BATCH_CONCURRENCY", "4")
+        get_settings.cache_clear()
+        try:
+            gateway = _FakeGateway(delay=0.02)
+            # Four calls of five items each. Per-call bounding would allow up to
+            # sixteen at once; the process-wide bound allows four.
+            await asyncio.gather(*[self._run(gateway, 5) for _ in range(4)])
+            assert gateway.max_concurrent <= 4, (
+                f"{gateway.max_concurrent} detector runs at once against a bound of 4"
+            )
+        finally:
+            get_settings.cache_clear()
+
+    @pytest.mark.asyncio
+    async def test_the_bound_is_actually_reached(self, monkeypatch):
+        """
+        The counterpart. A bound that is never reached would make the test above
+        pass even if the work were running one at a time.
+        """
+        monkeypatch.setenv("BATCH_CONCURRENCY", "4")
+        get_settings.cache_clear()
+        try:
+            gateway = _FakeGateway(delay=0.02)
+            await asyncio.gather(*[self._run(gateway, 5) for _ in range(4)])
+            assert gateway.max_concurrent == 4, (
+                f"only {gateway.max_concurrent} ran at once; the bound is not the limit"
+            )
+        finally:
+            get_settings.cache_clear()
+
+    @pytest.mark.asyncio
+    async def test_a_caller_cannot_buy_more_capacity(self, monkeypatch):
+        """
+        The per-call argument tightens; it must not loosen. Otherwise a caller
+        escapes the process bound by asking for a bigger one.
+        """
+        monkeypatch.setenv("BATCH_CONCURRENCY", "2")
+        get_settings.cache_clear()
+        try:
+            gateway = _FakeGateway(delay=0.02)
+            await asyncio.gather(*[
+                self._run(gateway, 6, concurrency=50) for _ in range(3)
+            ])
+            assert gateway.max_concurrent <= 2, (
+                f"a caller-supplied concurrency of 50 ran {gateway.max_concurrent} at once"
+            )
+        finally:
+            get_settings.cache_clear()
+
+    @pytest.mark.asyncio
+    async def test_a_tighter_per_call_bound_still_applies(self, monkeypatch):
+        monkeypatch.setenv("BATCH_CONCURRENCY", "8")
+        get_settings.cache_clear()
+        try:
+            gateway = _FakeGateway(delay=0.02)
+            await self._run(gateway, 6, concurrency=2)
+            assert gateway.max_concurrent <= 2
+        finally:
+            get_settings.cache_clear()
+
+    @pytest.mark.asyncio
+    async def test_a_changed_limit_is_picked_up(self, monkeypatch):
+        """
+        The limit is a setting. A cached semaphore keyed only by loop would keep
+        the old capacity after it changed, which is the failure mode of caching
+        a value derived from configuration.
+        """
+        gateway = _FakeGateway(delay=0.02)
+
+        monkeypatch.setenv("BATCH_CONCURRENCY", "2")
+        get_settings.cache_clear()
+        await asyncio.gather(*[self._run(gateway, 4) for _ in range(3)])
+        assert gateway.max_concurrent <= 2
+
+        gateway.max_concurrent = 0
+        monkeypatch.setenv("BATCH_CONCURRENCY", "6")
+        get_settings.cache_clear()
+        try:
+            await asyncio.gather(*[self._run(gateway, 4) for _ in range(3)])
+            assert gateway.max_concurrent > 2, "still bounded by the previous limit"
+        finally:
+            get_settings.cache_clear()

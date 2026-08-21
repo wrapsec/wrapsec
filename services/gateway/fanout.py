@@ -30,6 +30,8 @@ from __future__ import annotations
 
 import asyncio
 import logging
+import weakref
+from contextlib import AsyncExitStack
 from dataclasses import dataclass
 from typing import Any
 
@@ -128,6 +130,33 @@ async def charge_additional_units(request: Any, n: int) -> None:
         raise RateLimitError()
 
 
+# One bound on detector work for the whole process, not one per request.
+#
+# A semaphore built per call bounds the request that built it and nothing else,
+# so N concurrent multi-input requests ran up to N x the limit of detector tasks
+# between them. Under that load detectors exceed their timeout, and detection
+# failure is fail-closed, so the result was legitimate traffic refused with a
+# BLOCK indistinguishable from one caused by its content.
+#
+# Keyed by event loop and built lazily. A semaphore created at import binds to
+# whichever loop is running then, and awaiting it from another loop raises --
+# the normal case under a test runner that gives each test a fresh loop. The
+# loop is a weak key, so a finished loop's entry goes with it. The limit is a
+# setting and can change between calls, so each value gets its own semaphore
+# rather than a stale capacity being reused.
+_LIMITERS: weakref.WeakKeyDictionary = weakref.WeakKeyDictionary()
+
+
+def _process_limiter(limit: int) -> asyncio.Semaphore:
+    loop     = asyncio.get_running_loop()
+    per_loop = _LIMITERS.setdefault(loop, {})
+    sem      = per_loop.get(limit)
+    if sem is None:
+        sem = asyncio.Semaphore(max(1, limit))
+        per_loop[limit] = sem
+    return sem
+
+
 async def scan_items(
     items:          list[ScanItem],
     *,
@@ -145,15 +174,24 @@ async def scan_items(
     caller can zip them against its own inputs. Order is guaranteed by gather,
     not by completion time.
 
-    Concurrency defaults to the configured batch concurrency. The bound is the
-    point: without it, one request with many inputs would launch that many
-    detector runs at once.
+    Every call is bounded by the process-wide limit (`batch_concurrency`), which
+    is shared with every other call in flight. That is what stops N concurrent
+    requests from running N times the limit of detector tasks between them.
+
+    `concurrency` applies an ADDITIONAL bound to this call only. It can tighten
+    what one call runs; it cannot loosen the process-wide bound, so a caller
+    cannot use it to buy more detector capacity than the process allows.
     """
-    limit = concurrency if concurrency is not None else get_settings().batch_concurrency
-    sem   = asyncio.Semaphore(max(1, limit))
+    shared = _process_limiter(get_settings().batch_concurrency)
+    local  = asyncio.Semaphore(max(1, concurrency)) if concurrency is not None else None
 
     async def _scan(item: ScanItem) -> tuple[IncomingRequest, Any]:
-        async with sem:
+        async with AsyncExitStack() as stack:
+            # Same order for every task, so the two can never deadlock against
+            # each other.
+            await stack.enter_async_context(shared)
+            if local is not None:
+                await stack.enter_async_context(local)
             # A supplied id is taken as-is; deriving it correctly (uniqueness and
             # the audit column's width) belongs to the caller that owns the
             # request-level identifier.
