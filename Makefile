@@ -76,9 +76,14 @@ migrate:
 migration:
 	alembic revision --autogenerate -m "$(MSG)"
 
+# The gated corpus and its regression guard, then the assistant-prose
+# measurement. The latter reports and never fails: assistant scanning is off by
+# default, so its cost is something to watch rather than something to block on.
+# It runs here so the number stays in front of whoever runs the evaluation.
 eval:
 	python tests/eval/run_evaluation.py
 	pytest tests/eval/test_redteam.py -v
+	python tests/eval/run_assistant_eval.py
 
 build:
 	docker compose -f infrastructure/docker/docker-compose.yml build

@@ -2,6 +2,11 @@
 # Every case is input_source=external_content -- the classification an assistant
 # message carries through the proxy.
 #
+# Held OUTSIDE the gated corpus on purpose. Assistant scanning is off by default,
+# and folding these into the established baseline would move a number that exists
+# to catch detector regressions, for a reason that has nothing to do with the
+# detectors. Measured by run_assistant_eval.py, which reports without gating.
+#
 # This is the false-positive surface that scanning assistant turns opened. An
 # assistant turn quotes, restates and explains what the user asked, so a refusal
 # to a jailbreak contains the jailbreak, and an answer about prompt injection

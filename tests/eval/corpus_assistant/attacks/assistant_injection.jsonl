@@ -1,6 +1,9 @@
 # Malicious ASSISTANT turns: the attack that scanning conversation history exists
 # to catch. Every case is input_source=external_content.
 #
+# Held outside the gated corpus alongside the benign assistant cases; see the
+# note there. These are all caught today -- the cost is on the benign side.
+#
 # An assistant turn is not necessarily something a model said. A caller composes
 # the whole messages array, and an agent commonly replays tool output, retrieved
 # pages or a previous provider response into it. So an assistant turn is a place
