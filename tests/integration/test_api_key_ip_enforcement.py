@@ -358,6 +358,95 @@ class TestDenialIsRecorded:
         assert rows == []
 
 
+class TestTheDenialIsRecordedAfterAnswering:
+    """
+    The denial path is the one a misconfigured client hammers in a retry loop.
+    Paying for a database insert before answering made it more expensive than
+    the allow path, and amplified load under exactly the condition it exists to
+    shed.
+
+    What is NOT asserted here is elapsed time. Under an ASGI transport the test
+    client drives the app directly and waits for background tasks to finish, so
+    a timing assertion would measure the transport rather than the server. The
+    property is asserted where it is actually decided instead -- on the response
+    object -- and paired with the row still arriving, since deferring a write is
+    only an improvement if it still happens.
+    """
+
+    @pytest.mark.asyncio
+    async def test_the_write_is_deferred_onto_the_response(self, app, test_db):
+        """
+        The response carries the recorder rather than having already run it, so
+        the caller is answered before the insert is attempted.
+        """
+        from starlette.background import BackgroundTask
+
+        from api.v1.middleware.auth import _ip_denied_response, _record_ip_denial
+
+        raw, _ = await _seed_key(test_db, [ALLOWED_NET])
+
+        captured = {}
+        original = _ip_denied_response
+
+        def _capture(request):
+            response = original(request)
+            captured["response"] = response
+            return response
+
+        import api.v1.middleware.auth as auth_module
+        auth_module._ip_denied_response = _capture
+        try:
+            resp = await _request(app, api_key=raw, peer_ip=DENIED_IP)
+        finally:
+            auth_module._ip_denied_response = original
+
+        assert resp.status_code == 403
+        task = getattr(captured["response"], "background", None)
+        assert isinstance(task, BackgroundTask), (
+            "the denial response carries no background task, so the write is inline"
+        )
+        assert task.func is _record_ip_denial
+
+    @pytest.mark.asyncio
+    async def test_deferring_it_does_not_lose_it(self, app, test_db):
+        """
+        The half that matters more. A write moved off the request path and then
+        dropped is worse than one that was slow.
+        """
+        from sqlalchemy import select
+
+        from db.models import AuthEventModel
+
+        raw, tenant_id = await _seed_key(test_db, [ALLOWED_NET])
+        assert (await _request(app, api_key=raw, peer_ip=DENIED_IP)).status_code == 403
+
+        rows = (await test_db.execute(
+            select(AuthEventModel).where(AuthEventModel.tenant_id == tenant_id)
+        )).scalars().all()
+        assert len(rows) == 1
+        assert rows[0].action     == "api_key_ip_denied"
+        assert rows[0].ip_address == DENIED_IP
+
+    @pytest.mark.asyncio
+    async def test_a_failing_recorder_does_not_change_the_denial(self, app, test_db):
+        """
+        Failure isolation, now that the write runs after the response. An
+        exception here would surface with no request left to attach it to, so
+        the recorder must swallow its own failures -- and the caller must still
+        have been refused.
+        """
+        from unittest.mock import AsyncMock, patch
+
+        raw, _tenant_id = await _seed_key(test_db, [ALLOWED_NET])
+
+        with patch("services.auth.service._log_auth_event",
+                   new=AsyncMock(side_effect=RuntimeError("audit store down"))):
+            resp = await _request(app, api_key=raw, peer_ip=DENIED_IP)
+
+        assert resp.status_code == 403
+        assert resp.json()["error"]["code"] == "IP_NOT_ALLOWED"
+
+
 # ── One tenant's restriction cannot affect another's ──────────────────────────
 
 class TestTenantIsolation:

@@ -14,6 +14,7 @@ from fastapi import Request
 from jwt.exceptions import ExpiredSignatureError, InvalidTokenError
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_async_engine
 from sqlalchemy.pool import NullPool
+from starlette.background import BackgroundTask
 from starlette.middleware.base import BaseHTTPMiddleware
 from starlette.responses import JSONResponse, Response
 
@@ -171,10 +172,14 @@ async def _record_ip_denial(request: Request) -> None:
     an invented decision, and those numbers feed block-rate and threat
     analytics.
 
-    Written on its own session, and best-effort. Recording must never delay or
-    fail the request it describes, and a refusal that cannot be recorded is
-    still a refusal. The credential is named so revoking one key does not mean
-    auditing all of them.
+    Written on its own session, and best-effort. A refusal that cannot be
+    recorded is still a refusal, so this swallows its own failures rather than
+    turning an audit problem into a request failure. The credential is named so
+    revoking one key does not mean auditing all of them.
+
+    Runs as a background task on the denial response, so the caller is answered
+    before this is attempted. Anything raised here would surface after the
+    response has been sent, which is why nothing is allowed to.
     """
     from domain.enums import AuthEventAction, AuthFailureReason
     from services.auth.service import _log_auth_event
@@ -569,8 +574,25 @@ class AuthMiddleware(BaseHTTPMiddleware):
                         request.state.ip_address,
                     )
                     record_api_key_ip_denied()
-                    await _record_ip_denial(request)
-                    return _ip_denied_response(request)
+
+                    # Recorded AFTER the response is sent, not before it.
+                    #
+                    # This is the path a misconfigured client hammers in a
+                    # retry loop, and the code above describes it as the cheap
+                    # refusal -- so paying for a database insert before
+                    # answering made the denial more expensive than the allow,
+                    # and amplified load under exactly the condition it exists
+                    # to shed. The recorder's own contract says the write must
+                    # never delay the request it describes; awaiting it here
+                    # said otherwise.
+                    #
+                    # A background task on the response, rather than a bare
+                    # task: a detached task can be garbage collected mid-flight
+                    # and takes its exceptions with it, whereas this one is
+                    # owned by the response and runs to completion.
+                    response = _ip_denied_response(request)
+                    response.background = BackgroundTask(_record_ip_denial, request)
+                    return response
 
                 if await _tenant_suspended(request.state.tenant_id):
                     return _tenant_suspended_response(request)
