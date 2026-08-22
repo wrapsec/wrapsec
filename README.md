@@ -94,7 +94,7 @@ Guardrails (PII, toxicity) are architecturally separate from the detection score
 
 A red-team evaluation suite scores the pipeline against a labeled adversarial corpus - prompt injection, jailbreak, encoding and obfuscation evasion, indirect injection, and data exfiltration - alongside benign and over-defense sets and a held-out out-of-distribution set. `make eval` reports catch-rate, false-positive rate (including over-defense), a per-category breakdown, and out-of-distribution generalisation, and enforces regression floors and ceilings, so a change that weakens detection or worsens over-defense fails the gate. The run is fully offline - no LLM provider, database, or Redis - and doubles as a reproducible measure of detection efficacy.
 
-Measured 2026-08-17 on the WrapSec-authored corpus of 141 cases (86 malicious, 55 benign), with the full detector stack (rules + ML + the optional Tier-2 transformer):
+Measured 2026-08-22 on the WrapSec-authored corpus of 141 cases (86 malicious, 55 benign), with the full detector stack (rules + ML + the optional Tier-2 transformer):
 
 | Metric | Result |
 |---|---|
