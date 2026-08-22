@@ -24,14 +24,25 @@ Run:
 Weight split: 70% full scan, 30% proxy (proxy is slower due to LLM roundtrip)
 """
 
+import os
 import random
 
 from locust import HttpUser, between, events, task
 
+from config import ADMIN_KEY
+
 # ── Auth ──────────────────────────────────────────────────────────────────────
 
-SCAN_API_KEY  = "wrapsec_admin_key"   # admin key - bypasses rate limit for setup
-PROXY_API_KEY = "wrapsec_admin_key"   # use same key; create a dedicated live key if needed
+# Read from the environment, like every other tool in this directory. These were
+# once hardcoded to the literal "wrapsec_admin_key", which cannot authenticate
+# anywhere: a real admin key is at least 32 characters, so the profiles below
+# failed auth on every request against any instance that boots.
+#
+# The admin key is the default because it bypasses the per-key rate limit, which
+# would otherwise throttle the load generator instead of the gateway. Set
+# WRAPSEC_PROXY_KEY to drive the proxy profiles with a dedicated live key.
+SCAN_API_KEY  = ADMIN_KEY
+PROXY_API_KEY = os.environ.get("WRAPSEC_PROXY_KEY") or ADMIN_KEY
 
 TENANT_ID = "42a083bf-5cad-4b65-84d1-b81def88c9f3"
 
@@ -320,6 +331,14 @@ class ProxyUser(HttpUser):
 
 @events.test_start.add_listener
 def on_test_start(environment, **kwargs):
+    # Fail loudly rather than producing a run of uniform 401s that looks like a
+    # gateway problem.
+    if not SCAN_API_KEY:
+        raise RuntimeError(
+            "WRAPSEC_ADMIN_KEY is not set. Export it (and optionally "
+            "WRAPSEC_PROXY_KEY) before running the load profiles; see "
+            "tests/load/README.md."
+        )
     print("\n" + "═" * 60)
     print("  WrapSec Soak Test Starting")
     print("  Duration : 4 hours")

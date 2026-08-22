@@ -46,8 +46,11 @@ export WRAPSEC_PURCHASE_DEPT_ID=...
 export WRAPSEC_FINANCE_DEPT_ID=...
 ```
 
-`tests/load/locustfile.py` still carries a literal `wrapsec_admin_key`; it must match
-the running stack's `ADMIN_API_KEY` for the load profiles to authenticate.
+`locustfile.py` reads the same variables. `WRAPSEC_ADMIN_KEY` is the one the load
+profiles need: the admin key bypasses the per-key rate limit, so the generator
+measures the gateway rather than the limiter. Set `WRAPSEC_PROXY_KEY` as well to
+drive the proxy profiles with a dedicated live key. A profile started without
+`WRAPSEC_ADMIN_KEY` fails at test start with a message naming the variable.
 
 ---
 
