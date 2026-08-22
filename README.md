@@ -371,6 +371,12 @@ pip install -r requirements-transformer.txt --extra-index-url https://download.p
 docker build --build-arg BUILD_ENV=transformer -f infrastructure/docker/Dockerfile .
 ```
 
+If you enable Tier 2, also set `BATCH_CONCURRENCY=2`. The shipped default of `8` is sized
+for the base install and is actively harmful on the transformer build: under concurrent
+load the detectors compete for CPU, exceed their timeout, and fail closed, so legitimate
+requests are refused. Lowering it improves latency and refusals together rather than
+trading one for the other. See "Tuning `BATCH_CONCURRENCY`" in `docs/developer_guide.md`.
+
 Without transformer dependencies, `transformer_detector` reports `degraded` in `/health/ready` and `wrapsec doctor`. All requests are still processed via Tier 1 (TF-IDF).
 
 > The HuggingFace transformer and the bundled TF-IDF model are suitable for evaluation. Production-grade WrapSec deployments use purpose-built models - see the note above.
@@ -412,6 +418,7 @@ WrapSec is open-core. The detection pipeline, guardrails, proxy, audit trail, da
 - Change `SECRET_KEY` and Grafana default password before first deployment.
 - Set `TRUSTED_PROXY_IPS` to the IP(s) of your reverse proxy so `X-Forwarded-For` is trusted only from known sources.
 - Restrict the master `ADMIN_API_KEY` at the network layer. Per-key source-network restrictions are stored on the API key record, and this credential has no record - it is matched against a configured secret - so the application cannot confine it. It is also the most privileged credential in the system, so place a firewall or reverse-proxy rule in front of the API instead.
+- Set `BATCH_CONCURRENCY=2` if you run the optional Tier-2 transformer build - the default of `8` causes fail-closed refusals of legitimate traffic under concurrency on that build. See `docs/developer_guide.md`.
 - Set `METRICS_TOKEN` to require bearer token authentication on `GET /metrics` - do not expose metrics unauthenticated.
 - Pin Grafana to 10.4.0 - Grafana 12 has dashboard provisioning issues.
 - Prometheus target changes from `host.docker.internal:8000` to `api:8000` in Docker deployment.

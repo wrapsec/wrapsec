@@ -1054,12 +1054,15 @@ caller's own latency. Raise it only against a measurement of your own traffic.
 **If you run the optional transformer build, measure before relying on Scan-All under
 concurrency.** Detection is fail-closed: a detector that runs out of time is treated as a
 failure and the message is blocked, and that block is indistinguishable from one caused by
-the content. On the default build this does not arise -- 240 of 240 messages served at up
-to 8 concurrent 10-message requests. With the Tier-2 transformer installed, the same load
-blocked 30.8% of messages that way, rising to 58% at 8 concurrent requests, with nothing
-blocked on content. The lever is `BATCH_CONCURRENCY`, `DETECTOR_TIMEOUT_SECONDS`, or a
-lower `MAX_SCAN_ALL_MESSAGES`; `tests/load/scan_all_load.py` reports the rate for your own
-hardware, and takes `--no-transformer` to compare build shapes.
+the content. On the default build this does not arise. With the Tier-2 transformer
+installed it does, at high concurrency, with nothing blocked on content.
+
+The levers are `BATCH_CONCURRENCY`, `DETECTOR_TIMEOUT_SECONDS`, and a lower
+`MAX_SCAN_ALL_MESSAGES`. `BATCH_CONCURRENCY` is the effective one, and its direction is
+counter-intuitive -- lowering it improves refusals and latency together. See "Tuning
+`BATCH_CONCURRENCY`" in `docs/developer_guide.md` before changing any of them.
+`tests/load/scan_all_load.py` reports the rate for your own hardware, and takes
+`--no-transformer` to compare build shapes.
 
 **WrapSec response headers:**
 

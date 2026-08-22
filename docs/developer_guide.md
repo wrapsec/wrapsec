@@ -1021,9 +1021,58 @@ These rules must be followed in all new code. Violation creates real production 
 | `LOGIN_RATE_LIMIT_PER_MINUTE` | `10` | Per-IP rate limit on `POST /v1/auth/login` - env-only, security control. Complements per-email lockout |
 | `COOKIE_SECURE` | `true` | Adds `Secure` flag to refresh token cookie. Set `false` only for local HTTP dev - must be `true` in all deployed environments |
 | `DETECTOR_TIMEOUT_SECONDS` | `2.0` | Per-detector, per-message execution bound. A detector that exceeds it is treated as a failure, which fails closed to `BLOCK` with `primary_reason=SYSTEM_ERROR` |
-| `BATCH_CONCURRENCY` | `8` | Concurrent detector runs **per request** for multi-input scans. Not a process-wide bound: N concurrent requests can run up to N times this many pipelines |
+| `BATCH_CONCURRENCY` | `8` | Concurrent detector runs for multi-input scans, bounded **process-wide** and shared by every request in flight. Scoped to the worker process, so a multi-worker deployment permits this many per worker. See the tuning note below before changing it |
 | `MAX_SCAN_ALL_MESSAGES` | `10` | Eligible messages the proxy will scan in one request when scan-all is requested. Over this the request is rejected rather than partly scanned. Each scanned message costs a detection run, an audit-chain append against a per-tenant lock, and a rate-limit unit |
 | `SCAN_ASSISTANT_MESSAGES` | `false` | Whether the proxy inspects `assistant` turns as well as `user` turns. Assistant turns are accepted and forwarded either way; when disabled they are not inspected. Global, not per tenant |
+
+### Tuning `BATCH_CONCURRENCY`
+
+The shipped default of `8` is sized for the default build, which does not need
+it. On the optional Tier-2 transformer build it is actively harmful.
+
+The mechanism is worth understanding, because the direction is counter-intuitive.
+Admitting more concurrent detector runs makes them compete for CPU, so each takes
+longer, and past a point they exceed `DETECTOR_TIMEOUT_SECONDS`. A detector that
+times out is a detection failure, and detection failure fails closed - so the
+request is refused with a `BLOCK` the caller cannot tell apart from one caused by
+its content. The work is not merely slow; it is discarded, and the traffic is
+turned away.
+
+Lowering the value therefore improves latency **and** refusals together on that
+build, rather than trading one for the other. Fewer runs at a time each finish
+inside their timeout instead of every run thrashing.
+
+Practical guidance:
+
+- **Default build (no transformer):** leave it at `8`. It refuses nothing at any
+  concurrency measured, and lowering it costs a little latency for no gain.
+- **Transformer build:** set `BATCH_CONCURRENCY=2` (or `4`). At the default it
+  refuses a material share of legitimate messages under concurrent load.
+- **Raising it above 8 does not reduce refusals** on the transformer build -
+  they stay in the same band - so there is no reason to go higher. Not measured
+  above 8 on the default build.
+
+Rates are hardware-specific even though the direction is not, so measure on your
+own machine before settling on a value. The tool runs the pipeline in process and
+writes real audit rows, so it needs a Postgres with the schema applied - point it
+at a throwaway database rather than one you care about:
+
+```bash
+# transformer build
+DATABASE_URL=... python tests/load/scan_all_load.py \
+  --messages 10 --concurrency 8 --requests 8
+
+# default build
+DATABASE_URL=... python tests/load/scan_all_load.py \
+  --messages 10 --concurrency 8 --requests 8 --no-transformer
+```
+
+It commits the rows it creates and prints a `DELETE` to clean them up afterwards.
+
+The tool reports blocks caused by detector failure separately from blocks caused
+by content. The failure column is the one to tune against: it should be zero.
+Repeat any transformer-build measurement before acting on it, as that build is
+noisy run to run.
 
 **Load test env vars** - required when running `tests/load/` scripts:
 
