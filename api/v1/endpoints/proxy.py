@@ -367,6 +367,13 @@ def _segment_audit_rows(segments: list[MessageSegment], scanned: list) -> list[d
                 "llm":  scores.llm_score,
             } if scores else {},
             "guardrail_scores": {"pii": scores.pii_score} if scores else {},
+            # This message's OWN scan duration, not the request's. The fan-out
+            # times each pipeline run separately, so writing the request total
+            # onto every row made an N-message request contribute N samples of
+            # the whole duration to audit_logs.latency_ms -- which feeds the
+            # avg_latency_ms on GET /v1/audit/stats. Request-level timing stays
+            # on the interaction row, which is where a request-level fact belongs.
+            "latency_ms":       round(decision.latency_ms, 2),
         })
     return rows
 
@@ -659,7 +666,9 @@ async def _log_interaction(
                 "detection_mode":        "fast",
                 "execution_mode":        "proxy",
                 "llm_invoked":           False,
-                "latency_ms":            float(total_latency_ms),
+                # Per-message when the caller supplied per-message evidence;
+                # the aggregate fallback below has only the request total.
+                "latency_ms":            float(row.get("latency_ms", total_latency_ms)),
                 "detection_scores":      row["detection_scores"],
                 "guardrail_scores":      row["guardrail_scores"],
                 "key_id":                key_id,

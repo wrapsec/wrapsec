@@ -378,3 +378,68 @@ class TestUnknownDecisionsFailClosed:
         from api.v1.endpoints.proxy import _DECISION_RANK, _UNKNOWN_DECISION_RANK
 
         assert _UNKNOWN_DECISION_RANK > max(_DECISION_RANK.values())
+
+
+class TestPerMessageAuditEvidence:
+    """
+    Each per-message audit row must describe ITS OWN message's execution.
+
+    Scan-All turns one request into N audit rows. Anything request-level copied
+    onto every row stops being evidence about a message and becomes N duplicate
+    samples of a request fact -- and `audit_logs.latency_ms` is averaged into
+    `avg_latency_ms` on GET /v1/audit/stats, so duplicating it there silently
+    weights the published metric toward whichever requests fanned out widest.
+    """
+
+    @staticmethod
+    def _segment(index: int, text: str = "hello", source: str = "user_prompt"):
+        from api.v1.endpoints.proxy import MessageSegment
+        return MessageSegment(index=index, role="user", text=text, source=source)
+
+    @staticmethod
+    def _scanned(latency_ms: float):
+        """One (incoming, result) pair carrying its own scan duration."""
+        from types import SimpleNamespace
+        decision = SimpleNamespace(
+            decision       = SimpleNamespace(value="ALLOW"),
+            risk_score     = SimpleNamespace(value=0.0),
+            threats        = [],
+            primary_reason = "NO_THREAT_DETECTED",
+            confidence     = 1.0,
+            layer_scores   = None,
+            latency_ms     = latency_ms,
+        )
+        incoming = SimpleNamespace(trace_id=f"trace-{latency_ms}")
+        return (incoming, SimpleNamespace(decision=decision))
+
+    def test_each_row_carries_its_own_latency(self):
+        from api.v1.endpoints.proxy import _segment_audit_rows
+
+        latencies = [11.0, 22.0, 33.0]
+        rows = _segment_audit_rows(
+            [self._segment(i) for i in range(len(latencies))],
+            [self._scanned(ms) for ms in latencies],
+        )
+
+        assert [row["latency_ms"] for row in rows] == latencies
+
+    def test_a_ten_message_scan_does_not_repeat_one_latency(self):
+        """
+        The regression this exists for: ten rows each claiming the whole
+        request's duration. Distinct per-message values must survive to the row.
+        """
+        from api.v1.endpoints.proxy import _segment_audit_rows
+
+        latencies = [float(ms) for ms in range(1, 11)]
+        rows = _segment_audit_rows(
+            [self._segment(i) for i in range(10)],
+            [self._scanned(ms) for ms in latencies],
+        )
+
+        assert len(rows) == 10
+        observed = [row["latency_ms"] for row in rows]
+        assert observed == latencies
+        assert len(set(observed)) == 10, (
+            "every row reported the same latency; a request-level total is "
+            "being copied onto each message row again"
+        )
