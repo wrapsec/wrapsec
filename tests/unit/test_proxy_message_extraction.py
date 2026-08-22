@@ -397,8 +397,8 @@ class TestPerMessageAuditEvidence:
         return MessageSegment(index=index, role="user", text=text, source=source)
 
     @staticmethod
-    def _scanned(latency_ms: float):
-        """One (incoming, result) pair carrying its own scan duration."""
+    def _scanned(latency_ms: float, mode="fast", llm_invoked=False):
+        """One (incoming, result) pair carrying its own execution facts."""
         from types import SimpleNamespace
         decision = SimpleNamespace(
             decision       = SimpleNamespace(value="ALLOW"),
@@ -408,6 +408,8 @@ class TestPerMessageAuditEvidence:
             confidence     = 1.0,
             layer_scores   = None,
             latency_ms     = latency_ms,
+            detection_mode = mode,
+            llm_invoked    = llm_invoked,
         )
         incoming = SimpleNamespace(trace_id=f"trace-{latency_ms}")
         return (incoming, SimpleNamespace(decision=decision))
@@ -443,3 +445,45 @@ class TestPerMessageAuditEvidence:
             "every row reported the same latency; a request-level total is "
             "being copied onto each message row again"
         )
+
+
+    def test_fast_mode_is_recorded_as_fast_without_the_llm(self):
+        from api.v1.endpoints.proxy import _segment_audit_rows
+
+        rows = _segment_audit_rows(
+            [self._segment(0)],
+            [self._scanned(5.0, mode="fast", llm_invoked=False)],
+        )
+        assert rows[0]["detection_mode"] == "fast"
+        assert rows[0]["llm_invoked"] is False
+
+    def test_full_mode_is_recorded_as_full_with_the_llm(self):
+        """
+        The regression: mode came from X-WrapSec-Mode and gated the LLM
+        detector, while the row said "fast" / False regardless. A full-mode
+        request ran the LLM detector and recorded that it had not.
+        """
+        from api.v1.endpoints.proxy import _segment_audit_rows
+
+        rows = _segment_audit_rows(
+            [self._segment(0)],
+            [self._scanned(5.0, mode="full", llm_invoked=True)],
+        )
+        assert rows[0]["detection_mode"] == "full", (
+            "a full-mode scan was recorded as fast"
+        )
+        assert rows[0]["llm_invoked"] is True, (
+            "the LLM detector ran and the row denies it"
+        )
+
+    def test_an_enum_mode_is_stored_as_its_string_value(self):
+        """The column is text; DetectionMode reaches here as an enum."""
+        from types import SimpleNamespace
+
+        from api.v1.endpoints.proxy import _segment_audit_rows
+
+        rows = _segment_audit_rows(
+            [self._segment(0)],
+            [self._scanned(5.0, mode=SimpleNamespace(value="full"))],
+        )
+        assert rows[0]["detection_mode"] == "full"

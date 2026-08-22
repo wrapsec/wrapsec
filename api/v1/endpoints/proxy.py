@@ -367,6 +367,17 @@ def _segment_audit_rows(segments: list[MessageSegment], scanned: list) -> list[d
                 "llm":  scores.llm_score,
             } if scores else {},
             "guardrail_scores": {"pii": scores.pii_score} if scores else {},
+            # What actually ran for this message. These were literals ("fast",
+            # False) while the request's mode comes from X-WrapSec-Mode and
+            # decides whether the LLM detector runs -- so a full-mode request
+            # ran the LLM detector and then recorded that it had not. The hash
+            # chain makes a row tamper-evident; it cannot make it true.
+            "detection_mode":   (
+                decision.detection_mode.value
+                if hasattr(decision.detection_mode, "value")
+                else decision.detection_mode
+            ),
+            "llm_invoked":      decision.llm_invoked,
             # This message's OWN scan duration, not the request's. The fan-out
             # times each pipeline run separately, so writing the request total
             # onto every row made an N-message request contribute N samples of
@@ -663,9 +674,12 @@ async def _log_interaction(
                 "risk_score":            row["risk_score"],
                 "threats":               row["threats"],
                 "input_hash":            "proxy:" + row_trace,
-                "detection_mode":        "fast",
+                # Per-message when the caller supplied per-message evidence.
+                # The aggregate fallback keeps the previous defaults, which is
+                # the only path with no decision object to read them from.
+                "detection_mode":        row.get("detection_mode", "fast"),
                 "execution_mode":        "proxy",
-                "llm_invoked":           False,
+                "llm_invoked":           row.get("llm_invoked", False),
                 # Per-message when the caller supplied per-message evidence;
                 # the aggregate fallback below has only the request total.
                 "latency_ms":            float(row.get("latency_ms", total_latency_ms)),
