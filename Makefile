@@ -28,6 +28,12 @@ test-integration:
 # the stack and its data -- even if the tests fail. The development stack and
 # its database are never touched.
 #
+# The images are REBUILT every run. Everything else here is thrown away, which
+# made the images easy to overlook: `up -d` alone builds only when no image
+# exists, so a run reused whatever was built last and the tier silently
+# reported on stale code. That fails in the dangerous direction -- an old image
+# passes while the working tree is broken.
+#
 # Requires the browser and its system libraries:
 #   cd dashboard && npx playwright install chromium chromium-headless-shell
 #   cd dashboard && sudo npx playwright install-deps chromium
@@ -37,7 +43,7 @@ test-e2e:
 	P="docker compose -p wrapsec-e2e -f $$R/infrastructure/docker/docker-compose.yml -f $$R/infrastructure/docker/docker-compose.e2e.yml"; \
 	trap "echo tearing down the ephemeral stack...; $$P down -v --remove-orphans || echo TEARDOWN FAILED -- remove wrapsec-e2e by hand" EXIT; \
 	echo "starting the ephemeral stack..."; \
-	$$P up -d postgres redis api dashboard; \
+	$$P up -d --build postgres redis api dashboard; \
 	echo "waiting for the api to report healthy..."; \
 	HEALTH="docker inspect --format {{.State.Health.Status}}"; \
 	for i in $$(seq 1 60); do \
