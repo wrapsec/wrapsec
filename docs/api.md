@@ -638,7 +638,9 @@ The `assessment` object is an always-present, self-contained security verdict - 
 | `MEDIUM` | 0.4 - 0.7 |
 | `LOW` | 0.0 - 0.4 |
 
-**`SYSTEM_ERROR` behaviour:** Returns `decision = ALLOW`, `confidence = 0.0`, `confidence_band = LOW`. Clients **must not** forward to LLM when `primary_reason = SYSTEM_ERROR`.
+**`SYSTEM_ERROR` behaviour is FAIL-CLOSED.** When a detector times out or raises, the request is REFUSED: `decision = BLOCK`, `risk_score = 1.0`, `primary_reason = SYSTEM_ERROR`, `confidence = 0.0`, `confidence_band = LOW`. A request that could not be inspected is never forwarded to an LLM.
+
+`SYSTEM_ERROR` is a `primary_reason`, never a `decision` value -- do not branch on a `SYSTEM_ERROR` decision, because there is none. Honouring `decision` is sufficient: it is already `BLOCK`. Use `primary_reason` to tell a refusal caused by a detector failure from one caused by content, since the two are indistinguishable from `decision` alone.
 
 **`risk_score = 0.0` does not mean safe.** Guardrails can BLOCK with `risk_score = 0.0`. Always check `decision`.
 
@@ -1367,9 +1369,11 @@ Aggregate statistics for a time range.
 | Severity | Condition |
 |---|---|
 | `CRITICAL` | `BLOCK` + (`risk_score >= 0.9` OR `primary_reason` ends with `_GUARDRAIL_BLOCK`) |
-| `HIGH` | `BLOCK` + `risk_score < 0.9`, OR `primary_reason = SYSTEM_ERROR` |
+| `HIGH` | `BLOCK` + `risk_score < 0.9` |
 | `MEDIUM` | `SANITIZE` (any reason) |
 | `LOW` | `ALLOW` |
+
+A `SYSTEM_ERROR` refusal is **`CRITICAL`**, not `HIGH`: fail-closed forces `risk_score = 1.0`, which meets the CRITICAL condition above. Alert rules that expect detector failures at `HIGH` will not match them.
 
 Severity is computed at write time and stored in `audit_logs.severity`. Never returned in scan responses - audit and SIEM use only.
 
@@ -2251,12 +2255,12 @@ Per API key. Falls back to per-IP if no key is present. Redis sliding window.
 
 ## Failure Modes
 
-**All detectors fail (SYSTEM_ERROR - fail open):**
+**All detectors fail (SYSTEM_ERROR - fail CLOSED):**
 ```json
 {
-  "decision":             "ALLOW",
+  "decision":             "BLOCK",
   "decision_version":     "v1.0",
-  "risk_score":           0.0,
+  "risk_score":           1.0,
   "primary_reason":       "SYSTEM_ERROR",
   "confidence":           0.0,
   "confidence_band":      "LOW",
@@ -2265,7 +2269,13 @@ Per API key. Falls back to per-IP if no key is present. Redis sliding window.
 }
 ```
 
-Clients **must not** forward to LLM when `primary_reason = SYSTEM_ERROR`.
+The request is refused because it could not be inspected, not because anything was
+found in it. `threats` is empty and `confidence` is 0.0 for that reason, while
+`risk_score` is 1.0 because the decision is forced rather than scored.
+
+To the caller this is indistinguishable from a content block on `decision` alone;
+`primary_reason` is what separates them. Alert on it -- a rising rate means
+detection is degraded, not that attacks are increasing.
 
 **SYSTEM_ERROR monitoring thresholds:**
 
@@ -2290,9 +2300,10 @@ confidence   = agreement between active detectors (0.0-1.0)
                Single-detector paths may yield confidence=1.0 - expected
 
 SYSTEM_ERROR = detectors failed (exception, timeout, internal error)
-               Always returns decision=ALLOW
+               FAIL-CLOSED: always returns decision=BLOCK, risk_score=1.0
                Always returns confidence=0.0, confidence_band=LOW
-               Client must treat as failure - never forward to LLM
+               A primary_reason, never a decision value
+               Audit severity is CRITICAL (the forced risk_score is 1.0)
 ```
 
 ---
