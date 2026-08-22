@@ -41,17 +41,23 @@ export default defineConfig({
       // RATCHETING floor: set just under the current baseline so coverage cannot
       // regress, and RAISE these as more of the page/component layer is tested.
       // Never lower them to make a drop pass (same discipline as the backend's
-      // coverage fail_under). NOT a release gate -- the plan's 80/75 targets are
-      // aspirational, not required. Raised from the 13/12/10/13 introduction floor
-      // to the measured baseline after the security-critical + primary-journey
-      // pass (auth lifecycle, key management, auto-logout): 20.66/18.35/18.89/21.80.
-      // The remaining data/analytics/settings pages are DEFERRED coverage (lower
-      // security priority) -- see docs/internal/wrapsec_frontend_testing_plan.md.
+      // coverage fail_under). It is a regression guard, not a release gate.
+      // Raised from 13/12/10/13, then 20/18/18/21, against a measured
+      // 25.02/22.23/22.56/25.91.
+      //
+      // Each floor keeps roughly a point of slack rather than sitting flush
+      // against the measurement. Statements is the reason: 0.02 of a percent is
+      // less than ONE of the 3592 statements, so a flush floor would fail on any
+      // change that adds an uncovered line, and a floor that fails on ordinary
+      // work gets lowered -- which is the one thing this must not invite.
+      //
+      // The data, analytics and settings pages remain the largely uncovered
+      // part, deliberately behind the security-critical and primary-journey work.
       thresholds: {
-        statements: 20,
-        branches:   18,
-        functions:  18,
-        lines:      21,
+        statements: 24,
+        branches:   22,
+        functions:  22,
+        lines:      25,
       },
     },
   },
