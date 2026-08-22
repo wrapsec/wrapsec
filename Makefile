@@ -6,20 +6,29 @@ run:
 test:
 	pytest tests/unit tests/integration -v
 
-# Integration tests against a DISPOSABLE Postgres. Spins an ephemeral
-# postgres:16-alpine on port 55432 (clear of the compose stack on 5432),
-# points both the app (DATABASE_URL) and the tests (WRAPSEC_TEST_PG_URL)
-# at it so auth and data share one throwaway DB, then removes it -- even
-# if the tests fail. The dev compose DB is never touched. Requires Docker;
-# without it the integration tier skips gracefully under plain `make test`.
+# Integration tests against a DISPOSABLE Postgres AND Redis. Spins an
+# ephemeral postgres:16-alpine on port 55432 and redis:7-alpine on 56379
+# (both clear of the compose stack on 5432/6379), points the app and the
+# tests at them, then removes both -- even if the tests fail.
+#
+# Redis is provisioned for the same reason Postgres is. Left to the
+# environment it resolves to the development instance, so a test run wrote
+# its rate-limit counters, caches and idempotency keys into the database a
+# developer is using, and the tier passed or failed depending on what was
+# already in there. Both stores are now throwaway, which is also what the CI
+# job provides. Requires Docker; without it the integration tier skips
+# gracefully under plain `make test`.
 test-integration:
 	@bash -c 'set -e; \
+	cleanup() { docker rm -f $$CID $$RID >/dev/null 2>&1 || true; }; \
+	trap cleanup EXIT; \
 	CID=$$(docker run --rm -d -e POSTGRES_USER=wrapsec -e POSTGRES_PASSWORD=wrapsec -e POSTGRES_DB=wrapsec_test -p 55432:5432 postgres:16-alpine); \
-	trap "docker rm -f $$CID >/dev/null 2>&1 || true" EXIT; \
-	echo "waiting for disposable postgres..."; \
+	RID=$$(docker run --rm -d -p 56379:6379 redis:7-alpine); \
+	echo "waiting for the disposable postgres and redis..."; \
 	for i in $$(seq 1 30); do docker exec $$CID pg_isready -U wrapsec -d wrapsec_test >/dev/null 2>&1 && break; sleep 1; done; \
+	for i in $$(seq 1 30); do docker exec $$RID redis-cli ping >/dev/null 2>&1 && break; sleep 1; done; \
 	URL=postgresql+asyncpg://wrapsec:wrapsec@localhost:55432/wrapsec_test; \
-	DATABASE_URL=$$URL WRAPSEC_TEST_PG_URL=$$URL TESTING=true pytest tests/integration -v'
+	DATABASE_URL=$$URL WRAPSEC_TEST_PG_URL=$$URL REDIS_URL=redis://localhost:56379/0 TESTING=true pytest tests/integration -v'
 
 # End-to-end browser journeys against an EPHEMERAL stack. Brings up postgres,
 # redis, api, and dashboard under their own compose project (separate
@@ -64,14 +73,19 @@ test-e2e:
 	( cd dashboard && PLAYWRIGHT_BASE_URL=http://localhost:3100 npx playwright test )'
 
 # Combined unit + integration coverage over the server code (config in .coveragerc).
-# Spins a disposable PostgreSQL so the integration tier runs. Writes an HTML report.
+# Spins a disposable PostgreSQL and Redis so the integration tier runs against
+# throwaway stores rather than the development ones. Writes an HTML report.
+# `coverage report` enforces fail_under, so this is the local form of the gate.
 coverage:
 	@bash -c 'set -e; \
+	cleanup() { docker rm -f $$CID $$RID >/dev/null 2>&1 || true; }; \
+	trap cleanup EXIT; \
 	CID=$$(docker run --rm -d -e POSTGRES_USER=wrapsec -e POSTGRES_PASSWORD=wrapsec -e POSTGRES_DB=wrapsec_test -p 55432:5432 postgres:16-alpine); \
-	trap "docker rm -f $$CID >/dev/null 2>&1 || true" EXIT; \
+	RID=$$(docker run --rm -d -p 56379:6379 redis:7-alpine); \
 	for i in $$(seq 1 30); do docker exec $$CID pg_isready -U wrapsec -d wrapsec_test >/dev/null 2>&1 && break; sleep 1; done; \
+	for i in $$(seq 1 30); do docker exec $$RID redis-cli ping >/dev/null 2>&1 && break; sleep 1; done; \
 	URL=postgresql+asyncpg://wrapsec:wrapsec@localhost:55432/wrapsec_test; \
-	DATABASE_URL=$$URL WRAPSEC_TEST_PG_URL=$$URL TESTING=true coverage run -m pytest tests/unit tests/integration -q; \
+	DATABASE_URL=$$URL WRAPSEC_TEST_PG_URL=$$URL REDIS_URL=redis://localhost:56379/0 TESTING=true coverage run -m pytest tests/unit tests/integration -q; \
 	coverage html; \
 	coverage report'
 
