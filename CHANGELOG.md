@@ -92,6 +92,17 @@ observe, and one is a breaking contract change; they are listed first.
   scanning and its rejection, and that N messages cost N rate-limit units. The
   scan-all header was previously described as scanning all user messages, which
   understated it in one direction and overstated it in another.
+- **Corrects two audit-chain claims that were never true.** The README stated
+  that a database trigger rejects `UPDATE` and `DELETE` on `audit_logs`, and that
+  chain verification "is a single pass and can run offline against a database
+  dump". The trigger covers `UPDATE` only -- `DELETE` is permitted because
+  per-tenant retention needs it -- and no verifier ships in the product. The
+  same overclaim appears in the 1.2.0 notes below, which are annotated rather
+  than rewritten.
+  What is true today: the chain detects an edited row and a row removed from the
+  middle. Truncating the newest rows leaves the remainder internally consistent
+  and is NOT detectable, and walking the chain is currently the operator's own
+  to do. Both gaps are tracked as an audit-integrity workstream.
 
 ## [1.9.1] - 2026-08-20
 
@@ -966,6 +977,11 @@ admin endpoints remain wire-compatible with 1.0.x and 1.1.x clients.
   access and leaves obvious gaps in the chain. Chain verification is a
   single pass over the table and can run offline against a database
   dump.
+  > **Correction (2026-08-22):** two claims in this entry were never accurate.
+  > The trigger covers `UPDATE` only; `DELETE` is permitted, because per-tenant
+  > retention requires it, so truncating the newest rows is not detectable. And
+  > no verifier shipped -- "chain verification is a single pass" described an
+  > intended capability, not one in the build. See the Unreleased notes.
 - **Fourth user role: AUDITOR.** Read-only role scoped for SOC 2 and
   ISO 27001 audit work. Carries `audit:read`, `dashboard:read`,
   `settings:read`, and `keys:read` -- broader than `VIEWER` so a
@@ -1012,6 +1028,9 @@ admin endpoints remain wire-compatible with 1.0.x and 1.1.x clients.
   `UPDATE`/`DELETE` trigger on `audit_logs` means tampering cannot
   succeed silently even if application-layer controls are bypassed.
   Chain verification detects any gap.
+  > **Correction (2026-08-22):** the trigger covers `UPDATE` only, and no
+  > verifier shipped. An edited row and a row removed from the middle are
+  > detectable; truncation of the newest rows is not.
 
 ### Migration notes
 

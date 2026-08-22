@@ -430,8 +430,10 @@ with its decision and risk score. The dashboard renders the same data as a timel
 - **Correlation metadata only.** They are never an authorization input - supplying
   someone else's `session_id` grants nothing. Tenant isolation is enforced from the
   API key or token, not from these fields.
-- **Do not put PII in them.** They are stored in the audit trail as given, and the
-  audit trail is immutable.
+- **Do not put PII in them.** They are stored in the audit trail as given, and a
+  stored row cannot be edited: the database rejects `UPDATE` on chained audit
+  rows, so there is no path to redact a value after the fact. Rows age out
+  through per-tenant retention and not before.
 
 `input_source` (content provenance, e.g. `retrieved_document`) is an API-level field
 and is **not** exposed as a CLI flag. See `docs/api.md`.

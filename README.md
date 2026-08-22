@@ -316,7 +316,14 @@ This allows deployment in regulated environments where storing raw user input is
 
 ## Audit Trail
 
-Every scan, proxy call, and administrative action is recorded to a tenant-scoped audit log. Rows are tamper-evident: each carries a SHA-256 hash computed over its payload and chained to the previous row's hash, and a database trigger rejects `UPDATE` and `DELETE` on the table. Tampering therefore breaks the chain and leaves a visible gap. Chain verification is a single pass and can run offline against a database dump.
+Every scan, proxy call, and administrative action is recorded to a tenant-scoped audit log. Rows are tamper-evident: each carries a SHA-256 hash computed over its payload and chained to the previous row's hash, and a database trigger rejects `UPDATE` on chained rows. Modifying a row, or removing one from the middle of the chain, breaks the link and is detectable.
+
+Two limits are worth stating plainly rather than leaving to be discovered:
+
+- **`DELETE` is not blocked, and truncation of the newest rows is not currently detectable.** Deletion is permitted because per-tenant retention needs it. Removing rows from the *end* of a chain leaves everything that remains internally consistent, so there is nothing to notice.
+- **No verifier ships yet.** The hashes needed to check a chain are in the table, and the scheme is documented, but walking it is currently your own to do. There is no `wrapsec audit verify`.
+
+Both are tracked as an audit-integrity workstream. Until it lands, treat the chain as evidence that a stored row has not been *edited*, not as proof that the log is *complete*.
 
 
 ## Webhooks and SIEM
