@@ -17,7 +17,6 @@ Severity levels:
                 (guardrail blocks identified by _GUARDRAIL_BLOCK suffix -
                 future guardrails like toxicity are automatically covered)
     HIGH      - Detection-based block with lower confidence
-                OR SYSTEM_ERROR (ops attention required)
     MEDIUM    - Any sanitization (threat detected but mitigated)
     LOW       - Clean input allowed through
 
@@ -57,8 +56,15 @@ def compute_severity(
           risk_score, because risk_score is always 0.0 on guardrail paths.
           Guardrail blocks are identified by the _GUARDRAIL_BLOCK suffix,
           which covers all current and future guardrail types automatically.
-        - SYSTEM_ERROR returns HIGH - not CRITICAL (no confirmed threat)
-          but requires immediate ops attention.
+        - SYSTEM_ERROR lands in CRITICAL, not HIGH. The intent was HIGH
+          (a detector failure is not a confirmed threat), but the fail-closed
+          path pairs SYSTEM_ERROR with risk_score=1.0, which meets the
+          CRITICAL_RISK_THRESHOLD check above and returns before the
+          SYSTEM_ERROR branch below is reached. Documented rather than
+          "fixed": changing it would move live alerting, and CRITICAL is
+          defensible for a request refused because it could not be inspected.
+          Anything keying on severity should know detector failures arrive
+          as CRITICAL.
         - risk_score = 0.0 does NOT mean safe - always check decision +
           primary_reason per core_concepts.md.
     """
