@@ -17,6 +17,12 @@ export default defineConfig({
     // Tests live under tests/{unit,integration,e2e}; source dirs stay test-free.
     include:     ["tests/**/*.{test,spec}.{ts,tsx}"],
     exclude:     ["node_modules/**", ".next/**", "tests/e2e/**"],
+    // The default 5s is too tight for the tests that drive a form through
+    // simulated typing: the slowest sits near 2.2s unloaded, and running the
+    // suite in parallel on a busy machine pushed one past the limit. That is a
+    // timing failure reported as a test failure, which is worse than useless.
+    // A hung test still fails, just later.
+    testTimeout: 15000,
     coverage: {
       provider:  "v8",
       reporter:  ["text", "html"],
