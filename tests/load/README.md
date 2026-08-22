@@ -5,12 +5,21 @@
 ```
 tests/load/
   config.py                  Shared config - keys, thresholds, prompts
-  locustfile.py              All load test scenarios (Locust)
+  locustfile.py              Load test scenarios (Locust)
+  locustfile-b.py            Second scenario set; same invocation pattern
+  scan_all_load.py           Scan-All cost + audit-lock contention (standalone)
+  monitor.py                 System metrics during a run (API, Postgres, Redis)
+  timing.py                  Per-request timing breakdown (total vs detection)
   security/
     security_tests.py        Security correctness tests (plain Python)
   results/                   CSV output from Locust runs (gitignored)
   README.md                  This file
 ```
+
+Two different kinds of tool live here. The Locust scenarios and the security
+tests drive a **running API over HTTP**. `scan_all_load.py` is standalone: it
+imports the gateway and runs the pipeline **in process**, so it needs a database
+but no server.
 
 ---
 
@@ -68,7 +77,9 @@ cd /path/to/wrapsec
 python tests/load/security/security_tests.py
 ```
 
-Expected: 20/20 passed -- ALL GREEN
+Every check must pass. The script prints a per-check pass/fail list and a total;
+any failure is a correctness bug, not a tuning matter, and blocks the load runs
+below.
 
 Tests cover:
 - Cross-department data isolation (A)
@@ -174,6 +185,74 @@ locust -f tests/load/locustfile.py StressUser \
 ```
 
 No pass/fail - record the RPS where errors start. This is your capacity ceiling.
+
+---
+
+## Scan-All cost and audit-lock contention
+
+`scan_all_load.py` answers a different question from the Locust profiles: what
+one Scan-All request costs, and whether `MAX_SCAN_ALL_MESSAGES` is set sanely.
+It runs the pipeline in process, so it needs a Postgres with the schema applied
+and **no running API**.
+
+```bash
+# a throwaway Postgres, migrated
+DATABASE_URL=postgresql+asyncpg://wrapsec:wrapsec@localhost:55433/wrapsec_load \
+  alembic upgrade head
+
+# the build almost everyone runs
+DATABASE_URL=... python tests/load/scan_all_load.py \
+  --messages 10 --concurrency 1,4,8 --requests 8 --no-transformer
+
+# the optional build, if Tier 2 is installed
+DATABASE_URL=... python tests/load/scan_all_load.py \
+  --messages 10 --concurrency 1,4,8 --requests 8
+```
+
+Options: `--messages` (eligible messages per request), `--concurrency`
+(simultaneous requests from ONE tenant), `--requests` (requests per concurrency
+level), `--no-transformer`.
+
+**Measure the build you actually run.** The Tier-2 transformer ships only in the
+optional build and dominates this measurement: with it installed the detectors
+contend for CPU and time out, and detection is fail-closed, so each timeout
+becomes a BLOCK the caller cannot distinguish from a content block. Measuring a
+development machine that happens to have it installed reports a cost most
+deployments never pay. `--no-transformer` blocks the import before the gateway
+loads, reproducing a default deployment.
+
+**Read the two lock columns first.** The audit chain is per tenant and each row
+hashes the previous one, so writes serialise behind a per-tenant advisory lock:
+
+- `hold` -- how long one request keeps every other request in that tenant out.
+  This is what grows with the message count.
+- `wait` -- how long a request sat queued behind the ones ahead of it. This is
+  what a caller experiences as a stall somebody else caused.
+
+One request's hold is every other request's wait, and a mean latency hides both.
+
+**The outcome columns matter more than the error column.** Every scanned message
+is classified as served, blocked on content, or blocked by detector failure. A
+run in which most messages were refused because a detector ran out of time has
+zero transport errors, so counting errors alone reports it as a clean run. The
+tool also counts timeouts by the detector that raised them.
+
+It writes real audit rows under a synthetic tenant id and prints the `DELETE`
+statement to remove them. Use a throwaway database and the point is moot.
+
+---
+
+## Monitoring a run
+
+```bash
+python tests/load/monitor.py     # API CPU/memory/fds, Postgres, Redis, system
+python tests/load/timing.py      # total round trip vs detection time per request
+```
+
+`monitor.py` samples the API process and the Postgres and Redis containers
+during a load run. `timing.py` splits a request into total round trip versus the
+pipeline time the API reports, which is how you tell a slow detector from a slow
+network or a queue.
 
 ---
 
