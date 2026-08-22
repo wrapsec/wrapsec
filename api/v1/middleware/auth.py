@@ -631,6 +631,18 @@ class AuthMiddleware(BaseHTTPMiddleware):
 
         request.state.principal_type = "api_key"
         request.state.key_id         = "key:admin"
+        # Deliberately unrestricted, and deliberately not a gap left open.
+        #
+        # A source-network list lives on an `api_keys` row. This credential has
+        # no row -- it is matched against a configured secret -- so there is
+        # nothing to attach one to and nothing to enforce. The exemption is a
+        # consequence of what it is, not a decision to exempt it.
+        #
+        # It is also the most privileged credential in the system, so the
+        # consequence is worth stating rather than leaving to be discovered:
+        # this one cannot be confined to a network by the application, and has
+        # to be confined by the network itself -- a firewall or reverse proxy
+        # in front of the API.
         request.state.ip_allowlist   = None
         request.state.key_name       = "Admin Key"
         request.state.key_type       = "live"
