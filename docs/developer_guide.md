@@ -1000,7 +1000,7 @@ These rules must be followed in all new code. Violation creates real production 
 | `SECRET_KEY` | - | HMAC secret for JWT signing. **Startup guard rejects the example placeholder** - server will not start until set to a real value. Generate: `python -c "import secrets; print(secrets.token_hex(32))"` |
 | `ACCESS_TOKEN_EXPIRE_MINUTES` | `30` | JWT access token lifetime |
 | `REFRESH_TOKEN_EXPIRE_DAYS` | `30` | Refresh token lifetime |
-| `ADMIN_API_KEY` | - | Master admin API key. **Startup guard rejects the example placeholder** - server will not start until set to a real value. Generate: `python -c "import secrets; print('wsk_admin_' + secrets.token_hex(24))"` |
+| `ADMIN_API_KEY` | - | Master admin API key. **Startup guard rejects the example placeholder** - server will not start until set to a real value. Generate: `python -c "import secrets; print('wsk_admin_' + secrets.token_hex(24))"`. **Not subject to a source-network restriction**: those live on an `api_keys` row and this credential has none, so confine it at the network layer instead |
 | `ADMIN_EMAIL` | *(unset)* | Optional - if set alongside `ADMIN_PASSWORD`, bootstrap creates first admin on startup. Leave unset to use the dashboard `/setup` page instead |
 | `ADMIN_PASSWORD` | *(unset)* | Optional - see `ADMIN_EMAIL`. Must meet password strength requirements if set |
 | `TRUSTED_PROXY_IPS` | `""` | Comma-separated IPs trusted to set `X-Forwarded-For` (e.g. `127.0.0.1,10.0.0.1`) |
