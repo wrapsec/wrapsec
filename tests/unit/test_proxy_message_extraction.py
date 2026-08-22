@@ -487,3 +487,35 @@ class TestPerMessageAuditEvidence:
             [self._scanned(5.0, mode=SimpleNamespace(value="full"))],
         )
         assert rows[0]["detection_mode"] == "full"
+
+    def test_more_segments_than_results_raises(self):
+        """
+        Truncation is the wrong failure on the audit path: the tail of the
+        conversation would simply have no row, and nothing would say so.
+        """
+        from api.v1.endpoints.proxy import _segment_audit_rows
+
+        with pytest.raises(ValueError):
+            _segment_audit_rows(
+                [self._segment(0), self._segment(1), self._segment(2)],
+                [self._scanned(1.0), self._scanned(2.0)],
+            )
+
+    def test_more_results_than_segments_raises(self):
+        """The mirror case: a result with no message to attribute it to."""
+        from api.v1.endpoints.proxy import _segment_audit_rows
+
+        with pytest.raises(ValueError):
+            _segment_audit_rows(
+                [self._segment(0)],
+                [self._scanned(1.0), self._scanned(2.0)],
+            )
+
+    def test_equal_lengths_still_pass(self):
+        from api.v1.endpoints.proxy import _segment_audit_rows
+
+        rows = _segment_audit_rows(
+            [self._segment(0), self._segment(1)],
+            [self._scanned(1.0), self._scanned(2.0)],
+        )
+        assert len(rows) == 2

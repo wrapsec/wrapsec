@@ -350,7 +350,11 @@ def _segment_audit_rows(segments: list[MessageSegment], scanned: list) -> list[d
     row carries the id derived from the request trace and the message position.
     """
     rows = []
-    for segment, (incoming, result) in zip(segments, scanned):
+    # strict: a length divergence means the scan returned a different number of
+    # results than there were messages, so the rows would silently describe the
+    # wrong messages from the point of the mismatch and the tail would vanish.
+    # On the audit path, truncating is the wrong failure -- raise instead.
+    for segment, (incoming, result) in zip(segments, scanned, strict=True):
         decision = result.decision
         scores   = decision.layer_scores
         rows.append({
