@@ -59,6 +59,83 @@ class AuditRepository(BaseRepository):
         await self.commit()
         return record
 
+    async def create_many(self, rows: list[dict]) -> list[AuditLogModel]:
+        """
+        Write several audit rows as ONE unit: every row commits, or none does.
+
+        `create` commits per row, which is correct for a single write but wrong
+        for a set. A Scan-All request produces one row per scanned message, and
+        committing them individually meant a failure partway through left the
+        earlier rows durably persisted -- an audit set that is silently short,
+        with no gap marker, indistinguishable from a request that scanned fewer
+        messages. A partial record that reads as complete is worse than a
+        recorded failure.
+
+        On any error the whole batch is rolled back and the exception re-raised
+        so the caller can record the loss. The caller decides what that means
+        for the request; the existing policy is that an audit failure never
+        changes the security decision or the caller's response.
+
+        The chain is carried forward IN MEMORY: the first row reads the tenant's
+        last committed hash, and each subsequent row hashes the one before it.
+        That is the same chain `create` builds, without re-querying per row, and
+        the advisory lock is held across the whole batch rather than taken and
+        released N times -- so no other writer can interleave a row into the
+        middle of one request's evidence.
+
+        All rows must belong to the same tenant: the lock and the chain are both
+        per tenant, and a mixed batch has no single correct ordering.
+        """
+        if not rows:
+            return []
+
+        tenant_ids = {row.get("tenant_id") for row in rows}
+        if len(tenant_ids) > 1:
+            raise ValueError(
+                "create_many writes rows for one tenant; got "
+                f"{len(tenant_ids)} distinct tenant_id values"
+            )
+        tenant_id = next(iter(tenant_ids))
+
+        try:
+            prev_hash = None
+            if tenant_id:
+                # Held until this batch commits, so the rows below cannot be
+                # interleaved with another request's.
+                if self.session.bind.dialect.name == "postgresql":
+                    await self.session.execute(
+                        text("SELECT pg_advisory_xact_lock(hashtext(:tid))"),
+                        {"tid": tenant_id},
+                    )
+                prev_hash = await self.session.scalar(
+                    select(AuditLogModel.record_hash)
+                    .where(
+                        AuditLogModel.tenant_id   == tenant_id,
+                        AuditLogModel.record_hash.is_not(None),
+                    )
+                    .order_by(AuditLogModel.created_at.desc())
+                    .limit(1)
+                )
+
+            records = []
+            for data in rows:
+                data.setdefault("created_at", utc_now())
+                if tenant_id:
+                    data["prev_hash"]   = prev_hash
+                    data["record_hash"] = compute_record_hash(data, prev_hash)
+                    prev_hash           = data["record_hash"]
+                # Rows without tenant_id stay unchained, as in `create`.
+                record = AuditLogModel(**data)
+                self.session.add(record)
+                records.append(record)
+
+            await self.commit()
+            return records
+        except Exception:
+            # Leave nothing behind. A short audit set is not evidence.
+            await self.rollback()
+            raise
+
     async def get_by_trace_id(self, trace_id: str) -> AuditLogModel | None:
         result = await self.session.execute(
             select(AuditLogModel).where(AuditLogModel.trace_id == trace_id)

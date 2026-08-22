@@ -69,6 +69,7 @@ from engine.proxy.router import (
 from errors.catalog import ErrorCode
 from errors.response import error_response as _catalog_error_response
 from observability.metrics import (
+    record_audit_batch_failed,
     record_proxy_rejection,
     record_proxy_request,
     record_request,
@@ -643,7 +644,13 @@ async def _log_interaction(
             created_at            = utc_now(),
         )
         db.add(interaction)
-        await db.flush()   # flush to get interaction.id before audit_logs insert
+        # Commit the aggregate before the per-message rows. They are written as
+        # their own unit and roll back together on failure; sharing one
+        # transaction would mean a per-message failure also discarded the
+        # request-level record, losing every trace of the request rather than
+        # the message detail. Also assigns interaction.id for the rows below.
+        await db.commit()
+        await db.refresh(interaction)
 
         # 2. Insert audit_logs rows, all linked to the interaction above.
         #
@@ -665,6 +672,7 @@ async def _log_interaction(
             "guardrail_scores": guardrail_scores or {},
         }]
 
+        audit_rows: list[dict] = []
         for row in rows:
             row_trace = row["trace_id"]
             row_conf  = row["confidence"]
@@ -705,7 +713,24 @@ async def _log_interaction(
             }
             if "input_source" in row:
                 audit_row["input_source"] = row["input_source"]
-            await repo.create(audit_row)
+            audit_rows.append(audit_row)
+
+        # One unit: every per-message row lands, or none does. Writing them one
+        # at a time committed as it went, so a failure partway through left the
+        # earlier rows persisted -- an audit set silently shorter than the
+        # request it describes, with nothing marking the gap.
+        try:
+            await repo.create_many(audit_rows)
+        except Exception as exc:
+            # Distinct from the outer handler: the interaction row above is
+            # already committed, so what was lost is the per-message evidence
+            # specifically, and how much of it is known.
+            logger.error(
+                "Per-message audit write failed, no rows persisted "
+                "trace_id=%s rows=%d tenant_id=%s: %s",
+                trace_id, len(audit_rows), tenant_id, exc,
+            )
+            record_audit_batch_failed(len(audit_rows))
 
     except Exception as exc:
         logger.error(f"Failed to log proxy interaction trace_id={trace_id}: {exc}")

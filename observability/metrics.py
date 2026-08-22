@@ -71,6 +71,17 @@ API_KEY_IP_DENIED = Counter(
 )
 
 
+AUDIT_BATCH_FAILED = Counter(
+    "wrapsec_audit_batch_failed_total",
+    "Per-message audit sets that could not be written, in rows lost",
+    # Counts ROWS, not failures: what matters is how much evidence is missing,
+    # and one failed set can be worth ten rows. The request itself still
+    # succeeded -- an audit failure never changes a security decision -- so
+    # this is the only place a lost audit set is visible. A rising value means
+    # the decision trail is incomplete while everything else looks healthy.
+)
+
+
 PROXY_REJECTED = Counter(
     "wrapsec_proxy_rejected_total",
     "Proxy requests refused before any inspection, by reason",
@@ -235,6 +246,17 @@ _REJECTION_REASONS = frozenset({
     "invalid_messages",
     "too_many_messages",
 })
+
+
+def record_audit_batch_failed(rows: int) -> None:
+    """
+    Count the per-message audit rows lost when a batch could not be written.
+
+    The set is written all-or-nothing, so a failure loses every row in it. The
+    caller's request is unaffected by design, which is exactly why this needs a
+    counter: nothing else in the system reports that the trail is short.
+    """
+    AUDIT_BATCH_FAILED.inc(rows)
 
 
 def record_proxy_rejection(reason: str) -> None:

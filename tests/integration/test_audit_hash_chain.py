@@ -12,6 +12,7 @@ that the write path stitches rows together correctly.
 """
 from __future__ import annotations
 
+import itertools
 from datetime import datetime, timezone
 
 import pytest
@@ -157,3 +158,114 @@ class TestPreV1_2LegacyRows:
         # off a NULL record_hash (which would corrupt every downstream hash).
         assert first_v1_2.prev_hash is None
         assert first_v1_2.record_hash is not None
+
+
+class TestBatchAtomicity:
+    """
+    A per-message audit set is written all-or-nothing.
+
+    Scan-All turns one request into N rows. Written one at a time they commit as
+    they go, so a failure partway through leaves the earlier rows persisted: an
+    audit set silently shorter than the request it describes, with no gap marker
+    and nothing distinguishing it from a request that scanned fewer messages. A
+    partial record that reads as complete is worse than a recorded failure.
+    """
+
+    @pytest.mark.asyncio
+    async def test_a_whole_batch_commits_and_chains(self, test_db):
+        from sqlalchemy import select
+
+        repo   = AuditRepository(test_db)
+        tenant = "11111111-1111-1111-1111-111111111111"
+
+        await repo.create_many([_row(f"batch-{i}", tenant, offset_sec=i) for i in range(5)])
+
+        rows = (await test_db.execute(
+            select(AuditLogModel)
+            .where(AuditLogModel.tenant_id == tenant)
+            .order_by(AuditLogModel.created_at)
+        )).scalars().all()
+
+        assert len(rows) == 5
+        # Each row hashes the one before it, first row opens the chain.
+        assert rows[0].prev_hash is None
+        for earlier, later in itertools.pairwise(rows):
+            assert later.prev_hash == earlier.record_hash, (
+                "the batch did not stitch its rows together"
+            )
+
+    @pytest.mark.asyncio
+    async def test_a_failure_partway_leaves_nothing_behind(self, test_db):
+        """
+        The regression this exists for: rows 1-4 durably committed while row 5
+        failed, and the caller none the wiser.
+        """
+        from sqlalchemy import select
+
+        repo   = AuditRepository(test_db)
+        tenant = "22222222-2222-2222-2222-222222222222"
+
+        rows = [_row(f"partial-{i}", tenant, offset_sec=i) for i in range(5)]
+        rows[3]["no_such_column"] = "boom"      # fails after rows 0-2 are staged
+
+        with pytest.raises(TypeError):
+            await repo.create_many(rows)
+
+        survivors = (await test_db.execute(
+            select(AuditLogModel).where(AuditLogModel.tenant_id == tenant)
+        )).scalars().all()
+
+        assert survivors == [], (
+            f"{len(survivors)} row(s) survived a failed batch; a short audit set "
+            f"is not evidence"
+        )
+
+    @pytest.mark.asyncio
+    async def test_a_failed_batch_does_not_break_the_chain_for_later_writes(self, test_db):
+        """
+        A rolled-back batch must leave the tenant's chain exactly where it was,
+        so the next write still links to the last good row.
+        """
+        from sqlalchemy import select
+
+        repo   = AuditRepository(test_db)
+        tenant = "33333333-3333-3333-3333-333333333333"
+
+        good = await repo.create_many([_row("chain-a", tenant, offset_sec=0)])
+        anchor_hash = good[0].record_hash
+
+        doomed = [_row("chain-x", tenant, offset_sec=1)]
+        doomed[0]["no_such_column"] = "boom"
+        with pytest.raises(TypeError):
+            await repo.create_many(doomed)
+
+        await repo.create_many([_row("chain-b", tenant, offset_sec=2)])
+
+        rows = (await test_db.execute(
+            select(AuditLogModel)
+            .where(AuditLogModel.tenant_id == tenant)
+            .order_by(AuditLogModel.created_at)
+        )).scalars().all()
+
+        assert [r.trace_id for r in rows] == ["chain-a", "chain-b"]
+        assert rows[1].prev_hash == anchor_hash, (
+            "the write after a failed batch did not link to the last good row"
+        )
+
+    @pytest.mark.asyncio
+    async def test_a_mixed_tenant_batch_is_refused(self, test_db):
+        """
+        The lock and the chain are both per tenant, so a mixed batch has no one
+        correct ordering. Refuse it rather than pick one.
+        """
+        repo = AuditRepository(test_db)
+        with pytest.raises(ValueError, match="one tenant"):
+            await repo.create_many([
+                _row("mixed-a", "44444444-4444-4444-4444-444444444444"),
+                _row("mixed-b", "55555555-5555-5555-5555-555555555555"),
+            ])
+
+    @pytest.mark.asyncio
+    async def test_an_empty_batch_is_a_no_op(self, test_db):
+        repo = AuditRepository(test_db)
+        assert await repo.create_many([]) == []

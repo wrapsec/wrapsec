@@ -159,3 +159,36 @@ class TestFailClosedIsDistinguishableInMetrics:
 
         assert self._blocked("SYSTEM_ERROR")  == before_fail + 2
         assert self._blocked("RULE_DETECTOR") == before_content + 1
+
+
+class TestAuditBatchFailureIsObservable:
+    """
+    A lost audit set has to be visible somewhere.
+
+    The request itself still succeeds -- an audit failure never changes a
+    security decision -- so nothing in the response, the logs a caller sees, or
+    the decision trail reports that evidence is missing. This counter is the
+    only signal, which is why it counts ROWS: one failed set can be worth ten.
+    """
+
+    @staticmethod
+    def _total() -> float:
+        from observability.metrics import AUDIT_BATCH_FAILED
+        return AUDIT_BATCH_FAILED._value.get()
+
+    def test_it_counts_rows_lost_not_failures(self):
+        from observability.metrics import record_audit_batch_failed
+
+        before = self._total()
+        record_audit_batch_failed(10)
+        assert self._total() == before + 10, (
+            "a ten-row set that was lost must count as ten rows, not one failure"
+        )
+
+    def test_repeated_failures_accumulate(self):
+        from observability.metrics import record_audit_batch_failed
+
+        before = self._total()
+        record_audit_batch_failed(3)
+        record_audit_batch_failed(4)
+        assert self._total() == before + 7
