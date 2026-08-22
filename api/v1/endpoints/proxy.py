@@ -652,9 +652,10 @@ async def _log_interaction(
         # their own unit and roll back together on failure; sharing one
         # transaction would mean a per-message failure also discarded the
         # request-level record, losing every trace of the request rather than
-        # the message detail. Also assigns interaction.id for the rows below.
+        # the message detail. The commit also assigns interaction.id, which the
+        # rows below carry -- the session is expire_on_commit=False, so it stays
+        # readable afterwards without a reload.
         await db.commit()
-        await db.refresh(interaction)
 
         # 2. Insert audit_logs rows, all linked to the interaction above.
         #

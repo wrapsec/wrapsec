@@ -329,15 +329,21 @@ async def test_scan_all_charges_one_rate_limit_unit_per_message(app):
 @pytest.mark.asyncio
 async def test_scan_all_writes_one_audit_row_per_message(app):
     """
-    Per-message evidence is retained, each row keyed by an id derived from the
-    request trace and the message position, because the trace column is unique.
+    The per-message audit contract, end to end.
+
+    Scan-All turns one request into N rows, and each row must describe ITS OWN
+    message. Anything request-level copied across every row stops being evidence
+    about a message: it becomes N duplicate samples of a request fact, which is
+    how audit_logs.latency_ms came to inflate avg_latency_ms on
+    GET /v1/audit/stats by the fan-out factor.
     """
     created = []
 
-    async def _capture(self, data):
-        created.append(data)
+    async def _capture(self, rows):
+        created.extend(rows)
+        return []
 
-    with patch("db.repositories.audit.AuditRepository.create", new=_capture):
+    with patch("db.repositories.audit.AuditRepository.create_many", new=_capture):
         resp = await _Harness(app).post(
             [
                 {"role": "user",      "content": "one"},
@@ -351,10 +357,40 @@ async def test_scan_all_writes_one_audit_row_per_message(app):
     trace = resp.headers["X-WrapSec-Trace-Id"]
 
     assert len(created) == 3
+
+    # -- identity: one row per message, keyed by position (trace_id is unique) --
     assert [row["trace_id"] for row in created] == [
         f"{trace}-0", f"{trace}-1", f"{trace}-2",
     ]
-    # each row keeps the trust source of the message it came from
+
+    # -- provenance: each row keeps the trust source of its own message --
     assert [row["input_source"] for row in created] == [
         "user_prompt", "external_content", "user_prompt",
     ]
+
+    for row in created:
+        # -- linkage: every row carries the aggregate interaction's id. The
+        #    value is None here only because this harness mocks the session, so
+        #    no INSERT runs to apply the model's Python-side uuid default; what
+        #    matters is that the field is wired onto every row.
+        assert "proxy_interaction_id" in row
+        # -- the decision and its evidence --
+        assert row["decision"] in {"ALLOW", "SANITIZE", "BLOCK"}
+        assert isinstance(row["risk_score"], (int, float))
+        assert row["primary_reason"]
+        assert row["execution_mode"] == "proxy"
+        # -- what actually ran, not a literal --
+        assert row["detection_mode"] == "fast"
+        assert row["llm_invoked"] is False
+        # -- this message's own cost --
+        assert isinstance(row["latency_ms"], float)
+        assert row["latency_ms"] > 0
+
+    # The regression itself: three rows must not all report one duration. The
+    # fan-out scans concurrently, so identical values to the 0.01ms would mean
+    # a request-level total is being copied onto each row again.
+    latencies = [row["latency_ms"] for row in created]
+    assert len(set(latencies)) > 1, (
+        f"all three rows reported the same latency {latencies[0]}; a "
+        f"request-level total is being written onto every message row"
+    )
