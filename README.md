@@ -411,6 +411,7 @@ WrapSec is open-core. The detection pipeline, guardrails, proxy, audit trail, da
 - Set `DATA_STORAGE_MODE` to `masked` or `none` for regulated environments.
 - Change `SECRET_KEY` and Grafana default password before first deployment.
 - Set `TRUSTED_PROXY_IPS` to the IP(s) of your reverse proxy so `X-Forwarded-For` is trusted only from known sources.
+- Restrict the master `ADMIN_API_KEY` at the network layer. Per-key source-network restrictions are stored on the API key record, and this credential has no record - it is matched against a configured secret - so the application cannot confine it. It is also the most privileged credential in the system, so place a firewall or reverse-proxy rule in front of the API instead.
 - Set `METRICS_TOKEN` to require bearer token authentication on `GET /metrics` - do not expose metrics unauthenticated.
 - Pin Grafana to 10.4.0 - Grafana 12 has dashboard provisioning issues.
 - Prometheus target changes from `host.docker.internal:8000` to `api:8000` in Docker deployment.
