@@ -98,8 +98,31 @@ jobs:
 
   # The detection red-team gate (`make eval`) is intentionally NOT a CI job: its
   # baseline is measured with the optional Tier-2 transformer model installed,
-  # which CI does not carry. Run it where that tier is present (locally / a
-  # dedicated environment), per docs/internal/eval_harness.md.
+  # which CI does not carry. Run it where that tier is present (locally or a
+  # dedicated environment).
+
+  # ── Python SDK: the published client library ────────────────────────────────
+  # It is what an integrator installs, and it versions and ships independently
+  # of the server, so a change here is not covered by the backend jobs. The
+  # suite needs no database and no running gateway.
+  #
+  # The Node SDK is NOT here. Its suite is written against a live gateway on a
+  # real socket and has no offline path, so it cannot run on a bare runner; it
+  # needs a job that stands a stack up first.
+  sdk-tests:
+    name: sdk-tests (python)
+    runs-on: ubuntu-22.04
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+      - uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065 # v5
+        with:
+          python-version: "3.10"
+          cache: pip
+      - name: Python SDK
+        run: |
+          pip install -e sdk/python/
+          pip install pytest
+          pytest sdk/python/tests -q
 
   # ── Frontend: static quality ────────────────────────────────────────────────
   frontend-static:

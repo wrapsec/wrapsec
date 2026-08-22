@@ -24,6 +24,14 @@ jobs:
         with:
           python-version: "3.10"
 
+      # A tag push does not run the pull-request checks, so the suite runs here
+      # too. Publishing is irreversible: a broken release cannot be recalled
+      # from the index, only superseded.
+      - name: Test
+        run: |
+          pip install -e . pytest
+          pytest tests -q
+
       - name: Build
         run: |
           pip install build
