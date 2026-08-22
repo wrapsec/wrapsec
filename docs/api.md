@@ -1,7 +1,5 @@
 # WrapSec API Reference
 
-> See [Core Concepts](core_concepts.md) for canonical definitions of decision model, SYSTEM_ERROR, and scoring semantics.
-
 Version: 1.0  
 Base URL: `http://your-host:8000`  
 Total endpoints: 63  

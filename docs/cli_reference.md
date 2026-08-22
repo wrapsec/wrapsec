@@ -1,6 +1,6 @@
 # WrapSec CLI - Command Reference
 
-CLI behavior follows [Core Concepts](core_concepts.md) for decision semantics and SYSTEM_ERROR handling.
+CLI behavior follows the [API reference](api.md) for decision semantics and SYSTEM_ERROR handling.
 
 Version: 1.0.0
 Last updated: May 2026
