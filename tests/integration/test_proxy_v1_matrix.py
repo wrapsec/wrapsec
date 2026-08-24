@@ -355,25 +355,76 @@ class TestUnsupportedFeatures:
 
 # ── A blocked response is not released ────────────────────────────────────────
 
+# Enough distinct PII types to reach the detector's maximum score, which is what
+# an output BLOCK requires. A shorter payload sanitizes instead: the numbers are
+# then absent from the response because they were REDACTED, not because the
+# response was refused, and an assertion on their absence alone cannot tell the
+# two apart. That is how the BLOCK branch here went untested -- it could be
+# deleted outright with the suite green.
+_BLOCK_LEVEL_OUTPUT = (
+    "SSN 123-45-6789 card 4111111111111111 email a@b.com phone 555-123-4567 "
+    "ip 10.0.0.1 dob 1990-01-01 passport X1234567 iban GB82WEST12345698765432"
+)
+
+_SANITIZE_LEVEL_OUTPUT = "My SSN is 123-45-6789 and my card is 4111111111111111"
+
+
 class TestOutputIsNotReleasedWhenBlocked:
 
     @pytest.mark.asyncio
-    async def test_blocked_output_content_does_not_reach_the_caller(self, app):
+    async def test_a_blocked_response_is_refused_not_returned(self, app):
         """
-        The point of scanning a response is that a caller never sees what the
-        guard rejected, so the assertion is on the absence of the content, not
-        merely on the status code.
+        Asserts the PATH, not only the outcome. `output_blocked` is reachable
+        from nowhere else, so it is proof the BLOCK branch actually ran -- if
+        scoring ever drifts and this input starts sanitizing instead, the test
+        fails loudly rather than passing against the wrong path.
         """
-        secret = "My SSN is 123-45-6789 and my card is 4111111111111111"
-
         resp = await _post(
             app,
             {"model": "openai/gpt-4o", "messages": [{"role": "user", "content": "hello"}]},
-            provider_content=secret,
+            provider_content=_BLOCK_LEVEL_OUTPUT,
         )
 
-        assert "123-45-6789"     not in resp.text
+        assert resp.status_code == 400, resp.text
+        assert resp.json()["error"]["code"] == "output_blocked", (
+            "the response was not refused by the output guard, so the BLOCK "
+            "branch did not run and this asserts nothing about it"
+        )
+        assert "123-45-6789"      not in resp.text
         assert "4111111111111111" not in resp.text
+
+    @pytest.mark.asyncio
+    async def test_a_sanitized_response_is_returned_with_the_pii_removed(self, app):
+        """
+        The neighbouring case, kept distinct so neither can stand in for the
+        other: SANITIZE returns the response with the values redacted, where
+        BLOCK returns no response at all.
+        """
+        resp = await _post(
+            app,
+            {"model": "openai/gpt-4o", "messages": [{"role": "user", "content": "hello"}]},
+            provider_content=_SANITIZE_LEVEL_OUTPUT,
+        )
+
+        assert resp.status_code == 200, resp.text
+        assert "123-45-6789"      not in resp.text
+        assert "4111111111111111" not in resp.text
+
+    def test_an_output_block_is_still_reachable_at_all(self):
+        """
+        The block threshold sits exactly ON the detector's maximum score, so
+        BLOCK fires only at that single value. Raising the threshold by any
+        amount, or lowering the cap, disables output blocking entirely and
+        leaves SANITIZE as the strongest outcome -- with nothing failing to say
+        so. Pinned here because the margin is zero.
+        """
+        from engine.guardrails.pii.detector import PIIDetector
+
+        assert get_settings().output_block_threshold <= PIIDetector.MAX_SCORE, (
+            f"output_block_threshold ({get_settings().output_block_threshold}) is "
+            f"above the highest score the PII detector can produce "
+            f"({PIIDetector.MAX_SCORE}), so an output BLOCK can never fire"
+        )
 
 
 # ── One error envelope everywhere ─────────────────────────────────────────────
