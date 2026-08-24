@@ -26,6 +26,7 @@ from domain.entities.request import (
 )
 from domain.enums import DecisionType, DetectionMode, ExecutionMode
 from domain.value_objects.severity import compute_severity
+from domain.value_objects.trace_id import TraceId
 from errors.exceptions import DebugForbiddenError, NotFoundError, RateLimitError
 from services.gateway.fanout import (
     DetectionPolicy,
@@ -493,13 +494,23 @@ async def ai_request(
     )
     if cached:
         CACHE_HITS.inc()
-        # Overwrite the cached body's trace_id with the current request's so the
-        # response body matches the X-Trace-Id header stamped by TraceMiddleware.
-        # Without this, the cached trace_id belongs to the original requester and
-        # trace correlation breaks for cache-hit responses.
-        _current_trace_id = getattr(request.state, "trace_id", None)
-        if _current_trace_id:
-            cached = {**cached, "trace_id": _current_trace_id}
+        # A FRESH id for this hit, generated the same way a fresh scan generates
+        # one. The cached body carries the original requester's id, which would
+        # be wrong to return and wrong to audit under.
+        #
+        # It is deliberately NOT `request.state.trace_id`. That value comes from
+        # the client's `X-Trace-Id` when it matches the middleware's pattern, and
+        # it is used below as the audit row's key -- a column that is UNIQUE and
+        # `String(50)`, while the header accepts up to 64 characters. So a caller
+        # could pick its own audit key: repeat one and the insert violates the
+        # constraint, send a 51-character one and it overflows the column. Either
+        # way the request fails, and the caller arranges it.
+        #
+        # Using a generated id also makes a cache hit behave like a miss: a fresh
+        # scan already returns `incoming.trace_id`, which never equalled the
+        # header either, so nothing is lost by not matching it here. The header
+        # remains the client's own correlation id, which is what it is for.
+        cached = {**cached, "trace_id": str(TraceId.generate())}
         # Audit the cache hit too. Every request must land in the tenant audit
         # trail and the tamper-evident hash chain -- otherwise repeated allowed
         # prompts (same tenant, within the TTL) are silently absent from the log,
