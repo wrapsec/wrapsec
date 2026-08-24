@@ -635,6 +635,24 @@ async def ai_request(
     except Exception:
         pass  # Metrics must never break scan responses
 
+    # Proxy execution was attempted and the provider returned nothing usable.
+    # Reported as a failed execution, not as a successful scan with no output:
+    # the gateway used to hand back a placeholder string as `output`, which an
+    # integrating application renders to its user as the model's reply.
+    #
+    # RETURNED rather than raised, so the audit row written above and the
+    # webhook emit scheduled with it both still land -- the scan itself ran and
+    # its verdict is real evidence. This mirrors how the proxy endpoint reports
+    # the same upstream condition. The trace id is the caller's handle on that
+    # verdict via GET /v1/ai/requests/{trace_id}.
+    if result.provider_error is not None:
+        from errors.catalog import ErrorCode
+        from errors.response import error_response
+        return error_response(
+            ErrorCode.LLM_UNAVAILABLE,
+            trace_id = str(incoming.trace_id),
+        )
+
     response = _build_response(
         result.decision,
         debug               = body.options.debug and getattr(request.state, "is_admin", False),

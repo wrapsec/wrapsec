@@ -37,6 +37,11 @@ logger = logging.getLogger("wrapsec.gateway")
 class GatewayResult:
     decision:     GatewayDecision
     audit_log:    AuditLog
+    # Set when proxy execution was attempted and the provider did not return a
+    # usable completion. The SCAN still succeeded and `decision` is its real
+    # verdict; this says only that there is no model output to accompany it, so
+    # the caller can report a failed execution instead of an empty success.
+    provider_error: str | None = None
 
 
 class GatewayService:
@@ -68,7 +73,24 @@ class GatewayService:
     def _hash_input(self, text: str) -> str:
         return "sha256:" + hashlib.sha256(text.encode()).hexdigest()
 
-    async def _call_llm_async(self, text: str, model: str, llm_settings: dict | None = None) -> str:
+    async def _call_llm_async(
+        self, text: str, model: str, llm_settings: dict | None = None
+    ) -> tuple[str | None, str | None]:
+        """
+        Ask the provider for a completion. Returns (content, error); exactly one
+        is set.
+
+        A failure is reported as a failure rather than as content. Returning a
+        placeholder string made an outage indistinguishable from an answer by
+        the time it reached the caller: the request succeeded, llm_invoked was
+        true, and an integrating application rendered the placeholder to its
+        user as the model's reply. Nothing downstream could tell the difference,
+        which is what made it worse than an error.
+
+        The error is a short stable token, matching the vocabulary the proxy
+        endpoint already reports upstream failures with. The provider's own
+        message stays in the log, because it can carry account detail.
+        """
         from clients import get_llm_client
 
         client = get_llm_client(llm_settings=llm_settings)
@@ -84,13 +106,17 @@ class GatewayService:
                 user_prompt   = text,
                 model         = model,
             )
-            if response.content:
-                return response.content
-            return "[LLM returned empty response]"
-
         except Exception as e:
             logger.error(f"LLM call failed: {e}")
-            return "[LLM unavailable]"
+            return None, "provider_unavailable"
+
+        if not response.content:
+            # An empty completion is not an answer either. Passing it through as
+            # "" would put the same successful-looking nothing in front of a
+            # user by a different route.
+            return None, "provider_empty_response"
+
+        return response.content, None
 
     async def process(
         self,
@@ -364,8 +390,9 @@ class GatewayService:
                 sanitized_input = input_result.sanitized_text
 
             # ── Step 8: LLM execution (proxy mode only) ───────
-            output      = None
-            llm_invoked = False
+            output         = None
+            llm_invoked    = False
+            provider_error = None
 
             if (
                 request.execution_mode == ExecutionMode.PROXY
@@ -373,12 +400,24 @@ class GatewayService:
             ):
                 llm_invoked   = True
                 prompt        = sanitized_input or effective_input
-                raw_output    = await self._call_llm_async(
+                raw_output, provider_error = await self._call_llm_async(
                     prompt,
                     request.model or (llm_settings or {}).get("model") or _settings.llm_model,
                     llm_settings=llm_settings,
                 )
 
+            if provider_error is not None:
+                # There is no completion to guard and none to return. The scan
+                # ran and its verdict stands, so it is still audited by the
+                # caller; `output` stays None and the caller reports a failed
+                # execution rather than a success with an empty body. This is
+                # NOT a detection failure -- forcing BLOCK here would report a
+                # provider outage as an attack.
+                logger.error(
+                    "Provider call failed reason=%s trace_id=%s",
+                    provider_error, request.trace_id,
+                )
+            elif llm_invoked:
                 # Output guard - check LLM response for PII
                 output_result = self._output_guard.inspect(raw_output)
 
@@ -511,8 +550,9 @@ class GatewayService:
             )
 
             return GatewayResult(
-                decision  = gateway_decision,
-                audit_log = audit_log,
+                decision       = gateway_decision,
+                audit_log      = audit_log,
+                provider_error = provider_error,
             )
 
         except Exception as e:

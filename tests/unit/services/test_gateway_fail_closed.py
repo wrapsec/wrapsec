@@ -335,7 +335,10 @@ async def test_output_guard_failure_suppresses_the_provider_response(svc):
 
     async def _fake_llm(*_a, **_kw):
         llm_called["yes"] = True
-        return "Reply containing jane.doe@example.com and 555-123-4567."
+        # (content, provider_error) -- a successful completion, so the output
+        # guard is reached. A provider failure is the other member of this pair
+        # and is covered in test_gateway_provider_failure.py.
+        return "Reply containing jane.doe@example.com and 555-123-4567.", None
 
     with patch.object(svc, "_call_llm_async", side_effect=_fake_llm), \
          patch.object(svc._output_guard._detector, "detect",

@@ -37,20 +37,40 @@ async def test_prompt_injection_returns_block(client, admin_headers):
 
 @pytest.mark.asyncio
 async def test_proxy_mode_invokes_llm(client, admin_headers):
-    response = await client.post(
-        "/v1/ai/request",
-        json={
-            "input":          "What is AI?",
-            "execution_mode": "proxy",
-            "model":          "llama3.2:latest",
-        },
-        headers=admin_headers,
-    )
-    assert response.status_code == 200
+    """
+    A completion is stubbed rather than left to whatever provider the
+    environment happens to have. No provider is reachable in this suite, so the
+    call always failed; the endpoint returned 200 with a placeholder string as
+    the model's answer and every assertion here passed against it. The test
+    asserted the failure path while claiming to cover the success one.
+    """
+    from unittest.mock import patch
+
+    class _Completion:
+        content = "AI is the simulation of human intelligence by machines."
+
+    async def _ok(*_a, **_kw):
+        return _Completion()
+
+    with patch("clients.get_llm_client") as _client:
+        _client.return_value.complete = _ok
+        response = await client.post(
+            "/v1/ai/request",
+            json={
+                "input":          "What is AI?",
+                "execution_mode": "proxy",
+                "model":          "llama3.2:latest",
+            },
+            headers=admin_headers,
+        )
+    assert response.status_code == 200, response.text
     data = response.json()
     assert data["decision"] == "ALLOW"
     assert data["processing"]["llm_invoked"] is True
     assert data["processing"]["execution_mode"] == "proxy"
+    assert data["output"] == _Completion.content, (
+        "proxy mode returned no model output, so the provider was not invoked"
+    )
 
 
 @pytest.mark.asyncio

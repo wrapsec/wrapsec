@@ -181,6 +181,7 @@ Security and proxy errors additionally include a `wrapsec` key:
 | `VALIDATION_ERROR` | 422 | Body failed validation |
 | `ACCOUNT_LOCKED` | 429 | Too many failed login attempts - includes `retry_after` seconds |
 | `RATE_LIMITED` | 429 | Rate limit exceeded |
+| `LLM_UNAVAILABLE` | 502 | `POST /v1/ai/request` with `execution_mode: proxy`: the scan completed, the provider did not return a usable answer. No `output` is returned; the scan itself is audited and readable at the `trace_id` in the error |
 | `INTERNAL_ERROR` | 500 | Unexpected server error |
 | `input_blocked` | 400 | Proxy: input blocked by policy |
 | `output_blocked` | 400 | Proxy: output blocked by policy |

@@ -127,6 +127,75 @@ async def test_proxy_mode_requires_llm_layer_422(client, test_db):
     assert r.status_code == 422
 
 
+# ── provider failure in proxy mode ───────────────────────────────────────────
+#
+# The endpoint used to answer an unreachable provider with 200 and the literal
+# string "[LLM unavailable]" in `output`, which an integrating application
+# renders to its user as the model's reply. It is reported through the existing
+# error taxonomy instead: LLM_UNAVAILABLE, 502.
+
+
+@pytest.mark.asyncio
+async def test_provider_failure_returns_502_not_a_placeholder_answer(client, test_db):
+    from unittest.mock import patch
+
+    raw, _ = await _seed_key(test_db)
+
+    async def _raise(*_a, **_kw):
+        raise RuntimeError("simulated provider outage")
+
+    with patch("clients.get_llm_client") as _client:
+        _client.return_value.complete = _raise
+        r = await client.post(
+            "/v1/ai/request",
+            json={"input": "Summarise the quarterly report.",
+                  "execution_mode": "proxy", "model": "gpt-4o"},
+            headers={"x-api-key": raw},
+        )
+
+    assert r.status_code == 502, r.text
+    assert r.json()["error"]["code"] == "LLM_UNAVAILABLE"
+    assert "[LLM unavailable]" not in r.text, (
+        "the placeholder reached the caller, which is the defect itself"
+    )
+
+
+@pytest.mark.asyncio
+async def test_a_provider_failure_is_still_audited(client, test_db):
+    """
+    The scan ran and its verdict is real evidence. Returning the error rather
+    than raising it is what keeps that row (and the webhook emit scheduled with
+    it) from being discarded, so the trace id in the error body has to resolve.
+    """
+    from unittest.mock import patch
+
+    raw, _ = await _seed_key(test_db)
+
+    async def _raise(*_a, **_kw):
+        raise RuntimeError("simulated provider outage")
+
+    with patch("clients.get_llm_client") as _client:
+        _client.return_value.complete = _raise
+        r = await client.post(
+            "/v1/ai/request",
+            json={"input": "Summarise the quarterly report.",
+                  "execution_mode": "proxy", "model": "gpt-4o"},
+            headers={"x-api-key": raw},
+        )
+    assert r.status_code == 502, r.text
+
+    trace = r.json()["error"]["trace_id"]
+    assert trace, "the error carries no trace id, so the scan cannot be looked up"
+
+    # Read back with the same key: the row belongs to that key's tenant, and
+    # tenant isolation is what a differently-scoped key would be testing.
+    found = await client.get(f"/v1/ai/requests/{trace}", headers={"x-api-key": raw})
+    assert found.status_code == 200, (
+        "the provider failure discarded the audit row for a scan that ran"
+    )
+    assert found.json()["execution_mode"] == "proxy"
+
+
 # ── GET /requests/{trace_id}: enrichment + proxy join ────────────────────────
 
 @pytest.mark.asyncio
