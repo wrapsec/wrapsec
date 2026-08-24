@@ -1156,6 +1156,21 @@ counter-intuitive -- lowering it improves refusals and latency together. See "Tu
 }
 ```
 
+**When an output BLOCK fires, and when it cannot.** The response is refused when
+the PII score reaches `OUTPUT_BLOCK_THRESHOLD` (default `0.95`); between
+`OUTPUT_SANITIZE_THRESHOLD` (default `0.01`) and that, the response is returned
+with the values redacted instead. The two outcomes are different: SANITIZE
+returns the model's answer with the personal data removed, BLOCK returns no
+answer at all.
+
+The default block threshold sits exactly on the highest score the PII detector
+can produce, so BLOCK fires only at that maximum -- a response has to carry
+enough distinct PII types to reach it, and a single credit-card number does not.
+**Raising `OUTPUT_BLOCK_THRESHOLD` above `0.95` disables output blocking
+entirely**, leaving SANITIZE as the strongest outcome, with nothing in the
+response or the logs to say so. Lower it if you want blocking to trigger more
+readily; there is no headroom above.
+
 ---
 
 ## Proxy Interactions

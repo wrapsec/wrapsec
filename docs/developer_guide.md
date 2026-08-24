@@ -860,8 +860,8 @@ Settings keys under the reserved `plugin:<name>:<key>` namespace are the per-ten
 export TESTING=true
 export PYTHONPATH="$(pwd)"
 
-pytest tests/unit -q                 # 1012 passed (no services needed)
-make test-integration                # integration tier on a disposable Postgres
+pytest tests/unit -q                 # 1242 passed, ~1m40s (no services needed)
+make test-integration                # 734 passed, ~4m50s, on a disposable Postgres
 make test                            # both, against whatever DB is configured
 ```
 
@@ -869,6 +869,13 @@ make test                            # both, against whatever DB is configured
 both the app and the tests at it, and removes it afterwards even on failure. The
 development compose database is never touched. Without Docker the integration tier
 skips gracefully under plain `make test`.
+
+That Postgres runs with `fsync`, `synchronous_commit` and `full_page_writes` off.
+Test isolation TRUNCATEs before every test, and against a durable server that
+TRUNCATE was the largest single cost in the tier -- about half the total runtime.
+The database is created and destroyed inside the target, so there is no crash for
+it to survive. Do not copy those flags to a compose file or anything holding real
+data.
 
 ### Test infrastructure
 
