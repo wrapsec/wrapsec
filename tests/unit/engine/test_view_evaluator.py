@@ -95,3 +95,31 @@ async def test_max_across_multiple_views():
     assert r.score == 0.7
     assert r.detector == "v2"
     assert calls == ["c", "v1", "v2", "v3"]  # every representation scanned
+
+
+async def test_a_failed_view_survives_losing_on_score():
+    """
+    Selection is by score and a failed result scores 0.0, so a view that could
+    not be evaluated loses to any view that scored anything. The failure must
+    still come out, or the request is judged on partial coverage while
+    reporting full coverage.
+    """
+    from engine.detection.base import DetectionResult
+    from engine.detection.view_evaluator import evaluate_views
+    from engine.normalization.types import DetectionView, NormalizedInput
+
+    ni = NormalizedInput(
+        canonical=" canonical text ",
+        views=[DetectionView(text="decoded view", kind="base64", depth=1)],
+    )
+
+    async def scan_one(text: str) -> DetectionResult:
+        # Canonical scores well; the view cannot be evaluated.
+        if text == ni.canonical:
+            return DetectionResult(score=0.9, threats=[], triggered=True, detector="d")
+        return DetectionResult.failure("d")
+
+    result = await evaluate_views(scan_one, ni)
+
+    assert result.score == 0.9, "the winning score should still be the canonical one"
+    assert result.failed is True, "the failed view was discarded by the max-by-score pick"

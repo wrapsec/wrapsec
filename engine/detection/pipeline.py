@@ -178,6 +178,12 @@ class DetectionPipeline:
             triggered = combined_score > 0.0,
             detector  = "ml_detector",   # keeps downstream layer name consistent
             details   = combined_details if combined_details else None,
+            # Either tier failing fails the combined result. Selection above is
+            # by score and a failed tier scores 0.0, so taking the dominant
+            # result's flag alone would discard a Tier-1 failure whenever Tier 2
+            # scored anything at all. A tier that is not INSTALLED reports clean,
+            # not failed, so the optional tier's absence is unaffected.
+            failed    = tfidf_result.failed or transformer_result.failed,
         )
 
     def status(self) -> dict[str, DetectorStatus]:

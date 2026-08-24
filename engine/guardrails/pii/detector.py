@@ -2,11 +2,14 @@
 # Copyright (c) 2026 WrapSec. All rights reserved.
 # WrapSec v1.0 | AI Security Gateway - https://wrapsec.com
 
+import logging
 import re
 
 from domain.enums import ThreatCategory
 from engine.detection.base import BaseDetector, DetectionResult
 from engine.detection.limits import clamp_for_regex
+
+logger = logging.getLogger("wrapsec.engine")
 
 # ── PII Pattern definitions ───────────────────────────────────
 #
@@ -140,5 +143,9 @@ class PIIDetector(BaseDetector):
                 details   = {"pii_types": list(found.keys())},
             )
 
-        except Exception:
-            return DetectionResult.clean(self.name)
+        except Exception as e:
+            # failure(), not clean(): InputGuard reads this flag to decide whether
+            # the guardrail actually ran. A clean result here allowed unredacted
+            # PII through as ALLOW.
+            logger.warning("PIIDetector failed: %s", e)
+            return DetectionResult.failure(self.name)

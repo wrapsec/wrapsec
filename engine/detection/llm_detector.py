@@ -78,7 +78,7 @@ class LLMDetector(BaseDetector):
 
         except Exception as e:
             logger.warning(f"LLMDetector parse failed: {e}")
-            return DetectionResult.clean(self.name)
+            return DetectionResult.failure(self.name)
 
     async def detect_async(self, text: str) -> DetectionResult:
         """Async entrypoint - awaits the LLM client directly, no new event loop."""
@@ -102,7 +102,7 @@ class LLMDetector(BaseDetector):
 
         except Exception as e:
             logger.warning(f"LLMDetector failed: {e}")
-            return DetectionResult.clean(self.name)
+            return DetectionResult.failure(self.name)
 
     def detect(self, text: str) -> DetectionResult:
         """Sync shim kept for any legacy callers - runs detect_async in a new loop."""

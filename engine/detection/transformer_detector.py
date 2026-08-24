@@ -87,6 +87,13 @@ class TransformerDetector(BaseDetector):
 
     def detect(self, text: str) -> DetectionResult:
         if not self._ready or self._pipeline is None:
+            # clean(), NOT failure(). Tier 2 is optional by build: the default
+            # image ships without it, and running without it is the documented
+            # degraded mode rather than a fault. Reporting failure here would
+            # fail-close every request on every default deployment.
+            #
+            # An INFERENCE exception below is a different matter and does return
+            # failure() -- the tier is present and broke, which is a fault.
             return DetectionResult.clean(self.name)
 
         try:
@@ -111,4 +118,4 @@ class TransformerDetector(BaseDetector):
 
         except Exception as e:
             logger.warning("TransformerDetector inference failed: %s", e)
-            return DetectionResult.clean(self.name)
+            return DetectionResult.failure(self.name)

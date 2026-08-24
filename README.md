@@ -54,7 +54,7 @@ Input
   |-- Normalize           Canonical form (folds homoglyph / zero-width / whitespace) + decode-views (leet, base64)
   |-- RuleDetector        Regex and heuristic patterns, ~1ms (scans canonical + views, max signal)
   |-- DetectionPipeline   Two-tier ML detection (scans canonical + views, max signal)
-  |   |-- Tier 1          TF-IDF + logistic regression, always on, ~5ms
+  |   |-- Tier 1          TF-IDF + logistic regression, required, ~5ms
   |   |-- Tier 2          DeBERTa-v3 transformer (optional), ~20-50ms
   |   +-- ToxicityDetector    Extracts toxicity signal from ML output (no extra compute)
   |-- LLMDetector         Semantic analysis, full mode only, ~100-500ms additional (original text)
@@ -127,7 +127,7 @@ WrapSec is built for agentic use, not just single prompts:
 | Database | PostgreSQL (SQLAlchemy async) |
 | Cache | Redis |
 | Dashboard | Next.js 16, React 19 |
-| ML detection | Two-tier: TF-IDF + logistic regression (Tier 1, always on) + DeBERTa-v3 transformer (Tier 2, optional) |
+| ML detection | Two-tier: TF-IDF + logistic regression (Tier 1, required) + DeBERTa-v3 transformer (Tier 2, optional) |
 | Observability | Prometheus, Grafana |
 
 
@@ -385,6 +385,8 @@ requests are refused. Lowering it improves latency and refusals together rather 
 trading one for the other. See "Tuning `BATCH_CONCURRENCY`" in `docs/developer_guide.md`.
 
 Without transformer dependencies, `transformer_detector` reports `degraded` in `/health/ready` and `wrapsec doctor`. All requests are still processed via Tier 1 (TF-IDF).
+
+The two tiers degrade differently, and the difference matters operationally. Tier 2 is optional: absent, it is skipped and traffic is served on Tier 1. Tier 1 is required: if its model cannot be loaded - a missing file, or a failed integrity check - the ML layer reports a detector failure rather than a clean score, and requests that run it are refused fail-closed. `/health/ready` reports `tfidf_detector: degraded` in that state, which means the deployment is refusing traffic rather than scoring it with less signal. Detection that cannot run is never reported as detection that found nothing.
 
 > The HuggingFace transformer and the bundled TF-IDF model are suitable for evaluation. Production-grade WrapSec deployments use purpose-built models - see the note above.
 

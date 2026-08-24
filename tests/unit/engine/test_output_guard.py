@@ -37,10 +37,16 @@ def _settings(block: float = 0.95, sanitize: float = 0.01):
     )
 
 
-def _detector_result(score: float, threats: list[str] | None = None):
+def _detector_result(score: float, threats: list[str] | None = None,
+                     failed: bool = False):
+    # `failed` is part of the DetectionResult contract the guard reads: a
+    # detector reports a fault through the flag rather than raising. A fake
+    # without it makes the guard block on AttributeError, which is fail-closed
+    # and correct -- but it is not what these threshold tests are asserting.
     return SimpleNamespace(
         score   = score,
         threats = threats if threats is not None else [],
+        failed  = failed,
     )
 
 
@@ -244,3 +250,48 @@ def test_result_is_output_guard_result_instance():
         result = guard.inspect("hello")
 
     assert isinstance(result, OutputGuardResult)
+
+
+# ---------------------------------------------------------------------------
+# Detector INTERNAL failure -- the output-side counterpart of the input-path
+# failure propagation.
+#
+# PIIDetector does not raise: its contract is to report a fault through
+# DetectionResult.failed. So the guard's own `except` never sees it, and a
+# failed scan arrived as pii_score 0.0 -- indistinguishable from a clean
+# response -- and provider output the guard never inspected was released.
+# ---------------------------------------------------------------------------
+
+def test_pii_detector_internal_failure_blocks_the_response():
+    from engine.guardrails.output_guard import OutputGuard
+
+    guard = OutputGuard()
+    text  = "Contact me at jane.doe@example.com or 555-123-4567."
+
+    # Break what PIIDetector.detect calls INSIDE its own try, so the detector's
+    # handler runs and returns a flagged result rather than propagating.
+    with patch("engine.guardrails.pii.detector.clamp_for_regex",
+               side_effect=RuntimeError("simulated internal pii failure")):
+        result = guard.inspect(text)
+
+    assert result.decision       == "BLOCK"
+    assert result.primary_reason == "SYSTEM_ERROR"
+    assert result.failed         is True
+    assert result.sanitized_text is None, "a response the guard could not read is never released"
+
+
+def test_a_guard_failure_is_never_reported_as_a_clean_response():
+    """
+    The shape of the defect. A failed scan and a clean scan both carry
+    pii_score 0.0, so 'not BLOCK' is not the interesting assertion -- 'reported
+    as ALLOW / NO_THREAT_DETECTED' is.
+    """
+    from engine.guardrails.output_guard import OutputGuard
+
+    with patch("engine.guardrails.pii.detector.clamp_for_regex",
+               side_effect=RuntimeError("boom")):
+        result = OutputGuard().inspect("some provider response")
+
+    assert not (
+        result.decision == "ALLOW" and result.primary_reason == "NO_THREAT_DETECTED"
+    ), "a guard failure was reported as a clean response"

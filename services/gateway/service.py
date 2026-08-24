@@ -225,9 +225,32 @@ class GatewayService:
                 ml_result        = DetectionResult.clean("ml_detector")
                 detection_failed = True
 
+            # Detectors do not raise -- their contract is to report a fault
+            # through DetectionResult.failed rather than propagate it, so the
+            # handlers above only ever catch a TIMEOUT. This is where an
+            # internal detector fault becomes a detection failure; without it
+            # the fail-closed override below is unreachable for the failure mode
+            # that actually occurs, and a broken detector reads as a clean one.
+            if rule_result.failed or ml_result.failed:
+                logger.error(
+                    "Detector reported failure rule_failed=%s ml_failed=%s trace_id=%s",
+                    rule_result.failed, ml_result.failed, request.trace_id,
+                )
+                detection_failed = True
+
             # ── Step 3.5: Toxicity guardrail (after ML) ─────────
             # Toxicity signal is extracted from ML result - no new inference
             input_result = self._input_guard.inspect_toxicity(input_result, ml_result)
+
+            # Read AGAIN after the toxicity step, not only after step 1. This
+            # call can set the flag itself, and the earlier check has already
+            # run by the time it does -- so without this a toxicity guardrail
+            # fault would be recorded on the result and then read by nobody.
+            if input_result.failed and not detection_failed:
+                logger.error(
+                    f"Toxicity guardrail could not be evaluated trace_id={request.trace_id}"
+                )
+                detection_failed = True
 
             # ── Step 4: LLM detection (async I/O -> direct await)
             # Only invoke LLM detector if:
@@ -254,6 +277,14 @@ class GatewayService:
                 except Exception as e:
                     logger.error(f"LLM detector failed: {e} trace_id={request.trace_id}")
                     llm_result       = DetectionResult.clean("llm_detector")
+                    detection_failed = True
+
+                # Same as the rule/ML layers: detect_async swallows its own
+                # errors, so the handler above catches nothing in practice.
+                if llm_result.failed:
+                    logger.error(
+                        f"LLM detector reported failure trace_id={request.trace_id}"
+                    )
                     detection_failed = True
 
             # ── Step 5: Risk scoring ──────────────────────────
@@ -350,7 +381,28 @@ class GatewayService:
 
                 # Output guard - check LLM response for PII
                 output_result = self._output_guard.inspect(raw_output)
-                output        = output_result.sanitized_text or raw_output
+
+                # The guard's BLOCK is honoured here. Only sanitized_text used
+                # to be read, and a BLOCK carries none -- so a response the
+                # guard refused fell through to `raw_output` and was returned to
+                # the caller, which is the one thing an output guard exists to
+                # stop. That applied to a severe-PII block and to the guard's
+                # own fail-closed SYSTEM_ERROR alike.
+                if output_result.decision == "BLOCK":
+                    output              = None
+                    policy.decision     = DecisionType.BLOCK
+                    scoring.final_score = RiskScore(1.0)
+                    # A guard that could not RUN is a detection failure, and is
+                    # reported as one. A guard that ran and refused the content
+                    # is a policy block, and keeps its own reason.
+                    if output_result.failed:
+                        detection_failed = True
+                    logger.warning(
+                        "Output blocked reason=%s trace_id=%s",
+                        output_result.primary_reason, request.trace_id,
+                    )
+                else:
+                    output = output_result.sanitized_text or raw_output
 
             # ── Step 9: Build result ──────────────────────────
             latency_ms = (time.perf_counter() - start) * 1000

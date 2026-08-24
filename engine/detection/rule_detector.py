@@ -2,6 +2,7 @@
 # Copyright (c) 2026 WrapSec. All rights reserved.
 # WrapSec v1.0 | AI Security Gateway - https://wrapsec.com
 
+import logging
 import re
 
 from engine.detection.base import BaseDetector, DetectionResult
@@ -11,6 +12,8 @@ from engine.detection.rule_patterns.general import COMPILED_REGISTRY
 # In v2, RuleDetector will accept a profile parameter and load the appropriate
 # pattern set from engine.detection.rule_patterns.<profile>. For v1 the general
 # compiled registry is always used.
+logger = logging.getLogger("wrapsec.engine")
+
 _COMPILED = COMPILED_REGISTRY
 
 
@@ -57,5 +60,8 @@ class RuleDetector(BaseDetector):
                 details   = details if details else None,
             )
 
-        except Exception:
-            return DetectionResult.clean(self.name)
+        except Exception as e:
+            # failure(), not clean(): the caller fails closed on the flag, and a
+            # clean result would report a broken detector as a safe verdict.
+            logger.warning("RuleDetector failed: %s", e)
+            return DetectionResult.failure(self.name)

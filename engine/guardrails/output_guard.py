@@ -43,6 +43,11 @@ class OutputGuardResult:
     pii_score:      float = 0.0
     threats:        list[str] = field(default_factory=list)
     confidence:     float = 1.0
+    # True when the guard could not evaluate the response, as opposed to
+    # evaluating it as clean. Both carry pii_score 0.0; only this separates
+    # them. Always accompanied by decision=BLOCK -- a response the guard could
+    # not read is never released.
+    failed:         bool = False
 
 
 class OutputGuard:
@@ -85,6 +90,28 @@ class OutputGuard:
             settings   = get_settings()
             pii_result = self._detector.detect(text)
             pii_score  = pii_result.score if pii_result else 0.0
+
+            # The detector reports its own faults through this flag rather than
+            # raising, so the handler below never sees them. Without this read a
+            # failed scan arrives as pii_score 0.0 -- indistinguishable from a
+            # clean response -- and provider output the guard never inspected
+            # was released to the caller.
+            if pii_result is not None and pii_result.failed:
+                logger.error(
+                    "OutputGuard -- PII detector could not evaluate the response; blocking"
+                )
+                return OutputGuardResult(
+                    text           = text,
+                    sanitized_text = None,
+                    was_sanitized  = False,
+                    redacted_types = [],
+                    decision       = "BLOCK",
+                    primary_reason = "SYSTEM_ERROR",
+                    pii_score      = 0.0,
+                    threats        = [],
+                    confidence     = 0.0,
+                    failed         = True,
+                )
 
             # BLOCK -- severe PII pattern, response must not reach client
             if pii_score >= settings.output_block_threshold:
@@ -151,4 +178,5 @@ class OutputGuard:
                 pii_score      = 0.0,
                 threats        = [],
                 confidence     = 0.0,
+                failed         = True,
             )

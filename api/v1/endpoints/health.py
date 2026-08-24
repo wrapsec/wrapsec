@@ -44,7 +44,14 @@ async def health_ready():
     # Redis ping
     redis_ok = await redis_ping()
 
-    # Per-detector status -- each tier reported separately
+    # Per-detector status -- each tier reported separately.
+    #
+    # The two tiers are NOT equivalent when degraded. Tier 2 is optional by
+    # build: absent, it reports degraded and traffic is served on Tier 1.
+    # Tier 1 is required: absent, MLDetector.detect returns a detector
+    # FAILURE and the fail-closed override refuses every request that runs
+    # the ML layer. A degraded tfidf_detector therefore means the deployment
+    # is refusing traffic, not merely scoring it with less signal.
     tfidf_status       = "unavailable"
     transformer_status = "unavailable"
     try:

@@ -20,6 +20,7 @@ supplied detector already produced.
 from __future__ import annotations
 
 from collections.abc import Awaitable, Callable
+from dataclasses import replace
 
 from engine.detection.base import DetectionResult
 from engine.normalization import NormalizedInput
@@ -44,9 +45,18 @@ async def evaluate_views(
     its own and leaves the caller's existing timeout/fail-closed wrapping intact.
     """
     texts = ni.texts()               # canonical first, then views (canonical always present)
-    best = await scan_one(texts[0])
+    best   = await scan_one(texts[0])
+    failed = best.failed
     for text in texts[1:]:
         result = await scan_one(text)
+        # A failure is carried even when this view loses on score. Selection is
+        # by score, and a failed result scores 0.0, so without this the scan of
+        # a view that could not be evaluated would be dropped whenever any other
+        # representation scored higher -- and the request would be judged on
+        # partial coverage while reporting none.
+        failed = failed or result.failed
         if result.score > best.score:
             best = result
+    if failed and not best.failed:
+        best = replace(best, failed=True)
     return best

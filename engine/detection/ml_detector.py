@@ -101,7 +101,21 @@ class MLDetector(BaseDetector):
 
     def detect(self, text: str) -> DetectionResult:
         if not self._ready or self._model is None:
-            return DetectionResult.clean(self.name)
+            # Tier 1 is not optional. It ships in every build and there is no
+            # switch that turns it off -- an operator who disables the ML layer
+            # is handled upstream, and never reaches this method. So arriving
+            # here means the layer was expected to run and cannot: a missing
+            # model file, or a failed integrity check at load.
+            #
+            # failure(), not clean(): reporting "found nothing" would let every
+            # request be judged with the always-on layer silently absent. The
+            # load failure is already logged at ERROR once, and /health/ready
+            # reports the tier degraded; this is deliberately quiet so a
+            # fail-closed deployment does not also flood its logs.
+            #
+            # Tier 2 differs and returns clean() when absent -- see
+            # transformer_detector.detect. That tier IS optional by build.
+            return DetectionResult.failure(self.name)
 
         try:
             proba      = self._model.predict_proba([text])[0]
@@ -125,4 +139,4 @@ class MLDetector(BaseDetector):
 
         except Exception as e:
             logger.warning(f"MLDetector inference failed: {e}")
-            return DetectionResult.clean(self.name)
+            return DetectionResult.failure(self.name)

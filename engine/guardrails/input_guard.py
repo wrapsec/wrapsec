@@ -3,7 +3,7 @@
 # WrapSec v1.0 | AI Security Gateway - https://wrapsec.com
 
 import logging
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 
 from engine.detection.base import DetectionResult
 from engine.guardrails.pii.detector import PIIDetector
@@ -50,6 +50,21 @@ class InputGuard:
         """Run PII guardrail. Toxicity is added later via inspect_toxicity()."""
         try:
             pii_result = self._pii_detector.detect(text)
+
+            # The detector swallows its own exceptions and reports them through
+            # this flag rather than raising, so the handler below never sees
+            # them. Read it here or a detector fault is indistinguishable from
+            # a clean scan and the guardrail is silently skipped.
+            if pii_result.failed:
+                return InputGuardResult(
+                    text            = text,
+                    sanitized_text  = None,
+                    pii_result      = pii_result,
+                    toxicity_result = DetectionResult.clean("toxicity_detector"),
+                    redacted_types  = [],
+                    was_sanitized   = False,
+                    failed          = True,
+                )
 
             if not pii_result.triggered:
                 return InputGuardResult(
@@ -117,5 +132,13 @@ class InputGuard:
                 failed          = guard_result.failed,
             )
         except Exception as e:
+            # Flagged, not swallowed. Returning the prior result unchanged left
+            # its clean toxicity placeholder in place with nothing recording
+            # that the guardrail had not run, so content it would have blocked
+            # was judged on the detection layers alone.
+            #
+            # The ML failure case is already covered upstream -- this signal is
+            # derived from ml_result, so a failed ML layer sets detection_failed
+            # before this runs. This covers a fault in the derivation itself.
             logger.error(f"InputGuard toxicity failed: {e}")
-            return guard_result  # Return unchanged - fail open
+            return replace(guard_result, failed=True)
