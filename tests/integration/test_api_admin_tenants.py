@@ -131,3 +131,62 @@ async def test_tenant_admin_is_not_platform_operator(client, auth_setup):
     hdr = {"Authorization": f"Bearer {auth_setup['admin_token']}"}
     r = await client.post("/v1/admin/tenants", json={"slug": _slug(), "name": "X"}, headers=hdr)
     assert r.status_code == 403
+
+
+# ── The operator gate belongs to EVERY control-plane route ────────────────────
+#
+# Only the create route was covered above. Removing the gate from list, detail,
+# suspend, reactivate or bootstrap-admin left the whole integration suite
+# passing, so a tenant admin could have listed every tenant on the deployment,
+# suspended or reactivated any of them, or bootstrapped an admin user into one
+# they do not belong to. The gate is a property of the route, and each route
+# has to say so for itself.
+
+@pytest.mark.asyncio
+async def test_a_tenant_admin_cannot_reach_any_control_plane_route(client, auth_setup):
+    hdr = {"Authorization": f"Bearer {auth_setup['admin_token']}"}
+
+    # A real tenant to aim the by-id routes at, so a 403 is the gate refusing
+    # rather than a 404 for a tenant that does not exist.
+    created = await client.post(
+        "/v1/admin/tenants", json={"slug": _slug(), "name": "Target"}, headers=_op(),
+    )
+    assert created.status_code == 201, created.text
+    tid = created.json()["id"]
+
+    routes = [
+        ("get",  "/v1/admin/tenants",                     None),
+        ("get",  f"/v1/admin/tenants/{tid}",              None),
+        ("post", f"/v1/admin/tenants/{tid}/suspend",      None),
+        ("post", f"/v1/admin/tenants/{tid}/reactivate",   None),
+        ("post", f"/v1/admin/tenants/{tid}/bootstrap-admin",
+         {"email": "intruder@example.com", "password": "StrongPass1!"}),
+    ]
+
+    for method, path, body in routes:
+        kwargs = {"headers": hdr}
+        if body is not None:
+            kwargs["json"] = body
+        resp = await getattr(client, method)(path, **kwargs)
+        assert resp.status_code == 403, (
+            f"{method.upper()} {path} admitted a tenant admin: {resp.status_code}"
+        )
+
+    # The gate held, so nothing was mutated: the tenant is still active and has
+    # no bootstrapped admin. A 403 that arrived after the work was done would
+    # satisfy the status assertions above and still be a breach.
+    detail = await client.get(f"/v1/admin/tenants/{tid}", headers=_op())
+    assert detail.status_code == 200, detail.text
+    assert detail.json()["status"] == "active", (
+        "a refused suspend still changed the tenant's status"
+    )
+
+    ok = await client.post(
+        f"/v1/admin/tenants/{tid}/bootstrap-admin",
+        json={"email": "rightful@example.com", "password": "StrongPass1!"},
+        headers=_op(),
+    )
+    assert ok.status_code == 201, (
+        "the refused bootstrap-admin still created the tenant's first admin: "
+        f"{ok.status_code} {ok.text[:200]}"
+    )
