@@ -638,7 +638,7 @@ The `assessment` object is an always-present, self-contained security verdict - 
 | `MEDIUM` | 0.4 - 0.7 |
 | `LOW` | 0.0 - 0.4 |
 
-**`SYSTEM_ERROR` behaviour is FAIL-CLOSED.** When a detector times out or raises, the request is REFUSED: `decision = BLOCK`, `risk_score = 1.0`, `primary_reason = SYSTEM_ERROR`, `confidence = 0.0`, `confidence_band = LOW`. A request that could not be inspected is never forwarded to an LLM.
+**`SYSTEM_ERROR` behaviour is FAIL-CLOSED.** When a detector or guardrail cannot run, the request is REFUSED: `decision = BLOCK`, `risk_score = 1.0`, `primary_reason = SYSTEM_ERROR`, `confidence = 0.0`, `confidence_band = LOW`. This covers a detector that times out and a detector that fails internally - detectors do not propagate exceptions, they report a fault on the result they return, and the gateway treats the two identically. A request that could not be inspected is never forwarded to an LLM, and a provider response the output guard could not inspect is never returned to the caller.
 
 `SYSTEM_ERROR` is a `primary_reason`, never a `decision` value -- do not branch on a `SYSTEM_ERROR` decision, because there is none. Honouring `decision` is sufficient: it is already `BLOCK`. Use `primary_reason` to tell a refusal caused by a detector failure from one caused by content, since the two are indistinguishable from `decision` alone.
 

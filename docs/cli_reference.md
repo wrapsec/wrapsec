@@ -44,7 +44,7 @@ wrapsec scan "hello world"
 Network and server errors (5xx, timeout, connection failure) are retried up to 3 times with exponential backoff before exit 1 is returned. A CLI exit 1 on infrastructure errors means retries have already been exhausted.
 
 **SYSTEM_ERROR and exit codes:**
-When the API returns `primary_reason = SYSTEM_ERROR`, the API decision is `ALLOW` - the detection pipeline failed and the system defaults to allowing the request. The CLI treats this as exit code `1` (failure) regardless of the ALLOW decision. This is intentional - a failed detection is not a safe detection. Applications must not forward input to an LLM when `SYSTEM_ERROR` is returned. See `wrapsec scan` output for how SYSTEM_ERROR is surfaced.
+When the API returns `primary_reason = SYSTEM_ERROR`, a detector or guardrail could not run and the API decision is `BLOCK` with `risk_score = 1.0` - the gateway refuses the request rather than allowing it. The CLI reports exit code `1` (failure) rather than `2` (BLOCK), so a refusal caused by a fault is distinguishable from one caused by content. Either way the input must not be forwarded to an LLM. See `wrapsec scan` output for how SYSTEM_ERROR is surfaced.
 
 Exit codes apply to all commands and all output modes (`--quiet`, `--json`).
 
@@ -565,7 +565,7 @@ Top threats:
   DATA_EXFILTRATION    1
 ```
 
-Severity follows SIEM triage levels: CRITICAL (guardrail blocks or risk_score >= 0.9), HIGH (other blocks or SYSTEM_ERROR), MEDIUM (sanitized), LOW (allowed). The Severity section is omitted when all counts are zero.
+Severity follows SIEM triage levels: CRITICAL (guardrail blocks, risk_score >= 0.9, or SYSTEM_ERROR), HIGH (other blocks), MEDIUM (sanitized), LOW (allowed). `SYSTEM_ERROR` lands in CRITICAL rather than HIGH because fail-closed forces `risk_score = 1.0`, which meets the CRITICAL condition; an alert rule expecting detector failures at HIGH will not match them. The Severity section is omitted when all counts are zero.
 
 ## 7. `wrapsec chat`
 

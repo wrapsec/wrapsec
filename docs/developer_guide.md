@@ -814,7 +814,7 @@ denying the request. See `engine/detection/preprocessors/base.py`.
 Guardrail priority: PII (highest) -> Toxicity -> Detection pipeline.
 Guardrails always override detection. Independent thresholds.
 
-`SYSTEM_ERROR` at engine level -> `decision=ALLOW`, `confidence=0.0`. Clients must NOT forward to LLM when `primary_reason=SYSTEM_ERROR`.
+`SYSTEM_ERROR` at engine level -> `decision=BLOCK`, `risk_score=1.0`, `confidence=0.0` (fail-closed). Detectors do not raise: `BaseDetector.detect`'s contract is to return `DetectionResult.failure()`, and `GatewayService` ORs that flag into `detection_failed`, which drives the single override in `process()`. The same applies on the output path - a guard that cannot evaluate a provider response blocks it.
 
 ---
 

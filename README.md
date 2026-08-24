@@ -87,7 +87,7 @@ Guardrails (PII, toxicity) are architecturally separate from the detection score
 
 `risk_score = 0.0` does not mean safe. Always rely on `decision` as the authoritative verdict. Guardrails can produce `BLOCK` with `risk_score = 0.0`.
 
-`primary_reason = SYSTEM_ERROR` means the detection pipeline failed. The returned `ALLOW` decision is not trustworthy and must not be used. Applications must treat this as a failure and must not forward input to the LLM.
+`primary_reason = SYSTEM_ERROR` means a detector or guardrail could not run. The request is **refused**: `decision = BLOCK`, `risk_score = 1.0`, `confidence = 0.0`. Input that could not be inspected is never forwarded to an LLM, and a provider response the output guard could not inspect is never returned to the caller. `SYSTEM_ERROR` is a `primary_reason`, never a `decision` value - honouring `decision` is sufficient, and `primary_reason` tells a refusal caused by a fault apart from one caused by content.
 
 
 ## Detection Evaluation
