@@ -11,6 +11,13 @@ test:
 # (both clear of the compose stack on 5432/6379), points the app and the
 # tests at them, then removes both -- even if the tests fail.
 #
+# fsync/synchronous_commit/full_page_writes are off because this database is
+# destroyed at the end of the run: there is no crash to survive. Test isolation
+# TRUNCATEs before every test, and that TRUNCATE was the single largest cost in
+# the suite -- 266ms of disk sync per test, roughly half the total runtime.
+# Without them it is ~100ms and the suite drops from about 6:42 to 4:52. Never
+# copy these flags to a compose file or anything holding real data.
+#
 # Redis is provisioned for the same reason Postgres is. Left to the
 # environment it resolves to the development instance, so a test run wrote
 # its rate-limit counters, caches and idempotency keys into the database a
@@ -22,7 +29,8 @@ test-integration:
 	@bash -c 'set -e; \
 	cleanup() { docker rm -f $$CID $$RID >/dev/null 2>&1 || true; }; \
 	trap cleanup EXIT; \
-	CID=$$(docker run --rm -d -e POSTGRES_USER=wrapsec -e POSTGRES_PASSWORD=wrapsec -e POSTGRES_DB=wrapsec_test -p 55432:5432 postgres:16-alpine); \
+	CID=$$(docker run --rm -d -e POSTGRES_USER=wrapsec -e POSTGRES_PASSWORD=wrapsec -e POSTGRES_DB=wrapsec_test -p 55432:5432 postgres:16-alpine \
+	  -c fsync=off -c synchronous_commit=off -c full_page_writes=off); \
 	RID=$$(docker run --rm -d -p 56379:6379 redis:7-alpine); \
 	echo "waiting for the disposable postgres and redis..."; \
 	for i in $$(seq 1 30); do docker exec $$CID pg_isready -U wrapsec -d wrapsec_test >/dev/null 2>&1 && break; sleep 1; done; \
@@ -82,7 +90,8 @@ coverage:
 	@bash -c 'set -e; \
 	cleanup() { docker rm -f $$CID $$RID >/dev/null 2>&1 || true; }; \
 	trap cleanup EXIT; \
-	CID=$$(docker run --rm -d -e POSTGRES_USER=wrapsec -e POSTGRES_PASSWORD=wrapsec -e POSTGRES_DB=wrapsec_test -p 55432:5432 postgres:16-alpine); \
+	CID=$$(docker run --rm -d -e POSTGRES_USER=wrapsec -e POSTGRES_PASSWORD=wrapsec -e POSTGRES_DB=wrapsec_test -p 55432:5432 postgres:16-alpine \
+	  -c fsync=off -c synchronous_commit=off -c full_page_writes=off); \
 	RID=$$(docker run --rm -d -p 56379:6379 redis:7-alpine); \
 	for i in $$(seq 1 30); do docker exec $$CID pg_isready -U wrapsec -d wrapsec_test >/dev/null 2>&1 && break; sleep 1; done; \
 	for i in $$(seq 1 30); do docker exec $$RID redis-cli ping >/dev/null 2>&1 && break; sleep 1; done; \
