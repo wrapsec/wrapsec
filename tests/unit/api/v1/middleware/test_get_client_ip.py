@@ -148,3 +148,24 @@ def test_zero_prefix_written_as_a_bare_address_is_still_ignored():
     must keep working -- only an actual zero prefix is dropped."""
     with _patch_trusted("0.0.0.0"):
         assert get_client_ip(_make_request("0.0.0.0", "203.0.113.9")) == "203.0.113.9"
+
+
+def test_a_malformed_forwarded_entry_falls_back_to_the_peer():
+    """
+    Behind a trusted proxy the leftmost entries are still client-controlled, so
+    the selected candidate has to be a well-formed address before it is trusted.
+    Without that check an arbitrary string becomes the recorded and enforced
+    client address: it is written to the audit trail, matched against a key's
+    ip_allowlist, and used as the per-IP rate-limit bucket, which lets a caller
+    pick its own bucket.
+    """
+    with _patch_trusted("10.0.0.1"):
+        req = _make_request("10.0.0.1", "not-an-ip-address")
+        assert get_client_ip(req) == "10.0.0.1"
+
+
+def test_a_malformed_entry_behind_a_trusted_hop_also_falls_back():
+    """The same value reached by walking past a trusted proxy hop."""
+    with _patch_trusted("10.0.0.0/24"):
+        req = _make_request("10.0.0.1", "'; DROP TABLE audit_logs; --, 10.0.0.9")
+        assert get_client_ip(req) == "10.0.0.1"
