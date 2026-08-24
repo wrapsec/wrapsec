@@ -145,6 +145,19 @@ class GatewayService:
                     toxicity_result = DetectionResult.clean("toxicity_detector"),
                     redacted_types  = [],
                     was_sanitized   = False,
+                    failed          = True,
+                )
+                detection_failed = True
+
+            # A guardrail that RAISED is the same fact as one that timed out:
+            # the text was not inspected. Only the timeout was caught here,
+            # because InputGuard swallows its own exceptions and hands back a
+            # zero-score result -- which read as "no PII found" and let text the
+            # guardrail never saw through as ALLOW, unredacted, to the provider.
+            # The guard reports the difference now; this is where it is honoured.
+            if input_result.failed:
+                logger.error(
+                    f"Input guard could not be evaluated trace_id={request.trace_id}"
                 )
                 detection_failed = True
 

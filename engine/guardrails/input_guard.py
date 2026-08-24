@@ -21,6 +21,12 @@ class InputGuardResult:
     toxicity_result:  DetectionResult
     redacted_types:   list[str]
     was_sanitized:    bool
+    # True when the guardrail could not be evaluated, as opposed to evaluating
+    # to "clean". Without the distinction a failure is indistinguishable from a
+    # clean result: both carry a zero-score pii_result, so a caller reading only
+    # the scores allows text the guardrail never actually inspected. The caller
+    # is expected to treat this exactly as it treats a guardrail timeout.
+    failed:           bool = False
 
 
 class InputGuard:
@@ -67,6 +73,12 @@ class InputGuard:
             )
 
         except Exception as e:
+            # The clean pii_result below is a placeholder, not a verdict. The
+            # detector may have raised before scanning anything, and the
+            # redactor re-raises rather than hand back text it could not
+            # redact -- so neither can be read as "no PII found". `failed` is
+            # what says so. Returning the placeholder alone reported clean for
+            # text nobody inspected, and the caller forwarded it unredacted.
             logger.error(f"InputGuard PII failed: {e}")
             return InputGuardResult(
                 text            = text,
@@ -75,6 +87,7 @@ class InputGuard:
                 toxicity_result = DetectionResult.clean("toxicity_detector"),
                 redacted_types  = [],
                 was_sanitized   = False,
+                failed          = True,
             )
 
     def inspect_toxicity(
@@ -97,6 +110,11 @@ class InputGuard:
                 toxicity_result = toxicity_result,
                 redacted_types  = guard_result.redacted_types,
                 was_sanitized   = guard_result.was_sanitized,
+                # Carried forward, not recomputed. This rebuilds the result
+                # rather than mutating it, so a field left out here is silently
+                # reset to its default -- and a PII guardrail that failed at
+                # step 1 would report success by the time this returns.
+                failed          = guard_result.failed,
             )
         except Exception as e:
             logger.error(f"InputGuard toxicity failed: {e}")
