@@ -357,6 +357,67 @@ def standard_headers():
     return {"x-api-key": "wsk_live_test_standard_key"}
 
 
+@pytest_asyncio.fixture(scope="function")
+async def scored_key_pair(test_db):
+    """
+    A LIVE key and a TRIAL key in the same tenant AND the same department.
+
+    This is the pair for anything testing who may read per-layer detector
+    scores. A live key resolves to DEVELOPER and holds `settings:read`; a trial
+    key does not, so the two differ in exactly the authorization under test and
+    in nothing else.
+
+    Do NOT reach for `admin_headers` as the authorized half.
+    `_authenticate_admin_key` leaves `tenant_id` as None under TESTING
+    (`middleware/auth.py`), so the admin key scans as tenant "global" while any
+    seeded key scans as the real tenant. Anything keyed on the tenant -- the
+    prompt cache above all -- then sees two different callers rather than one
+    tenant with two credentials, and a test meaning to compare them silently
+    compares nothing.
+
+    Same DEPARTMENT matters for the same reason: the cache key covers the
+    resolved policy identity, and two departments can resolve differently.
+    """
+    import hashlib
+
+    from db.models import APIKeyModel, DepartmentModel
+    from db.repositories.tenant import TenantRepository
+
+    tenant = await TenantRepository(test_db).get_bootstrap_default()
+    assert tenant is not None, "the default tenant is seeded by the session fixture"
+
+    # `ck_api_keys_non_admin_tenant` requires a department on any non-admin key.
+    dept_id = uuid.uuid4()
+    test_db.add(DepartmentModel(
+        id        = dept_id,
+        tenant_id = tenant.id,
+        slug      = f"scored-{dept_id.hex[:8]}",
+        name      = "Layer score dept",
+        is_active = True,
+    ))
+    await test_db.flush()
+
+    def _add(prefix: str, key_type: str) -> str:
+        raw = prefix + uuid.uuid4().hex
+        test_db.add(APIKeyModel(
+            id        = uuid.uuid4(),
+            key_id    = f"k_{key_type}_" + uuid.uuid4().hex[:10],
+            tenant_id = tenant.id,
+            dept_id   = dept_id,
+            name      = f"layer score {key_type} key",
+            key_hash  = hashlib.sha256(raw.encode()).hexdigest(),
+            key_type  = key_type,
+            is_admin  = False,
+            revoked   = False,
+        ))
+        return raw
+
+    live  = _add("wsk_live_",  "live")
+    trial = _add("wsk_trial_", "trial")
+    await test_db.commit()
+    return {"x-api-key": live}, {"x-api-key": trial}
+
+
 # ── Redis helpers ─────────────────────────────────────────────────────────────
 
 async def _flush_test_redis_keys():

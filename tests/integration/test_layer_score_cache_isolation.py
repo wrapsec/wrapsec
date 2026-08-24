@@ -26,66 +26,6 @@ import uuid
 
 import pytest
 
-from db.models import APIKeyModel
-
-
-async def _seed_key_pair(test_db) -> tuple[dict, dict]:
-    """
-    A LIVE key and a TRIAL key in the same tenant AND the same department.
-
-    Both halves matter, because the cache key is built from the tenant plus the
-    resolved policy identity. Same tenant alone is not enough: two departments
-    can resolve to different policy, and the callers would then write separate
-    entries and never meet.
-
-    The warming caller must not be the admin key. `_authenticate_admin_key`
-    leaves `tenant_id` as None under TESTING (`middleware/auth.py:648`), so it
-    scans as tenant "global" while any seeded key scans as the real tenant --
-    different cache keys, no shared entry, and the unauthorized caller below
-    silently exercises the FRESH path instead of the cache-hit one. A live key
-    resolves to DEVELOPER and holds `settings:read`, which is the authorization
-    this pair is contrasting.
-    """
-    import hashlib
-
-    from db.models import DepartmentModel
-    from db.repositories.tenant import TenantRepository
-
-    tenant = await TenantRepository(test_db).get_bootstrap_default()
-    assert tenant is not None, "the default tenant is seeded by the session fixture"
-
-    # `ck_api_keys_non_admin_tenant` requires a department on any non-admin
-    # key, so one is created rather than passing dept_id=None.
-    dept_id = uuid.uuid4()
-    test_db.add(DepartmentModel(
-        id        = dept_id,
-        tenant_id = tenant.id,
-        name      = "cache isolation dept",
-        slug      = f"cache-iso-{dept_id.hex[:8]}",
-        is_active = True,
-    ))
-    await test_db.flush()
-
-    def _add(prefix: str, key_type: str) -> str:
-        raw = prefix + uuid.uuid4().hex
-        test_db.add(APIKeyModel(
-            id        = uuid.uuid4(),
-            key_id    = f"k_{key_type}_" + uuid.uuid4().hex[:10],
-            tenant_id = tenant.id,
-            dept_id   = dept_id,
-            name      = f"cache isolation {key_type} key",
-            key_hash  = hashlib.sha256(raw.encode()).hexdigest(),
-            key_type  = key_type,
-            is_admin  = False,
-            revoked   = False,
-        ))
-        return raw
-
-    live  = _add("wsk_live_",  "live")
-    trial = _add("wsk_trial_", "trial")
-    await test_db.commit()
-    return {"x-api-key": live}, {"x-api-key": trial}
-
 
 def _scores(body: dict) -> list:
     return [layer.get("score") for layer in body["assessment"]["layers"]]
@@ -156,9 +96,9 @@ async def _assert_cached(body_json: dict, payload: dict) -> None:
 
 @pytest.mark.asyncio
 async def test_a_trial_caller_cannot_read_scores_from_a_warm_cache(
-    client, test_db,
+    client, scored_key_pair,
 ):
-    live_headers, trial_headers = await _seed_key_pair(test_db)
+    live_headers, trial_headers = scored_key_pair
 
     # Same text, same tenant, same department, same modes -> the same cache key.
     payload = await _fresh_payload("isolation")
@@ -187,14 +127,14 @@ async def test_a_trial_caller_cannot_read_scores_from_a_warm_cache(
 
 @pytest.mark.asyncio
 async def test_the_warm_cache_still_serves_an_authorized_caller_its_scores(
-    client, test_db,
+    client, scored_key_pair,
 ):
     """
     The other direction. Restricting on serve must not have stripped the entry
     itself -- if it had, the first unauthorized caller would silently degrade
     every authorized one after it.
     """
-    live_headers, _ = await _seed_key_pair(test_db)
+    live_headers, _ = scored_key_pair
     payload = await _fresh_payload("isolation")
 
     first = await client.post("/v1/ai/request", json=payload, headers=live_headers)
@@ -211,12 +151,12 @@ async def test_the_warm_cache_still_serves_an_authorized_caller_its_scores(
 
 
 @pytest.mark.asyncio
-async def test_a_trial_caller_still_receives_a_usable_verdict(client, test_db):
+async def test_a_trial_caller_still_receives_a_usable_verdict(client, scored_key_pair):
     """
     The restriction removes a targeting signal, not the answer. An agent acting
     on the verdict -- which is what the MCP tool does -- must still be able to.
     """
-    _, trial_headers = await _seed_key_pair(test_db)
+    _, trial_headers = scored_key_pair
     resp = await client.post(
         "/v1/ai/request",
         json=await _fresh_payload("verdict"),
