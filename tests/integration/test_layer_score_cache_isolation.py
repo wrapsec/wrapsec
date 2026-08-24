@@ -29,10 +29,26 @@ import pytest
 from db.models import APIKeyModel
 
 
-async def _seed_trial_key(test_db) -> dict:
-    """A trial key in the same tenant, which is what makes the cache shared."""
+async def _seed_key_pair(test_db) -> tuple[dict, dict]:
+    """
+    A LIVE key and a TRIAL key in the same tenant AND the same department.
+
+    Both halves matter, because the cache key is built from the tenant plus the
+    resolved policy identity. Same tenant alone is not enough: two departments
+    can resolve to different policy, and the callers would then write separate
+    entries and never meet.
+
+    The warming caller must not be the admin key. `_authenticate_admin_key`
+    leaves `tenant_id` as None under TESTING (`middleware/auth.py:648`), so it
+    scans as tenant "global" while any seeded key scans as the real tenant --
+    different cache keys, no shared entry, and the unauthorized caller below
+    silently exercises the FRESH path instead of the cache-hit one. A live key
+    resolves to DEVELOPER and holds `settings:read`, which is the authorization
+    this pair is contrasting.
+    """
     import hashlib
 
+    from db.models import DepartmentModel
     from db.repositories.tenant import TenantRepository
 
     tenant = await TenantRepository(test_db).get_bootstrap_default()
@@ -40,8 +56,6 @@ async def _seed_trial_key(test_db) -> dict:
 
     # `ck_api_keys_non_admin_tenant` requires a department on any non-admin
     # key, so one is created rather than passing dept_id=None.
-    from db.models import DepartmentModel
-
     dept_id = uuid.uuid4()
     test_db.add(DepartmentModel(
         id        = dept_id,
@@ -52,24 +66,54 @@ async def _seed_trial_key(test_db) -> dict:
     ))
     await test_db.flush()
 
-    raw = "wsk_trial_" + uuid.uuid4().hex
-    test_db.add(APIKeyModel(
-        id        = uuid.uuid4(),
-        key_id    = "k_trial_" + uuid.uuid4().hex[:10],
-        tenant_id = tenant.id,
-        dept_id   = dept_id,
-        name      = "cache isolation trial key",
-        key_hash  = hashlib.sha256(raw.encode()).hexdigest(),
-        key_type  = "trial",
-        is_admin  = False,
-        revoked   = False,
-    ))
+    def _add(prefix: str, key_type: str) -> str:
+        raw = prefix + uuid.uuid4().hex
+        test_db.add(APIKeyModel(
+            id        = uuid.uuid4(),
+            key_id    = f"k_{key_type}_" + uuid.uuid4().hex[:10],
+            tenant_id = tenant.id,
+            dept_id   = dept_id,
+            name      = f"cache isolation {key_type} key",
+            key_hash  = hashlib.sha256(raw.encode()).hexdigest(),
+            key_type  = key_type,
+            is_admin  = False,
+            revoked   = False,
+        ))
+        return raw
+
+    live  = _add("wsk_live_",  "live")
+    trial = _add("wsk_trial_", "trial")
     await test_db.commit()
-    return {"x-api-key": raw}
+    return {"x-api-key": live}, {"x-api-key": trial}
 
 
 def _scores(body: dict) -> list:
     return [layer.get("score") for layer in body["assessment"]["layers"]]
+
+
+async def _cache_keys() -> set:
+    from cache.redis_client import get_redis
+
+    return set(await get_redis().keys("prompt_cache:*"))
+
+
+async def _assert_served_from_cache(before: set) -> None:
+    """
+    The second caller must have READ the warmed entry, not written its own.
+
+    Asserting that something is in the cache is not the same as asserting this
+    request came out of it. When the two callers disagree on tenant or resolved
+    policy they compute different cache keys, so the second one misses, scans
+    fresh, and stores a SECOND entry -- while every assertion about the
+    cache-hit path passes having exercised only the fresh one. A new key
+    appearing is exactly that miss, and is what this catches.
+    """
+    after = await _cache_keys()
+    assert after == before, (
+        "the request wrote a new cache entry instead of reading the warmed one, "
+        "so it missed the cache and the cache-hit path is not under test "
+        f"(new: {sorted(after - before)})"
+    )
 
 
 async def _fresh_payload(label: str) -> dict:
@@ -112,24 +156,25 @@ async def _assert_cached(body_json: dict, payload: dict) -> None:
 
 @pytest.mark.asyncio
 async def test_a_trial_caller_cannot_read_scores_from_a_warm_cache(
-    client, admin_headers, test_db,
+    client, test_db,
 ):
-    trial_headers = await _seed_trial_key(test_db)
+    live_headers, trial_headers = await _seed_key_pair(test_db)
 
-    # Same text, same tenant, same modes -> the same cache key. Unique per run
-    # so a previous run's entry cannot make this pass or fail by accident.
+    # Same text, same tenant, same department, same modes -> the same cache key.
     payload = await _fresh_payload("isolation")
 
-    warm = await client.post("/v1/ai/request", json=payload, headers=admin_headers)
+    warm = await client.post("/v1/ai/request", json=payload, headers=live_headers)
     assert warm.status_code == 200, warm.text
     assert any(s is not None for s in _scores(warm.json())), (
         "the authorized caller did not receive scores, so this proves nothing "
         "about what the cache then holds"
     )
     await _assert_cached(warm.json(), payload)
+    warmed = await _cache_keys()
 
     served = await client.post("/v1/ai/request", json=payload, headers=trial_headers)
     assert served.status_code == 200, served.text
+    await _assert_served_from_cache(warmed)
     body = served.json()
 
     assert _scores(body) == [None] * len(body["assessment"]["layers"]), (
@@ -142,19 +187,24 @@ async def test_a_trial_caller_cannot_read_scores_from_a_warm_cache(
 
 @pytest.mark.asyncio
 async def test_the_warm_cache_still_serves_an_authorized_caller_its_scores(
-    client, admin_headers,
+    client, test_db,
 ):
     """
     The other direction. Restricting on serve must not have stripped the entry
     itself -- if it had, the first unauthorized caller would silently degrade
     every authorized one after it.
     """
+    live_headers, _ = await _seed_key_pair(test_db)
     payload = await _fresh_payload("isolation")
 
-    first  = await client.post("/v1/ai/request", json=payload, headers=admin_headers)
-    second = await client.post("/v1/ai/request", json=payload, headers=admin_headers)
+    first = await client.post("/v1/ai/request", json=payload, headers=live_headers)
+    assert first.status_code == 200, first.text
+    await _assert_cached(first.json(), payload)
+    warmed = await _cache_keys()
 
-    assert first.status_code == second.status_code == 200
+    second = await client.post("/v1/ai/request", json=payload, headers=live_headers)
+    assert second.status_code == 200, second.text
+    await _assert_served_from_cache(warmed)
     assert any(s is not None for s in _scores(second.json())), (
         "an authorized caller lost scores on a cache hit"
     )
@@ -166,7 +216,7 @@ async def test_a_trial_caller_still_receives_a_usable_verdict(client, test_db):
     The restriction removes a targeting signal, not the answer. An agent acting
     on the verdict -- which is what the MCP tool does -- must still be able to.
     """
-    trial_headers = await _seed_trial_key(test_db)
+    _, trial_headers = await _seed_key_pair(test_db)
     resp = await client.post(
         "/v1/ai/request",
         json=await _fresh_payload("verdict"),
@@ -206,6 +256,7 @@ async def test_a_repeated_client_trace_id_cannot_break_a_cache_hit(client, admin
                              headers={**admin_headers, "X-Trace-Id": chosen})
     assert warm.status_code == 200, warm.text
     await _assert_cached(warm.json(), payload)
+    warmed = await _cache_keys()
 
     # Same header again, now served from cache -- the path that used to key the
     # audit row on this value.
@@ -214,6 +265,7 @@ async def test_a_repeated_client_trace_id_cannot_break_a_cache_hit(client, admin
     assert again.status_code == 200, (
         f"a repeated client trace id broke the request: {again.status_code} {again.text[:200]}"
     )
+    await _assert_served_from_cache(warmed)
     assert again.json()["trace_id"] != chosen, (
         "the response is keyed on the client's value, so it is still the audit key"
     )
@@ -233,6 +285,7 @@ async def test_an_over_long_client_trace_id_cannot_break_a_cache_hit(client, adm
                               headers={**admin_headers, "X-Trace-Id": over_long})
     assert first.status_code == 200, first.text
     await _assert_cached(first.json(), payload)
+    warmed = await _cache_keys()
 
     second = await client.post("/v1/ai/request", json=payload,
                                headers={**admin_headers, "X-Trace-Id": over_long})
@@ -240,6 +293,7 @@ async def test_an_over_long_client_trace_id_cannot_break_a_cache_hit(client, adm
         f"an over-long client trace id broke the cached request: "
         f"{second.status_code} {second.text[:200]}"
     )
+    await _assert_served_from_cache(warmed)
     assert len(second.json()["trace_id"]) <= 50
 
 
@@ -255,9 +309,11 @@ async def test_a_cache_hit_is_still_retrievable_by_the_trace_id_it_returns(
     warm = await client.post("/v1/ai/request", json=payload, headers=admin_headers)
     assert warm.status_code == 200, warm.text
     await _assert_cached(warm.json(), payload)
+    warmed = await _cache_keys()
 
     hit = await client.post("/v1/ai/request", json=payload, headers=admin_headers)
     assert hit.status_code == 200
+    await _assert_served_from_cache(warmed)
 
     found = await client.get(f"/v1/ai/requests/{hit.json()['trace_id']}",
                              headers=admin_headers)
