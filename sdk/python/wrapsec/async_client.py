@@ -405,7 +405,9 @@ class AsyncClient:
                 f"{self._base_url}/health/ready",
                 headers=build_headers(api_key),
             )
-        if resp.is_success:
+        # 503 is a readiness REPORT, not a transport error -- see the sync
+        # client for why it is returned rather than raised.
+        if resp.is_success or resp.status_code == 503:
             return resp.json()
         response_data = None
         try:

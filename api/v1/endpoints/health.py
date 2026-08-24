@@ -3,6 +3,7 @@
 # WrapSec v1.0 | AI Security Gateway - https://wrapsec.com
 
 from fastapi import APIRouter, Depends
+from fastapi.responses import JSONResponse
 from sqlalchemy import text
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -25,9 +26,18 @@ async def health():
 @router.get("/health/ready")
 async def health_ready():
     """
-    Readiness check. Returns "ready" if all critical components are healthy.
-    Checks: database connectivity, Redis availability, ML model load status.
-    Used by container orchestrators to hold traffic until the service is ready.
+    Readiness check. Used by container orchestrators to decide whether to route
+    traffic, so the STATUS CODE is the contract and the body is the detail.
+
+    200 -- every REQUIRED component is up: database, Redis, and the Tier-1 ML
+           model. The body may still read "degraded", which means an OPTIONAL
+           component is absent: the Tier-2 transformer is not installed in the
+           default build, and running without it is the documented degraded
+           mode rather than a fault.
+    503 -- a required component is down. The instance cannot serve: a request
+           that runs the ML layer with no Tier-1 model is refused fail-closed
+           with SYSTEM_ERROR, so routing to it produces errors, not weaker
+           scoring.
     """
     from cache.redis_client import ping as redis_ping
     from db.session import AsyncSessionFactory
@@ -70,10 +80,33 @@ async def health_ready():
     }
     all_ok = all(v in ("ok", "healthy") for v in checks.values())
 
-    return {
+    # Which checks decide the STATUS CODE, as opposed to the body.
+    #
+    # transformer_detector is deliberately absent: Tier 2 is optional by build
+    # and reports degraded on every default deployment, so keying the code on
+    # every check would fail readiness for a correctly-installed gateway.
+    #
+    # tfidf_detector is present because Tier 1 is required. When its model has
+    # not loaded, MLDetector.detect returns a detector FAILURE and the
+    # fail-closed override refuses every request that runs the ML layer -- the
+    # instance is serving errors, not serving degraded.
+    _REQUIRED = ("database", "redis", "tfidf_detector")
+    required_ok = all(checks[name] in ("ok", "healthy") for name in _REQUIRED)
+
+    body = {
         "status": "ready" if all_ok else "degraded",
         "checks": checks,
     }
+
+    # 200 with a degraded body means "serving, with less signal" -- the Tier-2
+    # case. 503 means "not serving": a readiness probe reads the status code, so
+    # returning 200 here kept an orchestrator routing to an instance that
+    # refused every request with SYSTEM_ERROR, and never restarted it. The body
+    # is unchanged in both cases; the code is what the orchestrator acts on.
+    return JSONResponse(
+        content     = body,
+        status_code = 200 if required_ok else 503,
+    )
 
 
 @router.get("/health/live")

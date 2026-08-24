@@ -930,13 +930,33 @@ export class WrapSec {
   async healthReady(timeout?: number): Promise<Record<string, unknown>> {
     const apiKey = this.requireApiKey()
     const t      = resolveTimeout(timeout, this._timeout, 5)
-    return withRetry(
-      () => {
-        const headers = buildHeaders(apiKey)
-        return executeRequest("GET", `${this._baseUrl}/health/ready`, headers, t) as Promise<Record<string, unknown>>
-      },
-      "GET /health/ready",
-    ) as Promise<Record<string, unknown>>
+    try {
+      return await withRetry(
+        () => {
+          const headers = buildHeaders(apiKey)
+          return executeRequest("GET", `${this._baseUrl}/health/ready`, headers, t) as Promise<Record<string, unknown>>
+        },
+        "GET /health/ready",
+      )
+    } catch (err) {
+      // 503 is a readiness REPORT, not a transport error: the gateway answers
+      // with the same body and names the component that is down. Surfacing it
+      // as a thrown error would hide the diagnosis at the one moment it is
+      // worth reading. Mirrors the Python client.
+      //
+      // It arrives here only after withRetry has exhausted its backoff, since
+      // a 503 maps to WrapSecSystemError, which that helper treats as
+      // retryable. Slower than an immediate answer, and still an answer.
+      if (
+        err instanceof WrapSecError &&
+        err.statusCode === 503 &&
+        err.response !== null &&
+        typeof err.response === "object"
+      ) {
+        return err.response as Record<string, unknown>
+      }
+      throw err
+    }
   }
 
   /**

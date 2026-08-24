@@ -576,7 +576,11 @@ class Client:
             headers=build_headers(api_key),
             timeout=timeout,
         )
-        if resp.ok:
+        # 503 is a readiness REPORT, not a transport error: the gateway answers
+        # with the same body and names the component that is down. Raising on it
+        # would make `doctor` report an auth failure and print "no service data"
+        # at the one moment the report is worth reading.
+        if resp.ok or resp.status_code == 503:
             return resp.json()
         response_data = None
         try:

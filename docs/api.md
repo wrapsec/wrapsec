@@ -88,7 +88,7 @@ Used by dashboard users. Issued via `POST /v1/auth/login`.
 - `POST /v1/chat/completions` is API-key only. Dashboard (JWT) sessions receive `403 PROXY_REQUIRES_API_KEY` regardless of role
 - `GET /v1/settings/*` requires the `settings:read` permission: ADMIN, DEVELOPER, and AUDITOR roles hold it; VIEWER does not. Trial API keys are rejected
 - `/v1/admin/tenants*` is the platform-operator control plane (tenant provisioning and lifecycle). Master admin API key only; excluded from the OpenAPI schema
-- If a tenant is suspended, every request under its credentials returns `403 TENANT_SUSPENDED`
+- If a tenant is suspended, every request under its credentials returns `403 TENANT_SUSPENDED`. The same applies when the tenant's status cannot be established: suspension enforcement fails closed, so a datastore outage refuses authenticated traffic rather than serving it on the assumption the tenant is active. A tenant row that simply does not exist is a definite answer and is not treated as suspended
 - All write endpoints on admin resources require JWT (no API key writes)
 
 ---
@@ -123,7 +123,7 @@ WrapSec uses `PATCH` for user updates and `PUT` for settings and configuration. 
 
 | Header | Description |
 |---|---|
-| `x-trace-id` | ULID trace ID (`req_01knzhh8...`) |
+| `x-trace-id` | Trace ID, `req_` + 32 hex characters (`req_33ab7464f5014936b07af2e828b274a9`) |
 | `X-RateLimit-Limit` | Requests per minute |
 | `X-RateLimit-Remaining` | Remaining in current window |
 | `X-RateLimit-Reset` | Unix timestamp when window resets |
@@ -1070,7 +1070,7 @@ counter-intuitive -- lowering it improves refusals and latency together. See "Tu
 
 | Header | Description |
 |---|---|
-| `X-WrapSec-Trace-Id` | ULID trace ID - always present |
+| `X-WrapSec-Trace-Id` | Trace ID, `req_` + 32 hex characters - always present |
 | `X-WrapSec-Input-Decision` | `ALLOW` / `BLOCK` / `SANITIZE` |
 | `X-WrapSec-Input-Primary-Reason` | Primary reason for input decision |
 | `X-WrapSec-Input-Confidence` | Input confidence (0.0-1.0) |
@@ -2203,6 +2203,17 @@ Hard-delete the endpoint.
 
 `status` is `"degraded"` if any check is not `"ok"` or `"healthy"`. Detector checks return `"healthy"` (not `"ok"`) when loaded. `transformer_detector` returns `"degraded"` when transformer dependencies are not installed -- Tier 1 (TF-IDF) handles all detection in this state.
 
+**The status code is the readiness contract; the body is the detail.** They are not the same signal, because not every component is required:
+
+| Code | Meaning | Required up | Body may read |
+|---|---|---|---|
+| `200` | Serving. An optional component may still be absent. | `database`, `redis`, `tfidf_detector` | `"ready"` or `"degraded"` |
+| `503` | Not serving. A required component is down. | - | `"degraded"` |
+
+`transformer_detector` is optional by build and never affects the status code: the default image ships without it, so a `200` with `"status": "degraded"` is the normal state of a correctly-installed default deployment. Tier 1 is required -- with no model loaded, every request that runs the ML layer is refused fail-closed with `SYSTEM_ERROR`, so the instance is serving errors rather than serving with less signal, and a readiness probe must take it out of rotation.
+
+A `503` here is a readiness REPORT, not a transport error: it carries the same body and names the component that is down. Both SDK clients and `wrapsec doctor` return that body rather than raising, so a health check remains readable during an outage.
+
 ### GET /health/live
 
 ```json
@@ -2458,7 +2469,7 @@ Note: `account_inactive` is the `auth_events.failure_reason` value when `is_acti
 - Rule, ML, LLM detectors
 - PII guardrail (30+ types)
 - Idempotency-Key
-- ULID trace IDs
+- Trace IDs on every request and response
 - Rate limiting per API key
 - Policy resolution chain
 

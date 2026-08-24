@@ -17,10 +17,19 @@ class TraceId:
     @staticmethod
     def _generate_ulid() -> str:
         """
-        Generate a ULID-based identifier.
-        Lexicographically sortable by time - better for DB indexing
-        and audit log ordering than random hex.
-        Falls back to random hex if python-ulid not installed.
+        Identifier body for a trace id.
+
+        A ULID would be lexicographically sortable by time, which is better for
+        DB indexing and audit ordering than random hex. `python-ulid` is NOT a
+        declared dependency of this project -- it is absent from
+        requirements.txt, requirements-dev.txt and requirements-mcp.txt -- so
+        the fallback below is the branch that actually runs, and ids are random
+        hex with no time ordering. Anything relying on trace ids sorting by time
+        is relying on a property they do not have.
+
+        The ULID branch is kept because it costs nothing and activates if the
+        package is ever added deliberately. Adding it is a decision about id
+        format, not a way to make existing documentation true.
         """
         try:
             from ulid import ULID  # type: ignore

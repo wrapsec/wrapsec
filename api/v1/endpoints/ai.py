@@ -375,10 +375,67 @@ async def ai_request(
     det_mode_str = _mode_str(body.detection_mode)
     exe_mode_str = _mode_str(body.execution_mode)
 
-    from cache.semantic_cache import get_cached_result, set_cached_result
+    # Policy is resolved BEFORE the cache is consulted, because the cache key
+    # has to name the scope a verdict was reached in. Resolution runs the
+    # department and application layers, which may tighten below the tenant's
+    # policy -- so a key naming only the tenant let a stricter department read a
+    # laxer one's cached ALLOW, with its own policy never consulted. Resolution
+    # is a DB read on a path that previously skipped it; the miss path pays the
+    # same read either way, and correctness here outranks a hit-path saving.
+    from services.policy_resolver import resolve_policy
+    policy, policy_source = await resolve_policy(
+        db        = db,
+        tenant_id = getattr(request.state, "tenant_id", None),
+        dept_id   = getattr(request.state, "dept_id",   None),
+        app_id    = getattr(request.state, "app_id",    None),
+    )
+
+    block_threshold    = policy["thresholds"]["block"]
+    sanitize_threshold = policy["thresholds"]["sanitize"]
+    rule_enabled       = policy["detection"]["rule_enabled"]
+    ml_enabled         = policy["detection"]["ml_enabled"]
+    llm_enabled        = policy["detection"]["llm_enabled"]
+    llm_settings       = policy["llm"]
+
+    if body.execution_mode == ExecutionMode.PROXY and not llm_enabled:
+        from errors.exceptions import WrapSecError
+        raise WrapSecError(
+            code        = "VALIDATION_ERROR",
+            message     = "Proxy mode requires LLM layer to be enabled",
+            status_code = 422,
+        )
+
+    pii_policy             = policy.get("guardrails", {}).get("pii", {})
+    pii_block_threshold    = pii_policy.get("block_threshold",    None)
+    pii_sanitize_threshold = pii_policy.get("sanitize_threshold", None)
+
+    toxicity_policy             = policy.get("guardrails", {}).get("toxicity", {})
+    toxicity_block_threshold    = toxicity_policy.get("block_threshold",    None)
+    toxicity_sanitize_threshold = toxicity_policy.get("sanitize_threshold", None)
+
+    from cache.semantic_cache import (
+        get_cached_result,
+        policy_identity,
+        set_cached_result,
+    )
     from observability.metrics import CACHE_HITS, CACHE_MISSES
     _tenant_id = getattr(request.state, "tenant_id", None) or "global"
-    cached = await get_cached_result(body.input, det_mode_str, exe_mode_str, _tenant_id)
+    _policy_id = policy_identity(
+        block_threshold             = block_threshold,
+        sanitize_threshold          = sanitize_threshold,
+        pii_block_threshold         = pii_block_threshold,
+        pii_sanitize_threshold      = pii_sanitize_threshold,
+        toxicity_block_threshold    = toxicity_block_threshold,
+        toxicity_sanitize_threshold = toxicity_sanitize_threshold,
+        rule_enabled                = rule_enabled,
+        ml_enabled                  = ml_enabled,
+        llm_enabled                 = llm_enabled,
+        llm_settings                = llm_settings,
+    )
+    cached = await get_cached_result(
+        body.input, det_mode_str, exe_mode_str, _tenant_id,
+        _policy_id, body.input_source,
+    )
     if cached:
         CACHE_HITS.inc()
         # Overwrite the cached body's trace_id with the current request's so the
@@ -419,17 +476,13 @@ async def ai_request(
         ),
     )
 
-    from services.policy_resolver import resolve_policy
-    policy, policy_source = await resolve_policy(
-        db        = db,
-        tenant_id = getattr(request.state, "tenant_id", None),
-        dept_id   = getattr(request.state, "dept_id",   None),
-        app_id    = getattr(request.state, "app_id",    None),
-    )
-
     # Per-app rate limit - enforced when app_id is known and rate_limit_override is set.
     # Uses a separate per-app bucket so the global middleware bucket is unaffected.
     # Fails open if Redis is unavailable - consistent with all other rate limit checks.
+    #
+    # Stays BELOW the cache return, where it has always been: a cache hit does
+    # not consume an app-bucket slot today, and changing that is a resource-
+    # control decision rather than part of closing the policy-scope defect.
     _app_id = getattr(request.state, "app_id", None)
     if _app_id:
         _app_rate_limit = policy.get("rate_limit", {}).get("per_minute")
@@ -446,29 +499,6 @@ async def ai_request(
                 raise
             except Exception:
                 pass  # Fail open if Redis unavailable.
-
-    block_threshold    = policy["thresholds"]["block"]
-    sanitize_threshold = policy["thresholds"]["sanitize"]
-    rule_enabled       = policy["detection"]["rule_enabled"]
-    ml_enabled         = policy["detection"]["ml_enabled"]
-    llm_enabled        = policy["detection"]["llm_enabled"]
-    llm_settings       = policy["llm"]
-
-    if body.execution_mode == ExecutionMode.PROXY and not llm_enabled:
-        from errors.exceptions import WrapSecError
-        raise WrapSecError(
-            code        = "VALIDATION_ERROR",
-            message     = "Proxy mode requires LLM layer to be enabled",
-            status_code = 422,
-        )
-
-    pii_policy             = policy.get("guardrails", {}).get("pii", {})
-    pii_block_threshold    = pii_policy.get("block_threshold",    None)
-    pii_sanitize_threshold = pii_policy.get("sanitize_threshold", None)
-
-    toxicity_policy             = policy.get("guardrails", {}).get("toxicity", {})
-    toxicity_block_threshold    = toxicity_policy.get("block_threshold",    None)
-    toxicity_sanitize_threshold = toxicity_policy.get("sanitize_threshold", None)
 
     result = await _gateway.process(
         incoming,
@@ -547,7 +577,13 @@ async def ai_request(
     # receive per-layer detector scores meant for admins only. Building a
     # separate cache-safe copy keeps the on-hit path uniformly non-debug.
     cache_body = {k: v for k, v in response.items() if k != "debug"}
-    await set_cached_result(body.input, det_mode_str, exe_mode_str, _tenant_id, cache_body)
+    # Written under the same key the lookup used, so an entry is only ever read
+    # back by a request resolving to the same policy and carrying the same
+    # provenance.
+    await set_cached_result(
+        body.input, det_mode_str, exe_mode_str, _tenant_id, cache_body,
+        _policy_id, body.input_source,
+    )
 
     return JSONResponse(content=response)
 

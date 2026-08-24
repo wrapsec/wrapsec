@@ -428,10 +428,24 @@ async def _get_db_session():
 
 async def _tenant_suspended(tenant_id: str | None) -> bool:
     """
-    True when the tenant is not active (suspend enforcement). Read-through cache
-    (auth:tenant:{id}, short TTL) then DB. FAIL OPEN: any lookup error returns
-    False (allow), so a Redis/DB outage degrades enforcement but never blocks
-    traffic - consistent with the rest of the auth path's availability posture.
+    True when the tenant may not be served: suspended, or in a state that could
+    not be established. Read-through cache (auth:tenant:{id}, short TTL) then DB.
+
+    FAILS CLOSED. A lookup error returns True, so a credential is refused while
+    the tenant's status is unknown rather than served on the assumption that it
+    is active. The documented contract is that a suspended tenant's credentials
+    return 403 on every request; returning False here made that true only while
+    the datastore was reachable, and a suspended tenant regained access during
+    exactly the disturbance nobody is watching.
+
+    The cost is explicit: a datastore outage refuses authenticated traffic
+    rather than degrading enforcement. That is the same trade the detection path
+    already makes, and the opposite of the rate limiter, which fails open
+    because exceeding a quota is not a security boundary. Suspension is.
+
+    An unknown tenant is NOT suspended: the row simply not existing is a
+    definite answer, and other guards handle an unrecognised tenant. Only an
+    unanswerable lookup fails closed.
     """
     if not tenant_id:
         return False
@@ -464,8 +478,11 @@ async def _tenant_suspended(tenant_id: str | None) -> bool:
                 pass  # best-effort cache write
         return status != "active"
     except Exception as e:
-        logger.warning("tenant status lookup failed open tenant=%s error=%s", tenant_id, e)
-        return False
+        logger.error(
+            "tenant status lookup failed, refusing the request tenant=%s error=%s",
+            tenant_id, e,
+        )
+        return True
 
 
 def _tenant_suspended_response(request: Request) -> Response:
