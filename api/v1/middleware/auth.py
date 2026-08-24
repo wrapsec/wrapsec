@@ -70,9 +70,28 @@ def _parse_trusted_proxy_nets(raw: str) -> list[ipaddress.IPv4Network | ipaddres
         if not entry:
             continue
         try:
-            nets.append(ipaddress.ip_network(entry, strict=False))
+            net = ipaddress.ip_network(entry, strict=False)
         except ValueError:
             logger.warning("trusted_proxy_ips: ignoring invalid entry %r", entry)
+            continue
+
+        # A zero-prefix network matches every address, so trusting it means
+        # believing a forwarded header from any peer -- the spoofing this list
+        # exists to prevent. `0.0.0.0/0` parses cleanly and reads like
+        # configuration, so the control would look enabled while doing nothing.
+        # Ignored rather than fatal: dropping the entry falls back to the direct
+        # peer, which is the safe direction, and an unusable value must not stop
+        # the gateway booting. ip_allowlist.normalize_entries applies the same
+        # rule but raises, because it runs at configuration time.
+        if net.prefixlen == 0:
+            logger.warning(
+                "trusted_proxy_ips: ignoring %r -- it matches every address. "
+                "Leave the setting empty to use the direct connection address.",
+                entry,
+            )
+            continue
+
+        nets.append(net)
     return nets
 
 

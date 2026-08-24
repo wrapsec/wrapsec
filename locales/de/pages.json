@@ -936,6 +936,7 @@
     },
     "enabled": "Aktiviert",
     "disabled": "Deaktiviert",
+    "restricted": "Eingeschraenkt",
     "llm_title": "LLM-Konfiguration",
     "provider": "Anbieter",
     "model": "Modell",

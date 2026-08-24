@@ -611,6 +611,19 @@ Scan-only mode. Inspect input, get a security decision, then forward to your LLM
 
 The `assessment` object is an always-present, self-contained security verdict - the decision, reasons, threats, and confidence, plus per-layer detector contributions (the full layer bag, not just the fixed keys). Agents and the MCP tool consume this single object; the top-level fields remain for backward compatibility.
 
+**Per-layer scores are restricted.** `assessment` is always present for every caller, and so is every entry in `assessment.layers` with its `name` and its `decision`. The numeric `score` on each entry is returned only to callers holding `settings:read` and not using a trial key -- the same boundary `GET /v1/settings` and `GET /health/config` apply. A live API key resolves to `DEVELOPER` and holds it; trial keys and `VIEWER` do not.
+
+| Caller | `assessment.layers[]` contains |
+|---|---|
+| Holds `settings:read`, not a trial key | `name`, `score`, `decision` |
+| Any other authenticated caller | `name`, `decision` |
+
+Nothing else changes: `decision`, `risk_score`, `primary_reason`, `confidence`, `threats`, and each layer's classification are returned to everyone. The same restriction applies to `detection_scores` and `guardrail_scores` on `GET /v1/ai/requests/{trace_id}`, which persist the same numbers -- otherwise a caller reads back from the audit record what the scan response withheld.
+
+**Why.** A per-layer score is a targeting signal: it says how much each detector contributed, so an author reworking a payload learns which layer to work against and how far it has to move. That is what makes evasion cheaper, and it is why the `debug` block carrying the same numbers is admin-gated and separately rate-limited.
+
+**What this is not.** It is not threshold confidentiality. `risk_score` and `decision` are returned to every caller, and a binary search over them recovers a threshold to six decimal places in about two dozen probes without reading any layer field. Nor does it end targeting: the classification is preserved deliberately, so a caller can still see which layer sits in which bucket. The signal narrows from a float to three states. Both limits are stated because a control defended with a claim that does not hold is one that gets removed the first time someone checks.
+
 `sanitized_input` is present only when `decision = SANITIZE`. Use it instead of the original input when forwarding to your LLM.
 
 `policy_source` is **not** in the scan response - it appears only in `GET /v1/ai/requests/{trace_id}`.
@@ -2222,7 +2235,20 @@ A `503` here is a readiness REPORT, not a transport error: it carries the same b
 
 ### GET /health/config
 
-Active configuration snapshot. Does not expose API keys or secrets.
+The configuration currently in force, for deployment verification. Does not expose API keys or secrets to any caller.
+
+Every authenticated caller may call it, but the body varies by permission. The values it reports are the same ones `GET /v1/settings` serves behind `settings:read` with trial keys refused -- thresholds and layer status are calibration data, since they tell a caller how far under a limit a payload has to sit. Returning them here regardless of permission would have made that restriction meaningless.
+
+| Caller | Receives |
+|---|---|
+| Holds `settings:read` and is not a trial key -- ADMIN, DEVELOPER, AUDITOR | the full body: thresholds, detection-layer states, LLM provider/model/trigger/timeout, rate limit, each with its `source` |
+| Any other authenticated caller -- VIEWER, trial keys | `version`, plus each section reduced to its `source` marker (`database` or `environment`) |
+
+The reduced body still answers the deployment-verification question: which build is running, and whether configuration is customised or left at environment defaults. It discloses no threshold and no layer state.
+
+`version` is unrestricted because unauthenticated `GET /health` already returns it.
+
+Unauthenticated callers receive `401` -- `/health/config` is not a public path, unlike `/health`, `/health/ready`, and `/health/live`.
 
 ```json
 {
@@ -2364,7 +2390,7 @@ SYSTEM_ERROR = detectors failed (exception, timeout, internal error)
 
 **Security hardening (env vars):**
 - `METRICS_TOKEN` - dedicated Bearer token for `/metrics` endpoint scraping. Falls back to `ADMIN_API_KEY` if unset. `/metrics` is no longer unauthenticated.
-- `TRUSTED_PROXY_IPS` - comma-separated list of trusted reverse proxy IPs/CIDRs. `x-forwarded-for` is only trusted for audit log attribution when the direct connection IP matches this list. Leave empty (default) to always use the direct connection IP - safe when not behind a proxy. Example: `TRUSTED_PROXY_IPS=10.0.0.1,172.16.0.0/12`
+- `TRUSTED_PROXY_IPS` - comma-separated list of trusted reverse proxy IPs/CIDRs. `x-forwarded-for` is trusted only when the direct connection IP matches this list. It decides HOW the client address is derived, and every control that reads that address inherits the answer -- not audit attribution alone: `audit_logs.ip_address` and `auth_events.ip_address`, API-key source-network restrictions, and the per-IP rate-limit bucket. It is NOT an access-control list and shares nothing with one: this names the PROXIES allowed to state who the client is, while an API key's `ip_allowlist` names the CLIENT networks that key may be used from. The two never hold the same value -- a proxy address in a key's allowlist would admit every caller behind that proxy, and a client range here would let those clients forge any address they like. An entry matching every address (`0.0.0.0/0`, `::/0`) is ignored with a warning, since it would trust a forwarded header from any peer. Leave empty (default) to always use the direct connection IP - safe when not behind a proxy. Example: `TRUSTED_PROXY_IPS=10.0.0.1,172.16.0.0/12`
 
 ---
 

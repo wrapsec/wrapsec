@@ -98,14 +98,23 @@ export default function SystemPage() {
                   { key: "llm",  enabled: config.detection_layers?.llm  },
                 ].map(({ key, enabled }) => (
                   <div key={key} className="bg-slate-50 rounded-lg px-3 py-3 flex items-center gap-2.5">
+                    {/* Three states, not two. `/health/config` omits layer state
+                        for callers without settings:read, so `enabled` can be
+                        undefined -- and undefined is falsy, which rendered a
+                        layer that is actually ON as a grey "disabled" dot. A
+                        wrong state reads as fact; an unknown one does not. */}
                     <span
                       className="h-2 w-2 rounded-full flex-shrink-0"
-                      style={{ backgroundColor: enabled ? "#10b981" : "#cbd5e1" }}
+                      style={{ backgroundColor: enabled === true ? "#10b981" : "#cbd5e1" }}
                     />
                     <div>
                       <p className="text-xs font-medium text-slate-700">{t(`layer.${key}`)}</p>
-                      <p className="text-xs" style={{ color: enabled ? "#059669" : "#94a3b8" }}>
-                        {enabled ? t("enabled") : t("disabled")}
+                      <p className="text-xs" style={{ color: enabled === true ? "#059669" : "#94a3b8" }}>
+                        {enabled === undefined
+                          ? t("restricted")
+                          : enabled
+                            ? t("enabled")
+                            : t("disabled")}
                       </p>
                     </div>
                   </div>

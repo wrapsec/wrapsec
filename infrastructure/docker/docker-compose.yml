@@ -2,6 +2,10 @@ services:
 
   nginx:
     image: nginx:alpine
+    networks:
+      wrapsec_net:
+        # Fixed, because TRUSTED_PROXY_IPS has to name it. .1 is the gateway.
+        ipv4_address: 172.31.240.2
     ports:
       - "80:80"
     volumes:
@@ -16,6 +20,7 @@ services:
       retries: 3
 
   api:
+    networks: [wrapsec_net]
     build:
       context: ../..
       dockerfile: infrastructure/docker/Dockerfile
@@ -38,6 +43,7 @@ services:
     # healthcheck lives in the Dockerfile so the image is self-describing
 
   dashboard:
+    networks: [wrapsec_net]
     build:
       context: ../..
       dockerfile: infrastructure/docker/Dockerfile.dashboard
@@ -66,6 +72,7 @@ services:
     restart: unless-stopped
 
   postgres:
+    networks: [wrapsec_net]
     image: postgres:16-alpine
     environment:
       POSTGRES_USER:     wrapsec
@@ -84,6 +91,7 @@ services:
       retries: 5
 
   redis:
+    networks: [wrapsec_net]
     image: redis:7-alpine
     ports:
       - "6379:6379"
@@ -99,6 +107,7 @@ services:
       retries: 5
 
   prometheus:
+    networks: [wrapsec_net]
     image: prom/prometheus:latest
     ports:
       # Bind to localhost only — Prometheus must never be public-facing.
@@ -124,6 +133,7 @@ services:
   #   docker compose --profile otlp up -d
   # Config: infrastructure/otel-collector/otel-collector-config.yaml
   otel-collector:
+    networks: [wrapsec_net]
     image: otel/opentelemetry-collector-contrib:latest
     profiles: ["otlp"]
     command: ["--config=/etc/otelcol/config.yaml"]
@@ -144,6 +154,7 @@ services:
     restart: unless-stopped
 
   grafana:
+    networks: [wrapsec_net]
     image: grafana/grafana:latest
     ports:
       # Bind to localhost only — serve Grafana behind nginx with auth in production.
@@ -168,3 +179,34 @@ volumes:
   redis_data:
   prometheus_data:
   grafana_data:
+
+# One user-defined network with an explicit subnet, so nginx can hold a FIXED
+# address. TRUSTED_PROXY_IPS names that address and nothing else: only nginx is
+# believed when it supplies X-Forwarded-For, and every other peer -- the
+# dashboard BFF, which reaches api:8000 directly -- is treated as a direct
+# client whose forwarded header is ignored.
+#
+# The subnet is declared rather than left to Docker because compose assigns
+# subnets in creation order (172.17, .18, .19 ... depending on what else exists
+# on the host), so there is no stable value an operator could put in .env.
+# Declaring it also reserves it: Docker will not auto-assign an overlapping
+# range to another project.
+#
+# A narrow /24 at the top of Docker's default pool, chosen to be far from the
+# /16s the auto-assigner hands out from the bottom. If it collides with
+# something already on the host, compose fails loudly at `up` -- change it here
+# and in TRUSTED_PROXY_IPS together.
+networks:
+  wrapsec_net:
+    driver: bridge
+    ipam:
+      config:
+        # `ip_range` confines DYNAMIC assignment to the upper half, which
+        # reserves the lower half for addresses pinned by hand. Without it
+        # Docker allocates from the bottom of the subnet and hands .2 to
+        # whichever service starts first -- so nginx's pinned address is taken
+        # by another container and its own start fails with "Address already in
+        # use". Every service except nginx takes an address from .128 upward.
+        - subnet: 172.31.240.0/24
+          ip_range: 172.31.240.128/25
+          gateway: 172.31.240.1

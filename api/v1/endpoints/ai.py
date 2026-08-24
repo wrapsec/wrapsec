@@ -46,6 +46,50 @@ def _mode_str(value) -> str:
     return str(value).split(".")[-1].lower()
 
 
+def restrict_layer_scores(body: dict) -> dict:
+    """
+    Drop the numeric `score` from every entry in `assessment.layers`, leaving
+    the layer's name and its ALLOW/SANITIZE/BLOCK classification.
+
+    What this removes and why. A per-layer score is a targeting signal: it says
+    how much each detector contributed, so an author reworking a payload learns
+    which layer to work against and how far it has to move. That makes evasion
+    cheaper in a way the aggregate does not, because the aggregate cannot say
+    where the signal came from.
+
+    What it does NOT claim. It is not threshold confidentiality. `risk_score`
+    and `decision` are returned to every caller, and a binary search over them
+    recovers a threshold to six decimal places in about two dozen probes
+    without reading any layer field -- measured, not assumed. Nor does it
+    eliminate targeting: the classification is deliberately preserved, so a
+    caller can still tell which layer is in which bucket. It narrows a float to
+    three states.
+
+    Stated this way on purpose. A control justified as "keeps thresholds
+    secret" is one somebody later disproves in an afternoon and removes,
+    because the claim is false and the removal looks like cleanup.
+
+    Returns a new object; the caller's dict is not mutated, which matters
+    because one of the two call sites is holding a cached body that other
+    requests will read again.
+    """
+    assessment = body.get("assessment")
+    if not isinstance(assessment, dict) or not isinstance(assessment.get("layers"), list):
+        return body
+
+    return {
+        **body,
+        "assessment": {
+            **assessment,
+            "layers": [
+                {k: v for k, v in layer.items() if k != "score"}
+                if isinstance(layer, dict) else layer
+                for layer in assessment["layers"]
+            ],
+        },
+    }
+
+
 def _build_response(
     decision,
     debug: bool = False,
@@ -413,6 +457,17 @@ async def ai_request(
     toxicity_block_threshold    = toxicity_policy.get("block_threshold",    None)
     toxicity_sanitize_threshold = toxicity_policy.get("sanitize_threshold", None)
 
+    # Who may see per-layer scores. Computed before the cache is consulted so
+    # the fresh path and the cache-hit path below decide from the same answer.
+    #
+    # The same predicate `/v1/settings` and `/health/config` use: a per-layer
+    # score is the finest-grained calibration signal the response carries, so
+    # the caller classes withheld from the others are withheld from this too.
+    # A live API key resolves to DEVELOPER and holds it; trial keys and VIEWER
+    # do not.
+    from api.v1.dependencies.auth import holds_permission
+    _may_read_layer_scores = holds_permission(request, "settings:read")
+
     from cache.semantic_cache import (
         get_cached_result,
         policy_identity,
@@ -452,6 +507,10 @@ async def ai_request(
         cache_audit = _build_cache_hit_audit(request, body, cached, det_mode_str, exe_mode_str)
         await AuditRepository(db).create(cache_audit)
         background_tasks.add_task(emit_from_audit_background, cache_audit)
+        # Restriction is applied on SERVE, not on store -- see the note at the
+        # fresh-response path below for why the cache holds full bodies.
+        if not _may_read_layer_scores:
+            cached = restrict_layer_scores(cached)
         return JSONResponse(content=cached)
     CACHE_MISSES.inc()
 
@@ -576,6 +635,21 @@ async def ai_request(
     # subsequent non-admin request for the same input would hit the cache and
     # receive per-layer detector scores meant for admins only. Building a
     # separate cache-safe copy keeps the on-hit path uniformly non-debug.
+    # The cache stores the FULL body and the restriction is applied on serve.
+    #
+    # The alternative -- caching a restricted copy -- looks safer and is worse
+    # here: a live API key resolves to DEVELOPER, which holds settings:read, so
+    # nearly all scan traffic is authorised. Caching stripped bodies would take
+    # scores away from that majority on every cache hit, and make one caller's
+    # responses differ depending on whether someone else had scanned the same
+    # text first. Keying the cache by permission class instead would double the
+    # entries for a distinction almost no traffic makes.
+    #
+    # What makes storing the full body safe is that there is exactly ONE way
+    # out of this handler for a cached body and one for a fresh body, and both
+    # pass through restrict_layer_scores under the same flag. A leak needs a
+    # THIRD return path added without it -- which is what the cache-isolation
+    # test exists to catch.
     cache_body = {k: v for k, v in response.items() if k != "debug"}
     # Written under the same key the lookup used, so an entry is only ever read
     # back by a request resolving to the same policy and carrying the same
@@ -584,6 +658,9 @@ async def ai_request(
         body.input, det_mode_str, exe_mode_str, _tenant_id, cache_body,
         _policy_id, body.input_source,
     )
+
+    if not _may_read_layer_scores:
+        response = restrict_layer_scores(response)
 
     return JSONResponse(content=response)
 
@@ -614,6 +691,9 @@ async def ai_scan_batch(
     Auth: any valid principal (API key). Trial keys keep the single-scan per-item
     input cap.
     """
+    from api.v1.dependencies.auth import holds_permission
+    _batch_may_read_layer_scores = holds_permission(request, "settings:read")
+
     _settings    = get_settings()
     items        = body.items
     n            = len(items)
@@ -720,6 +800,9 @@ async def ai_scan_batch(
             block_threshold    = block_threshold,
             sanitize_threshold = sanitize_threshold,
         )
+        # Same restriction as the single scan: a batch is not a way around it.
+        if not _batch_may_read_layer_scores:
+            item_resp = restrict_layer_scores(item_resp)
         results.append({
             "id":         item.id,
             "trace_id":   str(incoming.trace_id),
@@ -761,6 +844,9 @@ async def get_request(
     including provider response, output decision, and execution status.
     404 if the record does not exist or is out of scope.
     """
+    from api.v1.dependencies.auth import holds_permission
+    _may_read_layer_scores = holds_permission(request, "settings:read")
+
     repo   = AuditRepository(db)
     record = await get_scoped_audit_record(repo, trace_id, request)
 
@@ -825,8 +911,14 @@ async def get_request(
         "session_id":        record.session_id,
         "turn_index":        record.turn_index,
         "input_source":      record.input_source,
-        "detection_scores":  record.detection_scores or {},
-        "guardrail_scores":  record.guardrail_scores or {},
+        # The persisted form of the same per-layer numbers the scan response
+        # restricts. Left open, a trial key or VIEWER simply reads back what the
+        # scan withheld a moment earlier -- the restriction would hold for one
+        # request and not for the record of it. Same predicate, so the two
+        # cannot disagree. The keys stay present and empty rather than being
+        # dropped, so a consumer reading them does not have to special-case.
+        "detection_scores":  (record.detection_scores or {}) if _may_read_layer_scores else {},
+        "guardrail_scores":  (record.guardrail_scores or {}) if _may_read_layer_scores else {},
         "processing": {
             "latency_ms":     record.latency_ms,
             # For scan_only: detection pipeline time only

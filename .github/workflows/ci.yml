@@ -195,7 +195,7 @@ jobs:
           sed -i 's#^ADMIN_API_KEY=.*#ADMIN_API_KEY=ci_admin_api_key_for_testing_minimum_32_chars_x#' .env
 
       - name: Start the stack (postgres, redis, api, dashboard)
-        run: docker compose -f infrastructure/docker/docker-compose.yml up -d --build postgres redis api dashboard
+        run: docker compose -f infrastructure/docker/docker-compose.yml up -d --build postgres redis api dashboard nginx
 
       - name: Wait for the stack to be ready
         # Services are addressed by compose service name, not by a fixed
@@ -230,6 +230,17 @@ jobs:
         run: |
           docker compose -f infrastructure/docker/docker-compose.yml \
             exec -T api python - < scripts/e2e_ip_allowlist.py
+
+      # Client-address attribution, both entry paths. Everything else that
+      # covers this supplies the peer address itself, so it proves the decision
+      # logic and nothing about the deployment: whether nginx actually holds
+      # the address TRUSTED_PROXY_IPS names, and whether a caller reaching the
+      # API directly -- the position the dashboard occupies -- can talk its way
+      # into being someone else. Needs the real network, so it runs here.
+      - name: Verify client-address attribution end to end
+        run: |
+          docker compose -f infrastructure/docker/docker-compose.yml \
+            exec -T api python - < scripts/e2e_trusted_proxy.py
 
       - name: Install Playwright + Chromium
         working-directory: dashboard

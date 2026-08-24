@@ -425,7 +425,7 @@ WrapSec is open-core. The detection pipeline, guardrails, proxy, audit trail, da
 - Set `WRAPSEC_BASE_URL` explicitly. The default `http://localhost:8000` must not be used in production.
 - Set `DATA_STORAGE_MODE` to `masked` or `none` for regulated environments.
 - Change `SECRET_KEY` and Grafana default password before first deployment.
-- Set `TRUSTED_PROXY_IPS` to the IP(s) of your reverse proxy so `X-Forwarded-For` is trusted only from known sources.
+- Set `TRUSTED_PROXY_IPS` to the IP(s) of your reverse proxy so `X-Forwarded-For` is trusted only from known sources. `.env.example` ships it set to the nginx container's fixed address on the compose network; change it if you front the gateway with something else, and leave it empty if nothing sits in front. Unset behind a proxy, every client looks like the proxy: audit and auth events record the proxy's address, an API-key source restriction is matched against the proxy rather than the caller, and JWT/anonymous traffic shares one rate-limit bucket.
 - Restrict the master `ADMIN_API_KEY` at the network layer. Per-key source-network restrictions are stored on the API key record, and this credential has no record - it is matched against a configured secret - so the application cannot confine it. It is also the most privileged credential in the system, so place a firewall or reverse-proxy rule in front of the API instead.
 - Set `BATCH_CONCURRENCY=2` if you run the optional Tier-2 transformer build - the default of `8` causes fail-closed refusals of legitimate traffic under concurrency on that build. See `docs/developer_guide.md`.
 - Set `METRICS_TOKEN` to require bearer token authentication on `GET /metrics` - do not expose metrics unauthenticated.

@@ -82,3 +82,41 @@ def test_assessment_present_with_empty_layers_when_no_scores():
     a = _resp(_decision(layer_scores=None))["assessment"]
     assert a["decision"] == "BLOCK"
     assert a["layers"]   == []
+
+
+# ── what the assessment must NOT carry ───────────────────────────────────────
+#
+# `assessment.layers` classifies each layer's score against the effective
+# thresholds, and it is present for EVERY caller -- there is no admin gate and
+# no fingerprinting rate limit on it, unlike the `debug` block, which has both.
+# Those two controls in the same builder therefore disagree about whether
+# per-layer scores are sensitive.
+#
+# That disagreement is recorded rather than resolved: `assessment` is a
+# documented, always-present field that agents and the MCP tool consume, so
+# gating it is a breaking API change and a product decision.
+#
+# What this pins is the line that DOES hold: the classification may be
+# returned, the threshold VALUES may not. Echoing a threshold would turn an
+# inference channel into a disclosure, and would do it silently.
+
+def test_the_assessment_never_echoes_threshold_values():
+    body = _build_response(_decision(), block_threshold=0.73, sanitize_threshold=0.41)
+
+    flat = str(body)
+    assert "0.73" not in flat, "the block threshold was echoed into the response"
+    assert "0.41" not in flat, "the sanitize threshold was echoed into the response"
+
+    for layer in body["assessment"]["layers"]:
+        assert set(layer) == {"name", "score", "decision"}, (
+            f"assessment.layers gained a field: {sorted(set(layer) - {'name','score','decision'})}"
+        )
+
+
+def test_the_debug_block_stays_absent_unless_asked_for():
+    """
+    It is admin-gated at the handler and rate-limited separately. Emitting it
+    unconditionally would remove both controls at once.
+    """
+    assert "debug" not in _build_response(_decision(), debug=False)
+    assert "debug" in _build_response(_decision(), debug=True)

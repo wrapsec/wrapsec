@@ -110,3 +110,41 @@ def test_no_request_client_returns_unknown():
         req.client = None
         req.headers = {}
         assert get_client_ip(req) == "unknown"
+
+
+# ── zero-prefix entries are not a restriction ────────────────────────────────
+#
+# `0.0.0.0/0` parses cleanly and reads like configuration, so without a guard it
+# would trust a forwarded header from ANY peer while the setting looked set --
+# the spoofing this list exists to prevent, with the control appearing enabled.
+# `security/ip_allowlist.py::normalize_entries` rejects the same shape on
+# credential allowlists; these pin the matching behaviour here.
+
+def test_ipv4_default_route_is_ignored_not_trusted():
+    with _patch_trusted("0.0.0.0/0"):
+        req = _make_request("203.0.113.5", "1.2.3.4")
+        assert get_client_ip(req) == "203.0.113.5", (
+            "0.0.0.0/0 made every peer a trusted proxy"
+        )
+
+
+def test_ipv6_default_route_is_ignored_not_trusted():
+    with _patch_trusted("::/0"):
+        req = _make_request("2001:db8::5", "1.2.3.4")
+        assert get_client_ip(req) == "2001:db8::5"
+
+
+def test_a_zero_prefix_entry_does_not_disable_the_valid_ones():
+    """One bad entry must not take the rest of the list with it."""
+    with _patch_trusted("0.0.0.0/0,10.0.0.1"):
+        # Peer IS a legitimate trusted proxy: the forwarded address is used.
+        assert get_client_ip(_make_request("10.0.0.1", "203.0.113.9")) == "203.0.113.9"
+        # Peer is not: the zero-prefix entry must not make it trusted.
+        assert get_client_ip(_make_request("198.51.100.7", "1.2.3.4")) == "198.51.100.7"
+
+
+def test_zero_prefix_written_as_a_bare_address_is_still_ignored():
+    """`0.0.0.0` normalises to a /32, which is a real single-host entry and
+    must keep working -- only an actual zero prefix is dropped."""
+    with _patch_trusted("0.0.0.0"):
+        assert get_client_ip(_make_request("0.0.0.0", "203.0.113.9")) == "203.0.113.9"

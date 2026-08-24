@@ -52,7 +52,7 @@ test-e2e:
 	P="docker compose -p wrapsec-e2e -f $$R/infrastructure/docker/docker-compose.yml -f $$R/infrastructure/docker/docker-compose.e2e.yml"; \
 	trap "echo tearing down the ephemeral stack...; $$P down -v --remove-orphans || echo TEARDOWN FAILED -- remove wrapsec-e2e by hand" EXIT; \
 	echo "starting the ephemeral stack..."; \
-	$$P up -d --build postgres redis api dashboard; \
+	$$P up -d --build postgres redis api dashboard nginx; \
 	echo "waiting for the api to report healthy..."; \
 	HEALTH="docker inspect --format {{.State.Health.Status}}"; \
 	for i in $$(seq 1 60); do \
@@ -69,6 +69,8 @@ test-e2e:
 	$$P exec -T api python scripts/seed_e2e_user.py; \
 	echo "running the source-network round trip..."; \
 	$$P exec -T api python - < $$R/scripts/e2e_ip_allowlist.py; \
+	echo "running the client-address attribution check..."; \
+	$$P exec -T api python - < $$R/scripts/e2e_trusted_proxy.py; \
 	echo "running the e2e suite..."; \
 	( cd dashboard && PLAYWRIGHT_BASE_URL=http://localhost:3100 npx playwright test )'
 

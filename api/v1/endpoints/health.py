@@ -2,7 +2,7 @@
 # Copyright (c) 2026 WrapSec. All rights reserved.
 # WrapSec v1.0 | AI Security Gateway - https://wrapsec.com
 
-from fastapi import APIRouter, Depends
+from fastapi import APIRouter, Depends, Request
 from fastapi.responses import JSONResponse
 from sqlalchemy import text
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -116,14 +116,40 @@ async def health_live():
 
 @router.get("/health/config")
 async def health_config(
+    request:    Request,
     db:         AsyncSession = Depends(get_db),
     _principal: Principal    = Depends(get_current_principal),
 ):
     """
-    Returns the currently active system configuration.
-    Useful for deployment verification and debugging.
-    Does not expose API keys or secrets.
+    The configuration currently in force, for deployment verification.
+
+    The route admits every authenticated caller, but the BODY varies by
+    permission. Values here duplicate what `GET /v1/settings` returns behind
+    `settings:read` with trial keys refused -- thresholds and layer status are
+    the calibration data that restriction exists to withhold, since they tell a
+    caller exactly how far under a limit a payload has to sit. Served from an
+    endpoint with no such check, the restriction meant nothing: the same trial
+    key or VIEWER simply read it here.
+
+    Gating the whole route instead would have broken deployment verification
+    for the callers most likely to need it, so the split is per field:
+
+      settings:read (ADMIN, DEVELOPER, AUDITOR; not trial)
+          everything, unchanged.
+      everyone else authenticated (VIEWER, trial keys)
+          `version`, plus each section reduced to its `source` marker. That is
+          enough to confirm which build is running and whether configuration is
+          database-backed or environment-default -- the verification purpose --
+          without disclosing a single threshold or layer state.
+
+    Never exposes API keys or secrets to any caller.
     """
+    from api.v1.dependencies.auth import holds_permission
+
+    # The identical predicate `/v1/settings` enforces, asked rather than
+    # enforced, so the two cannot drift into disagreeing about who may read
+    # calibration data.
+    may_read_settings = holds_permission(request, "settings:read")
     from api.v1.endpoints.settings import _resolve_tenant
     from db.repositories.settings import TenantSettingsRepository
 
@@ -135,28 +161,37 @@ async def health_config(
     stored_llm        = await repo.get(_tid, "llm_settings")      or {}
     stored_rate_limit = await repo.get(_tid, "rate_limit")        or {}
 
-    return {
+    # `version` is unrestricted: unauthenticated `GET /health` already returns
+    # it, so withholding it here would protect nothing. Every other section is
+    # reduced to its origin marker, which says whether configuration was
+    # customised without saying what it was set to.
+    body: dict = {
         "version": _settings.app_version,
-        "thresholds": {
-            "block":    stored_thresholds.get("block_threshold",    _settings.block_threshold),
-            "sanitize": stored_thresholds.get("sanitize_threshold", _settings.sanitize_threshold),
-            "source":   "database" if stored_thresholds else "environment",
-        },
-        "detection_layers": {
-            "rule":   stored_layers.get("rule_enabled", True),
-            "ml":     stored_layers.get("ml_enabled",   True),
-            "llm":    stored_layers.get("llm_enabled",  True),
-            "source": "database" if stored_layers else "environment",
-        },
-        "llm": {
-            "provider":    stored_llm.get("provider",    _settings.llm_provider),
-            "model":       stored_llm.get("model",       _settings.llm_model),
-            "llm_trigger": stored_llm.get("llm_trigger", _settings.llm_trigger_threshold),
-            "timeout":     stored_llm.get("timeout",     _settings.llm_timeout),
-            "source":      "database" if stored_llm else "environment",
-        },
-        "rate_limit": {
-            "per_minute": stored_rate_limit.get("per_minute", _settings.rate_limit_per_minute),
-            "source":     "database" if stored_rate_limit else "environment",
-        },
+        "thresholds":       {"source": "database" if stored_thresholds else "environment"},
+        "detection_layers": {"source": "database" if stored_layers     else "environment"},
+        "llm":              {"source": "database" if stored_llm        else "environment"},
+        "rate_limit":       {"source": "database" if stored_rate_limit else "environment"},
     }
+
+    if not may_read_settings:
+        return body
+
+    body["thresholds"].update({
+        "block":    stored_thresholds.get("block_threshold",    _settings.block_threshold),
+        "sanitize": stored_thresholds.get("sanitize_threshold", _settings.sanitize_threshold),
+    })
+    body["detection_layers"].update({
+        "rule": stored_layers.get("rule_enabled", True),
+        "ml":   stored_layers.get("ml_enabled",   True),
+        "llm":  stored_layers.get("llm_enabled",  True),
+    })
+    body["llm"].update({
+        "provider":    stored_llm.get("provider",    _settings.llm_provider),
+        "model":       stored_llm.get("model",       _settings.llm_model),
+        "llm_trigger": stored_llm.get("llm_trigger", _settings.llm_trigger_threshold),
+        "timeout":     stored_llm.get("timeout",     _settings.llm_timeout),
+    })
+    body["rate_limit"]["per_minute"] = stored_rate_limit.get(
+        "per_minute", _settings.rate_limit_per_minute
+    )
+    return body

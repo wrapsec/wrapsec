@@ -936,6 +936,7 @@
     },
     "enabled": "Enabled",
     "disabled": "Disabled",
+    "restricted": "Restricted",
     "llm_title": "LLM Configuration",
     "provider": "Provider",
     "model": "Model",

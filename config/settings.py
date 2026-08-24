@@ -79,7 +79,11 @@ class Settings(BaseSettings):
     # x-forwarded-for is only trusted when the direct connection IP
     # matches one of these entries. Leave empty (default) to always
     # use the direct connection IP - safe when not behind a proxy.
-    # Example: TRUSTED_PROXY_IPS=10.0.0.1,172.16.0.0/12
+    # Name the proxy as narrowly as possible: a whole container subnet lets
+    # anything on that network spoof a client address. The compose stack pins
+    # nginx to a fixed address for exactly this reason.
+    # Example: TRUSTED_PROXY_IPS=172.31.240.2
+    # An entry matching every address (0.0.0.0/0) is ignored with a warning.
     trusted_proxy_ips: str = Field(default="")
 
     # ── JWT (dashboard auth) ──────────────────────────────────

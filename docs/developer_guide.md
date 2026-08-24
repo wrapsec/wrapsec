@@ -986,7 +986,7 @@ These rules must be followed in all new code. Violation creates real production 
 54. Use `require_any_admin()` for endpoints that are admin-only but must also accept the admin API key (programmatic access). Use `require_admin()` only for dashboard-exclusive endpoints that must reject API key auth
 55. All IP attribution in audit logs, admin events, and auth events must use `get_client_ip(request)` - never `request.headers.get("x-forwarded-for", ...)` directly
 56. Semantic cache keys must name the scope a verdict was reached in: `tenant_id`, the resolved-policy identity, and `input_source` - never prompt + mode alone. Tenant scoping is not sufficient, because departments and applications may tighten policy below the tenant's, so one tenant resolves to different thresholds and different enabled layers depending on the caller; keyed on tenant alone, a stricter department reads a laxer one's cached ALLOW with its own policy never consulted. Resolve policy BEFORE the cache lookup and derive the identity with `cache.semantic_cache.policy_identity()`, whose parameters are exactly the policy-derived arguments of `GatewayService.process` - a drift test fails if a new decision input is added to the pipeline without reaching the key. Use `"global"` as the tenant key for requests with no tenant_id (admin/system calls)
-57. The Next.js BFF (`dashboard/app/api/auth/login/route.ts`) must forward the real client IP as `x-forwarded-for` on all backend fetch calls - without this, the backend rate limiter sees only the BFF server IP and cannot enforce per-client limits
+57. The dashboard BFF is NOT a trusted proxy for client-IP attribution. It reaches `api:8000` directly, so it is a direct peer: requests originating from the dashboard are attributed to the BFF's own address, and any `x-forwarded-for` it sends is IGNORED because its address is not in `TRUSTED_PROXY_IPS`. `login/route.ts` does send the header today; that is inert under this model, not a control. Browser-origin attribution is DEFERRED - adding it means listing the BFF as a second trusted hop, which widens the set of peers allowed to state who the client is, and is only worth doing if a requirement explicitly needs the browser's address. The consequence to know: per-IP limits and lockout keyed on the address see the BFF for all dashboard traffic, so they bound the dashboard as a whole rather than each browser. Per-email lockout is unaffected and remains the per-user control on login
 58. The Next.js BFF must never forward the raw backend `set-cookie` header to the browser - always parse the token value and max-age, then re-issue with `Path=/api/auth`. The backend sets `Path=/v1/auth`; that path restriction means the browser will never send the cookie back to `/api/auth/*` BFF routes, breaking refresh and logout
 59. Only one auth mechanism must be active at a time per session - when a user logs in via JWT (email/password), the BFF login route must clear any existing `wrapsec_api_key` cookie, and vice versa. Allowing both simultaneously creates an ambiguous fallback state where a revoked JWT session could silently continue via a still-valid API key cookie
 60. API keys must never be created without a valid `tenant_id` on `request.state` - a scopeless key bypasses tenant isolation in every downstream auth check. The key creation endpoint enforces this with a 403 guard before any DB write
@@ -1003,7 +1003,7 @@ These rules must be followed in all new code. Violation creates real production 
 | `ADMIN_API_KEY` | - | Master admin API key. **Startup guard rejects the example placeholder** - server will not start until set to a real value. Generate: `python -c "import secrets; print('wsk_admin_' + secrets.token_hex(24))"`. **Not subject to a source-network restriction**: those live on an `api_keys` row and this credential has none, so confine it at the network layer instead |
 | `ADMIN_EMAIL` | *(unset)* | Optional - if set alongside `ADMIN_PASSWORD`, bootstrap creates first admin on startup. Leave unset to use the dashboard `/setup` page instead |
 | `ADMIN_PASSWORD` | *(unset)* | Optional - see `ADMIN_EMAIL`. Must meet password strength requirements if set |
-| `TRUSTED_PROXY_IPS` | `""` | Comma-separated IPs trusted to set `X-Forwarded-For` (e.g. `127.0.0.1,10.0.0.1`) |
+| `TRUSTED_PROXY_IPS` | `""` (code default); `.env.example` ships `172.31.240.2`, the nginx fixed address on the compose network | Comma-separated IPs/CIDRs trusted to set `X-Forwarded-For`. Name the proxy only - keep it as narrow as possible, and do not list a whole container subnet, since anything on that network could then spoof a client address. A zero-prefix entry is ignored with a warning. Governs audit and auth-event attribution, API-key source restrictions, and the per-IP rate-limit bucket |
 | `METRICS_TOKEN` | `""` | If set, `GET /metrics` requires `Authorization: Bearer <token>`. Falls back to `ADMIN_API_KEY` if unset |
 | `DATA_STORAGE_MODE` | `masked` | `full` / `masked` / `none` - controls proxy text persistence |
 | `DATA_RETENTION_DAYS` | `30` | Audit log retention in days (min 7, max 3650) |
@@ -1019,6 +1019,8 @@ These rules must be followed in all new code. Violation creates real production 
 | `TRIAL_RATE_LIMIT_PER_MINUTE` | `10` | Rate limit for trial keys - env-only, not dashboard-configurable |
 | `DEBUG_RATE_LIMIT_PER_MINUTE` | `10` | Rate limit for debug mode requests - env-only, security control |
 | `LOGIN_RATE_LIMIT_PER_MINUTE` | `10` | Per-IP rate limit on `POST /v1/auth/login` - env-only, security control. Complements per-email lockout |
+
+**Which address the per-IP buckets use.** `RateLimitMiddleware` derives it through `get_client_ip` (`rate_limit.py:104`), the same function every other client-address control uses, so a bucket follows `TRUSTED_PROXY_IPS`: behind a configured proxy it is the real client, and unset it is whatever connects directly. The limiter runs BEFORE authentication, which affects only WHAT it can bucket on -- the raw `x-api-key` header rather than a resolved key id -- not which address it sees, since `get_client_ip` reads the peer, the header and settings, and needs nothing the auth middleware produces. Verified on a live stack: a proxied request produced exactly one bucket, `rate_limit:ip:<client>`, and none for the proxy. Dashboard traffic is the exception, and by design -- see rule 57: it arrives from the BFF, so those requests share one bucket.
 | `COOKIE_SECURE` | `true` | Adds `Secure` flag to refresh token cookie. Set `false` only for local HTTP dev - must be `true` in all deployed environments |
 | `DETECTOR_TIMEOUT_SECONDS` | `2.0` | Per-detector, per-message execution bound. A detector that exceeds it is treated as a failure, which fails closed to `BLOCK` with `primary_reason=SYSTEM_ERROR` |
 | `BATCH_CONCURRENCY` | `8` | Concurrent detector runs for multi-input scans, bounded **process-wide** and shared by every request in flight. Scoped to the worker process, so a multi-worker deployment permits this many per worker. See the tuning note below before changing it |
@@ -1155,6 +1157,48 @@ npm run dev
 # Prometheus: http://localhost:9090
 # Grafana:    http://localhost:3001  (admin / wrapsec)
 ```
+
+---
+
+## Compose network topology
+
+Both shipped stacks run on one user-defined network with an explicit subnet,
+because nginx needs a fixed address for `TRUSTED_PROXY_IPS` to name it.
+
+```
+wrapsec_net   172.31.240.0/24
+  gateway     172.31.240.1
+  nginx       172.31.240.2        pinned -- the only trusted proxy
+  ip_range    172.31.240.128/25   dynamic pool for every other service
+```
+
+`ip_range` confines dynamic assignment to the upper half. Without it Docker
+allocates from the bottom of the subnet, whichever service starts first takes
+`.2`, and nginx fails to start with `Address already in use`.
+
+The subnet is declared rather than left to Docker because Compose assigns
+subnets in creation order, which depends on what else exists on the host -- so
+there is no stable value to put in `.env`.
+
+**If `172.31.240.0/24` collides with something on your host**, `docker compose
+up` fails loudly rather than misbehaving. Change the subnet, `ip_range`, and
+gateway in `infrastructure/docker/docker-compose.yml` and
+`docker-compose.prod.yml`, keep nginx's `ipv4_address` inside the subnet but
+OUTSIDE `ip_range`, and set `TRUSTED_PROXY_IPS` in `.env` to the new nginx
+address. Those two values must always agree; nothing checks it for you, and the
+symptom of disagreement is that every client is recorded as the proxy.
+
+A declared subnet is unique across the Docker daemon, so two projects from the
+same compose file cannot both be up. `docker-compose.e2e.yml` therefore takes
+the adjacent range (`172.31.241.0/24`, nginx at `.241.2`, with a matching
+`TRUSTED_PROXY_IPS` override), which is what lets `make test-e2e` run alongside
+a development stack.
+
+The dashboard reaches `api:8000` directly and is not proxied by nginx, so it is
+a direct client, not a second hop. It must not be added to `TRUSTED_PROXY_IPS`.
+
+`scripts/e2e_trusted_proxy.py` verifies both entry paths over a real socket and
+runs in CI and `make test-e2e`.
 
 ---
 

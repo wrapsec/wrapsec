@@ -135,6 +135,28 @@ def require_any_admin():
     return _dependency
 
 
+def holds_permission(
+    request:     Request,
+    permission:  str,
+    *,
+    allow_trial: bool = False,
+) -> bool:
+    """
+    Whether this principal may exercise `permission` -- the same question
+    `require_permission` asks, answered instead of enforced.
+
+    Exists so an endpoint that varies its RESPONSE by permission, rather than
+    admitting or refusing the whole route, can branch on the identical
+    predicate. Re-deriving it inline is how two paths that are supposed to
+    share a boundary drift apart, and the drift is invisible: both keep
+    returning something, and only the wrong caller notices what is in it.
+    """
+    principal = _get_principal_from_state(request)
+    if not allow_trial and getattr(request.state, "key_type", None) == "trial":
+        return False
+    return principal.has_permission(permission)
+
+
 def require_permission(permission: str, *, allow_trial: bool = False):
     """
     FastAPI dependency factory - requires the principal to hold `permission`
@@ -150,6 +172,8 @@ def require_permission(permission: str, *, allow_trial: bool = False):
     """
     async def _dependency(request: Request) -> Principal:
         principal = _get_principal_from_state(request)
+        # Same predicate as holds_permission, kept separate here only so each
+        # refusal can name its own reason.
         if not allow_trial and getattr(request.state, "key_type", None) == "trial":
             raise ForbiddenError("Trial keys cannot access this resource.")
         if not principal.has_permission(permission):

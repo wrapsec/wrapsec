@@ -22,6 +22,19 @@
 # bindings would still be claimed.
 
 services:
+  # Included so the client-address attribution check has a real proxy hop to go
+  # through. It publishes NO host port: the check runs inside the api container
+  # and reaches it in-network as http://nginx, so binding 80 would collide with
+  # a development stack for no benefit.
+  #
+  # Its pinned address is overridden below along with the subnet -- see the
+  # `networks` block for why the ephemeral stack cannot reuse the base range.
+  nginx:
+    ports: !reset null
+    networks: !override
+      wrapsec_net:
+        ipv4_address: 172.31.241.2
+
   postgres:
     ports: !reset null
 
@@ -36,8 +49,27 @@ services:
       # A throwaway stack must never inherit a real provider key or start
       # dialling out mid-test; detection stays on the offline layers.
       - LLM_PROVIDER=
+      # This stack's own proxy address. The value in .env names the development
+      # stack's nginx, which sits on a different subnet here, so without this
+      # override the attribution check would traverse an UNTRUSTED hop and
+      # correctly report the proxy's address -- failing for a configuration
+      # reason rather than a defect.
+      - TRUSTED_PROXY_IPS=172.31.241.2
     ports: !reset null
 
   dashboard:
     ports: !override
       - "3100:3000"
+
+# A subnet is unique across the Docker daemon: two networks cannot overlap. The
+# base file declares 172.31.240.0/24, so an ephemeral stack brought up from the
+# same file while a development stack is running would be refused. This project
+# takes the adjacent range, which is what lets `make test-e2e` run without
+# touching -- or being blocked by -- the development stack.
+networks:
+  wrapsec_net:
+    ipam:
+      config:
+        - subnet: 172.31.241.0/24
+          ip_range: 172.31.241.128/25
+          gateway: 172.31.241.1
