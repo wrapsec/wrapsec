@@ -495,8 +495,18 @@ async def ai_request(
     if cached:
         CACHE_HITS.inc()
         # A FRESH id for this hit, generated the same way a fresh scan generates
-        # one. The cached body carries the original requester's id, which would
-        # be wrong to return and wrong to audit under.
+        # one. This line is load-bearing, not cosmetic: `audit_logs.trace_id` is
+        # UNIQUE, and a single cache entry is served to every repeat of the same
+        # prompt within the TTL. Auditing a hit under the cached body's own id
+        # would insert that key once per hit -- the first hit writes its row, the
+        # second violates the constraint and 500s. That is the cache's NORMAL
+        # operating condition, not an edge case, so regenerating here is what
+        # keeps repeat hits auditable at all. `tests/integration/
+        # test_api_ai_branches.py::test_two_hits_on_one_cached_entry_both_audit`
+        # pins it: one unchanging cached body, two hits, both rows land.
+        #
+        # It corrects attribution as well: the cached body carries the ORIGINAL
+        # requester's id, which would be wrong to return and wrong to audit under.
         #
         # It is deliberately NOT `request.state.trace_id`. That value comes from
         # the client's `X-Trace-Id` when it matches the middleware's pattern, and

@@ -279,3 +279,46 @@ async def test_cache_hit_writes_audit_row(client, test_db):
     assert row.policy_source == "cache"
     assert row.decision == "ALLOW"
     assert row.record_hash is not None          # tenant-attributed -> hash-chained
+
+
+@pytest.mark.asyncio
+async def test_two_hits_on_one_cached_entry_both_audit(client, test_db):
+    # The cached body carries ONE trace_id, but audit_logs.trace_id is UNIQUE.
+    # Two hits on the same entry must therefore not key their rows off the
+    # cached id -- the handler mints a fresh one per hit. A single-hit test
+    # passes either way, so this scans the same input twice against one
+    # unchanging cached body and asserts both rows land with distinct ids.
+    from unittest.mock import AsyncMock, patch
+
+    from sqlalchemy import select
+
+    from db.models import AuditLogModel
+
+    raw, ids = await _seed_key(test_db)
+    cached_body = {
+        "trace_id":        "req_" + "a" * 32,
+        "decision":        "ALLOW",
+        "risk_score":      0.05,
+        "primary_reason":  "NO_THREAT_DETECTED",
+        "confidence":      0.9,
+        "confidence_band": "HIGH",
+        "threats":         [],
+        "processing":      {"llm_invoked": False, "latency_ms": 2.0},
+    }
+    with patch("cache.semantic_cache.get_cached_result", AsyncMock(return_value=cached_body)):
+        r1 = await client.post("/v1/ai/request", json={"input": "hello world"}, headers={"x-api-key": raw})
+        r2 = await client.post("/v1/ai/request", json={"input": "hello world"}, headers={"x-api-key": raw})
+
+    assert r1.status_code == 200
+    assert r2.status_code == 200
+
+    rows = (await test_db.execute(
+        select(AuditLogModel).where(AuditLogModel.tenant_id == str(ids["tenant_id"]))
+    )).scalars().all()
+    assert len(rows) == 2                                   # neither hit was lost to a constraint
+    trace_ids = {row.trace_id for row in rows}
+    assert len(trace_ids) == 2                              # a fresh id per hit, not the cached one
+    assert cached_body["trace_id"] not in trace_ids
+    assert all(len(t) <= 50 for t in trace_ids)             # fits the String(50) column
+    assert {row.policy_source for row in rows} == {"cache"}
+    assert all(row.record_hash is not None for row in rows)  # both chained
