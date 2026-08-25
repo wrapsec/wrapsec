@@ -30,11 +30,30 @@ from threading import Thread
 
 import pytest
 
-# The adapter is opt-in: `mcp` ships in requirements-mcp.txt and is pulled into
-# the dev/CI environment by requirements-dev.txt. Skipping rather than failing
-# keeps a minimal install usable; CI installs both, so the tests run there.
+# The two guards below are deliberately asymmetric.
+#
+# No `mcp` means a minimal install that never intended to exercise the adapter,
+# so skipping is right and keeps such an install usable.
+#
+# `mcp` present but the client SDK missing is a different situation: `mcp` comes
+# from requirements-dev.txt, so its presence says this environment WAS set up to
+# run these tests. The SDK is installed separately -- a path requirement in
+# requirements-dev.txt would break the dev image build, which installs that file
+# before the source tree exists -- so it can be absent while `mcp` is present,
+# which is exactly the state `pip install -r requirements-dev.txt` alone leaves
+# behind. Skipping there would hide the only coverage of the protocol wiring in
+# the setup a developer is most likely to have, and a silent skip is how that
+# wiring went unverified to begin with. Fail, and say how to fix it.
 pytest.importorskip("mcp", reason="MCP protocol SDK not installed (requirements-mcp.txt)")
-pytest.importorskip("wrapsec", reason="WrapSec Python SDK not installed (pip install -e sdk/python/)")
+
+try:
+    import wrapsec  # noqa: F401
+except ImportError:
+    pytest.fail(
+        "The MCP protocol SDK is installed but the WrapSec client SDK is not, so "
+        "the adapter cannot be exercised. Install it with: pip install -e sdk/python/",
+        pytrace=False,
+    )
 
 from mcp import ClientSession, StdioServerParameters
 from mcp.client.stdio import stdio_client
