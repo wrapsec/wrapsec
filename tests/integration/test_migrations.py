@@ -165,6 +165,14 @@ def test_recent_migrations_reverse_and_reapply(tmp_path):
         ("0021_proxy_scan_latency",  "proxy_interactions", {"input_scan_ms", "output_scan_ms"}),
     ]
 
+    # Land on the newest revision this test walks before stepping down. The walk
+    # below moves by "-1" and asserts on the column the revision it just left
+    # behind had added, so it only lines up when the starting point is steps[0].
+    # Anchoring here keeps that true as revisions are added on top: without it
+    # every new head offsets the walk by one, and the first assertion fails
+    # against a column that is still applied.
+    command.downgrade(cfg, steps[0][0])
+
     for revision, table, added in steps:
         assert added <= _columns(sync_url, table), (
             f"{revision} did not leave {added} on {table}"

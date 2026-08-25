@@ -29,6 +29,7 @@ thread.
 """
 
 import asyncio
+import json
 import uuid
 from pathlib import Path
 
@@ -362,16 +363,13 @@ async def test_non_admin_key_check_constraint_is_enforced(migration_db):
 # migrations' own downgrades, rather than hand-written DDL that could stage a
 # state the chain never actually produces.
 
-# Known divergence, found by this test and deliberately NOT fixed in this pass.
-# 0022 adds api_keys.ip_allowlist as `sa.JSON()` rather than the JSONVariant the
-# model declares, and it postdates 0006's target list, so a database that reached
-# head by UPGRADING has `json` where a fresh install has `jsonb`. Nothing queries
-# the column with a jsonb operator today, so it is latent rather than broken.
-#
-# Pinned as an exact set rather than excluded: if another column drifts, or if
-# this one is later aligned, the assertion fails and the divergence is revisited
-# instead of being absorbed silently.
-_KNOWN_JSON_NOT_JSONB = {("api_keys", "ip_allowlist")}
+# No column may remain `json` after the chain. This was previously pinned to
+# {("api_keys", "ip_allowlist")}: 0022 adds that column as `sa.JSON()` rather than
+# the JSONVariant the model declares, and it postdates 0006's target list, so a
+# database that reached head by UPGRADING had `json` where a fresh install had
+# `jsonb`. 0024 closes it. The set stays here, empty, so a future column adding
+# the same divergence fails this assertion rather than being absorbed silently.
+_KNOWN_JSON_NOT_JSONB: set[tuple[str, str]] = set()
 
 
 async def _column_types(url: str, where: str) -> dict[tuple[str, str], str]:
@@ -419,3 +417,166 @@ async def test_timestamps_are_converted_when_the_chain_finds_them_naive(migratio
     converted = await _column_types(migration_db, "data_type LIKE 'timestamp%'")
     naive = {k: v for k, v in converted.items() if v != "timestamp with time zone"}
     assert not naive, f"columns left naive after the chain re-ran: {naive}"
+
+
+# ── api_keys.ip_allowlist: json on the upgrade path, jsonb everywhere now ─────
+#
+# The column's type used to depend on how a database reached head -- `jsonb` from
+# the baseline's create_all on a fresh install, `json` from 0022's `sa.JSON()` on
+# an upgrade -- so two deployments at the same revision had different schemas.
+# 0024 converts it. These cases prove the conversion on the path that actually
+# produced the divergence, and that no allowlist changes value in either
+# direction.
+
+_IP_ALLOWLIST_COL = ("api_keys", "ip_allowlist")
+
+# NULL (control off), empty list (also off), and a populated list, because the
+# absent and empty cases are the ones a cast is most likely to mangle.
+_ALLOWLISTS = {
+    "key_null":  None,
+    "key_empty": [],
+    "key_full":  ["10.0.0.0/8", "192.168.1.1/32", "2001:db8::/32"],
+}
+
+
+async def _ip_allowlist_type(url: str) -> str | None:
+    types = await _column_types(url, "data_type IN ('json', 'jsonb')")
+    return types.get(_IP_ALLOWLIST_COL)
+
+
+async def _seed_keys_with_allowlists(url: str) -> None:
+    """Insert one key per allowlist shape while the column is still `json`.
+
+    The cast is written as `json` because that is the column's type at the point
+    this is called; casting to the target type would beg the question the test is
+    asking.
+    """
+    tenant_id = uuid.uuid4()
+    engine = create_async_engine(url, poolclass=NullPool)
+    try:
+        async with engine.begin() as conn:
+            await conn.execute(text(
+                "INSERT INTO tenants (id, slug, name, status, created_at) "
+                "VALUES (:id, :slug, 'T', 'active', now())"
+            ), {"id": tenant_id, "slug": "t-" + tenant_id.hex[:8]})
+
+            for key_id, allowlist in _ALLOWLISTS.items():
+                await conn.execute(text("""
+                    INSERT INTO api_keys (
+                        id, key_id, tenant_id, dept_id, name, key_hash,
+                        key_type, is_admin, revoked, ip_allowlist, created_at
+                    ) VALUES (
+                        :id, :key_id, :tenant_id, NULL, 'k', :key_hash,
+                        'live', true, false, CAST(:allowlist AS json), now()
+                    )
+                """), {
+                    "id":        uuid.uuid4(),
+                    "key_id":    key_id,
+                    "tenant_id": tenant_id,
+                    "key_hash":  "h_" + key_id,
+                    # NULL stays NULL rather than becoming the JSON literal null.
+                    "allowlist": None if allowlist is None else json.dumps(allowlist),
+                })
+    finally:
+        await engine.dispose()
+
+
+async def _stored_allowlists(url: str) -> dict[str, object]:
+    """Read the allowlists back as Python values.
+
+    Cast to text and parse, rather than comparing raw column output: jsonb
+    normalises whitespace and key order, so a textual comparison would report a
+    difference that is not one.
+    """
+    rows = await _fetch(
+        url,
+        "SELECT key_id, ip_allowlist::text FROM api_keys "
+        "WHERE key_id IN ('key_null', 'key_empty', 'key_full')",
+    )
+    return {key_id: (json.loads(value) if value is not None else None) for key_id, value in rows}
+
+
+async def _stage_upgrade_path(url: str) -> None:
+    """Reach 0023 the way a pre-0022 deployment does.
+
+    Downgrading below 0022 drops the column; upgrading back to 0023 makes 0022
+    re-add it, which is the step that produces `json`. Stopping at 0023 leaves the
+    database in the exact state 0024 was written for.
+    """
+    await _upgrade(url)
+    await _downgrade(url, "0021_proxy_scan_latency")
+    await _upgrade(url, "0023_auth_event_key_id")
+
+
+@pytest.mark.asyncio
+async def test_ip_allowlist_is_jsonb_on_a_fresh_install(migration_db):
+    await _upgrade(migration_db)
+
+    assert await _ip_allowlist_type(migration_db) == "jsonb"
+
+
+@pytest.mark.asyncio
+async def test_ip_allowlist_is_json_before_the_conversion(migration_db):
+    """The staging itself, asserted: without this the conversion case below could
+    pass while testing nothing."""
+    await _stage_upgrade_path(migration_db)
+
+    assert await _ip_allowlist_type(migration_db) == "json"
+
+
+@pytest.mark.asyncio
+async def test_ip_allowlist_converts_to_jsonb_on_the_upgrade_path(migration_db):
+    await _stage_upgrade_path(migration_db)
+    assert await _ip_allowlist_type(migration_db) == "json"
+
+    await _upgrade(migration_db)
+
+    assert await _ip_allowlist_type(migration_db) == "jsonb"
+
+
+@pytest.mark.asyncio
+async def test_existing_allowlists_survive_the_conversion(migration_db):
+    """Rows written before the conversion must read back identically after it --
+    NULL still NULL, empty still empty, entries in order."""
+    await _stage_upgrade_path(migration_db)
+    await _seed_keys_with_allowlists(migration_db)
+    assert await _stored_allowlists(migration_db) == _ALLOWLISTS
+
+    await _upgrade(migration_db)
+
+    assert await _ip_allowlist_type(migration_db) == "jsonb"
+    assert await _stored_allowlists(migration_db) == _ALLOWLISTS
+
+
+@pytest.mark.asyncio
+async def test_the_conversion_round_trips_with_its_data(migration_db):
+    """Down to json, back up to jsonb, with the rows unchanged throughout. A
+    downgrade that loses an allowlist would silently widen every key it touched
+    from a restricted set of networks to unrestricted."""
+    await _stage_upgrade_path(migration_db)
+    await _seed_keys_with_allowlists(migration_db)
+    await _upgrade(migration_db)
+    assert await _ip_allowlist_type(migration_db) == "jsonb"
+
+    await _downgrade(migration_db, "0023_auth_event_key_id")
+
+    assert await _ip_allowlist_type(migration_db) == "json"
+    assert await _stored_allowlists(migration_db) == _ALLOWLISTS
+
+    await _upgrade(migration_db)
+
+    assert await _ip_allowlist_type(migration_db) == "jsonb"
+    assert await _stored_allowlists(migration_db) == _ALLOWLISTS
+
+
+@pytest.mark.asyncio
+async def test_the_conversion_is_idempotent_in_both_directions(migration_db):
+    """Both directions are guarded by the column's current type, so re-running
+    either must be a no-op rather than an error."""
+    await _upgrade(migration_db)
+    await _upgrade(migration_db)
+    assert await _ip_allowlist_type(migration_db) == "jsonb"
+
+    await _downgrade(migration_db, "0023_auth_event_key_id")
+    await _downgrade(migration_db, "0023_auth_event_key_id")
+    assert await _ip_allowlist_type(migration_db) == "json"
