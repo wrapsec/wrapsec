@@ -157,16 +157,36 @@ class AuditRepository(BaseRepository):
 
         autoescape keeps the underscore in the id prefix literal rather than
         letting it act as a single-character wildcard.
+
+        The suffix is a message POSITION, so it is ordered numerically here
+        rather than by `ORDER BY trace_id`. A SQL sort is lexicographic over the
+        id text, which puts `-10` before `-2` and makes "first" mean the wrong
+        row as soon as a conversation carries eleven or more messages -- the
+        scan-all cap bounds how many messages are SCANNED, not the index each
+        one sits at. The candidate set is one row per scanned message and so is
+        bounded by that cap, which is what makes ordering in Python cheap enough
+        to prefer over a dialect-specific cast in SQL.
         """
-        stmt = (
-            select(AuditLogModel.trace_id)
-            .where(AuditLogModel.trace_id.startswith(f"{base_trace_id}-", autoescape=True))
-            .order_by(AuditLogModel.trace_id)
-            .limit(1)
+        prefix = f"{base_trace_id}-"
+        stmt = select(AuditLogModel.trace_id).where(
+            AuditLogModel.trace_id.startswith(prefix, autoescape=True)
         )
         if tenant_id:
             stmt = stmt.where(AuditLogModel.tenant_id == tenant_id)
-        return (await self.session.execute(stmt)).scalar_one_or_none()
+        candidates = (await self.session.execute(stmt)).scalars().all()
+        if not candidates:
+            return None
+
+        def _position(trace_id: str) -> tuple[int, int, str]:
+            # A suffix that is not a plain position sorts after every real one
+            # instead of crashing the lookup; the id itself breaks ties so the
+            # result stays deterministic either way.
+            suffix = trace_id[len(prefix):]
+            if suffix.isascii() and suffix.isdigit():
+                return (0, int(suffix), trace_id)
+            return (1, 0, trace_id)
+
+        return min(candidates, key=_position)
 
     async def get_by_trace_id_scoped(
         self,
