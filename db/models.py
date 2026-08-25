@@ -198,9 +198,13 @@ class APIKeyModel(Base):
     ip_allowlist: Mapped[Any | None] = mapped_column(JSONVariant,  nullable=True)
 
     __table_args__ = (
-        # Only enforced in PostgreSQL (production). SQLite (used in tests) silently
-        # skips this constraint - test scenarios that create invalid API key rows
-        # will not be caught until the production schema is exercised.
+        # Created on PostgreSQL only (_create_rule), which is the production
+        # dialect and also the one the integration tier runs on: that tier builds
+        # its schema on a real PostgreSQL, so a test writing an invalid key row is
+        # refused there rather than only on a deployment. It is still absent where
+        # a test builds the schema on SQLite -- the migration-chain smoke test in
+        # tests/integration/test_migrations.py -- so that file proves nothing about
+        # it. The constraint is exercised directly by test_migrations_postgres.py.
         CheckConstraint(
             "is_admin = true OR (tenant_id IS NOT NULL AND dept_id IS NOT NULL)",
             name="ck_api_keys_non_admin_tenant",

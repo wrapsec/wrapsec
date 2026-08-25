@@ -1,0 +1,421 @@
+# SPDX-License-Identifier: MIT
+# Copyright (c) 2026 WrapSec. All rights reserved.
+# WrapSec v1.0 | AI Security Gateway - https://wrapsec.com
+
+"""
+The migration chain, run on PostgreSQL.
+
+`test_migrations.py` runs the chain on SQLite. That establishes table parity and
+idempotence, but every PostgreSQL-only construct in the chain is skipped there,
+by the migrations themselves: 0004 returns early unless the dialect is
+postgresql, 0006's JSON-to-JSONB conversion has no SQLite meaning, 0010's
+timestamptz swap is skipped where the type does not exist, and
+`ck_api_keys_non_admin_tenant` carries a `_create_rule` that omits it on any
+dialect but PostgreSQL. Those are precisely the parts that can only break in
+production.
+
+The integration tier's own schema is built with `Base.metadata.create_all`, not
+Alembic, so it does not cover the chain either: it proves the MODELS work on
+PostgreSQL, never that the migrations produce that schema.
+
+Each test here therefore creates its own throwaway database on the PostgreSQL
+server the tier is already using, runs `alembic upgrade head` into it, asserts
+against the real schema, and drops it. Nothing touches the shared test database,
+and no second test framework or container is introduced.
+
+Alembic's env.py drives an async engine through `asyncio.run`, which cannot be
+called inside a running loop, so every `command.*` call goes through a worker
+thread.
+"""
+
+import asyncio
+import uuid
+from pathlib import Path
+
+import pytest
+import pytest_asyncio
+from alembic import command
+from alembic.config import Config
+from alembic.script import ScriptDirectory
+from sqlalchemy import JSON, DateTime, inspect, make_url, text
+from sqlalchemy.ext.asyncio import create_async_engine
+from sqlalchemy.pool import NullPool
+
+from db.models import Base
+
+_REPO_ROOT     = Path(__file__).resolve().parents[2]
+_MIGRATIONS    = _REPO_ROOT / "db" / "migrations"
+
+
+def _alembic_config(url: str) -> Config:
+    cfg = Config(str(_REPO_ROOT / "alembic.ini"))
+    cfg.set_main_option("script_location", str(_MIGRATIONS))
+    cfg.set_main_option("sqlalchemy.url", url)
+    return cfg
+
+
+def _head_revision() -> str:
+    return ScriptDirectory.from_config(_alembic_config("postgresql+asyncpg:///")).get_current_head()
+
+
+async def _upgrade(url: str, revision: str = "head") -> None:
+    await asyncio.to_thread(command.upgrade, _alembic_config(url), revision)
+
+
+async def _downgrade(url: str, revision: str) -> None:
+    await asyncio.to_thread(command.downgrade, _alembic_config(url), revision)
+
+
+@pytest_asyncio.fixture
+async def migration_db(pg_url):
+    """A brand-new, empty database on the same server, dropped afterwards.
+
+    A fresh database is what makes this a migration test rather than a schema
+    test: the chain has to build everything from nothing, exactly as it does on a
+    real deployment.
+    """
+    base   = make_url(pg_url)
+    dbname = "wrapsec_mig_" + uuid.uuid4().hex[:12]
+    # render_as_string(hide_password=False): str(URL) masks the password as
+    # "***", which reaches the driver verbatim and fails authentication.
+    admin  = base.set(database="postgres").render_as_string(hide_password=False)
+    target = base.set(database=dbname).render_as_string(hide_password=False)
+
+    engine = create_async_engine(admin, isolation_level="AUTOCOMMIT", poolclass=NullPool)
+    async with engine.connect() as conn:
+        await conn.execute(text(f'CREATE DATABASE "{dbname}"'))
+    await engine.dispose()
+
+    try:
+        yield target
+    finally:
+        engine = create_async_engine(admin, isolation_level="AUTOCOMMIT", poolclass=NullPool)
+        async with engine.connect() as conn:
+            # Any lingering session would block the drop and leave the database
+            # behind for the next run to trip over.
+            await conn.execute(text(
+                "SELECT pg_terminate_backend(pid) FROM pg_stat_activity "
+                "WHERE datname = :name AND pid <> pg_backend_pid()"
+            ), {"name": dbname})
+            await conn.execute(text(f'DROP DATABASE IF EXISTS "{dbname}"'))
+        await engine.dispose()
+
+
+async def _fetch(url: str, sql: str, **params):
+    engine = create_async_engine(url, poolclass=NullPool)
+    try:
+        async with engine.connect() as conn:
+            return (await conn.execute(text(sql), params or None)).fetchall()
+    finally:
+        await engine.dispose()
+
+
+# ── the chain itself ─────────────────────────────────────────────────────────
+
+@pytest.mark.asyncio
+async def test_chain_reaches_head_and_creates_every_model_table(migration_db):
+    await _upgrade(migration_db)
+
+    stamped = await _fetch(migration_db, "SELECT version_num FROM alembic_version")
+    assert [r[0] for r in stamped] == [_head_revision()]
+
+    engine = create_async_engine(migration_db, poolclass=NullPool)
+    try:
+        async with engine.connect() as conn:
+            tables = set(await conn.run_sync(lambda c: inspect(c).get_table_names()))
+    finally:
+        await engine.dispose()
+
+    missing = set(Base.metadata.tables) - tables
+    assert not missing, f"migration chain missing tables on PostgreSQL: {sorted(missing)}"
+
+
+@pytest.mark.asyncio
+async def test_chain_is_idempotent_on_postgres(migration_db):
+    """Re-running the chain is the in-place upgrade path; on PostgreSQL it also
+    re-executes the trigger and conversion migrations, which SQLite skips."""
+    await _upgrade(migration_db)
+    await _upgrade(migration_db)
+
+    stamped = await _fetch(migration_db, "SELECT version_num FROM alembic_version")
+    assert [r[0] for r in stamped] == [_head_revision()]
+
+
+@pytest.mark.asyncio
+async def test_head_revision_downgrades_and_reapplies(migration_db):
+    head = _head_revision()
+    await _upgrade(migration_db)
+
+    await _downgrade(migration_db, "-1")
+    stepped_back = await _fetch(migration_db, "SELECT version_num FROM alembic_version")
+    assert [r[0] for r in stepped_back] != [head]
+
+    await _upgrade(migration_db)
+    assert [r[0] for r in await _fetch(migration_db, "SELECT version_num FROM alembic_version")] == [head]
+
+
+# ── the PostgreSQL-only constructs ───────────────────────────────────────────
+
+@pytest.mark.asyncio
+async def test_audit_immutability_trigger_is_installed_by_the_chain(migration_db):
+    """0004 is a no-op on SQLite, so nothing has ever proven the chain installs
+    this. The tamper-evidence claim rests on it."""
+    await _upgrade(migration_db)
+
+    triggers = await _fetch(
+        migration_db,
+        "SELECT tgname FROM pg_trigger WHERE tgname = 'audit_logs_no_update_on_chained'",
+    )
+    assert [r[0] for r in triggers] == ["audit_logs_no_update_on_chained"]
+
+
+@pytest.mark.asyncio
+async def test_a_chained_audit_row_cannot_be_updated(migration_db):
+    """The behaviour, not just the catalog entry: a row carrying a record_hash is
+    immutable, and one without a hash is still writable."""
+    from sqlalchemy.exc import DBAPIError
+
+    await _upgrade(migration_db)
+
+    insert = """
+        INSERT INTO audit_logs (
+            id, trace_id, decision, risk_score, threats, input_hash,
+            detection_mode, execution_mode, llm_invoked, latency_ms,
+            attribution_verified, created_at, record_hash
+        ) VALUES (
+            :id, :trace_id, 'ALLOW', 0.1, '[]'::jsonb, 'h',
+            'fast', 'scan_only', false, 1.0, false, now(), :record_hash
+        )
+    """
+    chained, unchained = uuid.uuid4(), uuid.uuid4()
+
+    engine = create_async_engine(migration_db, poolclass=NullPool)
+    try:
+        async with engine.begin() as conn:
+            await conn.execute(text(insert), {
+                "id": chained, "trace_id": "req_chained", "record_hash": "abc123",
+            })
+            await conn.execute(text(insert), {
+                "id": unchained, "trace_id": "req_unchained", "record_hash": None,
+            })
+
+        with pytest.raises(DBAPIError) as caught:
+            async with engine.begin() as conn:
+                await conn.execute(
+                    text("UPDATE audit_logs SET decision = 'BLOCK' WHERE id = :id"),
+                    {"id": chained},
+                )
+        assert "chain-locked" in str(caught.value)
+
+        # The trigger is scoped to chained rows; it must not freeze the table.
+        async with engine.begin() as conn:
+            await conn.execute(
+                text("UPDATE audit_logs SET decision = 'BLOCK' WHERE id = :id"),
+                {"id": unchained},
+            )
+    finally:
+        await engine.dispose()
+
+
+@pytest.mark.asyncio
+async def test_every_json_column_lands_as_jsonb(migration_db):
+    """0006 exists because the code queries these columns with jsonb operators,
+    which fail against `json`. The expected set is derived from the models, so a
+    new JSON column is covered without editing this test."""
+    await _upgrade(migration_db)
+
+    expected = {
+        (table.name, column.name)
+        for table in Base.metadata.tables.values()
+        for column in table.columns
+        if isinstance(column.type, JSON)
+    }
+    assert expected, "no JSON columns found in the models; the assertion below would be vacuous"
+
+    rows = await _fetch(
+        migration_db,
+        "SELECT table_name, column_name, data_type FROM information_schema.columns "
+        "WHERE table_schema = 'public' AND data_type IN ('json', 'jsonb')",
+    )
+    actual = {(t, c): d for t, c, d in rows}
+
+    not_jsonb = {key: actual.get(key) for key in expected if actual.get(key) != "jsonb"}
+    assert not not_jsonb, f"columns not at jsonb after the chain: {not_jsonb}"
+
+
+@pytest.mark.asyncio
+async def test_a_jsonb_operator_works_on_the_migrated_schema(migration_db):
+    """The failure 0006 was written for was a runtime one:
+    `jsonb_array_elements_text(json) does not exist`. Run the operator."""
+    await _upgrade(migration_db)
+
+    engine = create_async_engine(migration_db, poolclass=NullPool)
+    try:
+        async with engine.begin() as conn:
+            await conn.execute(text("""
+                INSERT INTO audit_logs (
+                    id, trace_id, decision, risk_score, threats, input_hash,
+                    detection_mode, execution_mode, llm_invoked, latency_ms,
+                    attribution_verified, created_at
+                ) VALUES (
+                    :id, :trace_id, 'BLOCK', 0.9, '["prompt_injection"]'::jsonb, 'h',
+                    'fast', 'scan_only', false, 1.0, false, now()
+                )
+            """), {"id": uuid.uuid4(), "trace_id": "req_" + uuid.uuid4().hex})
+
+        async with engine.connect() as conn:
+            found = (await conn.execute(text(
+                "SELECT count(*) FROM audit_logs, "
+                "jsonb_array_elements_text(threats) AS threat "
+                "WHERE threat = 'prompt_injection'"
+            ))).scalar_one()
+    finally:
+        await engine.dispose()
+
+    assert found == 1
+
+
+@pytest.mark.asyncio
+async def test_every_timestamp_column_lands_as_timestamptz(migration_db):
+    """0010 rebuilds these columns; a naive one anywhere reintroduces the bug the
+    aware-UTC conversion closed."""
+    await _upgrade(migration_db)
+
+    expected = {
+        (table.name, column.name)
+        for table in Base.metadata.tables.values()
+        for column in table.columns
+        if isinstance(column.type, DateTime)
+    }
+    assert expected, "no DateTime columns found in the models"
+
+    rows = await _fetch(
+        migration_db,
+        "SELECT table_name, column_name, data_type FROM information_schema.columns "
+        "WHERE table_schema = 'public' AND data_type LIKE 'timestamp%'",
+    )
+    actual = {(t, c): d for t, c, d in rows}
+
+    naive = {
+        key: actual.get(key)
+        for key in expected
+        if actual.get(key) != "timestamp with time zone"
+    }
+    assert not naive, f"columns not timestamptz after the chain: {naive}"
+
+
+@pytest.mark.asyncio
+async def test_non_admin_key_check_constraint_is_enforced(migration_db):
+    """`ck_api_keys_non_admin_tenant` is omitted on SQLite by its own
+    `_create_rule`, so the model comment's warning -- that invalid key rows are
+    not caught until the production schema is exercised -- has been literally
+    true of the whole suite. Exercise it."""
+    from sqlalchemy.exc import IntegrityError
+
+    await _upgrade(migration_db)
+
+    tenant_id = uuid.uuid4()
+    engine = create_async_engine(migration_db, poolclass=NullPool)
+    try:
+        async with engine.begin() as conn:
+            await conn.execute(text(
+                "INSERT INTO tenants (id, slug, name, status, created_at) "
+                "VALUES (:id, :slug, 'T', 'active', now())"
+            ), {"id": tenant_id, "slug": "t-" + tenant_id.hex[:8]})
+
+        key_insert = """
+            INSERT INTO api_keys (
+                id, key_id, tenant_id, dept_id, name, key_hash,
+                key_type, is_admin, revoked, created_at
+            ) VALUES (
+                :id, :key_id, :tenant_id, :dept_id, 'k', :key_hash,
+                'live', :is_admin, false, now()
+            )
+        """
+
+        # A non-admin key with no department violates the constraint.
+        with pytest.raises(IntegrityError) as caught:
+            async with engine.begin() as conn:
+                await conn.execute(text(key_insert), {
+                    "id": uuid.uuid4(), "key_id": "key_bad", "tenant_id": tenant_id,
+                    "dept_id": None, "key_hash": "h_bad", "is_admin": False,
+                })
+        assert "ck_api_keys_non_admin_tenant" in str(caught.value)
+
+        # An admin key legitimately carries no department.
+        async with engine.begin() as conn:
+            await conn.execute(text(key_insert), {
+                "id": uuid.uuid4(), "key_id": "key_admin", "tenant_id": tenant_id,
+                "dept_id": None, "key_hash": "h_admin", "is_admin": True,
+            })
+    finally:
+        await engine.dispose()
+
+
+# ── the conversions, actually converting ─────────────────────────────────────
+#
+# On a fresh database 0001's create_all already produces jsonb and timestamptz
+# columns, so 0006 and 0010 find nothing to do and the two end-state assertions
+# above pass without either migration converting anything. The conversions only
+# matter for a database that predates them, so the pre-migration state is staged
+# here by downgrading the chain to the revision just before each one -- using the
+# migrations' own downgrades, rather than hand-written DDL that could stage a
+# state the chain never actually produces.
+
+# Known divergence, found by this test and deliberately NOT fixed in this pass.
+# 0022 adds api_keys.ip_allowlist as `sa.JSON()` rather than the JSONVariant the
+# model declares, and it postdates 0006's target list, so a database that reached
+# head by UPGRADING has `json` where a fresh install has `jsonb`. Nothing queries
+# the column with a jsonb operator today, so it is latent rather than broken.
+#
+# Pinned as an exact set rather than excluded: if another column drifts, or if
+# this one is later aligned, the assertion fails and the divergence is revisited
+# instead of being absorbed silently.
+_KNOWN_JSON_NOT_JSONB = {("api_keys", "ip_allowlist")}
+
+
+async def _column_types(url: str, where: str) -> dict[tuple[str, str], str]:
+    rows = await _fetch(
+        url,
+        "SELECT table_name, column_name, data_type FROM information_schema.columns "
+        f"WHERE table_schema = 'public' AND {where}",
+    )
+    return {(t, c): d for t, c, d in rows}
+
+
+@pytest.mark.asyncio
+async def test_json_columns_are_converted_when_the_chain_finds_them_as_json(migration_db):
+    await _upgrade(migration_db)
+    await _downgrade(migration_db, "0005_add_auditor_role")
+
+    staged = await _column_types(migration_db, "data_type IN ('json', 'jsonb')")
+    assert "json" in staged.values(), (
+        "staging produced no json columns, so this test would pass without 0006 "
+        "converting anything"
+    )
+
+    await _upgrade(migration_db)
+
+    converted = await _column_types(migration_db, "data_type IN ('json', 'jsonb')")
+    still_json = {k for k, v in converted.items() if v != "jsonb"}
+    assert still_json == _KNOWN_JSON_NOT_JSONB, (
+        f"json/jsonb divergence changed: {sorted(still_json)}"
+    )
+
+
+@pytest.mark.asyncio
+async def test_timestamps_are_converted_when_the_chain_finds_them_naive(migration_db):
+    await _upgrade(migration_db)
+    await _downgrade(migration_db, "0009_webhook_connector_type")
+
+    staged = await _column_types(migration_db, "data_type LIKE 'timestamp%'")
+    assert "timestamp without time zone" in staged.values(), (
+        "staging produced no naive timestamp columns, so this test would pass "
+        "without 0010 converting anything"
+    )
+
+    await _upgrade(migration_db)
+
+    converted = await _column_types(migration_db, "data_type LIKE 'timestamp%'")
+    naive = {k: v for k, v in converted.items() if v != "timestamp with time zone"}
+    assert not naive, f"columns left naive after the chain re-ran: {naive}"
