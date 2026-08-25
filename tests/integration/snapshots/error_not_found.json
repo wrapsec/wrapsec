@@ -1,0 +1,16 @@
+{
+  "body": {
+    "error": {
+      "code": "NOT_FOUND",
+      "key": "<secret>",
+      "message": "request not found.",
+      "params": {
+        "resource": "request"
+      },
+      "severity": "WARNING",
+      "trace_id": "<trace_id>"
+    }
+  },
+  "mode": "value",
+  "status": 404
+}

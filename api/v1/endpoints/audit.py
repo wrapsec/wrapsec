@@ -323,7 +323,8 @@ async def get_audit_stats(
         "severity_counts": severity_counts,
     })
 
-@router.get("/attribution")
+# Dashboard analytics. The integrator surface is logs, stats and export.
+@router.get("/attribution", include_in_schema=False)
 async def get_attribution_report(
     request:    Request,
     dept_id:    str | None = Query(None),
@@ -463,7 +464,8 @@ async def get_attribution_report(
         "by_confidence_band": by_confidence,
     })
 
-@router.get("/analytics")
+# Dashboard analytics. The integrator surface is logs, stats and export.
+@router.get("/analytics", include_in_schema=False)
 async def get_analytics(
     request:    Request,
     from_date:  str | None = Query(None, alias="from"),
@@ -548,7 +550,8 @@ async def get_analytics(
         "trend":      trend,
     })
 
-@router.get("/by-source")
+# Dashboard analytics. The integrator surface is logs, stats and export.
+@router.get("/by-source", include_in_schema=False)
 async def get_audit_by_source(
     request:    Request,
     from_:      str | None = Query(None, alias="from"),

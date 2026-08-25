@@ -231,7 +231,9 @@ async def delete_proxy_settings(
 
 # ── GET /v1/settings/proxy/health ──────────────────────────────────────────────
 
-@router.get("/proxy/health")
+# Operator reachability probe against the configured provider, not part of
+# the integrator contract.
+@router.get("/proxy/health", include_in_schema=False)
 async def get_proxy_health(
     request:    Request,
     db:         AsyncSession = Depends(get_db),

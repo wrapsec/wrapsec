@@ -1,0 +1,8 @@
+{
+  "body": {
+    "block_threshold": "<float>",
+    "sanitize_threshold": "<float>"
+  },
+  "mode": "keys",
+  "status": 200
+}

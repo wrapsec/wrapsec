@@ -1,0 +1,27 @@
+{
+  "body": {
+    "attribution": "<dict>",
+    "confidence": "<float>",
+    "confidence_band": "<str>",
+    "decision": "<str>",
+    "detection_scores": "<dict>",
+    "execution_mode": "<str>",
+    "guardrail_scores": "<dict>",
+    "input_hash": "<str>",
+    "input_length": "<int>",
+    "input_source": "<str>",
+    "is_proxy": "<bool>",
+    "primary_reason": "<str>",
+    "processing": "<dict>",
+    "risk_score": "<float>",
+    "run_id": null,
+    "session_id": null,
+    "severity": "<str>",
+    "threats": "<list>",
+    "timestamp": "<str>",
+    "trace_id": "<str>",
+    "turn_index": null
+  },
+  "mode": "keys",
+  "status": 200
+}

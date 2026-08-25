@@ -1,0 +1,13 @@
+{
+  "body": {
+    "checks": {
+      "database": "ok",
+      "redis": "ok",
+      "tfidf_detector": "healthy",
+      "transformer_detector": "healthy"
+    },
+    "status": "ready"
+  },
+  "mode": "value",
+  "status": 200
+}

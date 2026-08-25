@@ -1,0 +1,12 @@
+{
+  "body": {
+    "api_key_masked": null,
+    "base_url": "<str>",
+    "llm_trigger": "<float>",
+    "model": "<str>",
+    "provider": "<str>",
+    "timeout": "<int>"
+  },
+  "mode": "keys",
+  "status": 200
+}

@@ -1,0 +1,8 @@
+{
+  "body": {
+    "per_minute": "<int>",
+    "source": "<str>"
+  },
+  "mode": "keys",
+  "status": 200
+}

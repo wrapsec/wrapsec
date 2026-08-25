@@ -1,0 +1,57 @@
+{
+  "body": {
+    "assessment": {
+      "confidence": 1.0,
+      "confidence_band": "HIGH",
+      "decision": "ALLOW",
+      "layers": [
+        {
+          "decision": "ALLOW",
+          "name": "rule_score",
+          "score": 0.0
+        },
+        {
+          "decision": "ALLOW",
+          "name": "ml_score",
+          "score": 0.0
+        },
+        {
+          "decision": "ALLOW",
+          "name": "llm_score",
+          "score": 0.0
+        },
+        {
+          "decision": "ALLOW",
+          "name": "pii_score",
+          "score": 0.0
+        },
+        {
+          "decision": "ALLOW",
+          "name": "toxicity_score",
+          "score": 0.0
+        }
+      ],
+      "primary_reason": "NO_THREAT_DETECTED",
+      "risk_level": "LOW",
+      "risk_score": 0.0,
+      "threats": []
+    },
+    "confidence": 1.0,
+    "confidence_band": "HIGH",
+    "decision": "ALLOW",
+    "decision_version": "v1.0",
+    "primary_reason": "NO_THREAT_DETECTED",
+    "processing": {
+      "detection_mode": "fast",
+      "execution_mode": "scan_only",
+      "latency_ms": "<float>",
+      "llm_invoked": false
+    },
+    "risk_score": 0.0,
+    "sanitization_applied": false,
+    "threats": [],
+    "trace_id": "<trace_id>"
+  },
+  "mode": "value",
+  "status": 200
+}

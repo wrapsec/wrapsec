@@ -2,14 +2,77 @@
 
 Version: 1.0  
 Base URL: `http://your-host:8000`  
-Total endpoints: 63  
+Operations served: 99 - of which **28 are the published public contract**  
+Documented here: 82 (public and non-public alike)  
 Last updated: May 2026
+
+---
+
+## Public Contract Boundary
+
+**This page documents more than the public API. Do not read all 82 documented
+operations as the integrator contract.**
+
+WrapSec serves two kinds of HTTP surface, and they carry different promises:
+
+| | Published contract | Everything else |
+|---|---|---|
+| Operations | **28** | 71 |
+| Authority | `docs/openapi.json` - generated, machine-readable, versioned | this page only |
+| Audience | SDKs, the protocol adapter, documented integrations | the dashboard, operators, first-run setup, monitoring |
+| Stability | changes are contract changes | may change with the surface that uses it |
+| In `/docs` and `/openapi.json` | yes | no |
+
+`docs/openapi.json` is the authority for the 28. It is generated from the OSS
+core build by `scripts/gen_openapi.py`, contains no plugin routes, and a test
+holds it to exactly this boundary in both directions. Where this page and the
+schema disagree about a public operation, **the schema is correct**.
+
+Every endpoint heading below is labelled `PUBLIC` or `NOT PUBLIC`. The published
+28 are:
+
+| Area | Operations |
+|---|---|
+| Health | `GET /health`, `/health/live`, `/health/ready`, `/health/config` |
+| Capabilities | `GET /v1/capabilities` |
+| Scanning | `POST /v1/ai/request`, `POST /v1/ai/scan-batch` |
+| Read-back | `GET /v1/ai/requests/{trace_id}`, `GET /v1/agent-runs/{run_id}` |
+| Audit | `GET /v1/audit/logs`, `/v1/audit/stats`, `/v1/audit/export` |
+| Proxy | `POST /v1/chat/completions`, `GET /v1/proxy/interactions`, `GET /v1/proxy/interactions/{trace_id}` |
+| Proxy settings | `GET` / `PUT` / `DELETE /v1/settings/proxy` |
+| Detection policy | `GET` + `PUT` on `/v1/settings/thresholds`, `/layers`, `/llm`, `/rate_limit` |
+| API keys | `GET /v1/keys`, `POST /v1/keys` |
+
+**`NOT PUBLIC` is a documentation boundary, never an access control.** Those
+routes are served exactly as before, with the same authentication, the same
+authorization and the same behaviour; they are simply not advertised in the
+machine-readable contract, so they are not something an integration should build
+against. Nothing about a route's visibility keeps a caller out of it - the auth
+middleware and the RBAC checks do that, and they are unchanged.
+
+Two published operations are deliberate special cases: `GET /v1/audit/export`
+returns CSV rather than JSON, and `POST /v1/chat/completions` follows the
+OpenAI-compatible request and response shapes rather than WrapSec's own.
 
 ---
 
 ## Authentication
 
 WrapSec supports two authentication methods. Both resolve to identical internal state - downstream code is auth-agnostic.
+
+**Which one an integration uses is settled: the API key.** Every published
+operation accepts `x-api-key`, the SDKs and the protocol adapter send it, and no
+integration needs a JWT to reach the public contract. JWT is the human session
+mechanism - a person signing into the dashboard - which is why the `/v1/auth/*`
+family that mints and refreshes tokens is documented here but is not part of the
+published schema. It stays fully served, supported, and described below under
+[Auth Endpoints](#auth-endpoints); it is simply not an integrator surface.
+
+The one place this matters in practice: a few published operations accept a JWT
+but refuse an API key for WRITES (`PUT /v1/settings/*` requires JWT + ADMIN), and
+`POST /v1/chat/completions` is the reverse - API key only. The table under
+[Endpoint Auth Requirements](#endpoint-auth-requirements) is authoritative per
+route.
 
 ### API Key
 
@@ -34,7 +97,11 @@ Used by applications and services. Three key types:
 Authorization: Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...
 ```
 
-Used by dashboard users. Issued via `POST /v1/auth/login`.
+Used by dashboard users, and by an operator driving an admin-only write. Issued
+via `POST /v1/auth/login`, refreshed via `POST /v1/auth/refresh` - both fully
+documented under [Auth Endpoints](#auth-endpoints), neither in the published
+schema. Obtaining a token is unchanged: post credentials to the login endpoint
+and read `access_token` from the response.
 
 - Access token: HS256 JWT, 30 min, audience=`wrapsec-dashboard`
 - Refresh token: opaque, 30 days, httpOnly cookie `Path=/v1/auth`
@@ -87,7 +154,7 @@ Used by dashboard users. Issued via `POST /v1/auth/login`.
 - `/v1/settings/proxy*` scoped per `tenant_id` - one proxy config shared across all API keys for the tenant. All proxy-settings operations (including reads) require admin: configuring an outbound provider changes what leaves the system
 - `POST /v1/chat/completions` is API-key only. Dashboard (JWT) sessions receive `403 PROXY_REQUIRES_API_KEY` regardless of role
 - `GET /v1/settings/*` requires the `settings:read` permission: ADMIN, DEVELOPER, and AUDITOR roles hold it; VIEWER does not. Trial API keys are rejected
-- `/v1/admin/tenants*` is the platform-operator control plane (tenant provisioning and lifecycle). Master admin API key only; excluded from the OpenAPI schema
+- `/v1/admin/tenants*` is the platform-operator control plane (tenant provisioning and lifecycle). Master admin API key only. Like every other non-public surface it is excluded from the OpenAPI schema - see [Public Contract Boundary](#public-contract-boundary); it is not uniquely hidden
 - If a tenant is suspended, every request under its credentials returns `403 TENANT_SUSPENDED`. The same applies when the tenant's status cannot be established: suspension enforcement fails closed, so a datastore outage refuses authenticated traffic rather than serving it on the assumption the tenant is active. A tenant row that simply does not exist is a definite answer and is not treated as suspended
 - All write endpoints on admin resources require JWT (no API key writes)
 
@@ -211,7 +278,11 @@ Security and proxy errors additionally include a `wrapsec` key:
 
 ## Capabilities
 
+***Published.***
+
 ### GET /v1/capabilities
+
+*PUBLIC - in the published OpenAPI contract.*
 
 Which optional plugin capabilities are active in this deployment. The dashboard uses this to show or hide the corresponding UI. Informational only - this endpoint is never an authorization control; features enforce their own gates at request time.
 
@@ -228,7 +299,11 @@ The OSS edition always returns an empty set. An enterprise deployment lists the 
 
 ## Setup Endpoints
 
+*First-run deployment. **No operation in this section is published**; the installer and the dashboard use them.*
+
 ### GET /v1/setup/status
+
+*NOT PUBLIC - first-run deployment. Served and supported; outside the published contract.*
 
 Returns whether the system has been initialized. Used by the dashboard to determine whether to redirect to `/setup` on first visit. Redis-cached after initialization - no DB load on subsequent calls.
 
@@ -242,6 +317,8 @@ Returns whether the system has been initialized. Used by the dashboard to determ
 ---
 
 ### POST /v1/setup
+
+*NOT PUBLIC - first-run deployment. Served and supported; outside the published contract.*
 
 Creates the first admin user. Only succeeds when no users exist. Returns `404` once initialized - permanently self-disabled after first use.
 
@@ -265,7 +342,11 @@ Creates the first admin user. Only succeeds when no users exist. Returns `404` o
 
 ## Auth Endpoints
 
+*Human session flow. **No operation in this section is published.** They remain served and supported - this is how a dashboard user or an operator obtains and refreshes a JWT - but an integration authenticates with an API key instead.*
+
 ### POST /v1/auth/login
+
+*NOT PUBLIC - human session flow. Served and supported; outside the published contract.*
 
 Authenticate with email and password. Returns JWT access token. Sets refresh token as httpOnly cookie.
 
@@ -313,6 +394,8 @@ Sets cookie: `refresh_token=<raw>; HttpOnly; Secure; SameSite=Strict; Path=/v1/a
 
 ### POST /v1/auth/refresh
 
+*NOT PUBLIC - human session flow. Served and supported; outside the published contract.*
+
 Issues a new access token using the refresh token cookie. Rotates the refresh token - old token is immediately revoked.
 
 **Auth:** httpOnly cookie (`refresh_token`, `Path=/v1/auth`). No body required.
@@ -339,6 +422,8 @@ Sets a new rotated `refresh_token` cookie. Parallel refresh requests with the sa
 
 ### POST /v1/auth/logout
 
+*NOT PUBLIC - human session flow. Served and supported; outside the published contract.*
+
 Revokes the refresh token. Access token expires naturally (max 30 min residual). Clears cookie.
 
 **Auth:** JWT Bearer required.
@@ -364,6 +449,8 @@ Idempotent - safe to call multiple times.
 
 ### GET /v1/auth/me
 
+*NOT PUBLIC - human session flow. Served and supported; outside the published contract.*
+
 Returns the current user's profile. Accessible even when `force_password_change = true`.
 
 **Auth:** JWT Bearer required.
@@ -385,6 +472,8 @@ Returns the current user's profile. Accessible even when `force_password_change 
 ---
 
 ### POST /v1/auth/change-password
+
+*NOT PUBLIC - human session flow. Served and supported; outside the published contract.*
 
 Changes the user's password. Immediately invalidates all active sessions (all refresh tokens revoked, token_version incremented). Accessible even when `force_password_change = true`.
 
@@ -415,9 +504,13 @@ Clears the refresh token cookie. User must log in again.
 
 ## User Management
 
+*Membership administration, dashboard surface. **No operation in this section is published.***
+
 All `/v1/admin/users` endpoints require **JWT + ADMIN role**. API keys cannot access these endpoints.
 
 ### POST /v1/admin/users
+
+*NOT PUBLIC - dashboard administration. Served and supported; outside the published contract.*
 
 Creates a new dashboard user. `force_password_change` is always set to `true` - user must change password on first login.
 
@@ -454,6 +547,8 @@ Creates a new dashboard user. `force_password_change` is always set to `true` - 
 
 ### GET /v1/admin/users
 
+*NOT PUBLIC - dashboard administration. Served and supported; outside the published contract.*
+
 Lists all users for the tenant. Scoped to caller's `tenant_id` - never cross-tenant.
 
 **Query params:** `role`, `is_active`, `limit` (default 50), `offset`
@@ -482,6 +577,8 @@ Lists all users for the tenant. Scoped to caller's `tenant_id` - never cross-ten
 
 ### GET /v1/admin/users/{user_id}
 
+*NOT PUBLIC - dashboard administration. Served and supported; outside the published contract.*
+
 Returns a single user. Returns `404` if user belongs to a different tenant.
 
 **Response 200:** Same shape as individual item in list above.
@@ -489,6 +586,8 @@ Returns a single user. Returns `404` if user belongs to a different tenant.
 ---
 
 ### PATCH /v1/admin/users/{user_id}
+
+*NOT PUBLIC - dashboard administration. Served and supported; outside the published contract.*
 
 Partially updates `role`, `dept_id`, or `is_active`. All fields optional - only provided fields are updated. Validation is performed on the **final state** (combined role + dept_id), not individual fields independently.
 
@@ -521,6 +620,8 @@ Partially updates `role`, `dept_id`, or `is_active`. All fields optional - only 
 
 ### POST /v1/admin/users/{user_id}/reset-password
 
+*NOT PUBLIC - dashboard administration. Served and supported; outside the published contract.*
+
 Admin resets a user's password. Sets `force_password_change = true`. Invalidates all active sessions.
 
 **Request:**
@@ -540,7 +641,11 @@ Admin resets a user's password. Sets `force_password_change = true`. Invalidates
 
 ## Gateway
 
+***Every operation in this section is published.** This is the core integrator surface.*
+
 ### POST /v1/ai/request
+
+*PUBLIC - in the published OpenAPI contract.*
 
 Scan-only mode. Inspect input, get a security decision, then forward to your LLM if ALLOW or SANITIZE.
 
@@ -614,10 +719,30 @@ The `assessment` object is an always-present, self-contained security verdict - 
 
 **Per-layer scores are restricted.** `assessment` is always present for every caller, and so is every entry in `assessment.layers` with its `name` and its `decision`. The numeric `score` on each entry is returned only to callers holding `settings:read` and not using a trial key -- the same boundary `GET /v1/settings` and `GET /health/config` apply. A live API key resolves to `DEVELOPER` and holds it; trial keys and `VIEWER` do not.
 
-| Caller | `assessment.layers[]` contains |
-|---|---|
-| Holds `settings:read`, not a trial key | `name`, `score`, `decision` |
-| Any other authenticated caller | `name`, `decision` |
+The predicate is `holds_permission(request, "settings:read")`, which answers the
+same question `GET /v1/settings` enforces: the principal holds `settings:read`
+**and** the request is not on a trial key. Caller by caller:
+
+| Caller | Holds `settings:read` | `layers[].score` |
+|---|---|---|
+| `ADMIN` (JWT) | yes | returned |
+| `DEVELOPER` (JWT) | yes | returned |
+| Live API key (`wsk_live_...`, resolves to `DEVELOPER`) | yes | returned |
+| `AUDITOR` (JWT) | yes - read-only, but carries `settings:read` | returned |
+| `VIEWER` (JWT) | no | **omitted** |
+| Trial API key (`wsk_trial_...`) | refused regardless of role | **omitted** |
+
+**Restricted callers see the field absent, not null.** Each entry in
+`assessment.layers` still carries `name` and `decision`; the `score` key is not
+present at all. A client must treat a missing `score` as "not authorized to see
+it", never as a zero or a missing detection:
+
+```json
+// settings:read, live key            // VIEWER or trial key
+{ "name": "rule_score",               { "name": "rule_score",
+  "score": 0.85,                        "decision": "BLOCK" }
+  "decision": "BLOCK" }
+```
 
 Nothing else changes: `decision`, `risk_score`, `primary_reason`, `confidence`, `threats`, and each layer's classification are returned to everyone. The same restriction applies to `detection_scores` and `guardrail_scores` on `GET /v1/ai/requests/{trace_id}`, which persist the same numbers -- otherwise a caller reads back from the audit record what the scan response withheld.
 
@@ -663,6 +788,8 @@ Nothing else changes: `decision`, `risk_score`, `primary_reason`, `confidence`, 
 ---
 
 ### POST /v1/ai/scan-batch
+
+*PUBLIC - in the published OpenAPI contract.*
 
 Scan many items in one request. Every item runs the same pipeline as
 `POST /v1/ai/request` (scan-only; no proxy/LLM forwarding) and is audited
@@ -719,6 +846,8 @@ SDK helpers wrap this endpoint: `scan_batch()` plus the per-source sugar
 
 ### GET /v1/agent-runs/{run_id}
 
+*PUBLIC - in the published OpenAPI contract.*
+
 Return every scan belonging to one agent run (shared `run_id`), ordered as a timeline (`turn_index`, then `created_at`). Read-only, derived from `audit_logs`. Models the run as a first-class agentic resource (aligned with OpenTelemetry GenAI / LangSmith / OpenAI-Assistants run semantics).
 
 **Auth:** API key OR JWT Bearer.
@@ -752,6 +881,8 @@ Each turn is a full audit item (same shape as `GET /v1/audit/logs` items), inclu
 ---
 
 ### GET /v1/ai/requests/{trace_id}
+
+*PUBLIC - in the published OpenAPI contract.*
 
 Retrieve a stored request by trace ID. For proxy requests, joins `proxy_interactions` and returns the full lifecycle in a `proxy` key.
 
@@ -909,6 +1040,8 @@ response = client.chat.completions.create(model="openai/gpt-4o", messages=[...])
 **Model format:** `{provider}/{model}` - always required. Examples: `openai/gpt-4o`, `ollama/gemma3:4b`.
 
 ### POST /v1/chat/completions
+
+*PUBLIC - in the published OpenAPI contract.*
 
 **Auth:** live API key only. Trial keys: `403 trial_proxy_disabled`. JWT (dashboard) sessions: `403 PROXY_REQUIRES_API_KEY` regardless of role.
 
@@ -1175,9 +1308,13 @@ readily; there is no headroom above.
 
 ## Proxy Interactions
 
+***Both operations here are published.***
+
 Read-only view of proxy request lifecycle records.
 
 ### GET /v1/proxy/interactions
+
+*PUBLIC - in the published OpenAPI contract.*
 
 Lists proxy interaction records.
 
@@ -1223,6 +1360,8 @@ Note: `input_raw`, `input_sanitized`, `output_raw`, `output_sanitized` are **not
 
 ### GET /v1/proxy/interactions/{trace_id}
 
+*PUBLIC - in the published OpenAPI contract.*
+
 Returns full interaction detail including raw text fields (subject to `DATA_STORAGE_MODE`).
 
 **Response 200:** Same as list item plus:
@@ -1242,9 +1381,13 @@ Returns `404 NOT_FOUND` if trace_id not found.
 
 ## Proxy Settings
 
+***Mixed section.** `GET`, `PUT` and `DELETE /v1/settings/proxy` are published; `GET /v1/settings/proxy/health` is an operator probe and is not.*
+
 All proxy-settings operations - including reads and the health probe - require admin (JWT ADMIN or the admin API key): configuring an outbound provider and its credentials changes what leaves the system.
 
 ### PUT /v1/settings/proxy
+
+*PUBLIC - in the published OpenAPI contract.*
 
 Configure the LLM provider for proxy mode. One configuration per tenant, shared across all API keys. Replaces existing configuration entirely.
 
@@ -1280,15 +1423,21 @@ Provider API key is encrypted AES-256-GCM at rest. Never returned in responses -
 
 ### GET /v1/settings/proxy
 
+*PUBLIC - in the published OpenAPI contract.*
+
 Returns current configuration (API key masked).
 
 **Response 200:** Same shape as PUT response. `404 NOT_FOUND` if not configured.
 
 ### DELETE /v1/settings/proxy
 
+*PUBLIC - in the published OpenAPI contract.*
+
 Removes the proxy provider configuration. Returns `204 No Content` on success, `404 NOT_FOUND` if not configured.
 
 ### GET /v1/settings/proxy/health
+
+*NOT PUBLIC - operator probe. Served and supported; outside the published contract.*
 
 Tests connectivity to the configured provider.
 
@@ -1309,11 +1458,15 @@ When unreachable, `reachable: false` and an `error` string are returned - still 
 
 ## Audit
 
+***Mixed section.** `logs`, `stats` and `export` are published; `attribution`, `analytics` and `by-source` are dashboard analytics and are not.*
+
 All audit endpoints scope non-admin identities to their own department - the `dept_id` query param is ignored for non-admin callers.
 
 **Date parameters (`from`, `to`):** All audit endpoints that accept date filters require ISO 8601 format (e.g. `2026-01-15T00:00:00Z`). Malformed values return `400 INVALID_REQUEST` - they are not silently ignored. Empty or absent values apply no date filter.
 
 ### GET /v1/audit/logs
+
+*PUBLIC - in the published OpenAPI contract.*
 
 List audit log records.
 
@@ -1377,6 +1530,8 @@ List audit log records.
 
 ### GET /v1/audit/stats
 
+*PUBLIC - in the published OpenAPI contract.*
+
 Aggregate statistics for a time range.
 
 **Query params:** `tenant_id` (admin only), `from`, `to`
@@ -1410,6 +1565,8 @@ A `SYSTEM_ERROR` refusal is **`CRITICAL`**, not `HIGH`: fail-closed forces `risk
 Severity is computed at write time and stored in `audit_logs.severity`. Never returned in scan responses - audit and SIEM use only.
 
 ### GET /v1/audit/attribution
+
+*NOT PUBLIC - dashboard analytics. Served and supported; outside the published contract.*
 
 Attribution breakdown grouped by API key, department, application, primary reason, and confidence band.
 
@@ -1447,6 +1604,8 @@ Attribution breakdown grouped by API key, department, application, primary reaso
 
 ### GET /v1/audit/analytics
 
+*NOT PUBLIC - dashboard analytics. Served and supported; outside the published contract.*
+
 Time-series trend data grouped by time period.
 
 **Query params:**
@@ -1483,6 +1642,8 @@ Time-series trend data grouped by time period.
 ```
 
 ### GET /v1/audit/by-source
+
+*NOT PUBLIC - dashboard analytics. Served and supported; outside the published contract.*
 
 Security by Source: audit aggregates grouped by `input_source` (trust-boundary
 provenance), plus a Top Attack Origins ranking. Read-only over data already on
@@ -1523,9 +1684,18 @@ lists only sources that delivered attacks, ranked descending.
 
 ### GET /v1/audit/export
 
+*PUBLIC - in the published OpenAPI contract.*
+
 Exports audit logs as CSV.
 
 **Returns:** `text/csv`, `Content-Disposition: attachment; filename=wrapsec_audit_export.csv`
+
+**Known schema mismatch.** The published OpenAPI entry for this route currently
+advertises `application/json` with an empty schema, because a route with no
+response model gets that default. **This page is correct and the schema is not:
+the body is CSV.** The response itself is unaffected - the advertised schema is
+empty and constrains nothing - and the media type is scheduled to be corrected on
+the route, after which the schema will say `text/csv`.
 
 **Query params:** `dept_id`, `app_id`, `decision`, `primary_reason`, `confidence_band`, `from`, `to`, `limit` (default 1000, max 10000)
 
@@ -1537,9 +1707,13 @@ Exports audit logs as CSV.
 
 ## Settings
 
+***Mixed section.** `thresholds`, `layers`, `llm` and `rate_limit` are published - the detection policy an integration reads. `retention`, `storage` and `admin_limits` are deployment configuration and are not.*
+
 Settings are tenant-scoped: each tenant reads and writes its own values, layered over platform defaults. Reads require the `settings:read` permission (ADMIN, DEVELOPER, AUDITOR roles, or a live API key; VIEWER and trial keys are rejected). Writes require JWT + ADMIN.
 
 ### GET /v1/settings/thresholds
+
+*PUBLIC - in the published OpenAPI contract.*
 
 Returns current detection thresholds.
 
@@ -1549,6 +1723,8 @@ Returns current detection thresholds.
 ```
 
 ### PUT /v1/settings/thresholds
+
+*PUBLIC - in the published OpenAPI contract.*
 
 Updates detection thresholds. `block_threshold` must be greater than `sanitize_threshold`.
 
@@ -1564,6 +1740,8 @@ Updates detection thresholds. `block_threshold` must be greater than `sanitize_t
 
 ### GET /v1/settings/layers
 
+*PUBLIC - in the published OpenAPI contract.*
+
 Returns current detection layer configuration.
 
 **Response 200:**
@@ -1572,6 +1750,8 @@ Returns current detection layer configuration.
 ```
 
 ### PUT /v1/settings/layers
+
+*PUBLIC - in the published OpenAPI contract.*
 
 Enables or disables rule, ML, and LLM detection layers.
 
@@ -1587,6 +1767,8 @@ Enables or disables rule, ML, and LLM detection layers.
 
 ### GET /v1/settings/llm
 
+*PUBLIC - in the published OpenAPI contract.*
+
 Returns LLM detector configuration (detection layer only - separate from proxy provider).
 
 **Response 200:**
@@ -1596,6 +1778,8 @@ Returns LLM detector configuration (detection layer only - separate from proxy p
 
 ### PUT /v1/settings/llm
 
+*PUBLIC - in the published OpenAPI contract.*
+
 Updates LLM detector configuration. Provider must be `ollama`, `openai`, or `groq`. Timeout 5-120 seconds.
 
 **Request:**
@@ -1604,6 +1788,8 @@ Updates LLM detector configuration. Provider must be `ollama`, `openai`, or `gro
 ```
 
 ### GET /v1/settings/retention
+
+*NOT PUBLIC - deployment configuration. Served and supported; outside the published contract.*
 
 Returns audit log retention period.
 
@@ -1616,6 +1802,8 @@ Returns audit log retention period.
 
 ### PUT /v1/settings/retention
 
+*NOT PUBLIC - deployment configuration. Served and supported; outside the published contract.*
+
 Sets audit log retention period. Min 7 days, max 3650 days (10 years).
 
 **Request:**
@@ -1624,6 +1812,8 @@ Sets audit log retention period. Min 7 days, max 3650 days (10 years).
 ```
 
 ### GET /v1/settings/rate_limit
+
+*PUBLIC - in the published OpenAPI contract.*
 
 Returns the current global rate limit for live keys.
 
@@ -1635,6 +1825,8 @@ Returns the current global rate limit for live keys.
 `source` is `"database"` if explicitly set, `"environment"` if using the default.
 
 ### PUT /v1/settings/rate_limit
+
+*PUBLIC - in the published OpenAPI contract.*
 
 Updates the global rate limit for live keys. Takes effect within 5 minutes (Redis cache TTL). Live key limit cannot be set below the trial key limit. Trial key limit is set via `TRIAL_RATE_LIMIT_PER_MINUTE` env var.
 
@@ -1649,6 +1841,8 @@ Updates the global rate limit for live keys. Takes effect within 5 minutes (Redi
 ```
 
 ### GET /v1/settings/storage
+
+*NOT PUBLIC - deployment configuration. Served and supported; outside the published contract.*
 
 Returns data storage mode and proxy text retention period. Read-only - configured via environment variables.
 
@@ -1671,7 +1865,11 @@ Text is purged (set to `null`) after `retention_days_proxy` days regardless of m
 
 ## API Keys
 
+***Mixed section.** `GET /v1/keys` and `POST /v1/keys` are published. The per-key operations - read, update, delete, rotate, addresses - are dashboard key administration and are not.*
+
 ### POST /v1/keys
+
+*PUBLIC - in the published OpenAPI contract.*
 
 Creates a new API key. Returns the raw key value once - store it securely, it cannot be retrieved again.
 
@@ -1715,6 +1913,8 @@ The refusal is shaped for the caller it is sent to, but identified the same way 
 
 ### GET /v1/keys
 
+*PUBLIC - in the published OpenAPI contract.*
+
 Lists all active (non-revoked, non-expired-grace-period) keys with department and application names.
 
 **Response 200:**
@@ -1738,6 +1938,8 @@ Lists all active (non-revoked, non-expired-grace-period) keys with department an
 ```
 
 ### GET /v1/keys/{key_id}
+
+*NOT PUBLIC - dashboard key administration. Served and supported; outside the published contract.*
 
 Returns a single key by `key_id`. `404 NOT_FOUND` if not found.
 
@@ -1763,6 +1965,8 @@ Returns a single key by `key_id`. `404 NOT_FOUND` if not found.
 
 ### PUT /v1/keys/{key_id}
 
+*NOT PUBLIC - dashboard key administration. Served and supported; outside the published contract.*
+
 Updates the key name, and optionally the addresses it may be used from.
 
 **Request:** `{"name": "New Name", "ip_allowlist": ["10.0.0.0/8"]}`
@@ -1775,6 +1979,8 @@ Updates the key name, and optionally the addresses it may be used from.
 ```
 
 ### GET /v1/keys/{key_id}/addresses
+
+*NOT PUBLIC - dashboard key administration. Served and supported; outside the published contract.*
 
 Where this key has recently been used from, and where it has been refused. This is the evidence for setting `ip_allowlist`: setting one from memory is how a working deployment gets locked out.
 
@@ -1799,6 +2005,8 @@ ADMIN only, and scoped to the caller's tenant (`404 NOT_FOUND` otherwise, matchi
 `observed` is drawn from the request trail and `denied` from the credential event log, each aggregated to one row per address, most recent first, capped at 20 rows per list. An address appearing in `denied` was turned away by the current restriction: it may be a service that moved to a new egress address, or it may be someone else holding the key, so it is not evidence that the address should be allowed.
 ### DELETE /v1/keys/{key_id}
 
+*NOT PUBLIC - dashboard key administration. Served and supported; outside the published contract.*
+
 Revokes a key immediately. If the key was in a grace period (from a rotation), it is revoked immediately with a warning.
 
 **Response 200:**
@@ -1813,6 +2021,8 @@ Revokes a key immediately. If the key was in a grace period (from a rotation), i
 ```
 
 ### POST /v1/keys/{key_id}/rotate
+
+*NOT PUBLIC - dashboard key administration. Served and supported; outside the published contract.*
 
 Generates a new key secret while preserving all metadata. The old key remains valid for a configurable grace period to allow seamless migration.
 
@@ -1843,7 +2053,11 @@ Cannot rotate a key that is already in a grace period or already expired.
 
 ## Tenant
 
+*Tenant self-administration, dashboard surface. **No operation in this section is published.***
+
 ### GET /v1/admin/tenant
+
+*NOT PUBLIC - dashboard administration. Served and supported; outside the published contract.*
 
 Returns the caller's tenant profile. Scoped to the authenticated principal's tenant.
 
@@ -1865,6 +2079,8 @@ Returns the caller's tenant profile. Scoped to the authenticated principal's ten
 
 ### PUT /v1/admin/tenant
 
+*NOT PUBLIC - dashboard administration. Served and supported; outside the published contract.*
+
 Updates tenant name, description, contact email, or default locale. All fields are optional - only provided fields are updated. Unknown fields are rejected (422).
 
 Policy configuration is NOT part of the tenant profile. Detection thresholds, layers, guardrails, and rate limits are managed through `/v1/settings/*` (tenant-scoped) and per-department or per-application policy overrides.
@@ -1875,6 +2091,8 @@ Policy configuration is NOT part of the tenant profile. Detection thresholds, la
 ```
 
 ### GET /v1/admin/tenant/usage
+
+*NOT PUBLIC - dashboard administration. Served and supported; outside the published contract.*
 
 Tenant-scoped usage aggregate over the audit trail: scan and proxy request counts and blocked/sanitized decisions, totalled and broken down by day. Every request that was **inspected** writes an audit row -- scan, batch, proxy, and cache hit alike -- so these figures are complete for inspected traffic.
 
@@ -1902,11 +2120,15 @@ They deliberately exclude requests refused **before** inspection: a malformed mo
 
 ## Platform Operator - Tenant Lifecycle
 
+*Control plane, master admin key only. **No operation in this section is published** - it was excluded from the schema before this boundary existed.*
+
 Tenant provisioning and lifecycle management. **Master admin API key only** (the platform-operator principal) - tenant credentials, including tenant ADMIN JWTs, are rejected. These endpoints are excluded from the OpenAPI schema.
 
 On a single-tenant self-hosted installation these endpoints are normally not needed: the default tenant is created at startup and the first admin via `/v1/setup`.
 
 ### POST /v1/admin/tenants
+
+*NOT PUBLIC - platform operator. Served and supported; outside the published contract.*
 
 Creates a tenant.
 
@@ -1935,15 +2157,21 @@ Creates a tenant.
 
 ### GET /v1/admin/tenants
 
+*NOT PUBLIC - platform operator. Served and supported; outside the published contract.*
+
 Lists all tenants with lifecycle status.
 
 **Response 200:** `{"total": 2, "tenants": [ ... ]}` - same tenant shape as create.
 
 ### GET /v1/admin/tenants/{tenant_id}
 
+*NOT PUBLIC - platform operator. Served and supported; outside the published contract.*
+
 Returns one tenant. `404 NOT_FOUND` if it does not exist.
 
 ### POST /v1/admin/tenants/{tenant_id}/suspend
+
+*NOT PUBLIC - platform operator. Served and supported; outside the published contract.*
 
 Suspends the tenant. All traffic under its credentials (API keys and user sessions) is rejected with `403 TENANT_SUSPENDED` until reactivation. Takes effect immediately (the cached lifecycle status is invalidated on change).
 
@@ -1951,9 +2179,13 @@ Suspends the tenant. All traffic under its credentials (API keys and user sessio
 
 ### POST /v1/admin/tenants/{tenant_id}/reactivate
 
+*NOT PUBLIC - platform operator. Served and supported; outside the published contract.*
+
 Restores a suspended tenant. **Response 200:** the tenant with `"status": "active"`.
 
 ### POST /v1/admin/tenants/{tenant_id}/bootstrap-admin
+
+*NOT PUBLIC - platform operator. Served and supported; outside the published contract.*
 
 Creates the FIRST admin user of a tenant (identity plus ADMIN membership). Refuses once the tenant has any member. The created user has `force_password_change = true` - they must rotate the operator-set password on first login.
 
@@ -1973,7 +2205,11 @@ Creates the FIRST admin user of a tenant (identity plus ADMIN membership). Refus
 
 ## Departments
 
+*Organisation structure, dashboard surface. **No operation in this section is published.***
+
 ### POST /v1/admin/departments
+
+*NOT PUBLIC - dashboard administration. Served and supported; outside the published contract.*
 
 Creates a department under the default tenant.
 
@@ -1992,15 +2228,21 @@ Creates a department under the default tenant.
 
 ### GET /v1/admin/departments
 
+*NOT PUBLIC - dashboard administration. Served and supported; outside the published contract.*
+
 Lists all departments for the default tenant.
 
 **Response 200:** `{"departments": [...]}`
 
 ### GET /v1/admin/departments/{dept_id}
 
+*NOT PUBLIC - dashboard administration. Served and supported; outside the published contract.*
+
 Returns a single department. `404 NOT_FOUND` if not found.
 
 ### PUT /v1/admin/departments/{dept_id}
+
+*NOT PUBLIC - dashboard administration. Served and supported; outside the published contract.*
 
 Updates department fields. Pass `policy_override: null` to explicitly clear overrides.
 
@@ -2008,11 +2250,15 @@ Updates department fields. Pass `policy_override: null` to explicitly clear over
 
 ### DELETE /v1/admin/departments/{dept_id}
 
+*NOT PUBLIC - dashboard administration. Served and supported; outside the published contract.*
+
 Deactivates a department (`is_active = false`).
 
 **Response 200:** `{"dept_id": "...", "deactivated": true}`
 
 ### GET /v1/admin/departments/{dept_id}/stats
+
+*NOT PUBLIC - dashboard administration. Served and supported; outside the published contract.*
 
 Returns aggregated request statistics for the department.
 
@@ -2029,6 +2275,8 @@ Returns aggregated request statistics for the department.
 ```
 
 ### GET /v1/admin/departments/{dept_id}/policy
+
+*NOT PUBLIC - dashboard administration. Served and supported; outside the published contract.*
 
 Returns the fully resolved effective policy for the department. Merges: system defaults -> DB settings -> department override.
 
@@ -2048,7 +2296,11 @@ Returns the fully resolved effective policy for the department. Merges: system d
 
 ## Applications
 
+*Organisation structure, dashboard surface. **No operation in this section is published.***
+
 ### POST /v1/admin/applications
+
+*NOT PUBLIC - dashboard administration. Served and supported; outside the published contract.*
 
 Creates an application under a department.
 
@@ -2069,25 +2321,35 @@ Creates an application under a department.
 
 ### GET /v1/admin/applications
 
+*NOT PUBLIC - dashboard administration. Served and supported; outside the published contract.*
+
 Lists applications. Optional `dept_id` query param filters by department.
 
 **Response 200:** `{"applications": [...]}`
 
 ### GET /v1/admin/applications/{app_id}
 
+*NOT PUBLIC - dashboard administration. Served and supported; outside the published contract.*
+
 Returns a single application. `404 NOT_FOUND` if not found.
 
 ### PUT /v1/admin/applications/{app_id}
 
+*NOT PUBLIC - dashboard administration. Served and supported; outside the published contract.*
+
 Updates application fields.
 
 ### DELETE /v1/admin/applications/{app_id}
+
+*NOT PUBLIC - dashboard administration. Served and supported; outside the published contract.*
 
 Deactivates an application (`is_active = false`).
 
 **Response 200:** `{"app_id": "...", "deactivated": true}`
 
 ### GET /v1/admin/applications/{app_id}/policy
+
+*NOT PUBLIC - dashboard administration. Served and supported; outside the published contract.*
 
 Returns the fully resolved effective policy. Merges: system -> DB settings -> department -> application.
 
@@ -2106,6 +2368,8 @@ Returns the fully resolved effective policy. Merges: system -> DB settings -> de
 
 ### PUT /v1/admin/applications/{app_id}/policy
 
+*NOT PUBLIC - dashboard administration. Served and supported; outside the published contract.*
+
 Sets or updates the application-level policy override. Pass `policy_override: null` to clear.
 
 **Request:**
@@ -2117,6 +2381,8 @@ Sets or updates the application-level policy override. Pass `policy_override: nu
 
 ### DELETE /v1/admin/applications/{app_id}/policy
 
+*NOT PUBLIC - dashboard administration. Served and supported; outside the published contract.*
+
 Resets application policy override to null. Application inherits from department.
 
 **Response 200:**
@@ -2127,6 +2393,8 @@ Resets application policy override to null. Application inherits from department
 ---
 
 ## Webhooks (Outbound)
+
+*Outbound delivery configuration, dashboard surface. **No operation in this section is published.***
 
 WrapSec pushes an event to configured destinations on every BLOCK and
 SANITIZE decision (ALLOW is not emitted). Delivery is asynchronous: the scan
@@ -2162,6 +2430,8 @@ To send to an on-prem SIEM on a private address, allowlist its host or CIDR via
 
 ### POST /v1/admin/webhooks
 
+*NOT PUBLIC - dashboard administration. Served and supported; outside the published contract.*
+
 Create a generic webhook (secret generated and returned once):
 
 ```json
@@ -2186,16 +2456,22 @@ Validation (422) rejects: unknown `connector_type`, a connector without
 
 ### GET /v1/admin/webhooks, GET /v1/admin/webhooks/{id}
 
+*NOT PUBLIC - dashboard administration. Served and supported; outside the published contract.*
+
 List/read endpoints. Secrets are always masked. Each row carries a computed
 `status`: `active`, `failing` (in a failure window), or `auto_disabled`
 (circuit breaker retired it).
 
 ### PUT /v1/admin/webhooks/{id}
 
+*NOT PUBLIC - dashboard administration. Served and supported; outside the published contract.*
+
 Update `url`, `description`, `event_types`, `config`. `connector_type` is
 immutable after create; `secret` and lifecycle flags are not settable here.
 
 ### POST /v1/admin/webhooks/{id}/rotate-secret
+
+*NOT PUBLIC - dashboard administration. Served and supported; outside the published contract.*
 
 Rotate the generic signing secret with a grace window (`grace_hours`, default
 24) during which the old secret still verifies. Returns a fresh plaintext
@@ -2204,19 +2480,27 @@ specific; delete and recreate to change a connector token).
 
 ### DELETE /v1/admin/webhooks/{id}
 
+*NOT PUBLIC - dashboard administration. Served and supported; outside the published contract.*
+
 Hard-delete the endpoint.
 
 ---
 
 ## Health
 
+***All four operations here are published.***
+
 ### GET /health
+
+*PUBLIC - in the published OpenAPI contract.*
 
 ```json
 {"status": "ok", "version": "1.2.0"}
 ```
 
 ### GET /health/ready
+
+*PUBLIC - in the published OpenAPI contract.*
 
 ```json
 {
@@ -2245,11 +2529,15 @@ A `503` here is a readiness REPORT, not a transport error: it carries the same b
 
 ### GET /health/live
 
+*PUBLIC - in the published OpenAPI contract.*
+
 ```json
 {"status": "alive"}
 ```
 
 ### GET /health/config
+
+*PUBLIC - in the published OpenAPI contract.*
 
 The configuration currently in force, for deployment verification. Does not expose API keys or secrets to any caller.
 
@@ -2280,7 +2568,11 @@ Unauthenticated callers receive `401` -- `/health/config` is not a public path, 
 
 ## Metrics
 
+*Monitoring scrape endpoint. **Not published**, and never was.*
+
 ### GET /metrics
+
+*NOT PUBLIC - monitoring. Served and supported; outside the published contract.*
 
 Prometheus exposition format. Requires `Authorization: Bearer <token>`.
 

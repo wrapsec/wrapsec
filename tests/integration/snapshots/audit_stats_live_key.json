@@ -1,0 +1,25 @@
+{
+  "body": {
+    "allow_count": "<int>",
+    "allow_rate": "<float>",
+    "avg_latency_ms": "<float>",
+    "avg_risk": "<float>",
+    "block_count": "<int>",
+    "block_rate": "<float>",
+    "p95_latency_ms": "<float>",
+    "period_from": "<str>",
+    "period_to": "<str>",
+    "sanitize_count": "<int>",
+    "sanitize_rate": "<float>",
+    "severity_counts": {
+      "CRITICAL": "<int>",
+      "HIGH": "<int>",
+      "LOW": "<int>",
+      "MEDIUM": "<int>"
+    },
+    "top_threats": [],
+    "total_requests": "<int>"
+  },
+  "mode": "shape",
+  "status": 200
+}

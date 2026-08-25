@@ -281,22 +281,66 @@ async def _postgres_db_setup():
 
 
 # ── Integration test session: disposable Postgres, per-test truncation ────────
-# test_db (and the `client` fixture that wraps it) now runs on the disposable
+# test_db (and the `client` fixture that wraps it) runs on the disposable
 # Postgres, not SQLite -- it shares the session-scoped _pg_engine (schema built
-# once via create_all) and clears the high-churn tables between tests. Seed and
-# config tables (tenants, users, departments, applications, settings) are
-# preserved so the session-seeded default tenant and the admin_jwt fixtures stay
-# valid; the _require_disposable_pg gate skips the whole tier when no throwaway
-# DB is configured, so this never runs against SQLite or the dev database.
+# once via create_all) and clears between tests. The _require_disposable_pg gate
+# skips the whole tier when no throwaway DB is configured, so this never runs
+# against SQLite or the dev database.
+#
+# Two groups are cleared, for different reasons.
+#
+# HIGH-CHURN tables hold per-request records: one test's audit rows and keys must
+# not be visible to the next.
+#
+# CONFIGURATION tables hold values a test WROTE THROUGH THE API and that the next
+# test then reads as if an operator had set them. Leaving these behind is how a
+# test asserting a default ("no stored value, so the source is the environment")
+# fails after some earlier test stored one. That was a real failure: running
+# `test_api_settings.py` twice against one database produced
+# `assert 'database' == 'environment'` in three tests, because
+# `tenant_settings` survived. It is invisible under `make test-integration`,
+# which builds a fresh container per run, and appears the moment a container is
+# reused -- so it read as a flaky suite rather than as missing cleanup.
+#
+# SEED/IDENTITY tables (tenants, users, departments, applications, memberships)
+# are deliberately NOT cleared: the session fixture seeds the default tenant and
+# the admin_jwt fixtures resolve against those rows, so truncating them empties
+# the tier's own credentials. Identity is seeded once; configuration is written
+# per test. Only the second is safe to drop.
+#
+# Ordering needs no thought here: every table listed is a child in its foreign
+# keys, referenced by nothing, so CASCADE has nothing to follow upward and no
+# seed row can be reached from them.
+
+_HIGH_CHURN_TABLES = (
+    "api_keys", "webhook_delivery_attempts", "webhook_endpoints",
+    "audit_logs", "proxy_interactions",
+)
+
+_CONFIGURATION_TABLES = (
+    # Per-tenant settings written by PUT /v1/settings/* -- thresholds, detection
+    # layers, llm, rate_limit, retention, admin limits and the encrypted provider
+    # key. The table behind the failure above.
+    "tenant_settings",
+    # Platform/control-plane settings (the D5 split's other half). Written by
+    # `PlatformSettingsRepository.set` -- the email settings endpoint stores here,
+    # and the settings-split and retention tests write it directly.
+    "platform_settings",
+    # Proxy provider configuration written by PUT /v1/settings/proxy. Only the
+    # two_tenant_setup fixture cleaned it, and only for the tenants it created,
+    # so rows from every other test persisted.
+    "proxy_provider_configs",
+)
+
 
 @pytest_asyncio.fixture(scope="function")
 async def test_db(_pg_engine):
     sf = async_sessionmaker(bind=_pg_engine, class_=AsyncSession, expire_on_commit=False)
     async with sf() as session:
         await session.execute(text(
-            "TRUNCATE TABLE api_keys, webhook_delivery_attempts, "
-            "webhook_endpoints, audit_logs, proxy_interactions "
-            "RESTART IDENTITY CASCADE"
+            "TRUNCATE TABLE "
+            + ", ".join(_HIGH_CHURN_TABLES + _CONFIGURATION_TABLES)
+            + " RESTART IDENTITY CASCADE"
         ))
         await session.commit()
         yield session

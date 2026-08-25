@@ -1,0 +1,14 @@
+{
+  "body": {
+    "error": {
+      "code": "UNAUTHORIZED",
+      "key": "<secret>",
+      "message": "Authentication is required.",
+      "params": {},
+      "severity": "WARNING",
+      "trace_id": "<trace_id>"
+    }
+  },
+  "mode": "value",
+  "status": 401
+}

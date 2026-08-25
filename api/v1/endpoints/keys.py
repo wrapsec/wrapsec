@@ -336,7 +336,10 @@ async def list_keys(
         ]
     })
 
-@router.get("/{key_id}")
+# Key lifecycle beyond list and create is dashboard surface today: the
+# published integrator contract is GET and POST /v1/keys. These five stay
+# served and authorized unchanged; revisit if an SDK grows key management.
+@router.get("/{key_id}", include_in_schema=False)
 async def get_key(
     key_id:    str,
     request:   Request,
@@ -398,7 +401,7 @@ class UpdateKeySchema(BaseModel):
         from security.ip_allowlist import normalize_entries
         return normalize_entries(v)
 
-@router.put("/{key_id}")
+@router.put("/{key_id}", include_in_schema=False)
 async def update_key(
     key_id:    str,
     body:      UpdateKeySchema,
@@ -433,7 +436,7 @@ async def update_key(
         "updated_at":   to_iso_z(utc_now()),
     })
 
-@router.delete("/{key_id}")
+@router.delete("/{key_id}", include_in_schema=False)
 async def delete_key(
     key_id:    str,
     request:   Request,
@@ -470,7 +473,7 @@ class RotateKeySchema(BaseModel):
     grace_period_minutes: int = Field(60, ge=0, le=10080)  # 0 = immediate, max 7 days
 
 
-@router.get("/{key_id}/addresses")
+@router.get("/{key_id}/addresses", include_in_schema=False)
 async def get_key_addresses(
     key_id:    str,
     request:   Request,
@@ -565,7 +568,7 @@ async def get_key_addresses(
     })
 
 
-@router.post("/{key_id}/rotate")
+@router.post("/{key_id}/rotate", include_in_schema=False)
 async def rotate_key(
     key_id:    str,
     body:      RotateKeySchema,

@@ -1,0 +1,9 @@
+{
+  "body": {
+    "llm_enabled": "<bool>",
+    "ml_enabled": "<bool>",
+    "rule_enabled": "<bool>"
+  },
+  "mode": "keys",
+  "status": 200
+}

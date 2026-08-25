@@ -1,0 +1,11 @@
+{
+  "body": {
+    "detection_layers": "<dict>",
+    "llm": "<dict>",
+    "rate_limit": "<dict>",
+    "thresholds": "<dict>",
+    "version": "<str>"
+  },
+  "mode": "keys",
+  "status": 200
+}

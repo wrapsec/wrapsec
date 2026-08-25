@@ -1,0 +1,14 @@
+{
+  "body": {
+    "error": {
+      "code": "invalid_model_format",
+      "message": "Model must be in provider/model format. Got: 'gpt-4'. Examples: 'openai/gpt-4o', 'ollama/llama3.2'",
+      "type": "invalid_request_error"
+    },
+    "wrapsec": {
+      "trace_id": "<trace_id>"
+    }
+  },
+  "mode": "value",
+  "status": 400
+}

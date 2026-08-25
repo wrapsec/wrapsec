@@ -13,6 +13,27 @@ logger = logging.getLogger("wrapsec.cache")
 CACHE_PREFIX  = "prompt_cache:"
 CACHE_TTL     = 3600  # 1 hour
 
+# Version of the RESPONSE CONTRACT that cached bodies were built against.
+#
+# A cached entry is a fully-formed response body, and it outlives the process
+# that produced it: the TTL is an hour, so a deployment that changes the shape of
+# a scan response will find bodies from the previous build still in Redis and
+# still being served. The response is not re-derived on a hit, so nothing else
+# would notice the mismatch -- the caller simply receives yesterday's shape.
+#
+# Carrying the version in the key means entries from an older contract are not
+# addressable by a newer build: they are never read, and expire on their own.
+# That is a deliberate alternative to waiting out the TTL, and to treating a
+# validation failure as a miss, which would depend on the new contract rejecting
+# the old body -- an added field would pass validation and be served silently.
+#
+# BUMP THIS whenever the public response shape changes: a field added, removed,
+# renamed or retyped, or a change to which callers see which fields. Do not bump
+# it for a change in a response VALUE. It is deliberately separate from
+# `policy_identity`, which answers a different question (was this verdict reached
+# under the same policy) and must not absorb response-shape concerns.
+RESPONSE_CONTRACT_VERSION = 1
+
 
 # Provider credentials can appear in the resolved `llm` section: policy
 # resolution decrypts `api_key_enc` into `api_key` before handing the policy on.
@@ -107,7 +128,10 @@ def _cache_key(
         f"{detection_mode}:{execution_mode}:{text.strip().lower()}"
     )
     digest  = hashlib.sha256(content.encode()).hexdigest()
-    return f"{CACHE_PREFIX}{digest}"
+    # The version sits OUTSIDE the digest so it stays readable in Redis: entries
+    # from a superseded contract can be seen, counted and purged by prefix rather
+    # than being indistinguishable hashes.
+    return f"{CACHE_PREFIX}v{RESPONSE_CONTRACT_VERSION}:{digest}"
 
 
 async def get_cached_result(

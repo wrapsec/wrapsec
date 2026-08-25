@@ -353,7 +353,10 @@ class RetentionSettingsSchema(BaseModel):
         return self
 
 
-@router.get("/retention")
+# Retention, storage and admin limits are deployment configuration an operator
+# sets, not detection policy an integrator reads. The published settings
+# contract is thresholds, layers, llm and rate_limit -- what the SDK calls.
+@router.get("/retention", include_in_schema=False)
 async def get_retention_settings(
     db:        AsyncSession = Depends(get_db),
     _principal = Depends(require_permission("settings:read")),
@@ -372,7 +375,7 @@ async def get_retention_settings(
     })
 
 
-@router.put("/retention")
+@router.put("/retention", include_in_schema=False)
 async def update_retention_settings(
     body:      RetentionSettingsSchema,
     db:        AsyncSession = Depends(get_db),
@@ -478,7 +481,7 @@ async def update_rate_limit_settings(
     })
 
 
-@router.get("/storage")
+@router.get("/storage", include_in_schema=False)
 async def get_storage_settings(
     _principal = Depends(require_permission("settings:read")),
 ):
@@ -525,7 +528,7 @@ class AdminLimitsUpdateSchema(BaseModel):
         return self
 
 
-@router.get("/admin_limits")
+@router.get("/admin_limits", include_in_schema=False)
 async def get_admin_limits(
     db:         AsyncSession = Depends(get_db),
     _principal  = Depends(require_permission("settings:read")),
@@ -542,7 +545,7 @@ async def get_admin_limits(
     return JSONResponse(content={**_default_admin_limits(), "source": "environment"})
 
 
-@router.put("/admin_limits")
+@router.put("/admin_limits", include_in_schema=False)
 async def update_admin_limits(
     body:      AdminLimitsUpdateSchema,
     request:   Request,

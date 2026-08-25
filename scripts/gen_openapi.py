@@ -47,22 +47,41 @@ _IMPORT_ENV = {
 
 
 def _render() -> str:
-    for key, value in _IMPORT_ENV.items():
-        os.environ.setdefault(key, value)
+    """Render the schema without leaving anything behind in this process.
+
+    Both the environment and the app's memoized schema are restored afterwards.
+    That matters because this is importable, and a test suite that calls it runs
+    in the same process as everything else: a placeholder ADMIN_API_KEY left in
+    the environment is picked up by the next `get_settings.cache_clear()` and
+    stops unrelated credentials authenticating, and a cached `openapi_schema`
+    makes a later route registration invisible.
+    """
+    injected = [k for k in _IMPORT_ENV if k not in os.environ]
+    for key in injected:
+        os.environ[key] = _IMPORT_ENV[key]
     sys.path.insert(0, str(_REPO_ROOT))
 
-    from api.main import app
-    from services.capabilities import get_capabilities
+    try:
+        from api.main import app
+        from services.capabilities import get_capabilities
 
-    registered = get_capabilities()
-    if registered:
-        raise SystemExit(
-            "refusing to write the published schema: plugin capabilities are "
-            f"registered in this environment ({sorted(registered)}). The schema "
-            "must be generated from the core build."
-        )
+        registered = get_capabilities()
+        if registered:
+            raise SystemExit(
+                "refusing to write the published schema: plugin capabilities are "
+                f"registered in this environment ({sorted(registered)}). The schema "
+                "must be generated from the core build."
+            )
 
-    return json.dumps(app.openapi(), indent=2, sort_keys=True) + "\n"
+        previous = app.openapi_schema
+        app.openapi_schema = None
+        try:
+            return json.dumps(app.openapi(), indent=2, sort_keys=True) + "\n"
+        finally:
+            app.openapi_schema = previous
+    finally:
+        for key in injected:
+            os.environ.pop(key, None)
 
 
 def main() -> int:

@@ -1,0 +1,8 @@
+{
+  "body": {
+    "status": "ok",
+    "version": "<version>"
+  },
+  "mode": "value",
+  "status": 200
+}
