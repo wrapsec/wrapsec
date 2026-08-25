@@ -180,6 +180,18 @@ async def resolve_policy(
             try:
                 dept_repo = DepartmentRepository(db)
                 dept      = await dept_repo.get_by_id(uuid.UUID(str(dept_id)))
+                # Same ownership check the application branch applies below. A
+                # department id is not a tenant boundary on its own: nothing in
+                # the schema ties api_keys.dept_id to api_keys.tenant_id, so a
+                # department carrying a foreign tenant would otherwise have its
+                # thresholds applied to this tenant's traffic.
+                if dept and tenant_id and str(dept.tenant_id) != str(tenant_id):
+                    logger.error(
+                        "policy dept_tenant_mismatch dept_id=%s dept.tenant=%s "
+                        "request.tenant=%s - skipping dept policy",
+                        dept_id, dept.tenant_id, tenant_id,
+                    )
+                    dept = None
                 if dept and dept.policy_override:
                     dept_override = dept.policy_override
                     policy        = deep_merge(policy, dept_override)
