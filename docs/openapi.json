@@ -1,0 +1,5967 @@
+{
+  "components": {
+    "schemas": {
+      "AIRequestSchema": {
+        "properties": {
+          "context": {
+            "$ref": "#/components/schemas/RequestContextSchema"
+          },
+          "detection_mode": {
+            "$ref": "#/components/schemas/DetectionMode",
+            "default": "fast"
+          },
+          "execution_mode": {
+            "$ref": "#/components/schemas/ExecutionMode",
+            "default": "scan_only"
+          },
+          "input": {
+            "minLength": 1,
+            "title": "Input",
+            "type": "string"
+          },
+          "input_source": {
+            "$ref": "#/components/schemas/InputSource",
+            "default": "user_prompt",
+            "description": "Trust-boundary provenance of `input`: where the text came from. One of user_prompt (the default when omitted), tool_output, retrieved_document, external_content. The untrusted origins mark content an agent pulled in -- the primary indirect prompt-injection surface. It is labelled, persisted, and scanned by the same pipeline; it never relaxes detection (identical content scores identically), but can, opt-in, tighten policy thresholds for untrusted origins (source-aware posture, off by default)."
+          },
+          "metadata": {
+            "$ref": "#/components/schemas/RequestMetadataSchema"
+          },
+          "model": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Model"
+          },
+          "options": {
+            "$ref": "#/components/schemas/RequestOptionsSchema"
+          },
+          "run_id": {
+            "anyOf": [
+              {
+                "maxLength": 200,
+                "pattern": "^[A-Za-z0-9_.:\\-]+$",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Caller-supplied identifier for one agent execution (which may span multiple gateway scans, tool calls, and LLM calls). Distinct from trace_id, which identifies a single scan. Matches LangSmith / OpenAI Assistants run_id semantics. Opaque string, max 200 chars, [A-Za-z0-9_.:-] only.",
+            "title": "Run Id"
+          },
+          "session_id": {
+            "anyOf": [
+              {
+                "maxLength": 200,
+                "pattern": "^[A-Za-z0-9_.:\\-]+$",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Caller-supplied conversation identifier that groups scans belonging to the same multi-turn interaction. Opaque string, max 200 chars, [A-Za-z0-9_.:-] only. Do NOT include PII (name, email, phone); use a hash, UUID, or other opaque identifier. v1 persists the field for future correlation; session-aware detection lands in a later release.",
+            "title": "Session Id"
+          },
+          "turn_index": {
+            "anyOf": [
+              {
+                "maximum": 10000.0,
+                "minimum": 0.0,
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Zero-based index of this turn within session_id.",
+            "title": "Turn Index"
+          }
+        },
+        "required": [
+          "input"
+        ],
+        "title": "AIRequestSchema",
+        "type": "object"
+      },
+      "AdminLimitsUpdateSchema": {
+        "properties": {
+          "admin_write_rate_limit": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Admin Write Rate Limit"
+          },
+          "audit_export_rate_limit": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Audit Export Rate Limit"
+          }
+        },
+        "title": "AdminLimitsUpdateSchema",
+        "type": "object"
+      },
+      "AppLLMOverrideSchema": {
+        "properties": {
+          "api_key": {
+            "anyOf": [
+              {
+                "format": "password",
+                "type": "string",
+                "writeOnly": true
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Api Key"
+          },
+          "base_url": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Base Url"
+          },
+          "clear": {
+            "default": false,
+            "title": "Clear",
+            "type": "boolean"
+          },
+          "model": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Model"
+          },
+          "provider": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Provider"
+          },
+          "timeout": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Timeout"
+          }
+        },
+        "title": "AppLLMOverrideSchema",
+        "type": "object"
+      },
+      "AppProxyOverrideSchema": {
+        "properties": {
+          "api_key": {
+            "anyOf": [
+              {
+                "format": "password",
+                "type": "string",
+                "writeOnly": true
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Api Key"
+          },
+          "base_url": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Base Url"
+          },
+          "clear": {
+            "default": false,
+            "title": "Clear",
+            "type": "boolean"
+          },
+          "default_model": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Default Model"
+          },
+          "provider": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Provider"
+          },
+          "timeout_seconds": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Timeout Seconds"
+          }
+        },
+        "title": "AppProxyOverrideSchema",
+        "type": "object"
+      },
+      "ApplicationCreateSchema": {
+        "properties": {
+          "dept_id": {
+            "title": "Dept Id",
+            "type": "string"
+          },
+          "description": {
+            "anyOf": [
+              {
+                "maxLength": 2000,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Description"
+          },
+          "environment": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": "production",
+            "title": "Environment"
+          },
+          "metadata": {
+            "anyOf": [
+              {
+                "additionalProperties": true,
+                "type": "object"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Metadata"
+          },
+          "name": {
+            "maxLength": 100,
+            "minLength": 1,
+            "title": "Name",
+            "type": "string"
+          },
+          "owner_email": {
+            "anyOf": [
+              {
+                "format": "email",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Owner Email"
+          },
+          "owner_name": {
+            "anyOf": [
+              {
+                "maxLength": 100,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Owner Name"
+          },
+          "policy_override": {
+            "anyOf": [
+              {
+                "additionalProperties": true,
+                "type": "object"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Policy Override"
+          },
+          "rate_limit_override": {
+            "anyOf": [
+              {
+                "maximum": 10000.0,
+                "minimum": 1.0,
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Rate Limit Override"
+          },
+          "slug": {
+            "title": "Slug",
+            "type": "string"
+          }
+        },
+        "required": [
+          "dept_id",
+          "slug",
+          "name"
+        ],
+        "title": "ApplicationCreateSchema",
+        "type": "object"
+      },
+      "ApplicationPolicySchema": {
+        "properties": {
+          "policy_override": {
+            "anyOf": [
+              {
+                "additionalProperties": true,
+                "type": "object"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Policy Override"
+          }
+        },
+        "title": "ApplicationPolicySchema",
+        "type": "object"
+      },
+      "ApplicationUpdateSchema": {
+        "properties": {
+          "description": {
+            "anyOf": [
+              {
+                "maxLength": 2000,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Description"
+          },
+          "environment": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Environment"
+          },
+          "is_active": {
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Is Active"
+          },
+          "metadata": {
+            "anyOf": [
+              {
+                "additionalProperties": true,
+                "type": "object"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Metadata"
+          },
+          "name": {
+            "anyOf": [
+              {
+                "maxLength": 100,
+                "minLength": 1,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Name"
+          },
+          "owner_email": {
+            "anyOf": [
+              {
+                "format": "email",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Owner Email"
+          },
+          "owner_name": {
+            "anyOf": [
+              {
+                "maxLength": 100,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Owner Name"
+          },
+          "policy_override": {
+            "anyOf": [
+              {
+                "additionalProperties": true,
+                "type": "object"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Policy Override"
+          },
+          "rate_limit_override": {
+            "anyOf": [
+              {
+                "maximum": 10000.0,
+                "minimum": 1.0,
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Rate Limit Override"
+          }
+        },
+        "title": "ApplicationUpdateSchema",
+        "type": "object"
+      },
+      "ChangePasswordRequest": {
+        "properties": {
+          "current_password": {
+            "title": "Current Password",
+            "type": "string"
+          },
+          "new_password": {
+            "title": "New Password",
+            "type": "string"
+          }
+        },
+        "required": [
+          "current_password",
+          "new_password"
+        ],
+        "title": "ChangePasswordRequest",
+        "type": "object"
+      },
+      "CreateKeySchema": {
+        "properties": {
+          "app_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "App Id"
+          },
+          "dept_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Dept Id"
+          },
+          "expires_at": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Expires At"
+          },
+          "ip_allowlist": {
+            "anyOf": [
+              {
+                "items": {
+                  "type": "string"
+                },
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Ip Allowlist"
+          },
+          "key_type": {
+            "$ref": "#/components/schemas/KeyType",
+            "default": "live"
+          },
+          "name": {
+            "maxLength": 100,
+            "minLength": 1,
+            "title": "Name",
+            "type": "string"
+          }
+        },
+        "required": [
+          "name"
+        ],
+        "title": "CreateKeySchema",
+        "type": "object"
+      },
+      "DepartmentCreateSchema": {
+        "properties": {
+          "contact_email": {
+            "anyOf": [
+              {
+                "format": "email",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Contact Email"
+          },
+          "description": {
+            "anyOf": [
+              {
+                "maxLength": 2000,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Description"
+          },
+          "name": {
+            "maxLength": 100,
+            "minLength": 1,
+            "title": "Name",
+            "type": "string"
+          },
+          "policy_override": {
+            "anyOf": [
+              {
+                "additionalProperties": true,
+                "type": "object"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Policy Override"
+          },
+          "slug": {
+            "title": "Slug",
+            "type": "string"
+          }
+        },
+        "required": [
+          "slug",
+          "name"
+        ],
+        "title": "DepartmentCreateSchema",
+        "type": "object"
+      },
+      "DepartmentUpdateSchema": {
+        "properties": {
+          "contact_email": {
+            "anyOf": [
+              {
+                "format": "email",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Contact Email"
+          },
+          "description": {
+            "anyOf": [
+              {
+                "maxLength": 2000,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Description"
+          },
+          "is_active": {
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Is Active"
+          },
+          "name": {
+            "anyOf": [
+              {
+                "maxLength": 100,
+                "minLength": 1,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Name"
+          },
+          "policy_override": {
+            "anyOf": [
+              {
+                "additionalProperties": true,
+                "type": "object"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Policy Override"
+          }
+        },
+        "title": "DepartmentUpdateSchema",
+        "type": "object"
+      },
+      "DeptLLMOverrideSchema": {
+        "properties": {
+          "api_key": {
+            "anyOf": [
+              {
+                "format": "password",
+                "type": "string",
+                "writeOnly": true
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Api Key"
+          },
+          "base_url": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Base Url"
+          },
+          "clear": {
+            "default": false,
+            "title": "Clear",
+            "type": "boolean"
+          },
+          "model": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Model"
+          },
+          "provider": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Provider"
+          },
+          "timeout": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Timeout"
+          }
+        },
+        "title": "DeptLLMOverrideSchema",
+        "type": "object"
+      },
+      "DeptProxyOverrideSchema": {
+        "properties": {
+          "api_key": {
+            "anyOf": [
+              {
+                "format": "password",
+                "type": "string",
+                "writeOnly": true
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Api Key"
+          },
+          "base_url": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Base Url"
+          },
+          "clear": {
+            "default": false,
+            "title": "Clear",
+            "type": "boolean"
+          },
+          "default_model": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Default Model"
+          },
+          "provider": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Provider"
+          },
+          "timeout_seconds": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Timeout Seconds"
+          }
+        },
+        "title": "DeptProxyOverrideSchema",
+        "type": "object"
+      },
+      "DetectionMode": {
+        "enum": [
+          "fast",
+          "full"
+        ],
+        "title": "DetectionMode",
+        "type": "string"
+      },
+      "EmailSettingsUpdate": {
+        "properties": {
+          "max_attempts": {
+            "title": "Max Attempts",
+            "type": "integer"
+          },
+          "notifications_enabled": {
+            "title": "Notifications Enabled",
+            "type": "boolean"
+          },
+          "retention_days": {
+            "title": "Retention Days",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "notifications_enabled",
+          "max_attempts",
+          "retention_days"
+        ],
+        "title": "EmailSettingsUpdate",
+        "type": "object"
+      },
+      "ExecutionMode": {
+        "enum": [
+          "scan_only",
+          "proxy"
+        ],
+        "title": "ExecutionMode",
+        "type": "string"
+      },
+      "HTTPValidationError": {
+        "properties": {
+          "detail": {
+            "items": {
+              "$ref": "#/components/schemas/ValidationError"
+            },
+            "title": "Detail",
+            "type": "array"
+          }
+        },
+        "title": "HTTPValidationError",
+        "type": "object"
+      },
+      "InputSource": {
+        "description": "Trust-boundary provenance of the scanned input: where the text came from.\nuser_prompt is trusted-origin; the rest mark content an agent pulled in\n(tool results, retrieved documents, other external text) -- the primary\nindirect prompt-injection surface. Source never relaxes detection: identical\ncontent scores identically whatever origin it claims. It can, opt-in, tighten\nthe policy thresholds applied to untrusted origins (source-aware posture,\noff by default).",
+        "enum": [
+          "user_prompt",
+          "tool_output",
+          "retrieved_document",
+          "external_content"
+        ],
+        "title": "InputSource",
+        "type": "string"
+      },
+      "KeyType": {
+        "enum": [
+          "live",
+          "trial"
+        ],
+        "title": "KeyType",
+        "type": "string"
+      },
+      "LLMSettingsSchema": {
+        "properties": {
+          "api_key": {
+            "anyOf": [
+              {
+                "format": "password",
+                "type": "string",
+                "writeOnly": true
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Api Key"
+          },
+          "base_url": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Base Url"
+          },
+          "llm_trigger": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Llm Trigger"
+          },
+          "model": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Model"
+          },
+          "provider": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Provider"
+          },
+          "timeout": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Timeout"
+          }
+        },
+        "title": "LLMSettingsSchema",
+        "type": "object"
+      },
+      "LayersUpdateSchema": {
+        "properties": {
+          "llm_enabled": {
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Llm Enabled"
+          },
+          "ml_enabled": {
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Ml Enabled"
+          },
+          "rule_enabled": {
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Rule Enabled"
+          }
+        },
+        "title": "LayersUpdateSchema",
+        "type": "object"
+      },
+      "LoginRequest": {
+        "properties": {
+          "email": {
+            "format": "email",
+            "title": "Email",
+            "type": "string"
+          },
+          "password": {
+            "title": "Password",
+            "type": "string"
+          }
+        },
+        "required": [
+          "email",
+          "password"
+        ],
+        "title": "LoginRequest",
+        "type": "object"
+      },
+      "LogoutRequest": {
+        "properties": {
+          "reason": {
+            "default": "manual",
+            "title": "Reason",
+            "type": "string"
+          }
+        },
+        "title": "LogoutRequest",
+        "type": "object"
+      },
+      "MePatchSchema": {
+        "properties": {
+          "locale": {
+            "anyOf": [
+              {
+                "maxLength": 35,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Locale"
+          }
+        },
+        "title": "MePatchSchema",
+        "type": "object"
+      },
+      "ProxyChatRequest": {
+        "additionalProperties": false,
+        "properties": {
+          "max_tokens": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Max Tokens"
+          },
+          "messages": {
+            "items": {
+              "additionalProperties": true,
+              "type": "object"
+            },
+            "title": "Messages",
+            "type": "array"
+          },
+          "model": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Model"
+          },
+          "temperature": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Temperature"
+          },
+          "top_p": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Top P"
+          }
+        },
+        "required": [
+          "messages"
+        ],
+        "title": "ProxyChatRequest",
+        "type": "object"
+      },
+      "ProxySettingsPutSchema": {
+        "properties": {
+          "api_key": {
+            "anyOf": [
+              {
+                "format": "password",
+                "type": "string",
+                "writeOnly": true
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Api Key"
+          },
+          "base_url": {
+            "title": "Base Url",
+            "type": "string"
+          },
+          "default_model": {
+            "title": "Default Model",
+            "type": "string"
+          },
+          "provider": {
+            "title": "Provider",
+            "type": "string"
+          },
+          "timeout": {
+            "default": 60,
+            "title": "Timeout",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "provider",
+          "base_url",
+          "default_model"
+        ],
+        "title": "ProxySettingsPutSchema",
+        "type": "object"
+      },
+      "RateLimitUpdateSchema": {
+        "properties": {
+          "per_minute": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Per Minute"
+          }
+        },
+        "title": "RateLimitUpdateSchema",
+        "type": "object"
+      },
+      "RequestContextSchema": {
+        "properties": {
+          "sensitivity": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Sensitivity"
+          },
+          "user_role": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "User Role"
+          }
+        },
+        "title": "RequestContextSchema",
+        "type": "object"
+      },
+      "RequestMetadataSchema": {
+        "properties": {
+          "source": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Source"
+          },
+          "user_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "User Id"
+          }
+        },
+        "title": "RequestMetadataSchema",
+        "type": "object"
+      },
+      "RequestOptionsSchema": {
+        "properties": {
+          "debug": {
+            "default": false,
+            "title": "Debug",
+            "type": "boolean"
+          },
+          "stream": {
+            "default": false,
+            "title": "Stream",
+            "type": "boolean"
+          }
+        },
+        "title": "RequestOptionsSchema",
+        "type": "object"
+      },
+      "ResetPasswordSchema": {
+        "properties": {
+          "new_password": {
+            "title": "New Password",
+            "type": "string"
+          }
+        },
+        "required": [
+          "new_password"
+        ],
+        "title": "ResetPasswordSchema",
+        "type": "object"
+      },
+      "RetentionSettingsSchema": {
+        "properties": {
+          "retention_days": {
+            "title": "Retention Days",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "retention_days"
+        ],
+        "title": "RetentionSettingsSchema",
+        "type": "object"
+      },
+      "RotateKeySchema": {
+        "properties": {
+          "grace_period_minutes": {
+            "default": 60,
+            "maximum": 10080.0,
+            "minimum": 0.0,
+            "title": "Grace Period Minutes",
+            "type": "integer"
+          }
+        },
+        "title": "RotateKeySchema",
+        "type": "object"
+      },
+      "ScanBatchItem": {
+        "description": "One item in a batch scan. Carries its own provenance and an optional\ncaller-supplied id echoed back on the result so callers can correlate\ninputs to outcomes (e.g. map a chunk back to its document).",
+        "properties": {
+          "id": {
+            "anyOf": [
+              {
+                "maxLength": 200,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Opaque caller reference echoed back in the matching result.",
+            "title": "Id"
+          },
+          "input": {
+            "minLength": 1,
+            "title": "Input",
+            "type": "string"
+          },
+          "input_source": {
+            "$ref": "#/components/schemas/InputSource",
+            "default": "user_prompt",
+            "description": "Trust-boundary provenance of `input`: where the text came from. One of user_prompt (the default when omitted), tool_output, retrieved_document, external_content. The untrusted origins mark content an agent pulled in -- the primary indirect prompt-injection surface. It is labelled, persisted, and scanned by the same pipeline; it never relaxes detection (identical content scores identically), but can, opt-in, tighten policy thresholds for untrusted origins (source-aware posture, off by default)."
+          }
+        },
+        "required": [
+          "input"
+        ],
+        "title": "ScanBatchItem",
+        "type": "object"
+      },
+      "ScanBatchSchema": {
+        "description": "Generic multi-item scan. Every item runs the same pipeline as a single\nscan (scan-only; no proxy/LLM forwarding) and is audited independently.",
+        "properties": {
+          "detection_mode": {
+            "$ref": "#/components/schemas/DetectionMode",
+            "default": "fast"
+          },
+          "items": {
+            "items": {
+              "$ref": "#/components/schemas/ScanBatchItem"
+            },
+            "minItems": 1,
+            "title": "Items",
+            "type": "array"
+          }
+        },
+        "required": [
+          "items"
+        ],
+        "title": "ScanBatchSchema",
+        "type": "object"
+      },
+      "TenantUpdateSchema": {
+        "properties": {
+          "contact_email": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Contact Email"
+          },
+          "description": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Description"
+          },
+          "locale": {
+            "anyOf": [
+              {
+                "maxLength": 35,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Locale"
+          },
+          "name": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Name"
+          }
+        },
+        "title": "TenantUpdateSchema",
+        "type": "object"
+      },
+      "ThresholdsUpdateSchema": {
+        "properties": {
+          "block_threshold": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Block Threshold"
+          },
+          "sanitize_threshold": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Sanitize Threshold"
+          }
+        },
+        "title": "ThresholdsUpdateSchema",
+        "type": "object"
+      },
+      "UpdateKeySchema": {
+        "properties": {
+          "ip_allowlist": {
+            "anyOf": [
+              {
+                "items": {
+                  "type": "string"
+                },
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Ip Allowlist"
+          },
+          "name": {
+            "maxLength": 100,
+            "minLength": 1,
+            "title": "Name",
+            "type": "string"
+          }
+        },
+        "required": [
+          "name"
+        ],
+        "title": "UpdateKeySchema",
+        "type": "object"
+      },
+      "UserCreateSchema": {
+        "properties": {
+          "dept_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Dept Id"
+          },
+          "email": {
+            "format": "email",
+            "title": "Email",
+            "type": "string"
+          },
+          "password": {
+            "title": "Password",
+            "type": "string"
+          },
+          "role": {
+            "title": "Role",
+            "type": "string"
+          }
+        },
+        "required": [
+          "email",
+          "password",
+          "role"
+        ],
+        "title": "UserCreateSchema",
+        "type": "object"
+      },
+      "UserPatchSchema": {
+        "properties": {
+          "dept_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Dept Id"
+          },
+          "is_active": {
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Is Active"
+          },
+          "role": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Role"
+          }
+        },
+        "title": "UserPatchSchema",
+        "type": "object"
+      },
+      "ValidationError": {
+        "properties": {
+          "ctx": {
+            "title": "Context",
+            "type": "object"
+          },
+          "input": {
+            "title": "Input"
+          },
+          "loc": {
+            "items": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "integer"
+                }
+              ]
+            },
+            "title": "Location",
+            "type": "array"
+          },
+          "msg": {
+            "title": "Message",
+            "type": "string"
+          },
+          "type": {
+            "title": "Error Type",
+            "type": "string"
+          }
+        },
+        "required": [
+          "loc",
+          "msg",
+          "type"
+        ],
+        "title": "ValidationError",
+        "type": "object"
+      },
+      "WebhookCreateSchema": {
+        "properties": {
+          "config": {
+            "anyOf": [
+              {
+                "additionalProperties": true,
+                "type": "object"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Config"
+          },
+          "connector_type": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Connector Type"
+          },
+          "description": {
+            "anyOf": [
+              {
+                "maxLength": 1000,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Description"
+          },
+          "event_types": {
+            "anyOf": [
+              {
+                "items": {
+                  "type": "string"
+                },
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Event Types"
+          },
+          "secret": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Secret"
+          },
+          "url": {
+            "maxLength": 2048,
+            "title": "Url",
+            "type": "string"
+          }
+        },
+        "required": [
+          "url"
+        ],
+        "title": "WebhookCreateSchema",
+        "type": "object"
+      },
+      "WebhookRotateSchema": {
+        "properties": {
+          "grace_hours": {
+            "default": 24,
+            "maximum": 168.0,
+            "minimum": 1.0,
+            "title": "Grace Hours",
+            "type": "integer"
+          }
+        },
+        "title": "WebhookRotateSchema",
+        "type": "object"
+      },
+      "WebhookUpdateSchema": {
+        "properties": {
+          "config": {
+            "anyOf": [
+              {
+                "additionalProperties": true,
+                "type": "object"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Config"
+          },
+          "description": {
+            "anyOf": [
+              {
+                "maxLength": 1000,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Description"
+          },
+          "event_types": {
+            "anyOf": [
+              {
+                "items": {
+                  "type": "string"
+                },
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Event Types"
+          },
+          "url": {
+            "anyOf": [
+              {
+                "maxLength": 2048,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Url"
+          }
+        },
+        "title": "WebhookUpdateSchema",
+        "type": "object"
+      }
+    }
+  },
+  "info": {
+    "description": "AI Security Gateway for Intelligent Applications",
+    "title": "WrapSec",
+    "version": "1.0.0"
+  },
+  "openapi": "3.1.0",
+  "paths": {
+    "/health": {
+      "get": {
+        "operationId": "health_health_get",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Successful Response"
+          }
+        },
+        "summary": "Health",
+        "tags": [
+          "Health"
+        ]
+      }
+    },
+    "/health/config": {
+      "get": {
+        "description": "The configuration currently in force, for deployment verification.\n\nThe route admits every authenticated caller, but the BODY varies by\npermission. Values here duplicate what `GET /v1/settings` returns behind\n`settings:read` with trial keys refused -- thresholds and layer status are\nthe calibration data that restriction exists to withhold, since they tell a\ncaller exactly how far under a limit a payload has to sit. Served from an\nendpoint with no such check, the restriction meant nothing: the same trial\nkey or VIEWER simply read it here.\n\nGating the whole route instead would have broken deployment verification\nfor the callers most likely to need it, so the split is per field:\n\n  settings:read (ADMIN, DEVELOPER, AUDITOR; not trial)\n      everything, unchanged.\n  everyone else authenticated (VIEWER, trial keys)\n      `version`, plus each section reduced to its `source` marker. That is\n      enough to confirm which build is running and whether configuration is\n      database-backed or environment-default -- the verification purpose --\n      without disclosing a single threshold or layer state.\n\nNever exposes API keys or secrets to any caller.",
+        "operationId": "health_config_health_config_get",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Successful Response"
+          }
+        },
+        "summary": "Health Config",
+        "tags": [
+          "Health"
+        ]
+      }
+    },
+    "/health/live": {
+      "get": {
+        "operationId": "health_live_health_live_get",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Successful Response"
+          }
+        },
+        "summary": "Health Live",
+        "tags": [
+          "Health"
+        ]
+      }
+    },
+    "/health/ready": {
+      "get": {
+        "description": "Readiness check. Used by container orchestrators to decide whether to route\ntraffic, so the STATUS CODE is the contract and the body is the detail.\n\n200 -- every REQUIRED component is up: database, Redis, and the Tier-1 ML\n       model. The body may still read \"degraded\", which means an OPTIONAL\n       component is absent: the Tier-2 transformer is not installed in the\n       default build, and running without it is the documented degraded\n       mode rather than a fault.\n503 -- a required component is down. The instance cannot serve: a request\n       that runs the ML layer with no Tier-1 model is refused fail-closed\n       with SYSTEM_ERROR, so routing to it produces errors, not weaker\n       scoring.",
+        "operationId": "health_ready_health_ready_get",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Successful Response"
+          }
+        },
+        "summary": "Health Ready",
+        "tags": [
+          "Health"
+        ]
+      }
+    },
+    "/v1/admin/applications": {
+      "get": {
+        "operationId": "list_applications_v1_admin_applications_get",
+        "parameters": [
+          {
+            "in": "query",
+            "name": "dept_id",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Dept Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "List Applications",
+        "tags": [
+          "Applications"
+        ]
+      },
+      "post": {
+        "operationId": "create_application_v1_admin_applications_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ApplicationCreateSchema"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Create Application",
+        "tags": [
+          "Applications"
+        ]
+      }
+    },
+    "/v1/admin/applications/{app_id}": {
+      "delete": {
+        "operationId": "delete_application_v1_admin_applications__app_id__delete",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "app_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "App Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Delete Application",
+        "tags": [
+          "Applications"
+        ]
+      },
+      "get": {
+        "operationId": "get_application_v1_admin_applications__app_id__get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "app_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "App Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Get Application",
+        "tags": [
+          "Applications"
+        ]
+      },
+      "put": {
+        "operationId": "update_application_v1_admin_applications__app_id__put",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "app_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "App Id",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ApplicationUpdateSchema"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Update Application",
+        "tags": [
+          "Applications"
+        ]
+      }
+    },
+    "/v1/admin/applications/{app_id}/policy": {
+      "delete": {
+        "description": "Reset application policy override to null.\nApplication will inherit from department policy.",
+        "operationId": "reset_application_policy_v1_admin_applications__app_id__policy_delete",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "app_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "App Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Reset Application Policy",
+        "tags": [
+          "Applications"
+        ]
+      },
+      "get": {
+        "description": "Returns the fully resolved effective policy for this application.\nMerges: system defaults -> tenant global -> department -> application.\nApplication overrides are currently null for most keys - set via policy_override field.",
+        "operationId": "get_application_policy_v1_admin_applications__app_id__policy_get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "app_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "App Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Get Application Policy",
+        "tags": [
+          "Applications"
+        ]
+      },
+      "put": {
+        "description": "Set or update application-level policy override.\nMerged on top of department policy during request processing.\nPass policy_override: null to remove all overrides.",
+        "operationId": "set_application_policy_v1_admin_applications__app_id__policy_put",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "app_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "App Id",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ApplicationPolicySchema"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Set Application Policy",
+        "tags": [
+          "Applications"
+        ]
+      }
+    },
+    "/v1/admin/applications/{app_id}/policy/llm": {
+      "patch": {
+        "description": "Set or clear the LLM detection override for an application.\nTakes precedence over department-level LLM override.\napi_key is encrypted before storage - never stored or returned in plaintext.\nSet clear=true to remove and inherit from the department.\nAuth: JWT + ADMIN role required.",
+        "operationId": "update_app_llm_override_v1_admin_applications__app_id__policy_llm_patch",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "app_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "App Id",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/AppLLMOverrideSchema"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Update App Llm Override",
+        "tags": [
+          "Applications"
+        ]
+      }
+    },
+    "/v1/admin/applications/{app_id}/policy/proxy": {
+      "patch": {
+        "description": "Set or clear the proxy provider override for an application.\nTakes precedence over department-level proxy override for proxy mode requests.\napi_key is encrypted before storage - never stored or returned in plaintext.\nSet clear=true to fall back to the department-level proxy override.\nAuth: JWT + ADMIN role required.",
+        "operationId": "update_app_proxy_override_v1_admin_applications__app_id__policy_proxy_patch",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "app_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "App Id",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/AppProxyOverrideSchema"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Update App Proxy Override",
+        "tags": [
+          "Applications"
+        ]
+      }
+    },
+    "/v1/admin/departments": {
+      "get": {
+        "description": "Lists departments scoped to the authenticated principal's tenant.\nADMIN principals see all departments. Non-admin principals see only their own department.",
+        "operationId": "list_departments_v1_admin_departments_get",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Successful Response"
+          }
+        },
+        "summary": "List Departments",
+        "tags": [
+          "Departments"
+        ]
+      },
+      "post": {
+        "description": "Creates a new department under the authenticated principal's tenant.\nAuth: JWT + ADMIN role required.",
+        "operationId": "create_department_v1_admin_departments_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/DepartmentCreateSchema"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Create Department",
+        "tags": [
+          "Departments"
+        ]
+      }
+    },
+    "/v1/admin/departments/{dept_id}": {
+      "delete": {
+        "description": "Soft-deletes a department by setting is_active=False.\nThe department record is retained for audit history.\nAuth: JWT + ADMIN role required.",
+        "operationId": "delete_department_v1_admin_departments__dept_id__delete",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "dept_id",
+            "required": true,
+            "schema": {
+              "title": "Dept Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Delete Department",
+        "tags": [
+          "Departments"
+        ]
+      },
+      "get": {
+        "description": "Returns a single department by ID. 404 if not found.",
+        "operationId": "get_department_v1_admin_departments__dept_id__get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "dept_id",
+            "required": true,
+            "schema": {
+              "title": "Dept Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Get Department",
+        "tags": [
+          "Departments"
+        ]
+      },
+      "put": {
+        "description": "Partially updates a department. Only fields present in the request body are applied.\nExplicitly set null values (e.g. policy_override=null) are also applied - use this\nto clear a department's policy override back to tenant-level defaults.\nAuth: JWT + ADMIN role required.",
+        "operationId": "update_department_v1_admin_departments__dept_id__put",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "dept_id",
+            "required": true,
+            "schema": {
+              "title": "Dept Id",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/DepartmentUpdateSchema"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Update Department",
+        "tags": [
+          "Departments"
+        ]
+      }
+    },
+    "/v1/admin/departments/{dept_id}/policy": {
+      "get": {
+        "description": "Returns the fully resolved effective policy for this department.\nMerges: system defaults -> tenant global -> department override.\nUseful for compliance verification.",
+        "operationId": "get_department_policy_v1_admin_departments__dept_id__policy_get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "dept_id",
+            "required": true,
+            "schema": {
+              "title": "Dept Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Get Department Policy",
+        "tags": [
+          "Departments"
+        ]
+      }
+    },
+    "/v1/admin/departments/{dept_id}/policy/llm": {
+      "patch": {
+        "description": "Set or clear the LLM detection override for a department.\nWhen set, this dept's requests use the specified LLM provider/model/key for threat detection.\napi_key is encrypted before storage - never stored or returned in plaintext.\nSet clear=true to remove the override and inherit the global LLM configuration.\nAuth: JWT + ADMIN role required.",
+        "operationId": "update_dept_llm_override_v1_admin_departments__dept_id__policy_llm_patch",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "dept_id",
+            "required": true,
+            "schema": {
+              "title": "Dept Id",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/DeptLLMOverrideSchema"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Update Dept Llm Override",
+        "tags": [
+          "Departments"
+        ]
+      }
+    },
+    "/v1/admin/departments/{dept_id}/policy/proxy": {
+      "patch": {
+        "description": "Set or clear the proxy provider override for a department.\nWhen set, proxy mode requests from this dept fall back to this provider if no\nper-key proxy config exists. api_key encrypted before storage.\nSet clear=true to remove the override and require per-key proxy configuration.\nAuth: JWT + ADMIN role required.",
+        "operationId": "update_dept_proxy_override_v1_admin_departments__dept_id__policy_proxy_patch",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "dept_id",
+            "required": true,
+            "schema": {
+              "title": "Dept Id",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/DeptProxyOverrideSchema"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Update Dept Proxy Override",
+        "tags": [
+          "Departments"
+        ]
+      }
+    },
+    "/v1/admin/departments/{dept_id}/stats": {
+      "get": {
+        "description": "Aggregates audit_logs for this department.\nReturns total request count, decision breakdown, block rate, average latency,\nand the top 5 threat categories by frequency.",
+        "operationId": "get_department_stats_v1_admin_departments__dept_id__stats_get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "dept_id",
+            "required": true,
+            "schema": {
+              "title": "Dept Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Get Department Stats",
+        "tags": [
+          "Departments"
+        ]
+      }
+    },
+    "/v1/admin/email": {
+      "get": {
+        "description": "List email delivery rows for the caller's tenant, newest first.\n\nFilters: status, notification_type, department_id, recipient (substring),\ncreated_from / created_to (ISO-8601). Scoped to principal.tenant_id.\n\nAuth: JWT + ADMIN or AUDITOR role.",
+        "operationId": "list_emails_v1_admin_email_get",
+        "parameters": [
+          {
+            "in": "query",
+            "name": "status",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Status"
+            }
+          },
+          {
+            "in": "query",
+            "name": "notification_type",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Notification Type"
+            }
+          },
+          {
+            "in": "query",
+            "name": "department_id",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Department Id"
+            }
+          },
+          {
+            "in": "query",
+            "name": "recipient",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Recipient"
+            }
+          },
+          {
+            "in": "query",
+            "name": "created_from",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Created From"
+            }
+          },
+          {
+            "in": "query",
+            "name": "created_to",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Created To"
+            }
+          },
+          {
+            "in": "query",
+            "name": "limit",
+            "required": false,
+            "schema": {
+              "default": 50,
+              "maximum": 200,
+              "minimum": 1,
+              "title": "Limit",
+              "type": "integer"
+            }
+          },
+          {
+            "in": "query",
+            "name": "offset",
+            "required": false,
+            "schema": {
+              "default": 0,
+              "minimum": 0,
+              "title": "Offset",
+              "type": "integer"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "List Emails",
+        "tags": [
+          "Email Audit"
+        ]
+      }
+    },
+    "/v1/admin/email/settings": {
+      "get": {
+        "description": "Return the effective email delivery settings and the read-only retry policy.\n\nAuth: JWT + ADMIN role.",
+        "operationId": "get_email_settings_endpoint_v1_admin_email_settings_get",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Successful Response"
+          }
+        },
+        "summary": "Get Email Settings Endpoint",
+        "tags": [
+          "Email Audit"
+        ]
+      },
+      "put": {
+        "description": "Update the email delivery settings (notifications on/off, max attempts,\nretention). max_attempts is bounded by the real retry schedule; retention\nmust be >= 1. Emits a configuration-change audit event.\n\nAuth: JWT + ADMIN role.",
+        "operationId": "put_email_settings_endpoint_v1_admin_email_settings_put",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/EmailSettingsUpdate"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Put Email Settings Endpoint",
+        "tags": [
+          "Email Audit"
+        ]
+      }
+    },
+    "/v1/admin/email/summary": {
+      "get": {
+        "description": "Per-status counts (queued / sending / provider_accepted / failed) for the\ncaller's tenant, honoring the same filters as the listing (minus status).\n\nAuth: JWT + ADMIN or AUDITOR role.",
+        "operationId": "email_summary_v1_admin_email_summary_get",
+        "parameters": [
+          {
+            "in": "query",
+            "name": "notification_type",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Notification Type"
+            }
+          },
+          {
+            "in": "query",
+            "name": "department_id",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Department Id"
+            }
+          },
+          {
+            "in": "query",
+            "name": "recipient",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Recipient"
+            }
+          },
+          {
+            "in": "query",
+            "name": "created_from",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Created From"
+            }
+          },
+          {
+            "in": "query",
+            "name": "created_to",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Created To"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Email Summary",
+        "tags": [
+          "Email Audit"
+        ]
+      }
+    },
+    "/v1/admin/email/{email_id}": {
+      "get": {
+        "description": "Return a single email delivery row by id.\n\nReturns 404 when the row does not exist OR belongs to another tenant, so\ncross-tenant ids are indistinguishable from missing ones.\n\nAuth: JWT + ADMIN or AUDITOR role.",
+        "operationId": "get_email_v1_admin_email__email_id__get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "email_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Email Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Get Email",
+        "tags": [
+          "Email Audit"
+        ]
+      }
+    },
+    "/v1/admin/tenant": {
+      "get": {
+        "description": "Returns the caller's tenant profile (metadata + lifecycle status).\nScoped to the caller's own tenant. Auth: any valid principal.",
+        "operationId": "get_tenant_v1_admin_tenant_get",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Successful Response"
+          }
+        },
+        "summary": "Get Tenant",
+        "tags": [
+          "Tenant"
+        ]
+      },
+      "put": {
+        "description": "Partially updates tenant metadata: name, description, contact_email, locale.\nOnly fields present in the request body are updated. Scoped to the caller's\nown tenant. Auth: JWT + ADMIN role required.",
+        "operationId": "update_tenant_v1_admin_tenant_put",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/TenantUpdateSchema"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Update Tenant",
+        "tags": [
+          "Tenant"
+        ]
+      }
+    },
+    "/v1/admin/tenant/usage": {
+      "get": {
+        "description": "Tenant-scoped usage aggregate over audit_logs: scan/proxy request counts and\nblocked/sanitized decisions, totalled and broken down by day, for the caller's\ntenant. The metering contract for a future billing plugin, proven while cheap --\nit rests on every request path (scan/batch/proxy/cache-hit) writing an audit row.\nWindow is [from, to); defaults to the last 30 days. Scoped to request.state.tenant_id.",
+        "operationId": "tenant_usage_v1_admin_tenant_usage_get",
+        "parameters": [
+          {
+            "in": "query",
+            "name": "from",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "From"
+            }
+          },
+          {
+            "in": "query",
+            "name": "to",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "To"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Tenant Usage",
+        "tags": [
+          "Tenant"
+        ]
+      }
+    },
+    "/v1/admin/users": {
+      "get": {
+        "description": "Lists all users for the tenant.\nScoped to principal.tenant_id - never cross-tenant.\n\nAuth: JWT + ADMIN role required.",
+        "operationId": "list_users_v1_admin_users_get",
+        "parameters": [
+          {
+            "in": "query",
+            "name": "role",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Role"
+            }
+          },
+          {
+            "in": "query",
+            "name": "is_active",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "boolean"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Is Active"
+            }
+          },
+          {
+            "in": "query",
+            "name": "limit",
+            "required": false,
+            "schema": {
+              "default": 50,
+              "maximum": 200,
+              "minimum": 1,
+              "title": "Limit",
+              "type": "integer"
+            }
+          },
+          {
+            "in": "query",
+            "name": "offset",
+            "required": false,
+            "schema": {
+              "default": 0,
+              "minimum": 0,
+              "title": "Offset",
+              "type": "integer"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "List Users",
+        "tags": [
+          "Users"
+        ]
+      },
+      "post": {
+        "description": "Creates a new dashboard user.\nforce_password_change = True always set.\n\nAuth: JWT + ADMIN role required.",
+        "operationId": "create_user_v1_admin_users_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/UserCreateSchema"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Create User",
+        "tags": [
+          "Users"
+        ]
+      }
+    },
+    "/v1/admin/users/{user_id}": {
+      "get": {
+        "description": "Returns a single user by ID.\nReturns 404 if user belongs to a different tenant.\n\nAuth: JWT + ADMIN role required.",
+        "operationId": "get_user_v1_admin_users__user_id__get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "user_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "User Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Get User",
+        "tags": [
+          "Users"
+        ]
+      },
+      "patch": {
+        "description": "Partially updates a user's role, dept_id, or is_active.\n\nValidation performed on FINAL STATE (role + dept_id combined),\nnot individual fields independently.\n\nGuards:\n- Admin cannot deactivate themselves\n- Cannot remove last ADMIN\n- dept_id must belong to same tenant\n\nSide effects:\n- role changed    -> token_version++, admin_event: role_changed\n- dept changed    -> token_version++, admin_event: dept_changed\n- deactivated     -> token_version++, admin_event: user_deactivated\n- reactivated     -> no token_version change, admin_event: user_reactivated\n\nAuth: JWT + ADMIN role required.",
+        "operationId": "update_user_v1_admin_users__user_id__patch",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "user_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "User Id",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/UserPatchSchema"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Update User",
+        "tags": [
+          "Users"
+        ]
+      }
+    },
+    "/v1/admin/users/{user_id}/reset-password": {
+      "post": {
+        "description": "Admin resets a user's password.\nSets force_password_change = True.\nInvalidates all active sessions.\n\nAuth: JWT + ADMIN role required.",
+        "operationId": "reset_password_v1_admin_users__user_id__reset_password_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "user_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "User Id",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ResetPasswordSchema"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Reset Password",
+        "tags": [
+          "Users"
+        ]
+      }
+    },
+    "/v1/admin/webhooks": {
+      "get": {
+        "description": "List every webhook endpoint on the caller's tenant, disabled\nor not. Secrets are always masked in this response.",
+        "operationId": "list_webhooks_v1_admin_webhooks_get",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Successful Response"
+          }
+        },
+        "summary": "List Webhooks",
+        "tags": [
+          "Webhooks"
+        ]
+      },
+      "post": {
+        "description": "Create a new webhook endpoint on the caller's tenant. The response\nbody includes the freshly generated plaintext signing secret as\n`secret` -- copy it into the receiver's verifier config on first\nread, because subsequent GET/LIST responses only show the mask.",
+        "operationId": "create_webhook_v1_admin_webhooks_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/WebhookCreateSchema"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Create Webhook",
+        "tags": [
+          "Webhooks"
+        ]
+      }
+    },
+    "/v1/admin/webhooks/connector-types": {
+      "get": {
+        "description": "Form schema per webhook destination type, for the dashboard's dynamic\ncreate form. Static metadata only -- no tenant data, no secrets. Declared\nbefore GET /{endpoint_id} so the literal path is not parsed as an id.",
+        "operationId": "list_connector_types_v1_admin_webhooks_connector_types_get",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Successful Response"
+          }
+        },
+        "summary": "List Connector Types",
+        "tags": [
+          "Webhooks"
+        ]
+      }
+    },
+    "/v1/admin/webhooks/{endpoint_id}": {
+      "delete": {
+        "description": "Hard-delete an endpoint. Cross-tenant access returns 404.",
+        "operationId": "delete_webhook_v1_admin_webhooks__endpoint_id__delete",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "endpoint_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Endpoint Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Delete Webhook",
+        "tags": [
+          "Webhooks"
+        ]
+      },
+      "get": {
+        "description": "Fetch one endpoint. Cross-tenant access returns 404 to prevent\nid enumeration.",
+        "operationId": "get_webhook_v1_admin_webhooks__endpoint_id__get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "endpoint_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Endpoint Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Get Webhook",
+        "tags": [
+          "Webhooks"
+        ]
+      },
+      "put": {
+        "description": "Update mutable fields (url, description, event_types). Secret\nmaterial, disabled flag, and circuit-breaker timer each have\ndedicated endpoints -- they cannot be changed here.",
+        "operationId": "update_webhook_v1_admin_webhooks__endpoint_id__put",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "endpoint_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Endpoint Id",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/WebhookUpdateSchema"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Update Webhook",
+        "tags": [
+          "Webhooks"
+        ]
+      }
+    },
+    "/v1/admin/webhooks/{endpoint_id}/pause": {
+      "post": {
+        "description": "Manually pause delivery to an endpoint. Stops events being forwarded\nwhile keeping the config, secret, and history intact -- resume with\n/reactivate. Idempotent on an already-paused endpoint.",
+        "operationId": "pause_webhook_v1_admin_webhooks__endpoint_id__pause_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "endpoint_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Endpoint Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Pause Webhook",
+        "tags": [
+          "Webhooks"
+        ]
+      }
+    },
+    "/v1/admin/webhooks/{endpoint_id}/reactivate": {
+      "post": {
+        "description": "Manually clear the circuit breaker (disabled + first_failure_at).\nCalled after the admin has fixed the receiver and wants deliveries\nto resume. Idempotent on already-active endpoints.",
+        "operationId": "reactivate_webhook_v1_admin_webhooks__endpoint_id__reactivate_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "endpoint_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Endpoint Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Reactivate Webhook",
+        "tags": [
+          "Webhooks"
+        ]
+      }
+    },
+    "/v1/admin/webhooks/{endpoint_id}/rotate-secret": {
+      "post": {
+        "description": "Rotate the signing secret. The current secret is moved into\n`old_secrets` with an `expires_at = now + grace_hours` and stays\nvalid for signature verification during that window, giving the\nreceiver time to update its verifier config. A fresh plaintext\nsecret is returned in this response and nowhere else.",
+        "operationId": "rotate_webhook_secret_v1_admin_webhooks__endpoint_id__rotate_secret_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "endpoint_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Endpoint Id",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/WebhookRotateSchema"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Rotate Webhook Secret",
+        "tags": [
+          "Webhooks"
+        ]
+      }
+    },
+    "/v1/admin/webhooks/{endpoint_id}/test": {
+      "post": {
+        "description": "Send a synthetic test event to the endpoint and return the receiver's\nresponse. Synchronous and side-effect-free: it does NOT enqueue, write a\ndelivery-attempt row, or move the circuit-breaker timer, so a test never\npollutes delivery health.\n\nSecurity: ADMIN-only and tenant-scoped (cross-tenant returns 404, no\nenumeration). The destination is the endpoint's already-SSRF-validated\nstored URL -- the same target the delivery worker uses, no new egress\nsurface. The response exposes only the receiver's status/body/timing; the\nendpoint secret and the outbound auth headers are never returned.",
+        "operationId": "test_webhook_v1_admin_webhooks__endpoint_id__test_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "endpoint_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Endpoint Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Test Webhook",
+        "tags": [
+          "Webhooks"
+        ]
+      }
+    },
+    "/v1/agent-runs/{run_id}": {
+      "get": {
+        "description": "Return one agent run's scans as an ordered timeline.\n\nTenant/dept-scoped: non-admin principals only ever see runs within their own\ntenant (and department); a run_id outside that scope yields an empty\ntimeline rather than another tenant's data.",
+        "operationId": "get_agent_run_v1_agent_runs__run_id__get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "run_id",
+            "required": true,
+            "schema": {
+              "title": "Run Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "query",
+            "name": "limit",
+            "required": false,
+            "schema": {
+              "default": 500,
+              "maximum": 1000,
+              "minimum": 1,
+              "title": "Limit",
+              "type": "integer"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Get Agent Run",
+        "tags": [
+          "Agent Runs"
+        ]
+      }
+    },
+    "/v1/ai/request": {
+      "post": {
+        "description": "Main AI security scan endpoint.\n\nProcessing order:\n  1. Debug mode guard - only admin keys may request debug output.\n  2. Debug rate limit - separate 10/min bucket prevents model fingerprinting.\n  3. Trial key restrictions - input size cap and proxy mode blocked.\n  4. Trial rate limit - stricter per-minute limit applied on top of global middleware limit.\n  5. Semantic cache lookup - returns cached result on hit, skips pipeline.\n  6. Policy resolution - resolves effective thresholds and detection layers for the\n     request's tenant/dept/app scope.\n  7. Detection pipeline - runs via GatewayService (rule, ML, LLM layers as configured).\n  8. Audit log write - persists full decision record to audit_logs.\n  9. Metrics recording - non-blocking; errors are swallowed.\n 10. Semantic cache write - caches successful responses for future identical inputs.\n\nAuth: any valid principal (API key).",
+        "operationId": "ai_request_v1_ai_request_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/AIRequestSchema"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Ai Request",
+        "tags": [
+          "Gateway"
+        ]
+      }
+    },
+    "/v1/ai/requests/{trace_id}": {
+      "get": {
+        "description": "Returns the full audit record for a single request by trace_id.\nAdmin keys use an unscoped lookup; all other keys are scoped to their dept_id.\nFor proxy requests, the response is enriched with the full proxy_interactions record\nincluding provider response, output decision, and execution status.\n404 if the record does not exist or is out of scope.",
+        "operationId": "get_request_v1_ai_requests__trace_id__get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "trace_id",
+            "required": true,
+            "schema": {
+              "title": "Trace Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Get Request",
+        "tags": [
+          "Gateway"
+        ]
+      }
+    },
+    "/v1/ai/scan-batch": {
+      "post": {
+        "description": "Batch security scan - scan many items in one call.\n\nEvery item runs the SAME detection pipeline as POST /request (scan-only; no\nproxy or LLM forwarding) and is audited independently, so batch scans appear\nin the audit trail and timeline exactly like single scans. Each item carries\nits own input_source, so a RAG caller can scan a page of retrieved chunks\nand drop the ones that come back BLOCK.\n\nA batch is charged as N units against the caller's rate-limit budget (not 1),\nso it cannot amplify throughput past the per-minute limit. Detection runs\nconcurrently (bounded by batch_concurrency); audit writes stay sequential\nbecause the audit hash-chain is per-tenant. The semantic cache is bypassed.\n\nResponse: { count, summary, results: [{ id, trace_id, decision, assessment }] }.\nAuth: any valid principal (API key). Trial keys keep the single-scan per-item\ninput cap.",
+        "operationId": "ai_scan_batch_v1_ai_scan_batch_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ScanBatchSchema"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Ai Scan Batch",
+        "tags": [
+          "Gateway"
+        ]
+      }
+    },
+    "/v1/audit/analytics": {
+      "get": {
+        "description": "Advanced cross-department analytics with time-series trend data.\nGroups requests by time period with decision breakdowns.",
+        "operationId": "get_analytics_v1_audit_analytics_get",
+        "parameters": [
+          {
+            "in": "query",
+            "name": "from",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "From"
+            }
+          },
+          {
+            "in": "query",
+            "name": "to",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "To"
+            }
+          },
+          {
+            "in": "query",
+            "name": "group_by",
+            "required": false,
+            "schema": {
+              "default": "day",
+              "pattern": "^(hour|day|week|month)$",
+              "title": "Group By",
+              "type": "string"
+            }
+          },
+          {
+            "in": "query",
+            "name": "dept_id",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Dept Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Get Analytics",
+        "tags": [
+          "Audit"
+        ]
+      }
+    },
+    "/v1/audit/attribution": {
+      "get": {
+        "description": "Returns attribution summary - requests grouped by key, department,\nand application. Useful for security review and capacity planning.\nSupports from/to date filtering (ISO format) for time-scoped reports.",
+        "operationId": "get_attribution_report_v1_audit_attribution_get",
+        "parameters": [
+          {
+            "in": "query",
+            "name": "dept_id",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Dept Id"
+            }
+          },
+          {
+            "in": "query",
+            "name": "limit",
+            "required": false,
+            "schema": {
+              "default": 10,
+              "maximum": 100,
+              "minimum": 1,
+              "title": "Limit",
+              "type": "integer"
+            }
+          },
+          {
+            "in": "query",
+            "name": "from",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "From"
+            }
+          },
+          {
+            "in": "query",
+            "name": "to",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "To"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Get Attribution Report",
+        "tags": [
+          "Audit"
+        ]
+      }
+    },
+    "/v1/audit/by-source": {
+      "get": {
+        "description": "Security by Source: audit aggregates grouped by input_source (trust-boundary\nprovenance) plus a Top Attack Origins ranking. Per source it returns volume,\ndecision mix, block rate, risk distribution, and threat-category counts.\n\nRead-only over data already stored on audit_logs (input_source since v1.7.0);\ngroups by whatever sources exist, so a new source appears with no code change.\nNon-admin keys are scoped to their tenant/dept, mirroring /stats.",
+        "operationId": "get_audit_by_source_v1_audit_by_source_get",
+        "parameters": [
+          {
+            "in": "query",
+            "name": "from",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "From"
+            }
+          },
+          {
+            "in": "query",
+            "name": "to",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "To"
+            }
+          },
+          {
+            "in": "query",
+            "name": "dept_id",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Dept Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Get Audit By Source",
+        "tags": [
+          "Audit"
+        ]
+      }
+    },
+    "/v1/audit/export": {
+      "get": {
+        "description": "Exports audit logs as a CSV file for compliance reporting.\n\nRow limits (L1):\n  * limit  <= 10_000 rows per call (hard cap)\n  * offset <= 1_000_000 rows into the result set\n\nCallers needing the full dataset must page: repeat the call with\noffset += limit until fewer than `limit` rows are returned.\n\nNon-admin keys are scoped to their own dept_id.\nResponse is streamed as attachment: wrapsec_audit_export.csv.",
+        "operationId": "export_audit_logs_v1_audit_export_get",
+        "parameters": [
+          {
+            "in": "query",
+            "name": "dept_id",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Dept Id"
+            }
+          },
+          {
+            "in": "query",
+            "name": "app_id",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "App Id"
+            }
+          },
+          {
+            "in": "query",
+            "name": "decision",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Decision"
+            }
+          },
+          {
+            "in": "query",
+            "name": "primary_reason",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Primary Reason"
+            }
+          },
+          {
+            "in": "query",
+            "name": "confidence_band",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Confidence Band"
+            }
+          },
+          {
+            "in": "query",
+            "name": "from",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "From"
+            }
+          },
+          {
+            "in": "query",
+            "name": "to",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "To"
+            }
+          },
+          {
+            "in": "query",
+            "name": "limit",
+            "required": false,
+            "schema": {
+              "default": 1000,
+              "maximum": 10000,
+              "minimum": 1,
+              "title": "Limit",
+              "type": "integer"
+            }
+          },
+          {
+            "in": "query",
+            "name": "offset",
+            "required": false,
+            "schema": {
+              "default": 0,
+              "maximum": 1000000,
+              "minimum": 0,
+              "title": "Offset",
+              "type": "integer"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Export Audit Logs",
+        "tags": [
+          "Audit"
+        ]
+      }
+    },
+    "/v1/audit/logs": {
+      "get": {
+        "description": "Returns a paginated, filterable list of audit log entries.\nNon-admin keys are always scoped to their own dept_id and tenant_id - any\ndept_id/tenant_id query parameters from non-admin callers are ignored.",
+        "operationId": "get_audit_logs_v1_audit_logs_get",
+        "parameters": [
+          {
+            "in": "query",
+            "name": "tenant_id",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Tenant Id"
+            }
+          },
+          {
+            "in": "query",
+            "name": "dept_id",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Dept Id"
+            }
+          },
+          {
+            "in": "query",
+            "name": "app_id",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "App Id"
+            }
+          },
+          {
+            "in": "query",
+            "name": "key_id",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Key Id"
+            }
+          },
+          {
+            "in": "query",
+            "name": "user_id",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "User Id"
+            }
+          },
+          {
+            "in": "query",
+            "name": "source",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Source"
+            }
+          },
+          {
+            "in": "query",
+            "name": "trace_id",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Trace Id"
+            }
+          },
+          {
+            "in": "query",
+            "name": "decision",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Decision"
+            }
+          },
+          {
+            "in": "query",
+            "name": "threat_category",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Threat Category"
+            }
+          },
+          {
+            "in": "query",
+            "name": "primary_reason",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Primary Reason"
+            }
+          },
+          {
+            "in": "query",
+            "name": "confidence_band",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Confidence Band"
+            }
+          },
+          {
+            "in": "query",
+            "name": "execution_mode",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Execution Mode"
+            }
+          },
+          {
+            "in": "query",
+            "name": "from",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "From"
+            }
+          },
+          {
+            "in": "query",
+            "name": "to",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "To"
+            }
+          },
+          {
+            "in": "query",
+            "name": "sort_by",
+            "required": false,
+            "schema": {
+              "default": "created_at",
+              "enum": [
+                "created_at",
+                "risk_score",
+                "latency_ms",
+                "decision"
+              ],
+              "title": "Sort By",
+              "type": "string"
+            }
+          },
+          {
+            "in": "query",
+            "name": "sort_order",
+            "required": false,
+            "schema": {
+              "default": "desc",
+              "enum": [
+                "asc",
+                "desc"
+              ],
+              "title": "Sort Order",
+              "type": "string"
+            }
+          },
+          {
+            "in": "query",
+            "name": "limit",
+            "required": false,
+            "schema": {
+              "default": 50,
+              "maximum": 500,
+              "minimum": 1,
+              "title": "Limit",
+              "type": "integer"
+            }
+          },
+          {
+            "in": "query",
+            "name": "offset",
+            "required": false,
+            "schema": {
+              "default": 0,
+              "minimum": 0,
+              "title": "Offset",
+              "type": "integer"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Get Audit Logs",
+        "tags": [
+          "Audit"
+        ]
+      }
+    },
+    "/v1/audit/stats": {
+      "get": {
+        "description": "Returns aggregated statistics for the given time range.\nIncludes: total request count, block/sanitize/allow rates, avg and p95 latency,\naverage risk, top threat categories, and severity breakdown\n(CRITICAL/HIGH/MEDIUM/LOW).\nThe list-view filters (decision/threat_category/execution_mode/trace_id) are\naccepted so a filter-scoped overview matches the rows shown by /logs.\nNon-admin keys are scoped to their own tenant_id.\nReturns zeroed stats (not 404) when no requests match the filters.",
+        "operationId": "get_audit_stats_v1_audit_stats_get",
+        "parameters": [
+          {
+            "in": "query",
+            "name": "tenant_id",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Tenant Id"
+            }
+          },
+          {
+            "in": "query",
+            "name": "dept_id",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Dept Id"
+            }
+          },
+          {
+            "in": "query",
+            "name": "from",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "From"
+            }
+          },
+          {
+            "in": "query",
+            "name": "to",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "To"
+            }
+          },
+          {
+            "in": "query",
+            "name": "decision",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Decision"
+            }
+          },
+          {
+            "in": "query",
+            "name": "threat_category",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Threat Category"
+            }
+          },
+          {
+            "in": "query",
+            "name": "execution_mode",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Execution Mode"
+            }
+          },
+          {
+            "in": "query",
+            "name": "trace_id",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Trace Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Get Audit Stats",
+        "tags": [
+          "Audit"
+        ]
+      }
+    },
+    "/v1/auth/change-password": {
+      "post": {
+        "description": "Changes password and invalidates all active sessions.\nAccessible even when force_password_change = True (middleware allowlist).\n\nAuth: JWT Bearer required.\n\nErrors:\n    400 INVALID_REQUEST  - new password too weak\n    401 INVALID_PASSWORD - current password incorrect",
+        "operationId": "change_password_v1_auth_change_password_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ChangePasswordRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Change Password",
+        "tags": [
+          "Auth"
+        ]
+      }
+    },
+    "/v1/auth/login": {
+      "post": {
+        "description": "Authenticates a dashboard user with email + password.\nReturns JWT access token in response body.\nSets refresh token as httpOnly cookie (Path=/v1/auth).\n\nEmail validated by Pydantic (RFC 5322) before reaching service layer.\nService layer additionally normalizes via normalize_email() (lowercase + strip).\n\nErrors:\n    401 INVALID_CREDENTIALS - wrong email or wrong password (identical message)\n    401 ACCOUNT_DISABLED    - is_active = False\n    429 ACCOUNT_LOCKED      - too many failed attempts",
+        "operationId": "login_v1_auth_login_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/LoginRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Login",
+        "tags": [
+          "Auth"
+        ]
+      }
+    },
+    "/v1/auth/logout": {
+      "post": {
+        "description": "Revokes refresh token AND blacklists the presented access token's jti\nfor the remainder of its lifetime (M1). Access token becomes unusable\nimmediately - not just after natural expiry. Clears httpOnly cookie.\nIdempotent - safe to call multiple times.\n\nOptional body: { \"reason\": \"manual\" | \"inactivity\" | \"expired\" }\nInvalid reason values are normalized to \"manual\" - never returns 400.\n\nAuth: JWT Bearer required.",
+        "operationId": "logout_v1_auth_logout_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/LogoutRequest",
+                "default": {
+                  "reason": "manual"
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Logout",
+        "tags": [
+          "Auth"
+        ]
+      }
+    },
+    "/v1/auth/me": {
+      "get": {
+        "description": "Returns current user profile.\nAccessible even when force_password_change = True (middleware allowlist).\n\nAuth: JWT Bearer required.",
+        "operationId": "me_v1_auth_me_get",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Successful Response"
+          }
+        },
+        "summary": "Me",
+        "tags": [
+          "Auth"
+        ]
+      },
+      "patch": {
+        "description": "Self-service profile preferences. Currently updates the locale preference\nonly (validated against the supported-locales allowlist).\n\nAuth: JWT Bearer required.",
+        "operationId": "update_me_v1_auth_me_patch",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/MePatchSchema"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Update Me",
+        "tags": [
+          "Auth"
+        ]
+      }
+    },
+    "/v1/auth/refresh": {
+      "post": {
+        "description": "Rotates refresh token and issues new access token.\nRefresh token read from httpOnly cookie - no body required.\nSets new rotated refresh token as httpOnly cookie.\n\nErrors:\n    401 INVALID_TOKEN       - expired, revoked, or not found\n    401 SESSION_INVALIDATED - token_version mismatch",
+        "operationId": "refresh_v1_auth_refresh_post",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Successful Response"
+          }
+        },
+        "summary": "Refresh",
+        "tags": [
+          "Auth"
+        ]
+      }
+    },
+    "/v1/capabilities": {
+      "get": {
+        "operationId": "list_capabilities_v1_capabilities_get",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Successful Response"
+          }
+        },
+        "summary": "List Capabilities",
+        "tags": [
+          "Capabilities"
+        ]
+      }
+    },
+    "/v1/chat/completions": {
+      "post": {
+        "description": "OpenAI-compatible proxy endpoint. Scans input, forwards to the configured LLM provider,\nthen scans the output before returning it to the caller.\n\nPipeline (steps executed in order):\n  0. Trial key guard - proxy mode blocked for trial keys.\n  1. Parse model string - must be in \"provider/model\" format (e.g. \"openai/gpt-4o\").\n  2. Load proxy provider config - keyed to the API key's key_id.\n  3. Read WrapSec request headers (X-WrapSec-Mode, X-WrapSec-Scan-All-Messages, X-WrapSec-Inline-Meta).\n  4. Extract scan target - last user message, or all user messages if scan_all=true.\n  5. Run input detection pipeline (GatewayService).\n  6. Handle input BLOCK - log and return 400.\n  7. Apply SANITIZE to messages - replaces user content with sanitized version.\n  8. Forward to provider - resolve provider instance and call chat_completions.\n  9. Run OutputGuard on provider response.\n 10. Handle output BLOCK - log and return 400.\n 11. Log successful interaction to proxy_interactions + audit_logs.\n 12. Record proxy metrics (non-blocking).\n 13. Return OpenAI-compatible response with WrapSec response headers.\n\nAll execution paths write to audit_logs. X-WrapSec-* headers are always included.\nAuth: a valid live API key only (trial keys and dashboard sessions are rejected).",
+        "operationId": "proxy_chat_completions_v1_chat_completions_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ProxyChatRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Proxy Chat Completions",
+        "tags": [
+          "Proxy"
+        ]
+      }
+    },
+    "/v1/keys": {
+      "get": {
+        "description": "Lists all active, non-expired keys for the authenticated principal's tenant.\nEach key is enriched with department name and application name where available.\nKeys past their grace-period expiry are excluded from the response.",
+        "operationId": "list_keys_v1_keys_get",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Successful Response"
+          }
+        },
+        "summary": "List Keys",
+        "tags": [
+          "API Keys"
+        ]
+      },
+      "post": {
+        "description": "Creates an API key. Scope resolution follows a three-tier chain:\n  app_id provided  -> derive dept + tenant from the app record\n  dept_id provided -> derive tenant from the dept record\n  neither          -> use the authenticated principal's tenant/dept\n\nThe raw key value is returned once and cannot be retrieved again.\nAuth: JWT + ADMIN role required.",
+        "operationId": "create_key_v1_keys_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CreateKeySchema"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Create Key",
+        "tags": [
+          "API Keys"
+        ]
+      }
+    },
+    "/v1/keys/{key_id}": {
+      "delete": {
+        "description": "Revokes an API key immediately. If the key is still in a rotation grace period,\nit is revoked early and a warning is included in the response.\nAuth: JWT + ADMIN role required.",
+        "operationId": "delete_key_v1_keys__key_id__delete",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "key_id",
+            "required": true,
+            "schema": {
+              "title": "Key Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Delete Key",
+        "tags": [
+          "API Keys"
+        ]
+      },
+      "get": {
+        "description": "Returns full metadata for a single key by key_id. 404 if not found.",
+        "operationId": "get_key_v1_keys__key_id__get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "key_id",
+            "required": true,
+            "schema": {
+              "title": "Key Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Get Key",
+        "tags": [
+          "API Keys"
+        ]
+      },
+      "put": {
+        "description": "Renames an API key. Does not rotate the key secret. Auth: JWT + ADMIN required.",
+        "operationId": "update_key_v1_keys__key_id__put",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "key_id",
+            "required": true,
+            "schema": {
+              "title": "Key Id",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/UpdateKeySchema"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Update Key",
+        "tags": [
+          "API Keys"
+        ]
+      }
+    },
+    "/v1/keys/{key_id}/addresses": {
+      "get": {
+        "description": "Where this credential has been used from, and where it has been refused.\n\nBuilding a source-network list from memory is how an operator locks out\nproduction. These are the two lists that make it an informed decision:\naddresses the credential actually authenticated from, and addresses it was\nturned away from -- the second being what an operator needs when production\nmoves to a new egress address and the key starts failing.\n\nAdministrator only, matching the write path. The networks a credential is\nconfined to, and the addresses it is used from, describe where an\norganisation operates; they are shown only to whoever can change them.\n\nAuth: JWT + ADMIN required. 404 if the key belongs to another tenant.",
+        "operationId": "get_key_addresses_v1_keys__key_id__addresses_get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "key_id",
+            "required": true,
+            "schema": {
+              "title": "Key Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "query",
+            "name": "days",
+            "required": false,
+            "schema": {
+              "default": 30,
+              "title": "Days",
+              "type": "integer"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Get Key Addresses",
+        "tags": [
+          "API Keys"
+        ]
+      }
+    },
+    "/v1/keys/{key_id}/rotate": {
+      "post": {
+        "description": "Rotate an API key - generates a new secret while preserving all metadata.\nOld key remains valid for grace_period_minutes to allow graceful migration.\nAfter grace period, old key is automatically revoked.\n\nReturns the new key secret - shown once, store securely.",
+        "operationId": "rotate_key_v1_keys__key_id__rotate_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "key_id",
+            "required": true,
+            "schema": {
+              "title": "Key Id",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/RotateKeySchema"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Rotate Key",
+        "tags": [
+          "API Keys"
+        ]
+      }
+    },
+    "/v1/proxy/interactions": {
+      "get": {
+        "operationId": "list_proxy_interactions_v1_proxy_interactions_get",
+        "parameters": [
+          {
+            "in": "query",
+            "name": "execution_status",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Execution Status"
+            }
+          },
+          {
+            "in": "query",
+            "name": "limit",
+            "required": false,
+            "schema": {
+              "default": 50,
+              "title": "Limit",
+              "type": "integer"
+            }
+          },
+          {
+            "in": "query",
+            "name": "offset",
+            "required": false,
+            "schema": {
+              "default": 0,
+              "title": "Offset",
+              "type": "integer"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "List Proxy Interactions",
+        "tags": [
+          "Proxy"
+        ]
+      }
+    },
+    "/v1/proxy/interactions/{trace_id}": {
+      "get": {
+        "operationId": "get_proxy_interaction_v1_proxy_interactions__trace_id__get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "trace_id",
+            "required": true,
+            "schema": {
+              "title": "Trace Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Get Proxy Interaction",
+        "tags": [
+          "Proxy"
+        ]
+      }
+    },
+    "/v1/settings/admin_limits": {
+      "get": {
+        "description": "Returns the active admin operation rate limits.\nSource is 'database' if explicitly set via PUT, 'environment' if using defaults.\nAuth: any valid principal.",
+        "operationId": "get_admin_limits_v1_settings_admin_limits_get",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Successful Response"
+          }
+        },
+        "summary": "Get Admin Limits",
+        "tags": [
+          "Settings"
+        ]
+      },
+      "put": {
+        "description": "Updates admin write and/or audit export rate limits. Merges with existing values.\nTakes effect immediately - Redis cache is invalidated on update.\nChanges are recorded in admin_events for audit trail.\n\nFloors: admin_write >= 5, audit_export >= 1.\nCeilings: admin_write <= 200, audit_export <= 60.\n\nAuth: JWT + ADMIN role required.",
+        "operationId": "update_admin_limits_v1_settings_admin_limits_put",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/AdminLimitsUpdateSchema"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Update Admin Limits",
+        "tags": [
+          "Settings"
+        ]
+      }
+    },
+    "/v1/settings/layers": {
+      "get": {
+        "description": "Returns the active detection layer configuration (rule, ML, LLM enabled flags).",
+        "operationId": "get_layers_v1_settings_layers_get",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Successful Response"
+          }
+        },
+        "summary": "Get Layers",
+        "tags": [
+          "Settings"
+        ]
+      },
+      "put": {
+        "description": "Enables or disables detection layers (rule, ML, LLM). Merges with existing values.\nNote: proxy mode requires llm_enabled=true - disabling LLM will block proxy requests.\nAuth: JWT + ADMIN role required.",
+        "operationId": "update_layers_v1_settings_layers_put",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/LayersUpdateSchema"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Update Layers",
+        "tags": [
+          "Settings"
+        ]
+      }
+    },
+    "/v1/settings/llm": {
+      "get": {
+        "description": "Returns the active LLM layer configuration. api_key is masked in the response - never plaintext.",
+        "operationId": "get_llm_settings_v1_settings_llm_get",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Successful Response"
+          }
+        },
+        "summary": "Get Llm Settings",
+        "tags": [
+          "Settings"
+        ]
+      },
+      "put": {
+        "description": "Updates LLM layer settings. Merges with existing values.\napi_key is encrypted before storage - never stored or returned in plaintext.\nSupported providers: ollama, openai, custom.\nAuth: JWT + ADMIN role required.",
+        "operationId": "update_llm_settings_v1_settings_llm_put",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/LLMSettingsSchema"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Update Llm Settings",
+        "tags": [
+          "Settings"
+        ]
+      }
+    },
+    "/v1/settings/proxy": {
+      "delete": {
+        "description": "Removes the proxy provider config for the current tenant.\nAfter deletion, proxy mode requests will fail with proxy_not_configured.\n404 if no config exists.",
+        "operationId": "delete_proxy_settings_v1_settings_proxy_delete",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Successful Response"
+          }
+        },
+        "summary": "Delete Proxy Settings",
+        "tags": [
+          "Proxy"
+        ]
+      },
+      "get": {
+        "description": "Returns the proxy provider config for the current tenant.\nThe provider API key is always masked in the response - never returned in plaintext.\n404 if no provider has been configured.",
+        "operationId": "get_proxy_settings_v1_settings_proxy_get",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Successful Response"
+          }
+        },
+        "summary": "Get Proxy Settings",
+        "tags": [
+          "Proxy"
+        ]
+      },
+      "put": {
+        "description": "Creates or replaces the proxy provider config for the current tenant (upsert).\nThe provider API key is encrypted before storage using the server's secret_key.\nProviders \"openai\" and \"custom\" require api_key; \"ollama\" does not.",
+        "operationId": "put_proxy_settings_v1_settings_proxy_put",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ProxySettingsPutSchema"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Put Proxy Settings",
+        "tags": [
+          "Proxy"
+        ]
+      }
+    },
+    "/v1/settings/proxy/health": {
+      "get": {
+        "description": "Tests live connectivity to the configured LLM provider.\nAlways returns HTTP 200 - reachable=true/false indicates the provider status.\nOllama: GET /api/tags. OpenAI-compatible: GET /models with Authorization header.\nTimeout for the connectivity check is fixed at 10 seconds.",
+        "operationId": "get_proxy_health_v1_settings_proxy_health_get",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Successful Response"
+          }
+        },
+        "summary": "Get Proxy Health",
+        "tags": [
+          "Proxy"
+        ]
+      }
+    },
+    "/v1/settings/rate_limit": {
+      "get": {
+        "description": "Returns the current global rate limit.\nSource is 'database' if explicitly set, 'environment' if using default.\nThis is the actual enforced value - not the global_policy default.",
+        "operationId": "get_rate_limit_settings_v1_settings_rate_limit_get",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Successful Response"
+          }
+        },
+        "summary": "Get Rate Limit Settings",
+        "tags": [
+          "Settings"
+        ]
+      },
+      "put": {
+        "description": "Update the global rate limit for live keys.\nTakes effect immediately - Redis cache is invalidated on update.\nDoes not require server restart.\nTrial key limit is configured via TRIAL_RATE_LIMIT_PER_MINUTE in .env.",
+        "operationId": "update_rate_limit_settings_v1_settings_rate_limit_put",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/RateLimitUpdateSchema"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Update Rate Limit Settings",
+        "tags": [
+          "Settings"
+        ]
+      }
+    },
+    "/v1/settings/retention": {
+      "get": {
+        "description": "Returns the audit log retention period in days.\nSource is 'database' if explicitly set via PUT, 'environment' if using the default.",
+        "operationId": "get_retention_settings_v1_settings_retention_get",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Successful Response"
+          }
+        },
+        "summary": "Get Retention Settings",
+        "tags": [
+          "Settings"
+        ]
+      },
+      "put": {
+        "description": "Updates the audit log retention period. Valid range: 7-3650 days (7 days to 10 years).\nAuth: JWT + ADMIN role required.",
+        "operationId": "update_retention_settings_v1_settings_retention_put",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/RetentionSettingsSchema"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Update Retention Settings",
+        "tags": [
+          "Settings"
+        ]
+      }
+    },
+    "/v1/settings/storage": {
+      "get": {
+        "description": "Returns the current data storage mode and proxy retention period.\nRead-only in V1 -- configured via environment variables.",
+        "operationId": "get_storage_settings_v1_settings_storage_get",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Successful Response"
+          }
+        },
+        "summary": "Get Storage Settings",
+        "tags": [
+          "Settings"
+        ]
+      }
+    },
+    "/v1/settings/thresholds": {
+      "get": {
+        "description": "Returns the active block and sanitize thresholds.\nSource is 'database' if thresholds have been explicitly set, 'environment' if using defaults.",
+        "operationId": "get_thresholds_v1_settings_thresholds_get",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Successful Response"
+          }
+        },
+        "summary": "Get Thresholds",
+        "tags": [
+          "Settings"
+        ]
+      },
+      "put": {
+        "description": "Updates block and/or sanitize thresholds. Merges with existing stored values.\nValidation enforces: block_threshold > sanitize_threshold, both in (0.0, 1.0].\nAuth: JWT + ADMIN role required.",
+        "operationId": "update_thresholds_v1_settings_thresholds_put",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ThresholdsUpdateSchema"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Update Thresholds",
+        "tags": [
+          "Settings"
+        ]
+      }
+    }
+  }
+}
