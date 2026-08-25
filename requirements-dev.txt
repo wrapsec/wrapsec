@@ -13,6 +13,18 @@ hypothesis==6.157.0
 # `make up-dev` workflow. Fixture skips (does not fail) if docker is missing.
 testcontainers[postgres]==4.13.1
 
+# The MCP protocol SDK. Optional at RUNTIME -- the gateway neither imports nor
+# requires it -- but the protocol tests drive the adapter over a real stdio
+# session, and without it the suite silently skips the only tests that cover the
+# protocol wiring, which is how that wiring went unverified. Same pin as
+# requirements-mcp.txt.
+#
+# The client SDK the adapter wraps is deliberately NOT listed here. This file is
+# installed from a stage that has copied requirements*.txt and nothing else, so a
+# path requirement pointing into the source tree fails the image build; the SDK
+# is installed editable after the source arrives, for every build stage.
+mcp>=2.0.0
+
 # ── Static analysis ───────────────────────────────────────────────────────────
 # Linting and formatting (make lint / make format).
 ruff==0.16.2

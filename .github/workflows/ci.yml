@@ -88,6 +88,12 @@ jobs:
           cache: pip
       - name: Install dependencies
         run: pip install -r requirements-dev.txt
+      - name: Install the Python SDK (editable)
+        # The MCP protocol tests import `wrapsec` through the adapter, so the
+        # client SDK has to be importable here. It is installed as a step rather
+        # than listed in requirements-dev.txt because that file is also installed
+        # by the image build before the source tree is copied.
+        run: pip install -e sdk/python/
       - name: Unit + integration with coverage
         # Uses the postgres/redis service containers directly (WRAPSEC_TEST_PG_URL
         # set), so the integration tier hits real PG without spawning a container.
