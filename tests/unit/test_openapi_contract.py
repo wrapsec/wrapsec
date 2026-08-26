@@ -213,21 +213,27 @@ def test_nothing_outside_the_public_surface_is_published():
     )
 
 
-def test_the_read_back_route_declares_a_422_it_cannot_reach():
-    """Why `GET /v1/ai/requests/{trace_id}` documents a status nothing produces.
+def test_the_read_back_route_declares_a_422_it_can_reach():
+    """`GET /v1/ai/requests/{trace_id}` documents a 422 that is now real.
 
-    Everywhere else in this work an unreachable status is left undeclared -- a
-    documented failure nothing emits is a promise nothing keeps. This route is the
-    exception, and the exception is FastAPI's doing: it publishes a 422 for any
-    route with a parameter, and there is no way to remove that entry, only to
-    override it. Left alone it names `HTTPValidationError`; overridden it names
-    the envelope a caller would actually get. Neither is reachable, so the choice
-    is between two unreachable entries, and the correct shape wins.
+    THIS TEST USED TO ASSERT THE OPPOSITE, and the change is the point. FastAPI
+    publishes a 422 for any route with a parameter and offers no way to remove
+    that entry, only to override it. While the path parameter was an
+    unconstrained string nothing could fail validation, so the entry described a
+    status the route could not produce -- recorded then as the one place in this
+    work where an unreachable status is declared, because the choice was between
+    two unreachable entries and the correct shape won.
 
-    The premise is asserted, not asserted-about: the route's flattened parameters
-    (which is what FastAPI itself reads) are exactly one unconstrained path string.
-    Adding a bounded query parameter here makes the 422 reachable and fails this
-    test, which is the point -- the declaration would then need a real description.
+    It is reachable now. The parameter carries a constraint forbidding a NUL,
+    which is the byte no stored identifier can contain, so a path segment
+    containing one is refused by the validation handler before the lookup runs.
+    That closed a defect where the value reached asyncpg and the caller got a
+    500.
+
+    What is asserted is the PREMISE behind the declaration, read the way FastAPI
+    reads it: one path parameter, constrained, and no body. If the constraint is
+    removed the 422 stops being reachable and its description becomes a promise
+    nothing keeps -- which is what this test then fails for.
     """
     from fastapi.dependencies.utils import get_flat_params
     from fastapi.routing import APIRoute
@@ -241,12 +247,19 @@ def test_the_read_back_route_declares_a_422_it_cannot_reach():
     params = get_flat_params(route.dependant)
 
     assert [p.name for p in params] == ["trace_id"], (
-        f"the route now validates {[p.name for p in params]}; if any of those can "
-        "fail, its 422 is reachable and must be described as such"
+        f"the route now validates {[p.name for p in params]}; every one of those "
+        "must be covered by the 422 description"
     )
-    assert params[0].field_info.annotation is str
-    assert params[0].field_info.metadata == [], (
-        "the path parameter gained a constraint, so validation can now fail here"
+    # The constraint rides on the ANNOTATION (`Annotated[str, StringConstraints]`),
+    # which is where FastAPI reads it from; `field_info.metadata` stays empty for
+    # a path parameter declared this way.
+    constraints = getattr(params[0].field_info.annotation, "__metadata__", ())
+    assert constraints, (
+        "the path parameter lost its constraint, so a NUL reaches the database "
+        "again and the declared 422 is unreachable"
+    )
+    assert any(getattr(c, "pattern", None) for c in constraints), (
+        f"expected a pattern constraint on trace_id, found {constraints}"
     )
     assert route.body_field is None, "the route gained a body, which can fail validation"
 

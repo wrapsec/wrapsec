@@ -18,6 +18,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from api.v1.dependencies.auth import get_current_principal
 from api.v1.dependencies.db import get_db
+from api.v1.schemas.request import PathIdentifier
 from api.v1.schemas.response import (
     ErrorEnvelope,
     ProxyInteractionDetail,
@@ -50,6 +51,9 @@ _INTERACTION_ERRORS: dict[int | str, dict[str, Any]] = {
 # invite a caller to read it as proof of non-existence.
 _INTERACTION_DETAIL_ERRORS: dict[int | str, dict[str, Any]] = {
     **_INTERACTION_ERRORS,
+    # Overridden, not inherited: the list route has no path parameter, so only
+    # this one can refuse a malformed identifier.
+    422: {"model": ErrorEnvelope, "description": "A query parameter could not be parsed. A path identifier containing a NUL is rejected here; it cannot name a stored resource, so it never reaches the lookup."},
     404: {"model": ErrorEnvelope, "description": "No interaction with this trace_id, or it is out of the caller's scope. The two are deliberately indistinguishable."},
 }
 
@@ -137,7 +141,7 @@ async def list_proxy_interactions(
     responses                    = _INTERACTION_DETAIL_ERRORS,
 )
 async def get_proxy_interaction(
-    trace_id:   str,
+    trace_id:   PathIdentifier,
     request:    Request,
     db:         AsyncSession = Depends(get_db),
     _principal: Principal    = Depends(get_current_principal),

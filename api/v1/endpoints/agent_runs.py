@@ -26,6 +26,7 @@ from api.v1.dependencies.auth import get_current_principal
 from api.v1.dependencies.db import get_db
 from api.v1.dependencies.scope import get_audit_scope
 from api.v1.endpoints.audit import _enrich, _format_item
+from api.v1.schemas.request import PathIdentifier
 from api.v1.schemas.response import AgentRunResponse, ErrorEnvelope
 from db.repositories.audit import AuditRepository
 from domain.entities.principal import Principal
@@ -39,7 +40,7 @@ router = APIRouter()
 # shape the application never emits.
 _RUN_ERRORS: dict[int | str, dict[str, Any]] = {
     401: {"model": ErrorEnvelope, "description": "Missing or invalid credentials."},
-    422: {"model": ErrorEnvelope, "description": "`limit` is outside 1-1000."},
+    422: {"model": ErrorEnvelope, "description": "`limit` is outside 1-1000. A path identifier containing a NUL is rejected here; it cannot name a stored resource, so it never reaches the lookup."},
 }
 
 
@@ -54,7 +55,7 @@ _RUN_ERRORS: dict[int | str, dict[str, Any]] = {
     responses                    = _RUN_ERRORS,
 )
 async def get_agent_run(
-    run_id:     str,
+    run_id:     PathIdentifier,
     request:    Request,
     limit:      int          = Query(500, ge=1, le=1000),
     db:         AsyncSession  = Depends(get_db),

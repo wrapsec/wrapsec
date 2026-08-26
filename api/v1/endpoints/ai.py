@@ -14,7 +14,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from api.v1.dependencies.auth import get_current_principal
 from api.v1.dependencies.db import get_db
 from api.v1.dependencies.scope import get_scoped_audit_record
-from api.v1.schemas.request import AIRequestSchema, ScanBatchSchema
+from api.v1.schemas.request import AIRequestSchema, PathIdentifier, ScanBatchSchema
 from api.v1.schemas.response import (
     ErrorEnvelope,
     RequestRecordResponse,
@@ -90,7 +90,7 @@ _BATCH_ERRORS: dict[int | str, dict[str, Any]] = {
 _RECORD_ERRORS: dict[int | str, dict[str, Any]] = {
     **_UNAUTHORIZED,
     404: {"model": ErrorEnvelope, "description": "No such trace_id, or it belongs to another scope."},
-    422: {"model": ErrorEnvelope, "description": "Request validation failed. Published for every parameterized route; this one validates nothing, so it is not reachable here."},
+    422: {"model": ErrorEnvelope, "description": "A path identifier containing a NUL is rejected here; it cannot name a stored resource, so it never reaches the lookup."},
     # The global limiter covers the whole `/v1/ai` prefix, so this read-back
     # shares the scan routes' bucket even though it scans nothing.
     429: {"model": ErrorEnvelope, "description": "Rate limit exceeded: this route shares the global `/v1/ai` bucket."},
@@ -982,7 +982,7 @@ async def ai_scan_batch(
     responses                    = _RECORD_ERRORS,
 )
 async def get_request(
-    trace_id:   str,
+    trace_id:   PathIdentifier,
     request:    Request,
     db:         AsyncSession = Depends(get_db),
     _principal: Principal    = Depends(get_current_principal),

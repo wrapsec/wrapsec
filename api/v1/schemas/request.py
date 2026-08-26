@@ -3,8 +3,9 @@
 # WrapSec v1.0 | AI Security Gateway - https://wrapsec.com
 
 import math
+from typing import Annotated
 
-from pydantic import BaseModel, Field, model_validator
+from pydantic import BaseModel, Field, StringConstraints, model_validator
 
 from config.settings import get_settings
 from domain.enums import DetectionMode, ExecutionMode, InputSource
@@ -178,3 +179,28 @@ class ScanBatchSchema(BaseModel):
         return self
 
     model_config = {"use_enum_values": True, "populate_by_name": True}
+
+
+# A resource identifier taken from the URL path.
+#
+# THE ONLY THING THIS FORBIDS IS A NUL. Not a format check: `trace_id` is
+# `req_` + 32 hex today and `run_id` is caller-supplied correlation metadata, so
+# constraining their shape here would reject identifiers the API currently
+# accepts. What it rejects is a byte that cannot appear in ANY identifier this
+# API stores, because PostgreSQL text cannot hold one -- so a path segment
+# containing it names nothing that could ever exist.
+#
+# WHY IT IS A CONSTRAINT RATHER THAN A CHECK IN THE HANDLER. Left to the
+# handler, the value reaches asyncpg, which raises
+# `CharacterNotInRepertoireError` mid-query; the route has no handler for it, so
+# the caller gets a 500 and the request's transaction is left aborted. Rejecting
+# at the schema means the value never reaches the driver at all, and the refusal
+# comes from the validation handler that already answers every other malformed
+# request -- canonical envelope, `invalid_params` naming the path parameter, no
+# new code path.
+#
+# A malformed identifier is NOT the same as an absent one, and this deliberately
+# does not merge them: an identifier that is merely unknown still gets whatever
+# that route already returns (404 on the two lookups, an empty timeline on the
+# run route). Only an identifier that could not exist is refused as input.
+PathIdentifier = Annotated[str, StringConstraints(pattern=r"^[^\x00]*$")]

@@ -4024,6 +4024,7 @@
             "name": "run_id",
             "required": true,
             "schema": {
+              "pattern": "^[^\\x00]*$",
               "title": "Run Id",
               "type": "string"
             }
@@ -4070,7 +4071,7 @@
                 }
               }
             },
-            "description": "`limit` is outside 1-1000."
+            "description": "`limit` is outside 1-1000. A path identifier containing a NUL is rejected here; it cannot name a stored resource, so it never reaches the lookup."
           }
         },
         "summary": "Get Agent Run",
@@ -4191,6 +4192,7 @@
             "name": "trace_id",
             "required": true,
             "schema": {
+              "pattern": "^[^\\x00]*$",
               "title": "Trace Id",
               "type": "string"
             }
@@ -4235,7 +4237,7 @@
                 }
               }
             },
-            "description": "Request validation failed. Published for every parameterized route; this one validates nothing, so it is not reachable here."
+            "description": "A path identifier containing a NUL is rejected here; it cannot name a stored resource, so it never reaches the lookup."
           },
           "429": {
             "content": {
@@ -5401,6 +5403,7 @@
             "name": "trace_id",
             "required": true,
             "schema": {
+              "pattern": "^[^\\x00]*$",
               "title": "Trace Id",
               "type": "string"
             }
@@ -5445,7 +5448,7 @@
                 }
               }
             },
-            "description": "A query parameter could not be parsed."
+            "description": "A query parameter could not be parsed. A path identifier containing a NUL is rejected here; it cannot name a stored resource, so it never reaches the lookup."
           }
         },
         "summary": "Get Proxy Interaction",
