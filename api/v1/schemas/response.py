@@ -42,6 +42,116 @@ from typing import Any
 
 from pydantic import BaseModel, Field
 
+# -- published allowed values -------------------------------------------------
+#
+# METADATA ONLY. These reach the OpenAPI schema and change nothing at runtime:
+# the fields stay `str`, and nothing validates against them. A value outside a
+# list is still served.
+#
+# WHY NOT AN ENUM TYPE. Several of these fields are read back from `VARCHAR`
+# columns written by earlier builds, and response validation is fail-closed, so
+# an enum would turn a historical row into a 500 rather than a read. Publishing
+# the vocabulary documents it for a code generator without taking that risk.
+# The distinction is recorded as F-030; typing them remains blocked on evidence
+# this repository cannot supply.
+#
+# This module imports nothing, by design, so each list below MIRRORS a source of
+# truth in another layer rather than deriving from it. That mirroring is not
+# left to trust: `tests/unit/test_openapi_contract.py` asserts every list equals
+# its source, and fails if either side moves.
+
+DECISIONS         = ["BLOCK", "SANITIZE", "ALLOW"]              # domain.enums.DecisionType
+SEVERITIES        = ["CRITICAL", "HIGH", "MEDIUM", "LOW"]       # domain.enums.RiskLevel
+DETECTION_MODES   = ["fast", "full"]                            # domain.enums.DetectionMode
+EXECUTION_MODES   = ["scan_only", "proxy"]                      # domain.enums.ExecutionMode
+INPUT_SOURCES     = ["user_prompt", "tool_output",              # domain.enums.InputSource
+                     "retrieved_document", "external_content"]
+CONFIDENCE_BANDS  = ["HIGH", "MEDIUM", "LOW"]                   # engine.scoring.confidence
+PRIMARY_REASONS   = ["SYSTEM_ERROR", "PII_GUARDRAIL_BLOCK",     # engine.scoring.primary_reason
+                     "PII_GUARDRAIL_SANITIZE", "TOXICITY_GUARDRAIL_BLOCK",
+                     "RULE_DETECTOR", "ML_DETECTOR", "LLM_DETECTOR",
+                     "NO_THREAT_DETECTED"]
+EXECUTION_STATUSES = ["SUCCESS", "BLOCKED", "OUTPUT_BLOCKED",   # api.v1.endpoints.proxy STATUS_*
+                      "FAILED", "TIMEOUT"]
+PROXY_PROVIDERS   = ["custom", "ollama", "openai"]              # engine.proxy.router SUPPORTED_PROVIDERS
+KEY_TYPES         = ["live", "trial"]                           # api.v1.endpoints.keys KeyType
+CONFIG_SOURCES    = ["database", "environment"]                 # health.py, one ternary for all four
+EDITIONS          = ["oss", "enterprise"]                       # capabilities.py
+
+# The probes report on two different scales, and they are not merged. Infra is
+# reachable or it is not; a detector tier additionally distinguishes "loaded" from
+# "running without its model". Publishing one union would tell a reader that a
+# database can be `healthy`, which it cannot be.
+HEALTH_STATUS           = ["ok"]                                # health.py, the liveness+build probe
+LIVENESS_STATUS         = ["alive"]                             # health.py, the process probe
+READINESS_STATUS        = ["ready", "degraded"]                 # health.py, aggregate over checks
+INFRA_CHECK_STATUSES    = ["ok", "unavailable"]                 # health.py, database and redis
+DETECTOR_CHECK_STATUSES = ["healthy", "degraded", "unavailable"]  # health.py, the detector tiers
+POLICY_SOURCES    = ["system_default", "department_override",   # services.policy_resolver
+                     "application_override", "cache"]           #   + the cache path in ai.py
+THREAT_CATEGORIES = ["PROMPT_INJECTION", "JAILBREAK",           # domain.enums.ThreatCategory
+                     "MALICIOUS_INTENT", "DATA_EXFILTRATION",
+                     "PII", "TOXICITY", "BENIGN"]
+
+# The chat success body is NARROWER than the vocabularies above, and the lists
+# below say so rather than over-publishing. `ChatCompletionMeta` describes the
+# meta on a 200, and three states cannot reach it -- the route returns first:
+#
+#     proxy.py:1125   if input_decision  == "BLOCK":  ...  return
+#     proxy.py:1427   if output_decision == "BLOCK":  ...  return
+#     proxy.py:1475   execution_status = STATUS_SUCCESS   (unconditional)
+#
+# Publishing BLOCK or TIMEOUT here would advertise a state a 200 body cannot
+# carry, and send an integrator to write a branch that never runs. Each list is
+# asserted to be a SUBSET of its parent, and the three lines above are pinned,
+# so removing an early return fails a test instead of silently making this wrong.
+#
+# `input_primary_reason` is deliberately NOT narrowed the same way. Which reasons
+# accompany a non-BLOCK decision is a property of the scorer, not a structural
+# guarantee of this route, so it publishes the full vocabulary.
+CHAT_META_DECISIONS = ["SANITIZE", "ALLOW"]                     # DECISIONS minus BLOCK
+CHAT_META_STATUSES  = ["SUCCESS"]                               # EXECUTION_STATUSES on a 200
+CHAT_OBJECT         = ["chat.completion"]                       # proxy.py, the success body
+CHAT_RESPONSE_ROLES = ["assistant"]                             # proxy.py, the success body
+
+
+def _allowed(values: list[str]):
+    """Attach `enum` to the STRING schema, wrapped in `anyOf` or not.
+
+    A plain `json_schema_extra={"enum": [...]}` lands the keyword beside `anyOf`
+    on a nullable field, and JSON Schema ANDs siblings -- so `null` satisfies the
+    `anyOf` and then fails the `enum`, and the published contract says a nullable
+    field cannot be null. The runtime happily returns null, so the schema would be
+    describing something the API does not do.
+
+    Passing a callable instead lets the enum be placed on the branch it belongs
+    to. Purely a schema concern: nothing here validates, and the field stays a
+    permissive `str`.
+    """
+    def _apply(schema: dict) -> None:
+        for branch in schema.get("anyOf") or []:
+            if branch.get("type") == "string":
+                branch["enum"] = values
+                return
+        schema["enum"] = values
+
+    return _apply
+
+# The detector's own `provider` and the chat `finish_reason` are deliberately
+# absent. The first is published straight from an unvalidated environment
+# variable; the second is whatever the upstream provider returned. Neither has a
+# vocabulary this API controls, so neither gets one here.
+#
+# `AuditItem.source` is absent for the same reason: it echoes
+# `metadata.source` from the caller's own request body, so its values are
+# whatever integrators send.
+#
+# `AuditItem.threats` holds ThreatCategory values but is a `list[str]`, and the
+# enum belongs on the ITEMS rather than the array. `json_schema_extra` on the
+# field would attach it to the array itself and publish something false. Left
+# for a pass that handles arrays deliberately.
+
+
 # ── the canonical error envelope ─────────────────────────────────────────────
 # One shape for every WrapSec error, built by `errors/response.py`. Declared here
 # so routes can reference it in `responses={...}`; it is not per-endpoint, and a
@@ -79,7 +189,7 @@ class AssessmentLayer(BaseModel):
     """
 
     name:     str = Field(description="Detector name, for example `rule_score` or `ml_score`.")
-    decision: str = Field(description="This layer's classification: ALLOW, SANITIZE or BLOCK.")
+    decision: str = Field(description="This layer's classification: ALLOW, SANITIZE or BLOCK.", json_schema_extra=_allowed(DECISIONS))
     score:    float | None = Field(
         default     = None,
         description = "0.0-1.0 contribution. Absent when the caller may not read layer scores.",
@@ -90,12 +200,12 @@ class Assessment(BaseModel):
     """The self-contained verdict. Agents and the protocol adapter consume this
     object; the flat top-level fields duplicate part of it for compatibility."""
 
-    decision:        str = Field(description="ALLOW, SANITIZE or BLOCK.")
+    decision:        str = Field(description="ALLOW, SANITIZE or BLOCK.", json_schema_extra=_allowed(DECISIONS))
     risk_score:      float = Field(description="Aggregate risk, 0.0-1.0.")
     risk_level:      str = Field(description="Banded risk: NONE, LOW, MEDIUM, HIGH or CRITICAL.")
-    primary_reason:  str | None = Field(description="Dominant reason for the decision, null if none applied.")
+    primary_reason:  str | None = Field(description="Dominant reason for the decision, null if none applied.", json_schema_extra=_allowed(PRIMARY_REASONS))
     confidence:      float | None = Field(description="Confidence in the decision, 0.0-1.0.")
-    confidence_band: str | None = Field(description="LOW, MEDIUM or HIGH.")
+    confidence_band: str | None = Field(description="LOW, MEDIUM or HIGH.", json_schema_extra=_allowed(CONFIDENCE_BANDS))
     threats:         list[str] = Field(description="Threat categories detected.")
     layers:          list[AssessmentLayer] = Field(description="Per-detector contributions.")
     posture:         dict[str, Any] | None = Field(
@@ -110,8 +220,8 @@ class Assessment(BaseModel):
 class ScanProcessing(BaseModel):
     latency_ms:     float = Field(description="Detection time in milliseconds.")
     llm_invoked:    bool = Field(description="Whether the LLM detector ran.")
-    detection_mode: str = Field(description="fast, balanced or thorough.")
-    execution_mode: str = Field(description="scan_only or proxy.")
+    detection_mode: str = Field(description="`fast` runs the cheap layers; `full` adds the LLM detector.", json_schema_extra=_allowed(DETECTION_MODES))
+    execution_mode: str = Field(description="scan_only or proxy.", json_schema_extra=_allowed(EXECUTION_MODES))
 
 
 class ScanDebug(BaseModel):
@@ -127,12 +237,12 @@ class ScanDebug(BaseModel):
 
 class ScanResponse(BaseModel):
     trace_id:             str = Field(description="Identifier for this scan; reads back via GET /v1/ai/requests/{trace_id}.")
-    decision:             str = Field(description="ALLOW, SANITIZE or BLOCK.")
+    decision:             str = Field(description="ALLOW, SANITIZE or BLOCK.", json_schema_extra=_allowed(DECISIONS))
     decision_version:     str = Field(description="Version of the decision contract.")
     risk_score:           float = Field(description="Aggregate risk, 0.0-1.0.")
-    primary_reason:       str | None = Field(description="Dominant reason, null if none applied.")
+    primary_reason:       str | None = Field(description="Dominant reason, null if none applied.", json_schema_extra=_allowed(PRIMARY_REASONS))
     confidence:           float | None = Field(description="Confidence in the decision, 0.0-1.0.")
-    confidence_band:      str | None = Field(description="LOW, MEDIUM or HIGH.")
+    confidence_band:      str | None = Field(description="LOW, MEDIUM or HIGH.", json_schema_extra=_allowed(CONFIDENCE_BANDS))
     threats:              list[str] = Field(description="Threat categories detected.")
     sanitization_applied: bool = Field(description="True only when the input text was actually rewritten.")
     processing:           ScanProcessing
@@ -205,7 +315,7 @@ class BatchSummary(BaseModel):
 class BatchItemResult(BaseModel):
     id:         str | None = Field(description="The caller's own reference for this item, echoed back. Null if none was sent.")
     trace_id:   str = Field(description="Identifier for this item's scan; each item is audited independently.")
-    decision:   str = Field(description="ALLOW, SANITIZE or BLOCK.")
+    decision:   str = Field(description="ALLOW, SANITIZE or BLOCK.", json_schema_extra=_allowed(DECISIONS))
     assessment: Assessment
 
 
@@ -221,22 +331,22 @@ class ScanBatchResponse(BaseModel):
 class HealthResponse(BaseModel):
     """Unauthenticated liveness plus build identity."""
 
-    status:  str = Field(description="Always `ok` -- reaching this endpoint at all is the signal.")
+    status:  str = Field(description="Always `ok` -- reaching this endpoint at all is the signal.", json_schema_extra=_allowed(HEALTH_STATUS))
     version: str = Field(description="Running build. Deliberately unauthenticated: it is how a deployment is verified.")
 
 
 class LivenessResponse(BaseModel):
-    status: str = Field(description="Always `alive`. The process answered; nothing else is checked.")
+    status: str = Field(description="Always `alive`. The process answered; nothing else is checked.", json_schema_extra=_allowed(LIVENESS_STATUS))
 
 
 class HealthChecks(BaseModel):
     """Per-component status. `ok` / `unavailable` for infrastructure,
     `healthy` / `degraded` / `unavailable` for the detector tiers."""
 
-    database:             str
-    redis:                str
-    tfidf_detector:       str = Field(description="Tier 1, REQUIRED. Degraded here means the instance refuses traffic fail-closed.")
-    transformer_detector: str = Field(description="Tier 2, OPTIONAL. Degraded on a default build and does not affect the status code.")
+    database:             str = Field(json_schema_extra=_allowed(INFRA_CHECK_STATUSES))
+    redis:                str = Field(json_schema_extra=_allowed(INFRA_CHECK_STATUSES))
+    tfidf_detector:       str = Field(description="Tier 1, REQUIRED. Degraded here means the instance refuses traffic fail-closed.", json_schema_extra=_allowed(DETECTOR_CHECK_STATUSES))
+    transformer_detector: str = Field(description="Tier 2, OPTIONAL. Degraded on a default build and does not affect the status code.", json_schema_extra=_allowed(DETECTOR_CHECK_STATUSES))
 
 
 class ReadinessResponse(BaseModel):
@@ -248,7 +358,7 @@ class ReadinessResponse(BaseModel):
     (Tier 2 absent); 503 means a required component is down.
     """
 
-    status: str = Field(description="`ready` when every check passed, `degraded` when any did not.")
+    status: str = Field(description="`ready` when every check passed, `degraded` when any did not.", json_schema_extra=_allowed(READINESS_STATUS))
     checks: HealthChecks
 
 
@@ -260,20 +370,20 @@ class ConfigThresholds(BaseModel):
     point of the restriction is that a caller cannot calibrate against it.
     """
 
-    source:   str = Field(description="`database` when stored for this tenant, `environment` otherwise.")
+    source:   str = Field(description="`database` when stored for this tenant, `environment` otherwise.", json_schema_extra=_allowed(CONFIG_SOURCES))
     block:    float | None = Field(default=None, description="Absent without `settings:read`.")
     sanitize: float | None = Field(default=None, description="Absent without `settings:read`.")
 
 
 class ConfigDetectionLayers(BaseModel):
-    source: str
+    source: str = Field(json_schema_extra=_allowed(CONFIG_SOURCES))
     rule:   bool | None = Field(default=None, description="Absent without `settings:read`.")
     ml:     bool | None = Field(default=None, description="Absent without `settings:read`.")
     llm:    bool | None = Field(default=None, description="Absent without `settings:read`.")
 
 
 class ConfigLLM(BaseModel):
-    source:      str
+    source:      str = Field(json_schema_extra=_allowed(CONFIG_SOURCES))
     provider:    str | None = Field(default=None, description="Absent without `settings:read`.")
     model:       str | None = Field(default=None, description="Absent without `settings:read`.")
     llm_trigger: float | None = Field(default=None, description="Absent without `settings:read`.")
@@ -281,7 +391,7 @@ class ConfigLLM(BaseModel):
 
 
 class ConfigRateLimit(BaseModel):
-    source:     str
+    source:     str = Field(json_schema_extra=_allowed(CONFIG_SOURCES))
     per_minute: int | None = Field(default=None, description="Absent without `settings:read`.")
 
 
@@ -309,7 +419,7 @@ class CapabilitiesResponse(BaseModel):
     authorization control. The OSS build returns an empty list and `oss`.
     """
 
-    edition:      str = Field(description="`oss` with no capabilities registered, `enterprise` otherwise. Display metadata, not a claim.")
+    edition:      str = Field(description="`oss` with no capabilities registered, `enterprise` otherwise. Display metadata, not a claim.", json_schema_extra=_allowed(EDITIONS))
     capabilities: list[str] = Field(description="Effective capability names; empty on the OSS build.")
 
 
@@ -335,17 +445,17 @@ class ProxyInteraction(BaseModel):
     created_at:           str | None = Field(description="ISO-8601 UTC with a Z suffix.")
     key_id:               str | None = Field(description="Owning API key, with the internal `key:` prefix stripped. Null for a system record.")
     user_id:              str | None
-    input_decision:       str = Field(description="Verdict on the prompt: ALLOW, SANITIZE or BLOCK.")
-    input_primary_reason: str
+    input_decision:       str = Field(description="Verdict on the prompt: ALLOW, SANITIZE or BLOCK.", json_schema_extra=_allowed(DECISIONS))
+    input_primary_reason: str = Field(json_schema_extra=_allowed(PRIMARY_REASONS))
     input_confidence:     float
     input_threats:        list[str]
-    input_attack_type:    str | None
-    provider:             str | None = Field(description="Null when the request never reached a provider.")
+    input_attack_type:    str | None = Field(json_schema_extra=_allowed(THREAT_CATEGORIES))
+    provider:             str | None = Field(description="Null when the request never reached a provider.", json_schema_extra=_allowed(PROXY_PROVIDERS))
     model:                str | None
     provider_latency_ms:  int | None = Field(description="Provider time only. Null when no call was made.")
-    execution_status:     str = Field(description="How the proxied call ended, for example `completed`.")
-    output_decision:      str | None = Field(description="Verdict on the reply. Null when there was no reply to guard.")
-    output_primary_reason: str | None
+    execution_status:     str = Field(description="How the proxied call ended.", json_schema_extra=_allowed(EXECUTION_STATUSES))
+    output_decision:      str | None = Field(description="Verdict on the reply. Null when there was no reply to guard.", json_schema_extra=_allowed(DECISIONS))
+    output_primary_reason: str | None = Field(json_schema_extra=_allowed(PRIMARY_REASONS))
     output_confidence:    float | None
     output_threats:       list[str]
     behavior_flag:        str | None
@@ -410,7 +520,7 @@ class ApiKeyCreated(BaseModel):
     key_id:     str = Field(description="Stable identifier for this key. Safe to log and to display.")
     name:       str
     api_key:    str = Field(description="The raw key. Returned ONLY here, only at creation, and never again.")
-    key_type:   str = Field(description="`live` or `trial`.")
+    key_type:   str = Field(description="`live` or `trial`.", json_schema_extra=_allowed(KEY_TYPES))
     app_id:     str | None = Field(description="Set when the key is application-scoped.")
     dept_id:    str | None = Field(description="Owning department. Creation requires one, directly or derived from the application.")
     tenant_id:  str | None
@@ -431,7 +541,7 @@ class ApiKeyListItem(BaseModel):
     dept_id:      str | None
     dept_name:    str | None = Field(description="Resolved name; null when the department no longer exists.")
     app_name:     str | None = Field(description="Resolved name; null when the application no longer exists.")
-    key_type:     str = Field(description="`live` or `trial`; defaults to `live` for a row that predates the column.")
+    key_type:     str = Field(description="`live` or `trial`; defaults to `live` for a row that predates the column.", json_schema_extra=_allowed(KEY_TYPES))
     created_at:   str
     expires_at:   str | None
     last_used_at: str | None = Field(description="Null until the key is first used.")
@@ -572,7 +682,7 @@ class ProxyProviderConfigResponse(BaseModel):
 
 
 class ChatMessage(BaseModel):
-    role:    str = Field(description="Always `assistant` on a response.")
+    role:    str = Field(description="Always `assistant` on a response.", json_schema_extra=_allowed(CHAT_RESPONSE_ROLES))
     content: str = Field(description="The reply, after the output guard has run. Sanitized in place when it was rewritten.")
 
 
@@ -587,14 +697,14 @@ class ChatCompletionMeta(BaseModel):
     true`; the same values are always available on the response headers."""
 
     trace_id:             str
-    decision:             str = Field(description="Verdict on the input: ALLOW, SANITIZE or BLOCK.")
-    input_primary_reason: str
+    decision:             str = Field(description="Verdict on the input. A blocked input never reaches this body.", json_schema_extra=_allowed(CHAT_META_DECISIONS))
+    input_primary_reason: str = Field(json_schema_extra=_allowed(PRIMARY_REASONS))
     input_confidence:     float
     input_sanitized:      bool
-    output_decision:      str | None
+    output_decision:      str | None = Field(json_schema_extra=_allowed(CHAT_META_DECISIONS))
     output_sanitized:     bool
-    execution_status:     str
-    provider:             str | None
+    execution_status:     str = Field(json_schema_extra=_allowed(CHAT_META_STATUSES))
+    provider:             str | None = Field(json_schema_extra=_allowed(PROXY_PROVIDERS))
     model:                str | None
     total_latency_ms:     int = Field(description="End to end, including detection on both sides.")
 
@@ -607,7 +717,7 @@ class ChatCompletionResponse(BaseModel):
     """
 
     id:      str = Field(description="`wrapsec-{trace_id}`, not the provider's completion id.")
-    object:  str = Field(description="Always `chat.completion`.")
+    object:  str = Field(description="Always `chat.completion`.", json_schema_extra=_allowed(CHAT_OBJECT))
     model:   str = Field(description="The model the provider reported using.")
     choices: list[ChatChoice]
 
@@ -672,18 +782,18 @@ class AuditItem(BaseModel):
     trace_id:        str = Field(description="Identifier of this scan.")
     timestamp:       str = Field(description="ISO-8601 UTC with a Z suffix.")
     tenant_id:       str | None
-    decision:        str = Field(description="ALLOW, SANITIZE or BLOCK for the input scan.")
-    output_decision: str | None = Field(description="Verdict on the model's reply. Null unless this turn went through the proxy.")
-    provider:        str | None = Field(description="Null unless this turn went through the proxy.")
+    decision:        str = Field(description="ALLOW, SANITIZE or BLOCK for the input scan.", json_schema_extra=_allowed(DECISIONS))
+    output_decision: str | None = Field(description="Verdict on the model's reply. Null unless this turn went through the proxy.", json_schema_extra=_allowed(DECISIONS))
+    provider:        str | None = Field(description="Null unless this turn went through the proxy.", json_schema_extra=_allowed(PROXY_PROVIDERS))
     model:           str | None = Field(description="Null unless this turn went through the proxy.")
-    primary_reason:  str | None
+    primary_reason:  str | None = Field(json_schema_extra=_allowed(PRIMARY_REASONS))
     risk_score:      float
     confidence:      float | None
-    confidence_band: str | None
+    confidence_band: str | None = Field(json_schema_extra=_allowed(CONFIDENCE_BANDS))
     threats:         list[str]
     input_hash:      str = Field(description="Hash of the scanned input; the input itself is not stored here.")
-    detection_mode:  str
-    execution_mode:  str
+    detection_mode:  str = Field(json_schema_extra=_allowed(DETECTION_MODES))
+    execution_mode:  str = Field(json_schema_extra=_allowed(EXECUTION_MODES))
     latency_ms:      float
     key_id:          str | None
     dept_id:         str | None
@@ -694,13 +804,13 @@ class AuditItem(BaseModel):
     source:          str | None
     ip_address:      str | None
     attribution_verified: bool
-    policy_source:   str | None = Field(description="Which policy layer resolved the decision, or `cache` for a cache hit.")
+    policy_source:   str | None = Field(description="Which policy layer resolved the decision, or `cache` for a cache hit.", json_schema_extra=_allowed(POLICY_SOURCES))
     input_length:    int
-    severity:        str = Field(description="INFO, WARNING, ERROR or CRITICAL.")
+    severity:        str = Field(description="Risk level of the recorded decision.", json_schema_extra=_allowed(SEVERITIES))
     session_id:      str | None = Field(description="Caller-supplied correlation; never an authorization input.")
     turn_index:      int | None = Field(description="Zero-based position within the session, as the caller supplied it.")
     run_id:          str | None
-    input_source:    str = Field(description="Declared provenance, for example `user_prompt` or `retrieved_document`.")
+    input_source:    str = Field(description="Declared provenance, for example `user_prompt` or `retrieved_document`.", json_schema_extra=_allowed(INPUT_SOURCES))
     record_hash:     str | None = Field(description="Hash-chain value for this row.")
     prev_hash:       str | None = Field(description="Preceding row's hash. Null for the first row in a tenant's chain.")
 
@@ -738,7 +848,7 @@ class AuditLogsResponse(BaseModel):
 
 
 class TopThreat(BaseModel):
-    category: str = Field(description="Threat category, for example PROMPT_INJECTION.")
+    category: str = Field(description="Threat category, for example PROMPT_INJECTION.", json_schema_extra=_allowed(THREAT_CATEGORIES))
     count:    int = Field(description="Occurrences within the filtered range.")
 
 
@@ -800,8 +910,8 @@ class RecordAttribution(BaseModel):
 class RecordProcessing(BaseModel):
     latency_ms:     float | None
     llm_invoked:    bool | None
-    detection_mode: str | None
-    execution_mode: str | None
+    detection_mode: str | None = Field(json_schema_extra=_allowed(DETECTION_MODES))
+    execution_mode: str | None = Field(json_schema_extra=_allowed(EXECUTION_MODES))
     policy_source:  str | None = Field(description="Which policy layer resolved the decision, or `cache` for a cache hit.")
 
 
@@ -809,19 +919,19 @@ class RecordProxyDetail(BaseModel):
     """Proxy lifecycle, joined from `proxy_interactions`. Present only for a
     request executed in proxy mode."""
 
-    provider:              str | None
+    provider:              str | None = Field(json_schema_extra=_allowed(PROXY_PROVIDERS))
     model:                 str | None
     provider_latency_ms:   int | None
     total_latency_ms:      int | None
-    execution_status:      str | None
-    input_primary_reason:  str | None
+    execution_status:      str | None = Field(json_schema_extra=_allowed(EXECUTION_STATUSES))
+    input_primary_reason:  str | None = Field(json_schema_extra=_allowed(PRIMARY_REASONS))
     input_confidence:      float | None
     input_threats:         list[str]
     input_attack_type:     str | None
     input_raw:             str | None
     input_sanitized:       str | None
-    output_decision:       str | None
-    output_primary_reason: str | None
+    output_decision:       str | None = Field(json_schema_extra=_allowed(DECISIONS))
+    output_primary_reason: str | None = Field(json_schema_extra=_allowed(PRIMARY_REASONS))
     output_confidence:     float | None
     output_threats:        list[str]
     output_raw:            str | None
@@ -833,16 +943,16 @@ class RecordProxyDetail(BaseModel):
 class RequestRecordResponse(BaseModel):
     trace_id:       str
     timestamp:      str = Field(description="ISO-8601 UTC with a Z suffix.")
-    execution_mode: str | None
+    execution_mode: str | None = Field(json_schema_extra=_allowed(EXECUTION_MODES))
     is_proxy:       bool
-    severity:       str | None = Field(description="INFO, WARNING, ERROR or CRITICAL.")
+    severity:       str | None = Field(description="Risk level of the recorded decision.", json_schema_extra=_allowed(SEVERITIES))
     attribution:    RecordAttribution
 
-    decision:        str
+    decision:        str = Field(json_schema_extra=_allowed(DECISIONS))
     risk_score:      float | None
-    primary_reason:  str | None
+    primary_reason:  str | None = Field(json_schema_extra=_allowed(PRIMARY_REASONS))
     confidence:      float | None
-    confidence_band: str | None
+    confidence_band: str | None = Field(json_schema_extra=_allowed(CONFIDENCE_BANDS))
     threats:         list[str]
 
     input_hash:   str = Field(description="Hash of the scanned input; the input itself is never stored here.")
@@ -851,7 +961,7 @@ class RequestRecordResponse(BaseModel):
     run_id:       str | None = Field(description="Caller-supplied agent-run correlation; never an authorization input.")
     session_id:   str | None
     turn_index:   int | None
-    input_source: str | None = Field(description="Declared provenance, for example `user_prompt` or `retrieved_document`.")
+    input_source: str | None = Field(description="Declared provenance, for example `user_prompt` or `retrieved_document`.", json_schema_extra=_allowed(INPUT_SOURCES))
 
     detection_scores: dict[str, float] = Field(
         description="Per-detector scores as persisted. EMPTY for a caller that may not read layer scores -- "

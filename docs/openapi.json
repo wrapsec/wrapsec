@@ -175,6 +175,10 @@
           },
           "key_type": {
             "description": "`live` or `trial`.",
+            "enum": [
+              "live",
+              "trial"
+            ],
             "title": "Key Type",
             "type": "string"
           },
@@ -278,6 +282,10 @@
           },
           "key_type": {
             "description": "`live` or `trial`; defaults to `live` for a row that predates the column.",
+            "enum": [
+              "live",
+              "trial"
+            ],
             "title": "Key Type",
             "type": "string"
           },
@@ -348,6 +356,11 @@
           "confidence_band": {
             "anyOf": [
               {
+                "enum": [
+                  "HIGH",
+                  "MEDIUM",
+                  "LOW"
+                ],
                 "type": "string"
               },
               {
@@ -359,6 +372,11 @@
           },
           "decision": {
             "description": "ALLOW, SANITIZE or BLOCK.",
+            "enum": [
+              "BLOCK",
+              "SANITIZE",
+              "ALLOW"
+            ],
             "title": "Decision",
             "type": "string"
           },
@@ -386,6 +404,16 @@
           "primary_reason": {
             "anyOf": [
               {
+                "enum": [
+                  "SYSTEM_ERROR",
+                  "PII_GUARDRAIL_BLOCK",
+                  "PII_GUARDRAIL_SANITIZE",
+                  "TOXICITY_GUARDRAIL_BLOCK",
+                  "RULE_DETECTOR",
+                  "ML_DETECTOR",
+                  "LLM_DETECTOR",
+                  "NO_THREAT_DETECTED"
+                ],
                 "type": "string"
               },
               {
@@ -432,6 +460,11 @@
         "properties": {
           "decision": {
             "description": "This layer's classification: ALLOW, SANITIZE or BLOCK.",
+            "enum": [
+              "BLOCK",
+              "SANITIZE",
+              "ALLOW"
+            ],
             "title": "Decision",
             "type": "string"
           },
@@ -504,6 +537,11 @@
           "confidence_band": {
             "anyOf": [
               {
+                "enum": [
+                  "HIGH",
+                  "MEDIUM",
+                  "LOW"
+                ],
                 "type": "string"
               },
               {
@@ -514,6 +552,11 @@
           },
           "decision": {
             "description": "ALLOW, SANITIZE or BLOCK for the input scan.",
+            "enum": [
+              "BLOCK",
+              "SANITIZE",
+              "ALLOW"
+            ],
             "title": "Decision",
             "type": "string"
           },
@@ -541,10 +584,18 @@
             "title": "Dept Name"
           },
           "detection_mode": {
+            "enum": [
+              "fast",
+              "full"
+            ],
             "title": "Detection Mode",
             "type": "string"
           },
           "execution_mode": {
+            "enum": [
+              "scan_only",
+              "proxy"
+            ],
             "title": "Execution Mode",
             "type": "string"
           },
@@ -559,6 +610,12 @@
           },
           "input_source": {
             "description": "Declared provenance, for example `user_prompt` or `retrieved_document`.",
+            "enum": [
+              "user_prompt",
+              "tool_output",
+              "retrieved_document",
+              "external_content"
+            ],
             "title": "Input Source",
             "type": "string"
           },
@@ -603,6 +660,11 @@
           "output_decision": {
             "anyOf": [
               {
+                "enum": [
+                  "BLOCK",
+                  "SANITIZE",
+                  "ALLOW"
+                ],
                 "type": "string"
               },
               {
@@ -615,6 +677,12 @@
           "policy_source": {
             "anyOf": [
               {
+                "enum": [
+                  "system_default",
+                  "department_override",
+                  "application_override",
+                  "cache"
+                ],
                 "type": "string"
               },
               {
@@ -639,6 +707,16 @@
           "primary_reason": {
             "anyOf": [
               {
+                "enum": [
+                  "SYSTEM_ERROR",
+                  "PII_GUARDRAIL_BLOCK",
+                  "PII_GUARDRAIL_SANITIZE",
+                  "TOXICITY_GUARDRAIL_BLOCK",
+                  "RULE_DETECTOR",
+                  "ML_DETECTOR",
+                  "LLM_DETECTOR",
+                  "NO_THREAT_DETECTED"
+                ],
                 "type": "string"
               },
               {
@@ -650,6 +728,11 @@
           "provider": {
             "anyOf": [
               {
+                "enum": [
+                  "custom",
+                  "ollama",
+                  "openai"
+                ],
                 "type": "string"
               },
               {
@@ -699,7 +782,13 @@
             "title": "Session Id"
           },
           "severity": {
-            "description": "INFO, WARNING, ERROR or CRITICAL.",
+            "description": "Risk level of the recorded decision.",
+            "enum": [
+              "CRITICAL",
+              "HIGH",
+              "MEDIUM",
+              "LOW"
+            ],
             "title": "Severity",
             "type": "string"
           },
@@ -922,6 +1011,11 @@
           },
           "decision": {
             "description": "ALLOW, SANITIZE or BLOCK.",
+            "enum": [
+              "BLOCK",
+              "SANITIZE",
+              "ALLOW"
+            ],
             "title": "Decision",
             "type": "string"
           },
@@ -1019,6 +1113,10 @@
           },
           "edition": {
             "description": "`oss` with no capabilities registered, `enterprise` otherwise. Display metadata, not a claim.",
+            "enum": [
+              "oss",
+              "enterprise"
+            ],
             "title": "Edition",
             "type": "string"
           }
@@ -1065,11 +1163,18 @@
         "description": "The opt-in `wrapsec` block. Present only with `X-WrapSec-Inline-Meta:\ntrue`; the same values are always available on the response headers.",
         "properties": {
           "decision": {
-            "description": "Verdict on the input: ALLOW, SANITIZE or BLOCK.",
+            "description": "Verdict on the input. A blocked input never reaches this body.",
+            "enum": [
+              "SANITIZE",
+              "ALLOW"
+            ],
             "title": "Decision",
             "type": "string"
           },
           "execution_status": {
+            "enum": [
+              "SUCCESS"
+            ],
             "title": "Execution Status",
             "type": "string"
           },
@@ -1078,6 +1183,16 @@
             "type": "number"
           },
           "input_primary_reason": {
+            "enum": [
+              "SYSTEM_ERROR",
+              "PII_GUARDRAIL_BLOCK",
+              "PII_GUARDRAIL_SANITIZE",
+              "TOXICITY_GUARDRAIL_BLOCK",
+              "RULE_DETECTOR",
+              "ML_DETECTOR",
+              "LLM_DETECTOR",
+              "NO_THREAT_DETECTED"
+            ],
             "title": "Input Primary Reason",
             "type": "string"
           },
@@ -1099,6 +1214,10 @@
           "output_decision": {
             "anyOf": [
               {
+                "enum": [
+                  "SANITIZE",
+                  "ALLOW"
+                ],
                 "type": "string"
               },
               {
@@ -1114,6 +1233,11 @@
           "provider": {
             "anyOf": [
               {
+                "enum": [
+                  "custom",
+                  "ollama",
+                  "openai"
+                ],
                 "type": "string"
               },
               {
@@ -1170,6 +1294,9 @@
           },
           "object": {
             "description": "Always `chat.completion`.",
+            "enum": [
+              "chat.completion"
+            ],
             "title": "Object",
             "type": "string"
           },
@@ -1216,6 +1343,9 @@
           },
           "role": {
             "description": "Always `assistant` on a response.",
+            "enum": [
+              "assistant"
+            ],
             "title": "Role",
             "type": "string"
           }
@@ -1266,6 +1396,10 @@
             "title": "Rule"
           },
           "source": {
+            "enum": [
+              "database",
+              "environment"
+            ],
             "title": "Source",
             "type": "string"
           }
@@ -1315,6 +1449,10 @@
             "title": "Provider"
           },
           "source": {
+            "enum": [
+              "database",
+              "environment"
+            ],
             "title": "Source",
             "type": "string"
           },
@@ -1352,6 +1490,10 @@
             "title": "Per Minute"
           },
           "source": {
+            "enum": [
+              "database",
+              "environment"
+            ],
             "title": "Source",
             "type": "string"
           }
@@ -1391,6 +1533,10 @@
           },
           "source": {
             "description": "`database` when stored for this tenant, `environment` otherwise.",
+            "enum": [
+              "database",
+              "environment"
+            ],
             "title": "Source",
             "type": "string"
           }
@@ -1619,20 +1765,38 @@
         "description": "Per-component status. `ok` / `unavailable` for infrastructure,\n`healthy` / `degraded` / `unavailable` for the detector tiers.",
         "properties": {
           "database": {
+            "enum": [
+              "ok",
+              "unavailable"
+            ],
             "title": "Database",
             "type": "string"
           },
           "redis": {
+            "enum": [
+              "ok",
+              "unavailable"
+            ],
             "title": "Redis",
             "type": "string"
           },
           "tfidf_detector": {
             "description": "Tier 1, REQUIRED. Degraded here means the instance refuses traffic fail-closed.",
+            "enum": [
+              "healthy",
+              "degraded",
+              "unavailable"
+            ],
             "title": "Tfidf Detector",
             "type": "string"
           },
           "transformer_detector": {
             "description": "Tier 2, OPTIONAL. Degraded on a default build and does not affect the status code.",
+            "enum": [
+              "healthy",
+              "degraded",
+              "unavailable"
+            ],
             "title": "Transformer Detector",
             "type": "string"
           }
@@ -1681,6 +1845,9 @@
         "properties": {
           "status": {
             "description": "Always `ok` -- reaching this endpoint at all is the signal.",
+            "enum": [
+              "ok"
+            ],
             "title": "Status",
             "type": "string"
           },
@@ -1942,6 +2109,9 @@
         "properties": {
           "status": {
             "description": "Always `alive`. The process answered; nothing else is checked.",
+            "enum": [
+              "alive"
+            ],
             "title": "Status",
             "type": "string"
           }
@@ -2086,7 +2256,14 @@
             "title": "Created At"
           },
           "execution_status": {
-            "description": "How the proxied call ended, for example `completed`.",
+            "description": "How the proxied call ended.",
+            "enum": [
+              "SUCCESS",
+              "BLOCKED",
+              "OUTPUT_BLOCKED",
+              "FAILED",
+              "TIMEOUT"
+            ],
             "title": "Execution Status",
             "type": "string"
           },
@@ -2098,6 +2275,15 @@
           "input_attack_type": {
             "anyOf": [
               {
+                "enum": [
+                  "PROMPT_INJECTION",
+                  "JAILBREAK",
+                  "MALICIOUS_INTENT",
+                  "DATA_EXFILTRATION",
+                  "PII",
+                  "TOXICITY",
+                  "BENIGN"
+                ],
                 "type": "string"
               },
               {
@@ -2112,10 +2298,25 @@
           },
           "input_decision": {
             "description": "Verdict on the prompt: ALLOW, SANITIZE or BLOCK.",
+            "enum": [
+              "BLOCK",
+              "SANITIZE",
+              "ALLOW"
+            ],
             "title": "Input Decision",
             "type": "string"
           },
           "input_primary_reason": {
+            "enum": [
+              "SYSTEM_ERROR",
+              "PII_GUARDRAIL_BLOCK",
+              "PII_GUARDRAIL_SANITIZE",
+              "TOXICITY_GUARDRAIL_BLOCK",
+              "RULE_DETECTOR",
+              "ML_DETECTOR",
+              "LLM_DETECTOR",
+              "NO_THREAT_DETECTED"
+            ],
             "title": "Input Primary Reason",
             "type": "string"
           },
@@ -2163,6 +2364,11 @@
           "output_decision": {
             "anyOf": [
               {
+                "enum": [
+                  "BLOCK",
+                  "SANITIZE",
+                  "ALLOW"
+                ],
                 "type": "string"
               },
               {
@@ -2184,6 +2390,16 @@
           "output_primary_reason": {
             "anyOf": [
               {
+                "enum": [
+                  "SYSTEM_ERROR",
+                  "PII_GUARDRAIL_BLOCK",
+                  "PII_GUARDRAIL_SANITIZE",
+                  "TOXICITY_GUARDRAIL_BLOCK",
+                  "RULE_DETECTOR",
+                  "ML_DETECTOR",
+                  "LLM_DETECTOR",
+                  "NO_THREAT_DETECTED"
+                ],
                 "type": "string"
               },
               {
@@ -2202,6 +2418,11 @@
           "provider": {
             "anyOf": [
               {
+                "enum": [
+                  "custom",
+                  "ollama",
+                  "openai"
+                ],
                 "type": "string"
               },
               {
@@ -2298,7 +2519,14 @@
             "title": "Created At"
           },
           "execution_status": {
-            "description": "How the proxied call ended, for example `completed`.",
+            "description": "How the proxied call ended.",
+            "enum": [
+              "SUCCESS",
+              "BLOCKED",
+              "OUTPUT_BLOCKED",
+              "FAILED",
+              "TIMEOUT"
+            ],
             "title": "Execution Status",
             "type": "string"
           },
@@ -2310,6 +2538,15 @@
           "input_attack_type": {
             "anyOf": [
               {
+                "enum": [
+                  "PROMPT_INJECTION",
+                  "JAILBREAK",
+                  "MALICIOUS_INTENT",
+                  "DATA_EXFILTRATION",
+                  "PII",
+                  "TOXICITY",
+                  "BENIGN"
+                ],
                 "type": "string"
               },
               {
@@ -2324,10 +2561,25 @@
           },
           "input_decision": {
             "description": "Verdict on the prompt: ALLOW, SANITIZE or BLOCK.",
+            "enum": [
+              "BLOCK",
+              "SANITIZE",
+              "ALLOW"
+            ],
             "title": "Input Decision",
             "type": "string"
           },
           "input_primary_reason": {
+            "enum": [
+              "SYSTEM_ERROR",
+              "PII_GUARDRAIL_BLOCK",
+              "PII_GUARDRAIL_SANITIZE",
+              "TOXICITY_GUARDRAIL_BLOCK",
+              "RULE_DETECTOR",
+              "ML_DETECTOR",
+              "LLM_DETECTOR",
+              "NO_THREAT_DETECTED"
+            ],
             "title": "Input Primary Reason",
             "type": "string"
           },
@@ -2399,6 +2651,11 @@
           "output_decision": {
             "anyOf": [
               {
+                "enum": [
+                  "BLOCK",
+                  "SANITIZE",
+                  "ALLOW"
+                ],
                 "type": "string"
               },
               {
@@ -2420,6 +2677,16 @@
           "output_primary_reason": {
             "anyOf": [
               {
+                "enum": [
+                  "SYSTEM_ERROR",
+                  "PII_GUARDRAIL_BLOCK",
+                  "PII_GUARDRAIL_SANITIZE",
+                  "TOXICITY_GUARDRAIL_BLOCK",
+                  "RULE_DETECTOR",
+                  "ML_DETECTOR",
+                  "LLM_DETECTOR",
+                  "NO_THREAT_DETECTED"
+                ],
                 "type": "string"
               },
               {
@@ -2462,6 +2729,11 @@
           "provider": {
             "anyOf": [
               {
+                "enum": [
+                  "custom",
+                  "ollama",
+                  "openai"
+                ],
                 "type": "string"
               },
               {
@@ -2756,6 +3028,10 @@
           },
           "status": {
             "description": "`ready` when every check passed, `degraded` when any did not.",
+            "enum": [
+              "ready",
+              "degraded"
+            ],
             "title": "Status",
             "type": "string"
           }
@@ -2907,6 +3183,10 @@
           "detection_mode": {
             "anyOf": [
               {
+                "enum": [
+                  "fast",
+                  "full"
+                ],
                 "type": "string"
               },
               {
@@ -2918,6 +3198,10 @@
           "execution_mode": {
             "anyOf": [
               {
+                "enum": [
+                  "scan_only",
+                  "proxy"
+                ],
                 "type": "string"
               },
               {
@@ -2988,6 +3272,13 @@
           "execution_status": {
             "anyOf": [
               {
+                "enum": [
+                  "SUCCESS",
+                  "BLOCKED",
+                  "OUTPUT_BLOCKED",
+                  "FAILED",
+                  "TIMEOUT"
+                ],
                 "type": "string"
               },
               {
@@ -3021,6 +3312,16 @@
           "input_primary_reason": {
             "anyOf": [
               {
+                "enum": [
+                  "SYSTEM_ERROR",
+                  "PII_GUARDRAIL_BLOCK",
+                  "PII_GUARDRAIL_SANITIZE",
+                  "TOXICITY_GUARDRAIL_BLOCK",
+                  "RULE_DETECTOR",
+                  "ML_DETECTOR",
+                  "LLM_DETECTOR",
+                  "NO_THREAT_DETECTED"
+                ],
                 "type": "string"
               },
               {
@@ -3083,6 +3384,11 @@
           "output_decision": {
             "anyOf": [
               {
+                "enum": [
+                  "BLOCK",
+                  "SANITIZE",
+                  "ALLOW"
+                ],
                 "type": "string"
               },
               {
@@ -3103,6 +3409,16 @@
           "output_primary_reason": {
             "anyOf": [
               {
+                "enum": [
+                  "SYSTEM_ERROR",
+                  "PII_GUARDRAIL_BLOCK",
+                  "PII_GUARDRAIL_SANITIZE",
+                  "TOXICITY_GUARDRAIL_BLOCK",
+                  "RULE_DETECTOR",
+                  "ML_DETECTOR",
+                  "LLM_DETECTOR",
+                  "NO_THREAT_DETECTED"
+                ],
                 "type": "string"
               },
               {
@@ -3143,6 +3459,11 @@
           "provider": {
             "anyOf": [
               {
+                "enum": [
+                  "custom",
+                  "ollama",
+                  "openai"
+                ],
                 "type": "string"
               },
               {
@@ -3289,6 +3610,11 @@
           "confidence_band": {
             "anyOf": [
               {
+                "enum": [
+                  "HIGH",
+                  "MEDIUM",
+                  "LOW"
+                ],
                 "type": "string"
               },
               {
@@ -3298,6 +3624,11 @@
             "title": "Confidence Band"
           },
           "decision": {
+            "enum": [
+              "BLOCK",
+              "SANITIZE",
+              "ALLOW"
+            ],
             "title": "Decision",
             "type": "string"
           },
@@ -3312,6 +3643,10 @@
           "execution_mode": {
             "anyOf": [
               {
+                "enum": [
+                  "scan_only",
+                  "proxy"
+                ],
                 "type": "string"
               },
               {
@@ -3340,6 +3675,12 @@
           "input_source": {
             "anyOf": [
               {
+                "enum": [
+                  "user_prompt",
+                  "tool_output",
+                  "retrieved_document",
+                  "external_content"
+                ],
                 "type": "string"
               },
               {
@@ -3356,6 +3697,16 @@
           "primary_reason": {
             "anyOf": [
               {
+                "enum": [
+                  "SYSTEM_ERROR",
+                  "PII_GUARDRAIL_BLOCK",
+                  "PII_GUARDRAIL_SANITIZE",
+                  "TOXICITY_GUARDRAIL_BLOCK",
+                  "RULE_DETECTOR",
+                  "ML_DETECTOR",
+                  "LLM_DETECTOR",
+                  "NO_THREAT_DETECTED"
+                ],
                 "type": "string"
               },
               {
@@ -3415,13 +3766,19 @@
           "severity": {
             "anyOf": [
               {
+                "enum": [
+                  "CRITICAL",
+                  "HIGH",
+                  "MEDIUM",
+                  "LOW"
+                ],
                 "type": "string"
               },
               {
                 "type": "null"
               }
             ],
-            "description": "INFO, WARNING, ERROR or CRITICAL.",
+            "description": "Risk level of the recorded decision.",
             "title": "Severity"
           },
           "threats": {
@@ -3600,12 +3957,20 @@
       "ScanProcessing": {
         "properties": {
           "detection_mode": {
-            "description": "fast, balanced or thorough.",
+            "description": "`fast` runs the cheap layers; `full` adds the LLM detector.",
+            "enum": [
+              "fast",
+              "full"
+            ],
             "title": "Detection Mode",
             "type": "string"
           },
           "execution_mode": {
             "description": "scan_only or proxy.",
+            "enum": [
+              "scan_only",
+              "proxy"
+            ],
             "title": "Execution Mode",
             "type": "string"
           },
@@ -3687,6 +4052,11 @@
           "confidence_band": {
             "anyOf": [
               {
+                "enum": [
+                  "HIGH",
+                  "MEDIUM",
+                  "LOW"
+                ],
                 "type": "string"
               },
               {
@@ -3709,6 +4079,11 @@
           },
           "decision": {
             "description": "ALLOW, SANITIZE or BLOCK.",
+            "enum": [
+              "BLOCK",
+              "SANITIZE",
+              "ALLOW"
+            ],
             "title": "Decision",
             "type": "string"
           },
@@ -3732,6 +4107,16 @@
           "primary_reason": {
             "anyOf": [
               {
+                "enum": [
+                  "SYSTEM_ERROR",
+                  "PII_GUARDRAIL_BLOCK",
+                  "PII_GUARDRAIL_SANITIZE",
+                  "TOXICITY_GUARDRAIL_BLOCK",
+                  "RULE_DETECTOR",
+                  "ML_DETECTOR",
+                  "LLM_DETECTOR",
+                  "NO_THREAT_DETECTED"
+                ],
                 "type": "string"
               },
               {
@@ -3904,6 +4289,15 @@
         "properties": {
           "category": {
             "description": "Threat category, for example PROMPT_INJECTION.",
+            "enum": [
+              "PROMPT_INJECTION",
+              "JAILBREAK",
+              "MALICIOUS_INTENT",
+              "DATA_EXFILTRATION",
+              "PII",
+              "TOXICITY",
+              "BENIGN"
+            ],
             "title": "Category",
             "type": "string"
           },

@@ -587,3 +587,684 @@ def test_the_settings_family_describes_every_published_field():
         "Add one that says something the field name does not, or state here why "
         "the field is self-explanatory."
     )
+
+
+# ── Phase C / F-030 Option B: published allowed values ───────────────────────
+
+# The ai/scan family, and the vocabulary each field publishes. Listed here rather
+# than derived from the schema, so a field that silently LOSES its enum fails.
+_AI_FAMILY_ENUMS = {
+    ("ScanResponse", "decision"):                    "DECISIONS",
+    ("ScanResponse", "primary_reason"):              "PRIMARY_REASONS",
+    ("ScanResponse", "confidence_band"):             "CONFIDENCE_BANDS",
+    ("Assessment", "decision"):                      "DECISIONS",
+    ("Assessment", "primary_reason"):                "PRIMARY_REASONS",
+    ("Assessment", "confidence_band"):               "CONFIDENCE_BANDS",
+    ("AssessmentLayer", "decision"):                 "DECISIONS",
+    ("ScanProcessing", "detection_mode"):            "DETECTION_MODES",
+    ("ScanProcessing", "execution_mode"):            "EXECUTION_MODES",
+    ("BatchItemResult", "decision"):                 "DECISIONS",
+    ("RequestRecordResponse", "decision"):           "DECISIONS",
+    ("RequestRecordResponse", "primary_reason"):     "PRIMARY_REASONS",
+    ("RequestRecordResponse", "confidence_band"):    "CONFIDENCE_BANDS",
+    ("RequestRecordResponse", "severity"):           "SEVERITIES",
+    ("RequestRecordResponse", "execution_mode"):     "EXECUTION_MODES",
+    ("RequestRecordResponse", "input_source"):       "INPUT_SOURCES",
+    ("RecordProcessing", "detection_mode"):          "DETECTION_MODES",
+    ("RecordProcessing", "execution_mode"):          "EXECUTION_MODES",
+    ("RecordProxyDetail", "provider"):               "PROXY_PROVIDERS",
+    ("RecordProxyDetail", "execution_status"):       "EXECUTION_STATUSES",
+    ("RecordProxyDetail", "input_primary_reason"):   "PRIMARY_REASONS",
+    ("RecordProxyDetail", "output_decision"):        "DECISIONS",
+    ("RecordProxyDetail", "output_primary_reason"):  "PRIMARY_REASONS",
+}
+
+# The audit family. Every one of these is read back from a `VARCHAR` column, so
+# the same caveat applies as for the ai/scan read-back: this asserts what the
+# SCHEMA publishes, never what a stored row contains.
+_AUDIT_FAMILY_ENUMS = {
+    ("AuditItem", "decision"):         "DECISIONS",
+    ("AuditItem", "output_decision"):  "DECISIONS",
+    ("AuditItem", "provider"):         "PROXY_PROVIDERS",
+    ("AuditItem", "primary_reason"):   "PRIMARY_REASONS",
+    ("AuditItem", "confidence_band"):  "CONFIDENCE_BANDS",
+    ("AuditItem", "detection_mode"):   "DETECTION_MODES",
+    ("AuditItem", "execution_mode"):   "EXECUTION_MODES",
+    ("AuditItem", "severity"):         "SEVERITIES",
+    ("AuditItem", "input_source"):     "INPUT_SOURCES",
+    ("AuditItem", "policy_source"):    "POLICY_SOURCES",
+    ("TopThreat", "category"):         "THREAT_CATEGORIES",
+}
+
+
+# The proxy-interactions family. The seven fields are declared once on
+# `ProxyInteraction` and inherited by `ProxyInteractionDetail`, so both published
+# schemas are checked -- inheritance is what carries the metadata, and a later
+# refactor that flattened the models could drop it from the detail schema alone.
+_PROXY_INTERACTION_FAMILY_ENUMS = {
+    (model, prop): vocab
+    for model in ("ProxyInteraction", "ProxyInteractionDetail")
+    for prop, vocab in (
+        ("input_decision",        "DECISIONS"),
+        ("input_primary_reason",  "PRIMARY_REASONS"),
+        ("input_attack_type",     "THREAT_CATEGORIES"),
+        ("provider",              "PROXY_PROVIDERS"),
+        ("execution_status",      "EXECUTION_STATUSES"),
+        ("output_decision",       "DECISIONS"),
+        ("output_primary_reason", "PRIMARY_REASONS"),
+    )
+}
+
+
+# The chat family. NARROWER than the vocabularies the other families publish, and
+# deliberately: a 200 chat body cannot carry a blocked decision or a non-success
+# status, because the route returns before building it.
+_CHAT_FAMILY_ENUMS = {
+    ("ChatCompletionResponse", "object"):        "CHAT_OBJECT",
+    ("ChatMessage", "role"):                     "CHAT_RESPONSE_ROLES",
+    ("ChatCompletionMeta", "decision"):          "CHAT_META_DECISIONS",
+    ("ChatCompletionMeta", "output_decision"):   "CHAT_META_DECISIONS",
+    ("ChatCompletionMeta", "execution_status"):  "CHAT_META_STATUSES",
+    ("ChatCompletionMeta", "input_primary_reason"): "PRIMARY_REASONS",
+    ("ChatCompletionMeta", "provider"):          "PROXY_PROVIDERS",
+}
+
+
+# The keys family. One vocabulary, on both published projections. Both fields are
+# non-nullable, so this is also the family that exercises `_allowed`'s top-level
+# branch -- the nullable branch is covered everywhere else.
+_KEYS_FAMILY_ENUMS = {
+    ("ApiKeyCreated", "key_type"):  "KEY_TYPES",
+    ("ApiKeyListItem", "key_type"): "KEY_TYPES",
+}
+
+
+# The health and capabilities family. Five distinct vocabularies, deliberately not
+# merged: the probes report on different scales, and `Config*.source` is one
+# vocabulary shared by four models rather than four similar-looking ones.
+_HEALTH_FAMILY_ENUMS = {
+    ("HealthResponse", "status"):               "HEALTH_STATUS",
+    ("LivenessResponse", "status"):             "LIVENESS_STATUS",
+    ("ReadinessResponse", "status"):            "READINESS_STATUS",
+    ("HealthChecks", "database"):               "INFRA_CHECK_STATUSES",
+    ("HealthChecks", "redis"):                  "INFRA_CHECK_STATUSES",
+    ("HealthChecks", "tfidf_detector"):         "DETECTOR_CHECK_STATUSES",
+    ("HealthChecks", "transformer_detector"):   "DETECTOR_CHECK_STATUSES",
+    ("ConfigThresholds", "source"):             "CONFIG_SOURCES",
+    ("ConfigDetectionLayers", "source"):        "CONFIG_SOURCES",
+    ("ConfigLLM", "source"):                    "CONFIG_SOURCES",
+    ("ConfigRateLimit", "source"):              "CONFIG_SOURCES",
+    ("CapabilitiesResponse", "edition"):        "EDITIONS",
+}
+
+# The four models whose `source` is produced by one ternary. Listed separately
+# because the risk is publishing it on ONE of them and calling the family done.
+_CONFIG_SOURCE_MODELS = ("ConfigThresholds", "ConfigDetectionLayers",
+                         "ConfigLLM", "ConfigRateLimit")
+
+
+# Deliberately NOT enumerated, and why. Each is a field whose values this API does
+# not control, so publishing a list would be a claim it cannot keep.
+_NEVER_ENUMERATED = {
+    ("LLMSettingsResponse", "provider"):        "published straight from an unvalidated env var",
+    ("LLMSettingsUpdatedResponse", "provider"): "published straight from an unvalidated env var",
+    ("ConfigLLM", "provider"):                  "published straight from an unvalidated env var",
+    ("ChatChoice", "finish_reason"):            "whatever the upstream provider returned",
+    ("AuditItem", "source"):                    "echoes metadata.source from the caller's own request",
+    ("AuditItem", "threats"):                   "an array -- the enum belongs on its items, not the field",
+    ("ProxyInteraction", "behavior_flag"):      "F-031: no writer ever sets it, so it is always null",
+    ("ProxyInteraction", "output_flags"):       "F-031: no writer ever sets it, so it is always null",
+    ("ProxyInteraction", "input_threats"):      "an array -- the enum belongs on its items, not the field",
+    ("ProxyInteraction", "output_threats"):     "an array -- the enum belongs on its items, not the field",
+    ("ProxyInteraction", "model"):              "the provider's own model name, free text",
+    ("ProxyInteractionDetail", "behavior_flag"): "F-031: no writer ever sets it, so it is always null",
+    ("ProxyInteractionDetail", "output_flags"):  "F-031: no writer ever sets it, so it is always null",
+    ("ChatCompletionResponse", "model"):        "the provider's own model name, free text",
+    ("ChatCompletionResponse", "usage"):        "the provider's token counts, passed through untouched",
+    ("ChatCompletionMeta", "model"):            "the provider's own model name, free text",
+    ("ApiKeyCreated", "api_key"):               "the credential itself; never a vocabulary",
+    ("ApiKeyCreated", "name"):                  "caller-chosen label, free text",
+    ("ApiKeyListItem", "name"):                 "caller-chosen label, free text",
+    ("CapabilitiesResponse", "capabilities"):   "plugin-supplied names, extensible -- and an array",
+    ("HealthResponse", "version"):              "the running build string",
+    ("HealthConfigResponse", "version"):        "the running build string",
+    ("AgentRunResponse", "run_id"):             "echoed back exactly as the caller sent it",
+}
+
+
+def _published_enum(schemas: dict, model: str, prop: str):
+    """The enum an integrator actually sees, however the property is expressed.
+
+    An optional field is emitted as `anyOf: [{...}, {type: null}]`, so the enum
+    sits one level down. Reading only the top level would report `None` for every
+    nullable field and quietly pass.
+    """
+    spec = schemas[model]["properties"][prop]
+    if "enum" in spec:
+        return spec["enum"]
+    for branch in spec.get("anyOf", []):
+        if "enum" in branch:
+            return branch["enum"]
+    return None
+
+
+def _assert_published(expected: dict) -> None:
+    """Compare the ARTIFACT against the declared vocabulary, one family's worth."""
+    import api.v1.schemas.response as R
+
+    schemas = _committed()["components"]["schemas"]
+    wrong = []
+    for (model, prop), vocab in sorted(expected.items()):
+        published = _published_enum(schemas, model, prop)
+        want      = getattr(R, vocab)
+        if published != want:
+            wrong.append(f"{model}.{prop}: published {published}, expected {vocab}={want}")
+
+    assert not wrong, "published allowed values do not match the declared vocabulary:\n  " + "\n  ".join(wrong)
+
+
+def test_the_ai_family_publishes_its_allowed_values():
+    """Phase C / F-030 Option B, first family.
+
+    Read from `docs/openapi.json`, not the models: an enum that exists on a
+    Python field but never reaches the artifact has not been published, and the
+    artifact is what a code generator consumes.
+
+    THIS ASSERTS SCHEMA METADATA ONLY. It says nothing about what values exist in
+    `audit_logs` or `proxy_interactions`, and it must not be read as evidence
+    that historical rows conform -- six of these fields are read back from
+    `VARCHAR` columns written by earlier builds. That is precisely why the
+    vocabulary is published without being enforced, and why Option A (typing the
+    fields as enums) stays blocked.
+    """
+
+    _assert_published(_AI_FAMILY_ENUMS)
+
+
+def test_the_published_vocabularies_match_their_source_of_truth():
+    """`api/v1/schemas/response.py` imports nothing, by design, so its vocabulary
+    lists are MIRRORS rather than derivations. A mirror that nobody checks is a
+    copy that drifts, so each one is compared against the layer that actually
+    produces the value."""
+    import api.v1.schemas.response as R
+    from api.v1.endpoints import proxy as P
+    from domain.enums import (
+        DecisionType,
+        DetectionMode,
+        ExecutionMode,
+        InputSource,
+        RiskLevel,
+    )
+    from engine.proxy.router import SUPPORTED_PROVIDERS
+
+    assert R.DECISIONS        == [d.value for d in DecisionType]
+    assert R.SEVERITIES       == [r.value for r in RiskLevel]
+    assert R.DETECTION_MODES  == [d.value for d in DetectionMode]
+    assert R.EXECUTION_MODES  == [e.value for e in ExecutionMode]
+    assert R.INPUT_SOURCES    == [i.value for i in InputSource]
+    assert sorted(R.PROXY_PROVIDERS) == sorted(SUPPORTED_PROVIDERS)
+    assert sorted(R.EXECUTION_STATUSES) == sorted({
+        P.STATUS_SUCCESS, P.STATUS_BLOCKED, P.STATUS_OUTPUT_BLOCKED,
+        P.STATUS_FAILED, P.STATUS_TIMEOUT,
+    })
+
+    from engine.scoring.confidence import get_confidence_band
+    assert sorted(set(R.CONFIDENCE_BANDS)) == sorted({get_confidence_band(c) for c in (0.9, 0.5, 0.1)})
+
+    from domain.enums import ThreatCategory
+    assert R.THREAT_CATEGORIES == [t.value for t in ThreatCategory]
+
+    # `policy_source` is three values from the resolver plus one the scan route
+    # writes on a cache hit, so it is checked against both producers.
+    from services.policy_resolver import determine_policy_source
+    resolver = {
+        determine_policy_source(None, None),
+        determine_policy_source({"x": 1}, None),
+        determine_policy_source(None, {"x": 1}),
+    }
+    assert resolver <= set(R.POLICY_SOURCES), sorted(resolver - set(R.POLICY_SOURCES))
+    assert "cache" in R.POLICY_SOURCES
+
+    # `primary_reason` has no single constant to mirror -- the values are returned
+    # as literals by two modules. Compare against the literals themselves so a new
+    # reason cannot appear without this list being updated.
+    import pathlib
+    import re
+    produced = set()
+    for mod in ("engine/scoring/primary_reason.py", "engine/guardrails/output_guard.py"):
+        text = pathlib.Path(mod).read_text(encoding="utf-8")
+        produced |= set(re.findall(r'return "([A-Z_]+)"', text))
+        produced |= set(re.findall(r'primary_reason\s*=\s*"([A-Z_]+)"', text))
+        produced |= set(re.findall(r'^\s*"([A-Z_]+_DETECTOR)":', text, re.MULTILINE))
+    assert produced <= set(R.PRIMARY_REASONS), (
+        f"a reason is produced but not published: {sorted(produced - set(R.PRIMARY_REASONS))}"
+    )
+
+
+def test_the_excluded_fields_are_not_enumerated():
+    """The audit's deliberate exceptions, held open.
+
+    Publishing a vocabulary for these would be a claim the API cannot keep, and
+    the failure mode is silent: someone tidying "inconsistent" fields would add
+    an enum and nothing else would object.
+    """
+    schemas = _committed()["components"]["schemas"]
+    wrong = [
+        f"{model}.{prop} was enumerated, but {why}"
+        for (model, prop), why in sorted(_NEVER_ENUMERATED.items())
+        if _published_enum(schemas, model, prop) is not None
+    ]
+    assert not wrong, "\n  ".join(wrong)
+
+
+def test_the_audit_family_publishes_its_allowed_values():
+    """Phase C / F-030 Option B, audit family.
+
+    ALL ELEVEN ARE PERSISTED -- every value is read back from a `VARCHAR` column
+    in `audit_logs`, or joined from `proxy_interactions`. This test asserts the
+    published SCHEMA and nothing else. It is not evidence that stored rows hold
+    only these values, and it must never be turned into that: the reason the
+    vocabulary is published without being enforced is precisely that nobody can
+    make that claim from the repository.
+    """
+    _assert_published(_AUDIT_FAMILY_ENUMS)
+
+
+def test_publishing_a_vocabulary_did_not_make_the_runtime_reject_anything():
+    """The property that distinguishes Option B from Option A.
+
+    An `enum` in the schema is documentation. If one of these fields had quietly
+    become an Enum or a Literal, a value outside the list would raise instead of
+    serialising -- and for the persisted fields that would turn a historical row
+    into a 500 rather than a read. So the permissiveness is asserted, on one
+    field from each family, rather than assumed from the type annotation.
+    """
+    import api.v1.schemas.response as R
+
+    assert R.AssessmentLayer(name="rule", decision="A_NEW_DECISION").decision == "A_NEW_DECISION"
+    assert R.TopThreat(category="A_NEW_CATEGORY", count=1).category == "A_NEW_CATEGORY"
+
+
+def test_the_proxy_interactions_family_publishes_its_allowed_values():
+    """Phase C / F-030 Option B, proxy-interactions family.
+
+    All seven are persisted, read back from `proxy_interactions`. This asserts
+    the published SCHEMA only. It is not evidence about stored rows, and the
+    reason the vocabulary is published rather than enforced is that nobody can
+    make that claim from the repository.
+
+    `input_attack_type` is included after tracing rather than by resemblance: the
+    proxy sets it to `input_threats[0]`, and `input_threats` is
+    `[t.value for t in gd.threats]` over a `list[ThreatCategory]`. It is a scalar,
+    so it takes scalar metadata cleanly -- unlike the threat ARRAYS beside it.
+    """
+    _assert_published(_PROXY_INTERACTION_FAMILY_ENUMS)
+
+
+def test_the_detail_model_inherits_the_published_vocabulary():
+    """`ProxyInteractionDetail` extends `ProxyInteraction`, so it gets the
+    metadata by inheritance rather than by its own declaration. Asserted
+    directly: flattening the models later would be an easy way to publish a
+    detail schema that quietly says less than the list schema."""
+    schemas = _committed()["components"]["schemas"]
+    for prop in ("input_decision", "input_primary_reason", "input_attack_type",
+                 "provider", "execution_status", "output_decision", "output_primary_reason"):
+        assert _published_enum(schemas, "ProxyInteraction", prop) == \
+               _published_enum(schemas, "ProxyInteractionDetail", prop), prop
+
+
+def test_the_proxy_interaction_runtime_still_accepts_an_unknown_value():
+    """Option B, on the family whose fields are most exposed to historical rows.
+
+    `execution_status` is the sharpest case: the test fixtures in this repository
+    write `completed`, which production never writes and the published vocabulary
+    does not contain. That value must still round-trip, because the schema
+    documents and does not enforce.
+    """
+    import api.v1.schemas.response as R
+
+    # Every field is required, including the nullable ones -- absence and null are
+    # different in this contract, so the writer must state which it means.
+    row = R.ProxyInteraction(
+        id="1", trace_id="tr-1", created_at=None, key_id=None, user_id=None,
+        input_decision="ALLOW", input_primary_reason="NO_THREAT_DETECTED",
+        input_confidence=1.0, input_threats=[], input_attack_type=None,
+        provider=None, model=None, provider_latency_ms=None,
+        execution_status="completed",
+        output_decision=None, output_primary_reason=None, output_confidence=None,
+        output_threats=[], behavior_flag=None, output_flags=None,
+        total_latency_ms=1,
+    )
+    assert row.execution_status == "completed"
+    assert row.model_dump()["execution_status"] == "completed"   # and it round-trips
+
+
+def test_the_chat_family_publishes_its_allowed_values():
+    """Phase C / F-030 Option B, chat family.
+
+    NOTHING HERE IS PERSISTED. `ChatCompletionMeta` is built per request from the
+    live gateway result, and the rest of the body from the provider's reply, so
+    the historical-row caveat that governs the other families does not apply.
+    Option B is still the right shape: the values are computed, but `provider`
+    and `finish_reason` come from outside this API.
+    """
+    _assert_published(_CHAT_FAMILY_ENUMS)
+
+
+def test_the_chat_meta_vocabularies_are_subsets_of_their_parents():
+    """The narrowing is a claim, so it is checked rather than trusted.
+
+    `CHAT_META_DECISIONS` and `CHAT_META_STATUSES` must stay strict subsets of the
+    vocabularies the other families publish. A value appearing here but not in the
+    parent would mean the chat body reports something no other surface can.
+    """
+    import api.v1.schemas.response as R
+
+    assert set(R.CHAT_META_DECISIONS) < set(R.DECISIONS)
+    assert set(R.CHAT_META_STATUSES)  < set(R.EXECUTION_STATUSES)
+    assert "BLOCK" not in R.CHAT_META_DECISIONS
+    assert R.CHAT_META_STATUSES == ["SUCCESS"]
+
+
+def test_the_chat_narrowing_still_rests_on_the_route_returning_early():
+    """What makes the narrow vocabulary true, pinned at the producer.
+
+    Three lines in `proxy.py` are the whole argument: a blocked input returns, a
+    blocked output returns, and the status is assigned unconditionally just before
+    the success body is built. Remove any one and the published vocabulary becomes
+    a lie, with nothing else to notice.
+    """
+    import pathlib
+
+    src = pathlib.Path("api/v1/endpoints/proxy.py").read_text(encoding="utf-8")
+    for guarantee in (
+        'if input_decision == "BLOCK":',
+        'if output_decision == "BLOCK":',
+        "execution_status = STATUS_SUCCESS",
+    ):
+        assert guarantee in src, (
+            f"{guarantee!r} is gone from proxy.py, so the chat body may now carry a "
+            "state the published vocabulary excludes. Re-derive CHAT_META_* before "
+            "deleting this assertion."
+        )
+
+
+def test_a_nullable_field_publishes_its_enum_on_the_string_branch():
+    """Placement, not just values -- and the reason the metadata is a callable.
+
+    `json_schema_extra={"enum": [...]}` lands the keyword as a SIBLING of `anyOf`.
+    JSON Schema ANDs siblings, so `null` satisfies the `anyOf` and then fails the
+    `enum`: the published contract would say a nullable field cannot be null,
+    while the runtime happily returns null. Every nullable enumerated field is
+    checked, because the failure is invisible in the values.
+    """
+    schemas = _committed()["components"]["schemas"]
+    misplaced = [
+        f"{model}.{prop}"
+        for model, schema in schemas.items()
+        for prop, spec in schema.get("properties", {}).items()
+        if "anyOf" in spec and "enum" in spec
+    ]
+    assert not misplaced, (
+        "enum sits beside anyOf on these nullable fields, so null is no longer "
+        f"valid for them in the published schema: {misplaced}"
+    )
+
+    # And the positive case: a known nullable field keeps its null branch.
+    out = schemas["AuditItem"]["properties"]["output_decision"]
+    assert any(b.get("type") == "null" for b in out["anyOf"])
+    assert any(b.get("enum") for b in out["anyOf"])
+
+
+def test_the_chat_runtime_still_accepts_an_unknown_value():
+    """Option B on the narrowest vocabulary in the API: `execution_status`
+    publishes exactly one value, and the field must still carry any string."""
+    import api.v1.schemas.response as R
+
+    meta = R.ChatCompletionMeta(
+        trace_id="req_x", decision="BLOCK", input_primary_reason="WHATEVER",
+        input_confidence=1.0, input_sanitized=False, output_decision=None,
+        output_sanitized=False, execution_status="TIMEOUT",
+        provider="something-new", model="m", total_latency_ms=1,
+    )
+    assert meta.execution_status == "TIMEOUT"
+    assert meta.model_dump()["decision"] == "BLOCK"
+
+
+def test_the_keys_family_publishes_its_allowed_values():
+    """Phase C / F-030 Option B, keys family.
+
+    Both fields are persisted in `api_keys.key_type`, a `VARCHAR(20)` with a
+    server default of `live`. Schema metadata only: this says nothing about the
+    values stored on any deployment, and Option A remains blocked for exactly
+    that reason.
+    """
+    _assert_published(_KEYS_FAMILY_ENUMS)
+
+
+def test_the_key_type_vocabulary_matches_its_producer():
+    """`KeyType` lives in the endpoint module rather than `domain.enums`, and it
+    is what actually gates the write path -- `CreateKeySchema.key_type` is typed
+    with it, so an unknown value is a 422 before anything is stored."""
+    import api.v1.schemas.response as R
+    from api.v1.endpoints.keys import KeyType
+
+    assert R.KEY_TYPES == [k.value for k in KeyType]
+
+
+def test_the_key_type_fields_are_not_nullable_so_the_enum_sits_at_the_top_level():
+    """The other half of F-032, asserted positively.
+
+    Every other enumerated field in the API is nullable somewhere, so the global
+    placement test only ever exercises `_allowed`'s `anyOf` branch. These two are
+    non-nullable, and pin the fallback: the enum belongs directly on the string
+    schema, with no union wrapper invented around it.
+    """
+    schemas = _committed()["components"]["schemas"]
+    for model in ("ApiKeyCreated", "ApiKeyListItem"):
+        spec = schemas[model]["properties"]["key_type"]
+        assert spec.get("type") == "string", spec
+        assert "anyOf" not in spec, f"{model}.key_type gained a union it does not have"
+        assert spec.get("enum") == ["live", "trial"]
+
+
+def test_the_keys_runtime_still_accepts_an_unknown_key_type():
+    """A row written before `key_type` existed reads back through this model. The
+    read path coerces a missing value to `live`, but a stored value outside the
+    vocabulary is passed through -- so the model must carry it rather than raise.
+    """
+    import api.v1.schemas.response as R
+
+    created = R.ApiKeyCreated(
+        key_id="k1", name="n", api_key="wsk_live_x", key_type="legacy_tier",
+        app_id=None, dept_id=None, tenant_id=None,
+        created_at="2026-01-01T00:00:00Z", expires_at=None,
+    )
+    assert created.key_type == "legacy_tier"
+    assert created.model_dump()["key_type"] == "legacy_tier"
+
+
+def test_the_health_family_publishes_its_allowed_values():
+    """Phase C / F-030 Option B, health and capabilities family.
+
+    NOTHING HERE IS PERSISTED. Every value is computed while answering the
+    request -- a probe result, a policy-origin ternary, or the plugin registry --
+    so the historical-row caveat does not apply. Option B is still the right
+    shape: these are documentation, and a probe that grows a state should not
+    start failing responses.
+    """
+    _assert_published(_HEALTH_FAMILY_ENUMS)
+
+
+def test_the_health_vocabularies_match_their_producers():
+    """Each vocabulary against the literals `health.py` and `capabilities.py`
+    actually emit. Read from source because these are inline literals rather than
+    an enum or a module constant -- there is nothing else to compare against."""
+    import pathlib
+    import re
+
+    import api.v1.schemas.response as R
+
+    health = pathlib.Path("api/v1/endpoints/health.py").read_text(encoding="utf-8")
+    caps   = pathlib.Path("api/v1/endpoints/capabilities.py").read_text(encoding="utf-8")
+
+    assert '"status":  "ok"' in health,                    "the /health literal moved"
+    assert '{"status": "alive"}' in health,                "the /health/live literal moved"
+    assert '"ready" if all_ok else "degraded"' in health,  "the readiness ternary moved"
+    assert '"ok"      if db_ok    else "unavailable"' in health
+    assert '"ok"      if redis_ok else "unavailable"' in health
+    assert '"enterprise" if caps else "oss"' in caps,      "the edition ternary moved"
+
+    # The detector tiers: one default and one ternary, three values in total.
+    detector = set(re.findall(r'_status\s*=\s*"(\w+)"', health))
+    detector |= set(re.findall(r'"(\w+)" if \w+\.is_model_loaded\(\) +else +"(\w+)"', health)[0]
+                    if re.findall(r'"(\w+)" if \w+\.is_model_loaded\(\) +else +"(\w+)"', health) else [])
+    assert detector <= set(R.DETECTOR_CHECK_STATUSES), sorted(detector - set(R.DETECTOR_CHECK_STATUSES))
+
+    # `Config*.source` is one ternary repeated per section, so the vocabulary is
+    # shared rather than four look-alikes.
+    sources = set(re.findall(r'"source": "(\w+)" if \w+ +else "(\w+)"', health))
+    assert sources, "the Config*.source ternaries moved"
+    for a, b in sources:
+        assert {a, b} == set(R.CONFIG_SOURCES), (a, b)
+
+
+def test_the_probe_vocabularies_are_not_merged():
+    """Infrastructure and detector tiers report on different scales.
+
+    A database is reachable or it is not; a detector additionally distinguishes
+    loaded from running-without-its-model. Publishing one union would say a
+    database can be `healthy`, which it cannot.
+    """
+    import api.v1.schemas.response as R
+
+    assert "healthy" not in R.INFRA_CHECK_STATUSES
+    assert "ok" not in R.DETECTOR_CHECK_STATUSES
+    assert set(R.INFRA_CHECK_STATUSES) != set(R.DETECTOR_CHECK_STATUSES)
+    assert "unavailable" in R.INFRA_CHECK_STATUSES and "unavailable" in R.DETECTOR_CHECK_STATUSES
+
+
+def test_every_config_model_publishes_the_source_vocabulary():
+    """All four, not a sample.
+
+    `source` is produced by one ternary per section in `health.py`, so the four
+    models share a vocabulary. The failure worth catching is publishing it on one
+    model and treating the family as finished -- which reads as correct in any
+    single-model check.
+    """
+    schemas = _committed()["components"]["schemas"]
+    missing = [
+        m for m in _CONFIG_SOURCE_MODELS
+        if _published_enum(schemas, m, "source") != ["database", "environment"]
+    ]
+    assert not missing, f"these Config models do not publish the source vocabulary: {missing}"
+
+
+def test_the_health_runtime_still_accepts_an_unknown_probe_value():
+    """A probe that grows a state must not start failing the response. These are
+    the narrowest vocabularies in the API -- one publishes a single value -- so
+    permissiveness matters more here than anywhere else."""
+    import api.v1.schemas.response as R
+
+    checks = R.HealthChecks(database="quarantined", redis="ok",
+                            tfidf_detector="healthy", transformer_detector="degraded")
+    assert checks.database == "quarantined"
+    assert R.HealthResponse(status="starting", version="1.0.0").status == "starting"
+    assert R.CapabilitiesResponse(edition="community", capabilities=[]).model_dump()["edition"] == "community"
+
+
+# ── Phase C / F-030 Option B: the agent-runs family ──────────────────────────
+#
+# This family added NO metadata, and that is the finding rather than an omission.
+# `AgentRunResponse` has three properties: `run_id` (echoed straight back from the
+# caller), `count` (an integer), and `turns` -- a list of `AuditItem`, the audit
+# family's own model. Its vocabularies are published there and reach this
+# operation by reference. Publishing them again would be a second source of truth
+# for the same values.
+
+def test_the_agent_run_turns_reference_the_audit_item_rather_than_copying_it():
+    """The whole reason this family needed no work of its own.
+
+    `turns.items` must stay a `$ref`. If the generator ever inlined `AuditItem`
+    here -- a plausible outcome of restructuring the model -- this operation would
+    get a private copy of the schema, and the enums published on the audit family
+    would silently stop covering it. Nothing else would notice: the property names
+    and types would be identical.
+    """
+    schemas = _committed()["components"]["schemas"]
+    turns = schemas["AgentRunResponse"]["properties"]["turns"]
+
+    assert turns.get("type") == "array", turns
+    assert turns["items"] == {"$ref": "#/components/schemas/AuditItem"}, (
+        "AgentRunResponse.turns no longer references AuditItem, so the audit "
+        "vocabularies no longer reach GET /v1/agent-runs/{run_id}"
+    )
+
+
+def test_the_audit_vocabularies_reach_the_agent_run_operation():
+    """Reachability, walked rather than assumed.
+
+    Follows the operation's own 200 schema to `AgentRunResponse`, then to
+    `AuditItem`, and checks the vocabularies are there -- which is what an
+    integrator or a code generator actually resolves.
+    """
+    doc = _committed()
+    schemas = doc["components"]["schemas"]
+
+    ref = doc["paths"]["/v1/agent-runs/{run_id}"]["get"]["responses"]["200"] \
+             ["content"]["application/json"]["schema"]["$ref"]
+    assert ref.endswith("/AgentRunResponse")
+
+    item_ref = schemas["AgentRunResponse"]["properties"]["turns"]["items"]["$ref"]
+    item = schemas[item_ref.rsplit("/", 1)[-1]]
+
+    missing = [
+        prop for (model, prop), _ in _AUDIT_FAMILY_ENUMS.items()
+        if model == "AuditItem"
+        and not (item["properties"][prop].get("enum")
+                 or any(b.get("enum") for b in item["properties"][prop].get("anyOf", [])))
+    ]
+    assert not missing, (
+        f"these audit vocabularies are not reachable from the agent-run turns: {missing}"
+    )
+
+
+def test_the_agent_run_envelope_has_no_vocabulary_of_its_own():
+    """No new vocabulary was found here, and the absence is pinned.
+
+    `run_id` is whatever the caller put in the path -- constrained only by the
+    NUL rule from F-024 -- and `count` is an integer. If either ever gained an
+    enum it would be a claim about caller input, so the exclusion is asserted
+    rather than left to reviewer memory.
+    """
+    schemas = _committed()["components"]["schemas"]
+    props = schemas["AgentRunResponse"]["properties"]
+
+    assert _published_enum(schemas, "AgentRunResponse", "run_id") is None
+    assert props["count"]["type"] == "integer"
+    assert set(props) == {"run_id", "count", "turns"}, (
+        f"AgentRunResponse gained a property that has not been classified: {sorted(props)}"
+    )
+
+
+def test_an_agent_run_still_round_trips_an_unknown_turn_value():
+    """Option B end to end on the last family: a turn carrying a value outside the
+    published vocabulary is still served, because the enum documents and does not
+    enforce."""
+    import api.v1.schemas.response as R
+
+    turn = R.AuditItem(
+        trace_id="req_1", timestamp="2026-01-01T00:00:00Z", tenant_id=None,
+        decision="ESCALATE", output_decision=None, provider=None, model=None,
+        primary_reason=None, risk_score=0.0, confidence=None, confidence_band=None,
+        threats=[], input_hash="h", detection_mode="fast", execution_mode="scan_only",
+        latency_ms=1.0, key_id=None, dept_id=None, dept_name=None, app_id=None,
+        app_name=None, user_id=None, source=None, ip_address=None,
+        attribution_verified=False, policy_source=None, input_length=1,
+        severity="LOW", session_id=None, turn_index=None, run_id=None,
+        input_source="user_prompt", record_hash=None, prev_hash=None,
+    )
+    run = R.AgentRunResponse(run_id="anything the caller sent", count=1, turns=[turn])
+
+    assert run.turns[0].decision == "ESCALATE"
+    assert run.model_dump()["turns"][0]["decision"] == "ESCALATE"
