@@ -4,8 +4,11 @@ All notable changes to WrapSec are documented here.
 
 ## [Unreleased]
 
-Hardens the OpenAI-compatible proxy. Three of these change behaviour a caller can
-observe, and one is a breaking contract change; they are listed first.
+Hardens the OpenAI-compatible proxy, and restructures the published API contract
+so the documented surface matches what the runtime actually returns. Two entries
+are breaking contract changes and are called out where they appear: an
+unsupported message role is now refused under Security, and the proxy capability
+refusal on `POST /v1/ai/request` changed status under Changed.
 
 ### Security
 
@@ -17,11 +20,19 @@ observe, and one is a breaking contract change; they are listed first.
   reaches no handler: no policy resolution, no detection, no upstream call. Dashboard
   sessions and the platform admin key are unaffected - a restriction belongs to an
   API key, and neither of those is one.
-  The denial is identified by `IP_NOT_ALLOWED` on every endpoint, in that
-  endpoint's envelope shape, so a rule keyed on the code catches it wherever the
-  credential was presented. It is distinct from the generic `FORBIDDEN` used for
-  permission failures: being refused for where you are is a different event from
-  being refused for who you are.
+  The denial is identified by `IP_NOT_ALLOWED` on every endpoint, so a rule keyed
+  on the code catches it wherever the credential was presented. It is distinct
+  from the generic `FORBIDDEN` used for permission failures: being refused for
+  where you are is a different event from being refused for who you are.
+  The body is the standard error envelope on every endpoint, `POST
+  /v1/chat/completions` included. It was previously shaped for the OpenAI
+  protocol on that one route and is not any more: the denial is produced by
+  authentication, before the route runs, and errors the gateway produces answer
+  in the gateway's own envelope. Errors the proxy route itself produces -- a
+  refused model string, a provider failure -- are still OpenAI-shaped. The code
+  is unchanged, so a rule keyed on `IP_NOT_ALLOWED` is unaffected; a caller
+  reading `error.message` is unaffected; a caller reading the OpenAI-only
+  `error.type` on this particular denial no longer finds it.
 - **Message roles are validated, and unsupported roles are refused.** `user`,
   `assistant`, and `system` are accepted; any other role, `tool` included, is
   rejected with `422`. A `tool` message was previously accepted and forwarded to the
@@ -57,6 +68,43 @@ observe, and one is a breaking contract change; they are listed first.
 
 ### Changed
 
+- **BREAKING: `POST /v1/ai/request` refuses proxy execution with `403
+  FEATURE_UNAVAILABLE` where it previously answered `422 VALIDATION_ERROR`.**
+  Two conditions reach it: a trial key, and a deployment whose LLM detection
+  layer is switched off by policy. Neither is a problem with the submitted data
+  -- the same body succeeds against a deployment that serves the capability --
+  so a validation error was the wrong answer and told the caller to change
+  something that was already correct. A caller branching on `422` for this
+  condition must branch on `403` and the `FEATURE_UNAVAILABLE` code instead.
+  The two causes return an identical body on purpose: which one applied is
+  tenant configuration, and the response does not reveal it. `params.feature`
+  names the capability that was refused. The equivalent refusal on
+  `POST /v1/chat/completions` is unchanged and remains OpenAI-shaped.
+- Public error responses now carry the full error envelope, including the ones
+  that previously answered with a shortened `code` and `message` only: the proxy
+  interaction detail `404`, and the proxy settings `404` and `422`. The status
+  codes are unchanged; the bodies gained the `severity`, `key`, `params` and
+  `trace_id` fields every other error already carried, so one parser now handles
+  all of them.
+- Field-level detail is no longer restricted to `422`. A `400` that can be
+  attributed to a specific value now carries `invalid_params` naming it -- a
+  malformed audit date range or a filter that is not a UUID, for example. The
+  field is optional and was already absent on those responses, so a consumer
+  that reads it must already handle absence. No status moved between `400` and
+  `422` to obtain it.
+- `NOT_FOUND` responses on the published routes carry a stable machine token in
+  `params.resource` rather than an English label: `request`, `application`,
+  `department`, `interaction`, `proxy_provider`. One value changed spelling as a
+  result, `proxy provider` to `proxy_provider`. The token exists so a localized
+  client can render its own word for it -- an English label interpolated into a
+  translated sentence is not a translation. It was not previously documented as
+  a stable value, and `error.message` is unchanged in English; the vocabulary is
+  now documented and add-only.
+- Responses are filtered to their declared contract before being sent. A field a
+  handler emits but the published schema does not declare is dropped rather than
+  served, so what the schema describes and what the runtime returns cannot drift
+  apart. The credential returned by `POST /v1/keys` is declared on that response
+  alone; the key listing has no field that could carry one.
 - Scanning every message of a conversation is bounded at 10 eligible messages,
   configurable with `MAX_SCAN_ALL_MESSAGES`. Over the bound the request is rejected
   rather than partly scanned: silently scanning some of a conversation would report a
@@ -73,6 +121,13 @@ observe, and one is a breaking contract change; they are listed first.
 
 ### Fixed
 
+- A path identifier containing a NUL byte returned `500`. The value travelled to
+  the database driver, which rejects it because the column cannot store one, and
+  the resulting error was unhandled. It is now refused as a malformed parameter
+  with `422` before any lookup runs, on `GET /v1/ai/requests/{trace_id}`,
+  `GET /v1/agent-runs/{run_id}` and `GET /v1/proxy/interactions/{trace_id}`. An
+  identifier that is merely unknown is unaffected and still answers exactly as
+  it did.
 - Rotation previously dropped a key's source-network restriction, silently widening
   the new key to any address.
 - A source-network denial did not record which key was refused, which turned revoking
@@ -86,6 +141,28 @@ observe, and one is a breaking contract change; they are listed first.
 
 ### Documentation
 
+- **The published API schema now describes the integrator surface rather than
+  the route table.** `docs/openapi.json` previously listed every registered
+  route, including operator, dashboard and first-run endpoints that no
+  integrator is meant to call; it now describes the 28 published operations.
+  Nothing was removed from the API: the other routes are still served and still
+  authorized exactly as before, and being absent from the schema is a
+  documentation boundary, never an access control.
+- The published `422` schema matches what the application returns. Fourteen
+  operations advertised the framework's generated validation shape, which this
+  API has never emitted -- validation failures have always answered with the
+  standard error envelope and per-field detail under `invalid_params`.
+- `GET /v1/audit/export` advertises `text/csv`. It returns a CSV attachment and
+  always has; the schema described it as JSON with an empty body schema, which
+  told a code generator to expect the wrong thing.
+- `POST /v1/chat/completions` documents both bodies its `429` can carry. The
+  gateway's own rate limiter answers with the standard error envelope and an
+  upstream provider refusal stays OpenAI-shaped; the schema previously named
+  only the second, which was a false statement about half the traffic reaching
+  that status. Runtime behaviour is unchanged -- only the declaration was wrong.
+- The API reference documents `error.params.resource` and its token vocabulary,
+  and states that a client should display `error.message` or resolve its own
+  label rather than rendering the token.
 - The proxy section of the API reference now states what is actually scanned: the
   role-to-trust mapping, that `system` messages are forwarded without inspection,
   that messages are scanned individually rather than concatenated, the bound on
