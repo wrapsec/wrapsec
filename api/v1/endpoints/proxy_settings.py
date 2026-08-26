@@ -30,29 +30,28 @@ from api.v1.schemas.response import ErrorEnvelope, ProxyProviderConfigResponse
 from config.settings import get_settings
 from db.models import ProxyProviderConfigModel
 from domain.entities.principal import Principal
+from errors.catalog import VALIDATION_CATALOG, ValidationCode
+from errors.exceptions import NotFoundError, WrapSecError
 from security.encryption import decrypt, encrypt, mask
 from security.url_validator import validate_llm_base_url
 from services.time import to_iso_z
 
 router = APIRouter()
 
-# Reachable failures on the three PUBLIC proxy-settings routes.
-#
-# 404 is deliberately NOT declared on the read and the delete: both return a
-# REDUCED body (`{"error": {"code", "message"}}`), not the catalog envelope, and
-# this pass preserves error behaviour rather than changing it. Declaring
-# ErrorEnvelope there would advertise fields the routes do not return. Recorded
-# for the error-contract pass, alongside the same divergence on the proxy
-# interaction detail route.
-#
-# 422 on the upsert has TWO branches: request-schema validation, which the global
-# handler answers with the catalog envelope, and a hand-built reduced body for a
-# provider that requires an api_key. Declaring ErrorEnvelope describes the first
-# correctly -- which is what FastAPI's generated entry got wrong -- and leaves
-# the second undocumented, exactly as it is today.
+# Reachable failures on the three PUBLIC proxy-settings routes. All three now
+# answer with the catalog envelope, so every entry below describes the body the
+# runtime actually sends.
 _PROXY_SETTINGS_ERRORS: dict[int | str, dict[str, Any]] = {
     401: {"model": ErrorEnvelope, "description": "Missing or invalid credentials."},
     403: {"model": ErrorEnvelope, "description": "Proxy provider configuration is admin-only, on reads as well as writes."},
+}
+
+# The read and the delete answer 404 when this tenant has no provider row. The
+# upsert does not: it creates one, so a 404 there would document a status it
+# cannot produce.
+_PROXY_SETTINGS_MISSING: dict[int | str, dict[str, Any]] = {
+    **_PROXY_SETTINGS_ERRORS,
+    404: {"model": ErrorEnvelope, "description": "This tenant has no proxy provider configured."},
 }
 logger = logging.getLogger("wrapsec.proxy.settings")
 
@@ -136,7 +135,7 @@ async def _get_config(tenant_id: str, db: AsyncSession) -> ProxyProviderConfigMo
     "/proxy",
     response_model               = ProxyProviderConfigResponse,
     response_model_exclude_unset = True,
-    responses                    = _PROXY_SETTINGS_ERRORS,
+    responses                    = _PROXY_SETTINGS_MISSING,
 )
 async def get_proxy_settings(
     request:    Request,
@@ -152,10 +151,12 @@ async def get_proxy_settings(
     config = await _get_config(tenant_id, db)
 
     if not config:
-        return JSONResponse(
-            status_code=404,
-            content={"error": {"code": "NOT_FOUND", "message": "No proxy provider configured."}},
-        )
+        # The catalog envelope, like every other error on this surface. The
+        # resource name is all the caller learns: `params` carries only
+        # "proxy provider", and the tenant id travels in `debug_message`, which
+        # is logged and never serialized. So the response still says no more
+        # than "this tenant has no provider configured".
+        raise NotFoundError("proxy provider", tenant_id)
 
     # A value, not a JSONResponse: a Response object bypasses the model.
     return _build_config_response(config)
@@ -185,16 +186,33 @@ async def put_proxy_settings(
     """
     tenant_id = request.state.tenant_id
 
-    # Validate: openai and custom providers require an api_key
+    # Validate: openai and custom providers require an api_key.
+    #
+    # Raised rather than returned, so the global handler builds the same envelope
+    # the OTHER 422 on this route already returns -- request-schema validation.
+    # One status answering with two different shapes is what made the published
+    # `422: ErrorEnvelope` a false statement.
+    #
+    # VALIDATION_ERROR is carried as an explicit code because the exception class
+    # named `ValidationError` maps to INVALID_REQUEST/400; using it here would
+    # move this rejection to 400. This matches the existing `WrapSecError(code=,
+    # status_code=)` convention for a 422 raised by handler logic.
+    #
+    # The provider name is NOT reflected into the public message. The condition
+    # is per-field, and `invalid_params` is the canonical place for it: a form
+    # client gets the field and a localizable REQUIRED code instead of an English
+    # sentence quoting the caller's own input back at them.
     if body.provider in ("openai", "custom") and not (body.api_key and body.api_key.get_secret_value()):
-        return JSONResponse(
-            status_code=422,
-            content={
-                "error": {
-                    "code":    "VALIDATION_ERROR",
-                    "message": f"api_key is required for provider '{body.provider}'",
-                }
-            },
+        raise WrapSecError(
+            code           = "VALIDATION_ERROR",
+            status_code    = 422,
+            debug_message  = f"api_key is required for provider {body.provider!r}",
+            invalid_params = [{
+                "field":  "api_key",
+                "code":   ValidationCode.REQUIRED.value,
+                "key":    VALIDATION_CATALOG[ValidationCode.REQUIRED],
+                "params": {},
+            }],
         )
 
     # Encrypt the api_key before storing
@@ -241,7 +259,7 @@ async def put_proxy_settings(
     # A model describes a body, and there is none to describe -- recorded in
     # NON_MODEL_ROUTES with that reason rather than given an empty schema.
     status_code = 204,
-    responses   = _PROXY_SETTINGS_ERRORS,
+    responses   = _PROXY_SETTINGS_MISSING,
 )
 async def delete_proxy_settings(
     request:    Request,
@@ -262,10 +280,8 @@ async def delete_proxy_settings(
     await db.commit()
 
     if cast(CursorResult, result).rowcount == 0:
-        return JSONResponse(
-            status_code=404,
-            content={"error": {"code": "NOT_FOUND", "message": "No proxy provider configured."}},
-        )
+        # Same envelope and same disclosure as the read above.
+        raise NotFoundError("proxy provider", tenant_id)
 
     logger.info(f"Proxy config deleted for tenant_id={tenant_id}")
     return Response(status_code=204)

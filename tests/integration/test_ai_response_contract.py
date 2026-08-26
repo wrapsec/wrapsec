@@ -409,3 +409,196 @@ async def test_a_validation_failure_in_this_family_returns_the_catalog_envelope(
     assert "detail" not in body, "the generated HTTPValidationError shape is back"
     assert body["error"]["code"] == "VALIDATION_ERROR"
     assert body["error"]["invalid_params"][0]["field"] == "input"
+
+
+# ── shared error paths on the AI family ──────────────────────────────────────
+
+@pytest.mark.asyncio
+async def test_reusing_an_idempotency_key_with_a_different_body_is_refused(
+    client, live_key_headers,
+):
+    """409 from the idempotency middleware, which the route never mentions.
+
+    The point of the refusal is that the caller must NOT be handed the first
+    body when they asked for something else, so the second request is asserted
+    to be rejected rather than served a cached 200.
+
+    Also the leak check for this path: the middleware sees the whole request,
+    so its refusal is the natural place for a body or a credential to escape.
+    """
+    key = f"idem-{_unique()}"
+    headers = {**live_key_headers, "Idempotency-Key": key}
+
+    first = await client.post("/v1/ai/request", headers=headers,
+                              json={"input": f"idempotency first {_unique()}"})
+    assert first.status_code == 200, first.text
+
+    secret = f"second-body-marker-{_unique()}"
+    second = await client.post("/v1/ai/request", headers=headers,
+                               json={"input": secret, "user_id": "u-idem-probe"})
+
+    assert second.status_code == 409, second.text
+    error = second.json()["error"]
+    assert error["code"]     == "IDEMPOTENCY_CONFLICT"
+    assert error["key"]      == "errors.IDEMPOTENCY_CONFLICT"
+    assert error["severity"] == "WARNING"
+    assert error["trace_id"].startswith("req_")
+
+    for leaked in (secret, "u-idem-probe", key, live_key_headers["x-api-key"]):
+        assert leaked not in second.text, f"the 409 body carried {leaked!r}"
+
+
+@pytest.mark.asyncio
+async def test_the_read_back_shares_the_global_ai_rate_limit(client, live_key_headers):
+    """429 on a route that scans nothing.
+
+    The global limiter matches on the `/v1/ai` PREFIX, so this read-back sits in
+    the same bucket as the scan routes. That is easy to miss from the route
+    source -- it takes no rate-limit dependency of its own -- and it is why the
+    status went undeclared here while being declared on its siblings.
+
+    The bucket is keyed on the hashed credential, and this fixture's key is
+    unique to the test, so the loop cannot exhaust another test's allowance.
+    """
+    trace = "req_" + "0" * 32
+    refused = None
+    for _ in range(130):
+        r = await client.get(f"/v1/ai/requests/{trace}", headers=live_key_headers)
+        if r.status_code == 429:
+            refused = r
+            break
+        assert r.status_code == 404, r.text   # unknown trace, until the limit bites
+
+    assert refused is not None, "the global /v1/ai bucket was never exhausted"
+    error = refused.json()["error"]
+    assert error["code"] == "RATE_LIMIT_EXCEEDED"
+    assert error["key"]  == "errors.RATE_LIMIT_EXCEEDED"
+    assert isinstance(error["params"].get("retry_after"), int)
+
+
+# ── capability refusals ──────────────────────────────────────────────────────
+#
+# Two conditions on this route refuse the SAME capability for reasons outside
+# the request: a trial credential, and a detection layer disabled by policy. The
+# request is well formed in both cases -- a live key on a tenant with the layer
+# enabled succeeds with an identical body -- so neither is a validation failure,
+# and neither is about the caller's role.
+#
+# They share one code and one body ON PURPOSE. A caller able to tell them apart
+# would be reading tenant configuration out of an error message.
+
+_FEATURE_TERMS = ("trial", "tier", "plan", "upgrade", "subscription", "pricing",
+                  "billing", "llm_enabled", "detection", "policy", "tenant")
+
+
+def _capability_envelope(response):
+    assert response.status_code == 403, response.text
+    body = response.json()
+    assert set(body) == {"error"}
+    error = body["error"]
+    assert set(error) == {"code", "severity", "key", "params", "message", "trace_id"}, (
+        f"unexpected envelope fields: {sorted(error)}"
+    )
+    assert error["code"]     == "FEATURE_UNAVAILABLE"
+    assert error["key"]      == "errors.FEATURE_UNAVAILABLE"
+    assert error["severity"] == "WARNING"
+    assert error["params"]   == {"feature": "proxy execution"}
+    assert error["message"]  == "proxy execution is not available."
+    assert error["trace_id"].startswith("req_")
+    # The feature identity is structural. The message is the catalog rendering of
+    # key + params, not a sentence written at the call site.
+    assert "invalid_params" not in error, (
+        "the capability refusal is not a field error; execution_mode is valid"
+    )
+    return error
+
+
+@pytest.mark.asyncio
+async def test_a_trial_credential_is_refused_the_proxy_capability(client, scored_key_pair):
+    """Producer 1. Was `403 FORBIDDEN`, which rendered "You do not have
+    permission to perform this action" and sent the reader looking for a role to
+    change. Nothing about this caller's role is wrong."""
+    _, trial = scored_key_pair
+
+    r = await client.post("/v1/ai/request", headers=trial, json={
+        "input": "capability probe", "execution_mode": "proxy", "model": "openai/gpt-4o",
+    })
+
+    _capability_envelope(r)
+
+
+@pytest.mark.asyncio
+async def test_a_disabled_detection_layer_refuses_the_proxy_capability(
+    client, scored_key_pair, admin_jwt_headers,
+):
+    """Producer 2. Was `422 VALIDATION_ERROR`, which was wrong twice: the body is
+    valid, and `llm_enabled` is resolved policy the caller cannot set and usually
+    cannot read."""
+    live, _ = scored_key_pair
+    off = await client.put("/v1/settings/layers", headers=admin_jwt_headers,
+                           json={"llm_enabled": False})
+    assert off.status_code == 200, off.text
+
+    r = await client.post("/v1/ai/request", headers=live, json={
+        "input": "capability probe", "execution_mode": "proxy", "model": "openai/gpt-4o",
+    })
+
+    _capability_envelope(r)
+
+
+@pytest.mark.asyncio
+async def test_the_two_capability_refusals_are_indistinguishable(
+    client, scored_key_pair, admin_jwt_headers,
+):
+    """The security property, asserted rather than argued.
+
+    A trial caller and a live caller on a tenant with the layer switched off must
+    receive the same body. If they differed, the response would tell each of them
+    something about the deployment they are not entitled to know.
+    """
+    live, trial = scored_key_pair
+    assert (await client.put("/v1/settings/layers", headers=admin_jwt_headers,
+                             json={"llm_enabled": False})).status_code == 200
+
+    body = {"input": "same probe", "execution_mode": "proxy", "model": "openai/gpt-4o"}
+    a = await client.post("/v1/ai/request", headers=trial, json=body)
+    b = await client.post("/v1/ai/request", headers=live,  json=body)
+
+    strip = lambda r: {k: v for k, v in r.json()["error"].items() if k != "trace_id"}
+    assert a.status_code == b.status_code == 403
+    assert strip(a) == strip(b), (
+        "the two capability refusals differ, so the response distinguishes a "
+        "credential class from a tenant policy setting"
+    )
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("mode", ["trial", "layer-off"])
+async def test_the_capability_refusal_leaks_no_cause_or_configuration(
+    client, scored_key_pair, admin_jwt_headers, mode,
+):
+    """No commercial terminology and no configuration reaches the public body.
+
+    The catalog owns the text, and `params` carries a capability NAME rather than
+    the flag, the plan or the credential class that decided it. The cause lives
+    in `debug_message`, which is logged and never serialized.
+    """
+    live, trial = scored_key_pair
+    if mode == "trial":
+        headers = trial
+    else:
+        headers = live
+        assert (await client.put("/v1/settings/layers", headers=admin_jwt_headers,
+                                 json={"llm_enabled": False})).status_code == 200
+
+    r = await client.post("/v1/ai/request", headers=headers, json={
+        "input": "leak probe", "execution_mode": "proxy", "model": "openai/gpt-4o",
+    })
+
+    assert r.status_code == 403
+    lowered = r.text.lower()
+    for term in _FEATURE_TERMS:
+        assert term not in lowered, f"the capability refusal carried {term!r}"
+    for term in ("execution_mode", "openai", "gpt-4o", "wsk_", "sk-",
+                 "SELECT", "Traceback", "/home/"):
+        assert term not in r.text, f"the capability refusal carried {term!r}"

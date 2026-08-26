@@ -417,3 +417,194 @@ async def test_export_declares_no_response_model_at_runtime(client, scored_key_p
     r = await client.get("/v1/audit/export", headers=live)
     assert r.status_code == 200
     assert r.headers["content-type"].startswith("text/csv")
+
+
+# ── the export's shared error paths ──────────────────────────────────────────
+#
+# None of these is built by the route. 400 comes from the shared date parser,
+# 401 from the auth middleware and 429 from this route's own rate-limit
+# dependency -- so nothing in the endpoint body hints they exist, which is how
+# all three went undeclared. Measured here; declared in the OpenAPI suite.
+
+@pytest.mark.asyncio
+async def test_export_rejects_a_malformed_date_range_with_the_catalog_envelope(
+    client, scored_key_pair,
+):
+    live, _ = scored_key_pair
+
+    r = await client.get("/v1/audit/export?from=not-a-date", headers=live)
+
+    assert r.status_code == 400, r.text
+    error = r.json()["error"]
+    assert error["code"]     == "INVALID_REQUEST"
+    assert error["severity"] == "WARNING"
+    assert error["key"]      == "errors.INVALID_REQUEST"
+    assert error["trace_id"].startswith("req_")
+    assert "not-a-date" not in r.text, "the rejected value is echoed back"
+
+
+@pytest.mark.asyncio
+async def test_export_without_credentials_returns_the_catalog_envelope(client):
+    r = await client.get("/v1/audit/export")
+
+    assert r.status_code == 401, r.text
+    assert r.headers["content-type"].startswith("application/json"), (
+        "an unauthenticated export must not answer with the CSV media type"
+    )
+    error = r.json()["error"]
+    assert error["code"] == "UNAUTHORIZED"
+    assert error["key"]  == "errors.UNAUTHORIZED"
+
+
+@pytest.mark.asyncio
+async def test_export_exhausting_its_own_bucket_returns_the_catalog_envelope(
+    client, scored_key_pair,
+):
+    """The export carries a bucket of its own, far smaller than the global one.
+
+    Its limit is a setting, so the loop finds the boundary rather than assuming
+    it; asserting "the 6th call is refused" would break the day the default
+    changes, for a reason unrelated to the contract under test.
+
+    The bucket is keyed on the credential and this fixture mints a fresh one per
+    test, so exhausting it here cannot affect another test.
+    """
+    live, _ = scored_key_pair
+
+    refused = None
+    for _ in range(12):
+        r = await client.get("/v1/audit/export", headers=live)
+        if r.status_code == 429:
+            refused = r
+            break
+        assert r.status_code == 200, r.text
+
+    assert refused is not None, "the export bucket was never exhausted in 12 calls"
+    error = refused.json()["error"]
+    assert error["code"]     == "RATE_LIMIT_EXCEEDED"
+    assert error["key"]      == "errors.RATE_LIMIT_EXCEEDED"
+    assert error["severity"] == "WARNING"
+    # The wait is a structured param, not a sentence a client has to parse.
+    assert isinstance(error["params"].get("retry_after"), int)
+
+
+# ── field attribution on the 400 validation branches ─────────────────────────
+#
+# These are 400s, not 422s: the request schema accepted the query, and it was
+# application logic that rejected the VALUE. The status is unchanged and stays
+# unchanged -- what is new is that the envelope now says which parameter was
+# rejected, which the contract permits on any canonical error carrying field
+# detail rather than on 422 alone.
+
+_DATE_ENTRY = {"code": "INVALID_VALUE", "key": "forms.errors.INVALID_VALUE", "params": {}}
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize(
+    ("query", "expected_fields"),
+    [
+        ("?from=not-a-date",                    ["from"]),
+        ("?to=not-a-date",                      ["to"]),
+        ("?from=not-a-date&to=also-bad",        ["from", "to"]),
+        ("?from=2026-01-01&to=also-bad",        ["to"]),
+        ("?from=not-a-date&to=2026-01-02",      ["from"]),
+    ],
+    ids=["from-bad", "to-bad", "both-bad", "from-good-to-bad", "from-bad-to-good"],
+)
+async def test_a_malformed_date_bound_names_only_the_bound_that_failed(
+    client, scored_key_pair, query, expected_fields,
+):
+    """The attribution has to be narrow to be worth having.
+
+    `date_range_bounds` parses both bounds under one exception, so the obvious
+    implementation blames both and tells a caller their perfectly good `from` is
+    invalid. The mixed cases are the ones that prove it does not: a valid bound
+    alongside an invalid one must not appear.
+    """
+    live, _ = scored_key_pair
+
+    r = await client.get("/v1/audit/logs" + query, headers=live)
+
+    assert r.status_code == 400, r.text
+    error = r.json()["error"]
+    assert error["code"]     == "INVALID_REQUEST"
+    assert error["severity"] == "WARNING"
+    assert error["key"]      == "errors.INVALID_REQUEST"
+    assert error["message"]  == "Invalid request."
+    assert error["params"]   == {}
+
+    assert error["invalid_params"] == [
+        {"field": f, **_DATE_ENTRY} for f in expected_fields
+    ], f"{query} attributed the failure to the wrong bound(s)"
+
+
+@pytest.mark.asyncio
+async def test_a_date_only_upper_bound_is_still_accepted(client, scored_key_pair):
+    """The guard against the obvious wrong fix.
+
+    A date-only `to` is valid and is extended to the end of that day. Re-checking
+    the raw strings to find the failing bound would reject it, so the check runs
+    through the same helper the success path uses. Without this, the attribution
+    work could silently narrow what the API accepts.
+    """
+    live, _ = scored_key_pair
+
+    r = await client.get("/v1/audit/logs?to=2026-04-16", headers=live)
+
+    assert r.status_code == 200, r.text
+
+
+@pytest.mark.asyncio
+async def test_a_non_uuid_user_filter_names_its_own_field(client, scored_key_pair):
+    """INVALID_UUID already existed for exactly this. The filter is UUID-strict
+    to close a substring-probe enumeration path, so the rejected value must not
+    come back -- reflecting the probe would hand the prober a confirmation
+    channel, which is the thing the strictness exists to remove."""
+    live, _ = scored_key_pair
+    probe = "not-a-uuid-probe-value"
+
+    r = await client.get(f"/v1/audit/logs?user_id={probe}", headers=live)
+
+    assert r.status_code == 400, r.text
+    error = r.json()["error"]
+    assert error["code"] == "INVALID_REQUEST"
+    assert error["invalid_params"] == [{
+        "field": "user_id", "code": "INVALID_UUID",
+        "key": "forms.errors.INVALID_UUID", "params": {},
+    }]
+    assert probe not in r.text, "the rejected filter value was echoed back"
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("path", ["/v1/audit/logs", "/v1/audit/stats", "/v1/audit/export"])
+async def test_every_audit_route_sharing_the_date_parser_gains_the_attribution(
+    client, scored_key_pair, path,
+):
+    """The parser is shared, so the improvement must reach every route using it
+    rather than only the one it was tested on."""
+    live, _ = scored_key_pair
+
+    r = await client.get(f"{path}?from=not-a-date", headers=live)
+
+    assert r.status_code == 400, r.text
+    assert r.json()["error"]["invalid_params"] == [{"field": "from", **_DATE_ENTRY}]
+
+
+@pytest.mark.asyncio
+async def test_the_400_bodies_leak_no_submitted_values_or_internals(
+    client, scored_key_pair,
+):
+    """The rejected strings stay in `debug_message`, which is logged and never
+    serialized."""
+    live, _ = scored_key_pair
+    marker = "2026-13-45T99:99:99"
+
+    r = await client.get(f"/v1/audit/logs?from={marker}", headers=live)
+
+    assert r.status_code == 400
+    for leaked in (marker, "ISO 8601", "audit_logs", "SELECT", "asyncpg",
+                   "Traceback", "/home/", "tenant_id"):
+        assert leaked not in r.text, f"the 400 body carried {leaked!r}"
+    for entry in r.json()["error"]["invalid_params"]:
+        assert set(entry) == {"field", "code", "key", "params"}
+        assert entry["params"] == {}

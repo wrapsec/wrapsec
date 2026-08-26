@@ -254,15 +254,32 @@ async def create_key(
     # within its tenant. The DB CheckConstraint enforces this too, but rejecting
     # here returns a clear 422 instead of a 500 from constraint violation.
     if dept_id is None:
+        from errors.catalog import VALIDATION_CATALOG, ValidationCode
         from errors.exceptions import WrapSecError
+
+        # `dept_id` is a real field on this request, so the condition belongs in
+        # `invalid_params` rather than in an English sentence the caller has to
+        # parse. Only `dept_id` is reported, not `app_id`: neither is required on
+        # its own -- supplying the app is one way to RESOLVE a department -- and
+        # marking both REQUIRED would tell the caller to send two fields when
+        # either one suffices.
+        #
+        # The full guidance stays in the log line, where the detail is useful to
+        # whoever is debugging the caller's integration.
         raise WrapSecError(
-            code        = "VALIDATION_ERROR",
-            message     = (
+            code           = "VALIDATION_ERROR",
+            status_code    = 422,
+            debug_message  = (
                 "dept_id is required to create an API key. Admins without a "
                 "department must specify app_id (dept derived from app) or "
                 "dept_id (dept-scoped key) explicitly."
             ),
-            status_code = 422,
+            invalid_params = [{
+                "field":  "dept_id",
+                "code":   ValidationCode.REQUIRED.value,
+                "key":    VALIDATION_CATALOG[ValidationCode.REQUIRED],
+                "params": {},
+            }],
         )
 
     # Persist expires_at (validated to ISO-8601 by the schema). Omitting it here

@@ -324,9 +324,17 @@ def test_chat_completions_advertises_its_own_protocol_shape():
     `created`, exactly one choice, and an optional `wrapsec` block.
 
     What must NOT happen is the WrapSec envelope leaking onto its OpenAI-shaped
-    errors. Two statuses are the measured exceptions: 422 is answered by the
-    global validation handler, and 403 refuses a dashboard session before the
-    OpenAI-compatible path begins. Every other error stays OpenAI-shaped.
+    errors. FOUR statuses are the measured exceptions, all answered before or
+    outside the OpenAI-compatible path: 401 and 409 come from middleware (auth
+    and idempotency), 422 from the global validation handler, and 403 refuses a
+    dashboard session. Every error the route itself builds stays OpenAI-shaped.
+
+    429 belongs to neither group -- it has one producer on each side -- and is
+    asserted separately.
+
+    401 and 409 were reachable and canonical well before they were declared --
+    neither is mentioned anywhere in this route's source, which is why they were
+    missed. Both are measured over HTTP in the integration suite.
     """
     op = _committed()["paths"]["/v1/chat/completions"]["post"]
     ref = lambda code: (
@@ -336,14 +344,193 @@ def test_chat_completions_advertises_its_own_protocol_shape():
 
     assert ref("200") == "ChatCompletionResponse"
 
-    for code in ("400", "413", "429", "500", "502", "504"):
+    # 429 is excluded here and asserted on its own below: it is the one status
+    # with two producers, so it is the one status that is NOT a single $ref.
+    for code in ("400", "413", "500", "502", "504"):
         assert ref(code) == "OpenAIErrorResponse", (
             f"{code} on the OpenAI-compatible route advertises {ref(code)!r}; its "
             "callers parse error.message / error.type / error.code"
         )
 
-    for code in ("403", "422"):
+    for code in ("401", "403", "409", "422"):
         assert ref(code) == "ErrorEnvelope", (
             f"{code} is answered by WrapSec rather than by the OpenAI-compatible "
             f"path, so it must advertise the catalog envelope, not {ref(code)!r}"
         )
+
+
+def test_the_proxy_interaction_detail_404_advertises_the_catalog_envelope():
+    """The 404 that was converted from a reduced body to the catalog envelope.
+
+    Phase A deliberately left this undeclared: the route returned
+    `{"error": {code, message}}`, and advertising `ErrorEnvelope` would have
+    promised fields the runtime did not send. The runtime now sends the full
+    envelope, so the declaration follows the behaviour rather than leading it --
+    the integration suite measures the body, this asserts the published contract
+    agrees.
+
+    The LIST route is asserted to have no 404 at all: it answers an empty result
+    with `{"total": 0, "items": []}`, and a documented status nothing produces is
+    a promise nothing keeps.
+    """
+    paths = _committed()["paths"]
+
+    detail = paths["/v1/proxy/interactions/{trace_id}"]["get"]["responses"]
+    assert "404" in detail, "the detail route's 404 is undeclared again"
+    ref = (detail["404"]["content"]["application/json"]["schema"]["$ref"]).split("/")[-1]
+    assert ref == "ErrorEnvelope", f"the 404 advertises {ref!r}"
+
+    assert "404" not in paths["/v1/proxy/interactions"]["get"]["responses"], (
+        "the list route advertises a 404 it never produces"
+    )
+
+
+def test_the_proxy_settings_errors_are_declared_where_they_occur():
+    """The proxy-settings family after its error envelopes were canonicalized.
+
+    Two different defects were corrected here, and they had opposite polarity:
+
+      * the read and the delete answer 404 and declared nothing;
+      * the upsert DECLARED `422: ErrorEnvelope` while one of its two branches
+        returned a reduced body -- a published statement that was false.
+
+    So the upsert's declaration is unchanged by that work and is asserted anyway:
+    the fix was to make the runtime match it, and a later edit that "corrects" the
+    schema instead would pass every other test in this file.
+
+    The upsert is also asserted to have NO 404. It upserts -- a missing row is
+    what it creates, not an error -- so declaring one would document a status it
+    cannot produce.
+    """
+    proxy = _committed()["paths"]["/v1/settings/proxy"]
+    ref = lambda method, code: (
+        (proxy[method]["responses"].get(code, {}).get("content") or {})
+        .get("application/json", {}).get("schema", {}).get("$ref", "").split("/")[-1]
+    )
+
+    for method in ("get", "delete"):
+        assert "404" in proxy[method]["responses"], (
+            f"{method.upper()} /v1/settings/proxy answers 404 but declares none"
+        )
+        assert ref(method, "404") == "ErrorEnvelope", (
+            f"{method.upper()} 404 advertises {ref(method, '404')!r}"
+        )
+
+    assert ref("put", "422") == "ErrorEnvelope", (
+        "the upsert's 422 no longer advertises the catalog envelope; both of its "
+        "branches return one"
+    )
+    assert "404" not in proxy["put"]["responses"], (
+        "the upsert advertises a 404 it never produces"
+    )
+
+
+# Public error responses that are produced by shared machinery -- middleware, a
+# rate-limit dependency, the global validation handler -- rather than by the
+# route's own body. They were reachable and canonical long before they were
+# declared, which is exactly why they went unnoticed: nothing about the route
+# source mentions them.
+#
+# Each entry is (path, method, status, code) and is backed by a runtime test
+# that triggers the condition over HTTP and asserts the same code. This checks
+# the published half of that pair.
+_SHARED_ERROR_DECLARATIONS = [
+    ("/v1/audit/export",            "get",  "400", "INVALID_REQUEST"),
+    ("/v1/audit/export",            "get",  "401", "UNAUTHORIZED"),
+    ("/v1/audit/export",            "get",  "429", "RATE_LIMIT_EXCEEDED"),
+    ("/v1/ai/requests/{trace_id}",  "get",  "429", "RATE_LIMIT_EXCEEDED"),
+    ("/v1/ai/request",              "post", "409", "IDEMPOTENCY_CONFLICT"),
+    ("/v1/chat/completions",        "post", "401", "UNAUTHORIZED"),
+    ("/v1/chat/completions",        "post", "409", "IDEMPOTENCY_CONFLICT"),
+]
+
+
+@pytest.mark.parametrize(
+    ("path", "method", "status", "code"),
+    _SHARED_ERROR_DECLARATIONS,
+    ids=[f"{m.upper()} {p} {s}" for p, m, s, _ in _SHARED_ERROR_DECLARATIONS],
+)
+def test_a_reachable_shared_error_is_declared_as_the_catalog_envelope(path, method, status, code):
+    """Declared, and declared as the envelope the runtime actually returns.
+
+    Asserting only that the status key exists would pass for an entry with no
+    schema, or with the wrong one -- which is the defect this whole phase exists
+    to remove, not a weaker version of it. The `$ref` is what a generator reads.
+
+    `code` is carried here for the runtime counterpart to match on; it is not
+    published in the schema (the envelope declares `code` as a string, not an
+    enum of every catalog member), so it is not asserted against the spec.
+    """
+    responses = _committed()["paths"][path][method]["responses"]
+
+    assert status in responses, (
+        f"{method.upper()} {path} answers {status} {code} at runtime but declares "
+        "no such response"
+    )
+    ref = (
+        (responses[status].get("content") or {})
+        .get("application/json", {}).get("schema", {}).get("$ref", "").split("/")[-1]
+    )
+    assert ref == "ErrorEnvelope", (
+        f"{method.upper()} {path} {status} advertises {ref!r}; the runtime returns "
+        f"the catalog envelope with code {code}"
+    )
+
+
+def test_the_csv_export_gained_error_declarations_without_gaining_a_json_success():
+    """The export's 200 must stay CSV-only while its error set grows.
+
+    Its errors are `application/json` and its success is not, so adding the one
+    is the most plausible way to reintroduce the other -- which was the original
+    defect on this route.
+    """
+    export = _committed()["paths"]["/v1/audit/export"]["get"]["responses"]
+
+    assert list(export["200"]["content"]) == ["text/csv"], (
+        f"the export success media types are {list(export['200']['content'])}"
+    )
+    for status in ("400", "401", "422", "429"):
+        assert list(export[status]["content"]) == ["application/json"], (
+            f"the export {status} is not application/json"
+        )
+
+
+def test_the_chat_429_advertises_both_of_its_producers():
+    """The one status on this route with two legitimate producers.
+
+    The gateway's own limiter refuses with the catalog envelope; an upstream
+    provider refusal is mapped by the route and stays OpenAI-shaped. Both are
+    real, so advertising either alone was a false statement about half the
+    traffic that reaches this status.
+
+    WHY `anyOf` AND NOT `oneOf`. These are alternative producers, not a
+    discriminated union -- nothing requires a body to match exactly one branch,
+    and there is no discriminator field to key on. `anyOf` is also the keyword
+    this schema already uses wherever a union appears, so it asks nothing new of
+    a consumer that already reads it.
+
+    NOT VERIFIED: how an EXTERNAL code generator handles this. No generator
+    consumes `docs/openapi.json` in this repository -- both SDKs are hand
+    written -- so the claim is only that the schema is accurate, not that every
+    downstream toolchain renders it well. That limitation is deliberate and
+    should stay recorded here rather than being quietly assumed away.
+
+    Fails if either branch disappears, which is the point: dropping one is how
+    this silently reverts to describing half the behaviour.
+    """
+    schema = (
+        _committed()["paths"]["/v1/chat/completions"]["post"]
+        ["responses"]["429"]["content"]["application/json"]["schema"]
+    )
+
+    assert "oneOf" not in schema, "the 429 union became exclusive; see the docstring"
+    assert "anyOf" in schema, (
+        f"the 429 is advertised as a single schema again: {schema}"
+    )
+
+    branches = {b.get("$ref", "").split("/")[-1] for b in schema["anyOf"]}
+    assert branches == {"OpenAIErrorResponse", "ErrorEnvelope"}, (
+        f"the 429 advertises {sorted(branches)}; both producers must be present "
+        "-- the gateway limiter (catalog envelope) and the upstream provider "
+        "refusal (OpenAI-shaped)"
+    )

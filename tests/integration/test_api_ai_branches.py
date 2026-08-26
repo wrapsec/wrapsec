@@ -74,14 +74,21 @@ async def test_trial_key_input_cap_rejected(client, test_db):
 
 
 @pytest.mark.asyncio
-async def test_trial_key_proxy_mode_forbidden(client, test_db):
+async def test_trial_key_proxy_mode_refused_as_unavailable(client, test_db):
+    """The code is asserted, not just the status.
+
+    This refusal moved from FORBIDDEN to FEATURE_UNAVAILABLE without changing the
+    status, so a status-only assertion passed under both and the old name
+    ("forbidden") had quietly become wrong.
+    """
     raw, _ = await _seed_key(test_db, key_type="trial")
     r = await client.post(
         "/v1/ai/request",
         json={"input": "hello", "execution_mode": "proxy", "model": "gpt-4o"},
         headers={"x-api-key": raw},
     )
-    assert r.status_code == 403
+    assert r.status_code == 403, r.text
+    assert r.json()["error"]["code"] == "FEATURE_UNAVAILABLE"
 
 
 @pytest.mark.asyncio
@@ -116,7 +123,17 @@ async def test_app_scoped_key_with_rate_limit_override_scans(client, test_db):
 # ── proxy-requires-LLM guard ─────────────────────────────────────────────────
 
 @pytest.mark.asyncio
-async def test_proxy_mode_requires_llm_layer_422(client, test_db):
+async def test_proxy_mode_requires_llm_layer(client, test_db):
+    """CONVERTED from 422. The refusal is a capability decision, not a
+    validation result.
+
+    A DEPARTMENT override disables the layer here, which is what this test adds
+    over the contract suite's tenant-level case: the refusal must follow the
+    resolved policy at whichever layer set it. The body is asserted only enough
+    to prove the status and code moved together -- the full envelope is pinned in
+    `test_ai_response_contract.py`, and duplicating it would mean two places to
+    update for one contract.
+    """
     # Department override disables the LLM layer; proxy mode then cannot run.
     raw, _ = await _seed_key(test_db, dept_policy_override={"detection": {"llm_enabled": False}})
     r = await client.post(
@@ -124,7 +141,9 @@ async def test_proxy_mode_requires_llm_layer_422(client, test_db):
         json={"input": "hello", "execution_mode": "proxy", "model": "gpt-4o"},
         headers={"x-api-key": raw},
     )
-    assert r.status_code == 422
+    assert r.status_code == 403, r.text
+    assert r.json()["error"]["code"] == "FEATURE_UNAVAILABLE"
+    assert r.json()["error"]["params"] == {"feature": "proxy execution"}
 
 
 # ── provider failure in proxy mode ───────────────────────────────────────────

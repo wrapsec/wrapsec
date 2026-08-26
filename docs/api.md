@@ -89,7 +89,7 @@ Used by applications and services. Three key types:
 **Trial key** (`wsk_trial_...`) - restricted for demos.
 - Input cap: 500 characters
 - Rate limit: 10 req/min (enforced at endpoint level)
-- Proxy mode: disabled - returns `403 trial_proxy_disabled`
+- Proxy mode: disabled - `POST /v1/chat/completions` returns `403 trial_proxy_disabled` in the OpenAI-compatible envelope; `POST /v1/ai/request` with `execution_mode: proxy` returns `403 FEATURE_UNAVAILABLE`
 
 ### JWT Bearer
 
@@ -184,7 +184,7 @@ WrapSec uses `PATCH` for user updates and `PUT` for settings and configuration. 
 | `x-api-key` | API key authentication |
 | `Authorization` | `Bearer {jwt_token}` - dashboard user auth |
 | `Content-Type` | `application/json` for POST/PUT |
-| `Idempotency-Key` | UUID - idempotent `POST /v1/ai/request` only |
+| `Idempotency-Key` | UUID - honoured on `POST /v1/ai/request` and `POST /v1/chat/completions` |
 
 **Response:**
 
@@ -241,13 +241,14 @@ Security and proxy errors additionally include a `wrapsec` key:
 | `PASSWORD_CHANGE_REQUIRED` | 403 | Must change password before accessing this resource |
 | `TENANT_SUSPENDED` | 403 | The tenant has been suspended by the platform operator - all its traffic is rejected until reactivation |
 | `PROXY_REQUIRES_API_KEY` | 403 | `POST /v1/chat/completions` called with a JWT session - the proxy accepts API keys only |
+| `FEATURE_UNAVAILABLE` | 403 | The requested capability is not served for this caller. `params.feature` names it. The cause - a credential class, a detection layer disabled by policy - is deliberately not distinguished, so the response never reveals tenant configuration |
 | `IP_NOT_ALLOWED` | 403 | The API key was presented from an address outside its `ip_allowlist`. Returned on every endpoint the key can reach, in that endpoint's envelope shape |
 | `NOT_FOUND` | 404 | Resource does not exist |
 | `CONFLICT` | 409 | Duplicate (e.g. email already registered) |
 | `IDEMPOTENCY_CONFLICT` | 409 | Same Idempotency-Key, different body |
 | `VALIDATION_ERROR` | 422 | Body failed validation |
 | `ACCOUNT_LOCKED` | 429 | Too many failed login attempts - includes `retry_after` seconds |
-| `RATE_LIMITED` | 429 | Rate limit exceeded |
+| `RATE_LIMIT_EXCEEDED` | 429 | Rate limit exceeded - includes `retry_after` seconds |
 | `LLM_UNAVAILABLE` | 502 | `POST /v1/ai/request` with `execution_mode: proxy`: the scan completed, the provider did not return a usable answer. No `output` is returned; the scan itself is audited and readable at the `trace_id` in the error |
 | `INTERNAL_ERROR` | 500 | Unexpected server error |
 | `input_blocked` | 400 | Proxy: input blocked by policy |
@@ -1220,11 +1221,11 @@ counter-intuitive -- lowering it improves refusals and latency together. See "Tu
 
 **WrapSec response headers:**
 
-`X-WrapSec-Trace-Id` is present on **every** response from this endpoint - including early error exits (invalid model format, trial key rejection, provider config errors). All other headers are present only when the request reached the detection pipeline.
+`X-WrapSec-Trace-Id` accompanies every response **this endpoint produces**, including its early error exits (invalid model format, trial key rejection, provider config errors). Refusals that happen before the endpoint runs - authentication, the IP allowlist, a suspended tenant, an idempotency conflict, request validation, the gateway rate limiter - carry `X-Trace-Id` and the same value in `error.trace_id` instead. Correlate on either. All other `X-WrapSec-*` headers are present only when the request reached the detection pipeline.
 
 | Header | Description |
 |---|---|
-| `X-WrapSec-Trace-Id` | Trace ID, `req_` + 32 hex characters - always present |
+| `X-WrapSec-Trace-Id` | Trace ID, `req_` + 32 hex characters - on every response the endpoint itself produces |
 | `X-WrapSec-Input-Decision` | `ALLOW` / `BLOCK` / `SANITIZE` |
 | `X-WrapSec-Input-Primary-Reason` | Primary reason for input decision |
 | `X-WrapSec-Input-Confidence` | Input confidence (0.0-1.0) |

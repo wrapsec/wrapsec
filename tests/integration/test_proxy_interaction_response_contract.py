@@ -195,13 +195,25 @@ async def test_the_detail_keeps_empty_fields_null(client, owned_interaction):
 
 # ── the errors this route actually returns ───────────────────────────────────
 
+# The reduced body this route used to return, kept as data so the regression
+# tests below state the old shape once instead of describing it in prose. A body
+# matching this exactly is the defect, not merely a different field set.
+_REDUCED_404 = {"code", "message"}
+
+
 @pytest.mark.asyncio
-async def test_a_missing_interaction_keeps_its_existing_404_body(client, owned_interaction):
-    """PINNED, NOT ENDORSED. This 404 is a reduced body -- `code` and `message`
-    only -- not the catalog envelope every other WrapSec error uses. This pass
-    preserves error behaviour, so the shape is recorded here rather than changed,
-    and the schema does not advertise ErrorEnvelope for it. Fixing it is an
-    error-contract change and will fail this test deliberately."""
+async def test_a_missing_interaction_returns_the_catalog_envelope(client, owned_interaction):
+    """CONVERTED. This 404 used to be a reduced body -- `code` and `message` only.
+
+    It is now the catalog envelope every other WrapSec error uses, which is what
+    the schema advertises. The status and the error code are unchanged; what a
+    caller gains is `severity`, `key`, `params` and a `trace_id` to correlate on.
+
+    The field set is asserted exactly, in both directions: a missing field is a
+    reduced envelope creeping back, and an extra one is an undeclared field on an
+    error body. `invalid_params` is absent because a lookup miss has no per-field
+    detail -- the builder omits it rather than sending an empty list.
+    """
     headers, _ = owned_interaction
 
     r = await client.get(f"/v1/proxy/interactions/tr-{uuid.uuid4().hex[:12]}", headers=headers)
@@ -209,11 +221,113 @@ async def test_a_missing_interaction_keeps_its_existing_404_body(client, owned_i
     assert r.status_code == 404
     body = r.json()
     assert set(body) == {"error"}
-    assert set(body["error"]) == {"code", "message"}, (
-        f"the 404 body changed: {sorted(body['error'])}. If it now carries the "
-        "catalog envelope, that is an error-contract change -- update this test."
+
+    error = body["error"]
+    assert set(error) == {"code", "severity", "key", "params", "message", "trace_id"}, (
+        f"the 404 envelope changed: {sorted(error)}"
     )
-    assert body["error"]["code"] == "NOT_FOUND"
+    assert set(error) != _REDUCED_404, "the reduced 404 envelope is back"
+    assert error["code"]     == "NOT_FOUND"
+    assert error["severity"] == "WARNING"
+    assert error["key"]      == "errors.NOT_FOUND"
+    assert error["params"]   == {"resource": "interaction"}
+    assert error["trace_id"].startswith("req_")
+
+
+@pytest.mark.asyncio
+async def test_the_404_does_not_echo_the_requested_trace_id(client, owned_interaction):
+    """The identifier stays out of the body, which is a tightening, not a loss.
+
+    The old message interpolated the caller's own path segment
+    (`Interaction <trace_id> not found.`). The catalog resolves the message from
+    `params.resource` alone, and the identifier travels in `debug_message`, which
+    is logged and never serialized -- the same treatment
+    `GET /v1/ai/requests/{trace_id}` already gives an identical lookup.
+
+    Asserted with a value that would be unmistakable if it were reflected, so
+    this also covers the general case of caller input reaching an error body.
+    """
+    headers, _ = owned_interaction
+    probe = "tr-reflect-me-b06f1d0a"
+
+    r = await client.get(f"/v1/proxy/interactions/{probe}", headers=headers)
+
+    assert r.status_code == 404
+    assert probe not in r.text, "the requested trace_id is reflected into the 404 body"
+    assert r.json()["error"]["message"] == "interaction not found."
+
+
+@pytest.mark.asyncio
+async def test_out_of_scope_and_absent_are_the_same_404(client, owned_interaction, test_db):
+    """The security property the three 404 branches exist to hold.
+
+    An interaction that EXISTS but belongs to another key must be indistinguishable
+    from one that does not exist -- otherwise the 404 becomes an oracle for probing
+    which trace_ids are real. Converting the body to the catalog envelope must not
+    weaken that, so the two responses are compared field by field with only
+    `trace_id` (per-request by definition) allowed to differ.
+    """
+    import uuid as _uuid
+
+    from db.models import ProxyInteractionModel
+
+    headers, _ = owned_interaction
+
+    foreign = "tr-" + _uuid.uuid4().hex[:12]
+    test_db.add(ProxyInteractionModel(
+        id=_uuid.uuid4(), trace_id=foreign, key_id="key:someone_else",
+        input_decision="ALLOW", input_primary_reason="NO_THREAT_DETECTED",
+        input_confidence=1.0, input_threats=[], execution_status="completed",
+        provider="openai", model="gpt-4o", provider_latency_ms=1,
+        total_latency_ms=2, output_decision="ALLOW", output_threats=[],
+        created_at=utc_now(),
+    ))
+    await test_db.commit()
+
+    exists_elsewhere = await client.get(f"/v1/proxy/interactions/{foreign}", headers=headers)
+    absent = await client.get(
+        f"/v1/proxy/interactions/tr-{_uuid.uuid4().hex[:12]}", headers=headers)
+
+    assert exists_elsewhere.status_code == absent.status_code == 404
+    a = {k: v for k, v in exists_elsewhere.json()["error"].items() if k != "trace_id"}
+    b = {k: v for k, v in absent.json()["error"].items() if k != "trace_id"}
+    assert a == b, f"the 404 distinguishes out-of-scope from absent: {a} vs {b}"
+
+
+@pytest.mark.asyncio
+async def test_the_404_carries_no_interaction_data(client, owned_interaction, test_db):
+    """Converting to a richer envelope must not enrich it with the wrong things.
+
+    The envelope gained `params`, which is the one field a call site controls. It
+    carries the resource NAME only -- so none of the foreign interaction's stored
+    values, nor the owning key, may appear anywhere in the 404 body.
+    """
+    import uuid as _uuid
+
+    from db.models import ProxyInteractionModel
+
+    headers, _ = owned_interaction
+
+    secret_model = "gpt-secret-deployment-a41c"
+    foreign      = "tr-" + _uuid.uuid4().hex[:12]
+    test_db.add(ProxyInteractionModel(
+        id=_uuid.uuid4(), trace_id=foreign, key_id="key:another_tenants_key",
+        input_decision="BLOCK", input_primary_reason="RULE_DETECTOR",
+        input_confidence=1.0, input_threats=["PROMPT_INJECTION"],
+        execution_status="completed", provider="openai", model=secret_model,
+        provider_latency_ms=1, total_latency_ms=2, output_decision="ALLOW",
+        output_threats=[], input_raw="the other tenant's prompt",
+        output_raw="the other tenant's reply", created_at=utc_now(),
+    ))
+    await test_db.commit()
+
+    r = await client.get(f"/v1/proxy/interactions/{foreign}", headers=headers)
+
+    assert r.status_code == 404
+    for leaked in (secret_model, "another_tenants_key", "the other tenant's prompt",
+                   "the other tenant's reply", "PROMPT_INJECTION", "RULE_DETECTOR"):
+        assert leaked not in r.text, f"the 404 body carried {leaked!r}"
+    assert r.json()["error"]["params"] == {"resource": "interaction"}
 
 
 @pytest.mark.asyncio

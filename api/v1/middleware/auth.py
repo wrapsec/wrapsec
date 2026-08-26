@@ -163,12 +163,6 @@ def _unauthorized(request: Request, reason: str) -> JSONResponse:
     )
 
 
-# The one route whose callers are OpenAI clients. A refusal there has to be
-# shaped like an OpenAI error or the client library raises on the body instead
-# of surfacing the status, and the caller never learns why they were refused.
-_OPENAI_COMPATIBLE_PATHS = frozenset({"/v1/chat/completions"})
-
-
 def bare_key_id(state_key_id: str | None) -> str | None:
     """
     The credential id as stored on the key, from the prefixed form request state
@@ -221,49 +215,43 @@ async def _record_ip_denial(request: Request) -> None:
 
 def _ip_denied_response(request: Request) -> Response:
     """
-    Refuse the request in the shape its caller can read.
+    Refuse the request in the canonical envelope, on every route.
 
-    The proxy is consumed by OpenAI client libraries, which parse the body
-    before the status; everything else is consumed by callers that expect the
-    standard envelope. One control, two renderings, because a refusal nobody
-    can interpret is a support ticket rather than a security signal.
+    WHICH LAYER PRODUCED THE ERROR decides the envelope. This refusal is the
+    gateway's: it happens in authentication middleware, before any route runs,
+    and it is about the credential rather than about anything the OpenAI
+    protocol describes. So it answers like every other gateway refusal --
+    including its two immediate neighbours here, `_unauthorized` and
+    `_tenant_suspended_response`, which already answer canonically on the
+    OpenAI-compatible route.
 
-    The SHAPE varies by protocol; the CODE does not. Both carry
-    `IP_NOT_ALLOWED`, because an alert keyed on the code has to catch this
-    denial wherever the credential was presented -- and a rule written against
-    the proxy's code that silently misses the same denial on the scan endpoints
-    would teach its author that the restriction only applies to the proxy,
-    which is the misunderstanding this control was moved to remove.
+    This used to render an OpenAI-shaped body on `/v1/chat/completions`, on the
+    reasoning that a client library parses the body before the status. If that
+    reasoning holds it is not satisfied by shaping ONE refusal: the same caller
+    already receives the canonical envelope from this route for 401, 403
+    TENANT_SUSPENDED, 409, 422, a gateway 429 and 500. Six of seven were
+    canonical and one was not, which taught a client nothing it could rely on.
+    Both envelopes nest under `error` and both carry `error.message`, so what a
+    library reads to surface a reason is present either way.
 
-    It is also distinct from the generic permission failure. Being refused for
+    The CODE was never the variable and still is not. `IP_NOT_ALLOWED` is
+    carried wherever the credential was presented, because an alert keyed on it
+    has to catch the denial on the proxy and the scan endpoints alike -- a rule
+    that silently missed one would teach its author that the restriction only
+    applies to the other.
+
+    It stays distinct from the generic permission failure. Being refused for
     where you are is a different event from being refused for who you are, and
     only a distinct code lets an alert tell them apart.
 
     The message says the credential is not permitted from this address without
     naming what is permitted. Whoever is holding the key is not necessarily
-    whoever is allowed to know the network layout.
+    whoever is allowed to know the network layout -- and the catalog owns that
+    wording, so it is written once.
     """
-    trace_id = getattr(request.state, "trace_id", "") or ""
-    message  = "This credential is not permitted from your network address."
-
-    if request.url.path in _OPENAI_COMPATIBLE_PATHS:
-        return JSONResponse(
-            status_code = 403,
-            content     = {
-                "error": {
-                    "message": message,
-                    "type":    "forbidden",
-                    "code":    ErrorCode.IP_NOT_ALLOWED.value,
-                },
-                "wrapsec": {"trace_id": trace_id},
-            },
-            headers     = {"X-WrapSec-Trace-Id": trace_id},
-        )
-
     return error_response(
         ErrorCode.IP_NOT_ALLOWED,
-        trace_id = trace_id,
-        message  = message,
+        trace_id = getattr(request.state, "trace_id", "") or "",
     )
 
 
@@ -508,7 +496,6 @@ def _tenant_suspended_response(request: Request) -> Response:
     return error_response(
         ErrorCode.TENANT_SUSPENDED,
         trace_id=getattr(request.state, "trace_id", "") or "",
-        message="This tenant is suspended. Contact your platform operator.",
     )
 
 

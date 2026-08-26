@@ -47,6 +47,11 @@ from services.webhooks.emitter import emit_from_audit_background
 router   = APIRouter()
 _gateway = GatewayService()
 
+# The feature identity carried in `params.feature`. Defined once because two
+# separate conditions on this route refuse the SAME capability, and a caller must
+# not be able to tell them apart from the response.
+_PROXY_EXECUTION = "proxy execution"
+
 # Documented failures for this family, each carrying the canonical error
 # envelope. Only errors these routes actually produce are listed: a status
 # documented but unreachable is a promise nothing keeps. 401 arrives from the
@@ -56,8 +61,12 @@ _UNAUTHORIZED: dict[int | str, dict[str, Any]] = {401: {"model": ErrorEnvelope, 
 _SCAN_ERRORS: dict[int | str, dict[str, Any]] = {
     **_UNAUTHORIZED,
     400: {"model": ErrorEnvelope, "description": "Input exceeds the trial-key character cap."},
-    403: {"model": ErrorEnvelope, "description": "Debug output requires an admin key; proxy mode is closed to trial keys."},
-    422: {"model": ErrorEnvelope, "description": "Request body failed validation, or proxy mode was requested with the LLM layer disabled."},
+    # Only this route and the OpenAI-compatible one honour `Idempotency-Key`;
+    # a replay of that key with a DIFFERENT body is refused rather than served
+    # the first body. The batch route does not participate.
+    409: {"model": ErrorEnvelope, "description": "`Idempotency-Key` was reused with a different request body."},
+    403: {"model": ErrorEnvelope, "description": "Debug output requires an admin key, or the requested capability is not served for this caller (`FEATURE_UNAVAILABLE`, with `params.feature` naming it)."},
+    422: {"model": ErrorEnvelope, "description": "Request body failed validation."},
     429: {"model": ErrorEnvelope, "description": "Rate limit exceeded: the global, trial, per-application or debug bucket."},
     502: {"model": ErrorEnvelope, "description": "Proxy execution reached the provider and it returned nothing usable. The scan itself ran and is audited under the returned trace_id."},
 }
@@ -82,6 +91,9 @@ _RECORD_ERRORS: dict[int | str, dict[str, Any]] = {
     **_UNAUTHORIZED,
     404: {"model": ErrorEnvelope, "description": "No such trace_id, or it belongs to another scope."},
     422: {"model": ErrorEnvelope, "description": "Request validation failed. Published for every parameterized route; this one validates nothing, so it is not reachable here."},
+    # The global limiter covers the whole `/v1/ai` prefix, so this read-back
+    # shares the scan routes' bucket even though it scans nothing.
+    429: {"model": ErrorEnvelope, "description": "Rate limit exceeded: this route shares the global `/v1/ai` bucket."},
 }
 
 
@@ -446,11 +458,26 @@ async def ai_request(
                 f"Trial keys are limited to {_settings.trial_max_input_chars} characters. "
                 f"Upgrade to a live key for full input limits."
             )
-        # Proxy mode not available for trial keys
+        # Proxy mode not available for trial keys.
+        #
+        # FEATURE_UNAVAILABLE, not FORBIDDEN: nothing about this caller's
+        # permissions is wrong, and nothing about the request is. The capability
+        # is simply not served for this credential. FORBIDDEN renders "You do not
+        # have permission to perform this action", which sends the reader looking
+        # for a role to change.
+        #
+        # The public body says only WHICH feature. That the cause is the
+        # credential's class stays in the log line -- the other producer of this
+        # code on this route is a disabled detection layer, and a caller who
+        # could tell the two apart would be reading tenant configuration out of
+        # an error message.
         from domain.enums import ExecutionMode as _ExecMode
         if _mode_str(body.execution_mode) == "proxy" or body.execution_mode == _ExecMode.PROXY:
-            from errors.exceptions import ForbiddenError
-            raise ForbiddenError("Proxy mode is not available for trial keys.")
+            from errors.exceptions import FeatureUnavailableError
+            raise FeatureUnavailableError(
+                _PROXY_EXECUTION,
+                debug_message="proxy execution refused: trial credential",
+            )
 
         # Trial rate limit - enforced here since rate_limit middleware runs before auth
         # Global rate limit (60/min) is already enforced by middleware
@@ -497,11 +524,20 @@ async def ai_request(
     llm_settings       = policy["llm"]
 
     if body.execution_mode == ExecutionMode.PROXY and not llm_enabled:
-        from errors.exceptions import WrapSecError
-        raise WrapSecError(
-            code        = "VALIDATION_ERROR",
-            message     = "Proxy mode requires LLM layer to be enabled",
-            status_code = 422,
+        # Was 422 VALIDATION_ERROR, which was wrong twice over: the submitted
+        # data is valid (the same body succeeds where the layer is enabled), and
+        # `llm_enabled` is resolved tenant/department/application policy that
+        # this caller cannot set and usually cannot read. It is a capability
+        # decision, not a validation result, and it is deliberately
+        # indistinguishable from the trial refusal above.
+        #
+        # `execution_mode` is NOT reported in invalid_params: the field is not
+        # invalid, and naming it would tell the caller to change a value that is
+        # correct.
+        from errors.exceptions import FeatureUnavailableError
+        raise FeatureUnavailableError(
+            _PROXY_EXECUTION,
+            debug_message="proxy execution refused: llm detection layer disabled by policy",
         )
 
     pii_policy             = policy.get("guardrails", {}).get("pii", {})

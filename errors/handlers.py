@@ -14,8 +14,24 @@ Envelope (LOCKED contract, see docs/internal/i18n_localization_plan.md):
         "params":   { ... named ICU args ... },
         "message":  "<English convenience; localized clients resolve key+params>",
         "trace_id": "<correlation id>",
-        "invalid_params": [ ... 422 field errors only ... ]
+        "invalid_params": [ ... per-field detail, when the error has any ... ]
     }}
+
+`invalid_params` is OPTIONAL and is present on any canonical error that carries
+field-level detail, not only on 422. The 400/422 split in this API is about
+WHICH LAYER caught the problem -- the request schema answers 422, application
+logic answers 400 -- and says nothing about whether the failure can be
+attributed to a field. Most 400s here are field-level (a malformed date range, a
+non-UUID filter, a reserved slug), and withholding the structured form from them
+would leave a client parsing English for information the envelope can carry.
+
+The field is omitted, not emptied, when there is nothing to say. It never
+replaces the top-level code, and it is not a second error mechanism: the entries
+use the `ValidationCode` vocabulary, which is a separate stable contract from the
+transport-level `ErrorCode`.
+
+This does NOT license moving a 400 to 422 to gain the field. A status is part of
+the published contract; the field is available where the status already is.
 
 The response `message` is the safe, generic-where-required English string. The
 DETAILED debug_message is logged and NEVER serialized -- the user/debug split
@@ -129,8 +145,7 @@ async def unhandled_exception_handler(request: Request, exc: Exception) -> JSONR
         request.method, request.url.path, trace_id, exc,
         exc_info=exc,
     )
-    return error_response(
-        ErrorCode.INTERNAL_ERROR,
-        trace_id=trace_id,
-        message="An unexpected error occurred.",
-    )
+    # No `message=`: the catalog owns this text. Passing the same English here
+    # would be a second place to update when the locale string changes, and the
+    # two would drift silently because both render correctly on their own.
+    return error_response(ErrorCode.INTERNAL_ERROR, trace_id=trace_id)

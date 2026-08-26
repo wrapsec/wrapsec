@@ -762,10 +762,26 @@ async def _log_interaction(
 # caller actually receives.
 _CHAT_RESPONSES: dict[int | str, dict[str, Any]] = {
     400: {"model": OpenAIErrorResponse, "description": "Refused before or during scanning: blocked input, unconfigured provider, or a model not in `provider/model` form."},
-    403: {"model": ErrorEnvelope, "description": "A dashboard session was used. This route is API-key only, and the refusal precedes the OpenAI-compatible path."},
+    401: {"model": ErrorEnvelope, "description": "Missing or invalid credentials. Answered by the auth middleware, which does not shape 401 for this protocol -- measured, not assumed."},
+    403: {"model": ErrorEnvelope, "description": "Refused by the gateway before the OpenAI-compatible path begins: a dashboard session on an API-key-only route, a credential presented from a disallowed address, or a suspended tenant. All three are gateway refusals and carry the catalog envelope."},
+    409: {"model": ErrorEnvelope, "description": "`Idempotency-Key` was reused with a different request body. Answered by middleware before this route runs, so it is not OpenAI-shaped."},
     413: {"model": OpenAIErrorResponse, "description": "Request exceeds a configured input bound."},
     422: {"model": ErrorEnvelope, "description": "Request body failed validation. Answered by the global validation handler, so this one is NOT OpenAI-shaped."},
-    429: {"model": OpenAIErrorResponse, "description": "Rate limited, by this gateway or by the upstream provider."},
+    # The one status on this route with TWO legitimate producers, and therefore
+    # two shapes. Under the producer rule the gateway's own limiter answers with
+    # the catalog envelope, while an upstream refusal is mapped by this route and
+    # stays OpenAI-shaped. Advertising either one alone is a false statement
+    # about half the traffic that hits it.
+    #
+    # `anyOf`, not `oneOf`: these are alternative producers, not a discriminated
+    # union, and nothing requires a body to match exactly one of them. `anyOf` is
+    # also what this schema already uses everywhere a union appears, so it asks
+    # nothing new of a consumer. Whether an EXTERNAL code generator handles it
+    # well is NOT verified here -- no generator consumes this schema in-repo.
+    429: {
+        "model":       OpenAIErrorResponse | ErrorEnvelope,
+        "description": "Rate limited. The gateway's own limiter answers with the catalog envelope; an upstream provider refusal is OpenAI-shaped and carries `Retry-After` when the provider supplied one.",
+    },
     500: {"model": OpenAIErrorResponse, "description": "Output guard failure, or an unexpected error after the provider replied."},
     502: {"model": OpenAIErrorResponse, "description": "The provider was unreachable or returned an unusable reply."},
     504: {"model": OpenAIErrorResponse, "description": "The provider timed out."},

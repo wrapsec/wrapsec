@@ -165,6 +165,33 @@ class NotFoundError(WrapSecError):
         )
 
 
+# -- Capability ------------------------------------------------
+class FeatureUnavailableError(WrapSecError):
+    """A capability this deployment will not serve for this caller.
+
+    Not a permission failure and not a validation failure: the caller's request
+    is well formed and their role is irrelevant. What decides it is deployment
+    or tenant state -- a credential class, a detection layer switched off, a
+    capability that is not installed.
+
+    Only the FEATURE reaches the caller, through `params`. The cause belongs in
+    `debug_message`, which is logged and never serialized, because two callers
+    refused for different reasons must not be able to tell which reason applied
+    -- that difference is tenant configuration.
+
+    `feature` is a short human-readable capability name ("proxy execution"), not
+    an internal flag, since it renders into the localized message.
+    """
+    code = ErrorCode.FEATURE_UNAVAILABLE
+
+    def __init__(self, feature: str, *, debug_message: str | None = None):
+        self.feature = feature
+        super().__init__(
+            params={"feature": feature},
+            debug_message=debug_message or f"{feature} is not available for this caller",
+        )
+
+
 # -- Conflict --------------------------------------------------
 class ConflictError(WrapSecError):
     """A resource with the same unique key (e.g. slug) already exists."""

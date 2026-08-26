@@ -52,9 +52,14 @@ async def _resolve_tenant(db, principal) -> uuid.UUID:
         tenant = await TenantRepository(db).get_bootstrap_default()
         if tenant is None:
             from errors.exceptions import WrapSecError
+            # INTERNAL_ERROR, not "SYSTEM_ERROR": the latter is the name of an
+            # audit primary_reason, not an ErrorCode, and naming it here was
+            # silently coerced to INTERNAL_ERROR by the code resolver. The wire
+            # response is unchanged -- this names the code it already returned.
+            # The message is diagnostic and stays in the logs, not the response.
             raise WrapSecError(
-                code="SYSTEM_ERROR",
-                message="No tenant context available for settings.",
+                code="INTERNAL_ERROR",
+                debug_message="No tenant context available for settings.",
                 status_code=500,
             ) from None
         return tenant.id
@@ -198,15 +203,37 @@ async def update_thresholds(
     block    = current["block_threshold"]
     sanitize = current["sanitize_threshold"]
     if not (0.0 < sanitize < block <= 1.0):
+        from errors.catalog import VALIDATION_CATALOG, ValidationCode
         from errors.exceptions import WrapSecError
+
+        # BOTH fields are reported, because the invariant is relational: the
+        # merged pair is what is wrong, and either value can be moved to satisfy
+        # it. Naming one would point the caller at a field that may be perfectly
+        # fine on its own.
+        #
+        # OUT_OF_RANGE, not INVALID_VALUE: each value is individually
+        # well-formed, and what fails is the range one leaves for the other.
+        #
+        # The offending numbers stay in `debug_message`. They are the caller's
+        # own configuration rather than a secret, but `params` on a validation
+        # entry carries limit DESCRIPTIONS in this codebase (max_length, allowed
+        # set), never submitted values, and this is not the place to start.
+        _range = [{
+            "field":  field,
+            "code":   ValidationCode.OUT_OF_RANGE.value,
+            "key":    VALIDATION_CATALOG[ValidationCode.OUT_OF_RANGE],
+            "params": {},
+        } for field in ("block_threshold", "sanitize_threshold")]
+
         raise WrapSecError(
-            code        = "VALIDATION_ERROR",
-            message     = (
+            code           = "VALIDATION_ERROR",
+            status_code    = 422,
+            debug_message  = (
                 f"Invalid threshold combination after merge: "
                 f"block={block}, sanitize={sanitize}. "
                 f"Required: 0.0 < sanitize < block <= 1.0"
             ),
-            status_code = 422,
+            invalid_params = _range,
         )
 
     await repo.set(THRESHOLD_KEY, current)

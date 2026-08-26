@@ -212,3 +212,56 @@ async def test_an_api_key_caller_cannot_create_a_key(client, scored_key_pair):
 
     assert r.status_code in (401, 403), r.text
     assert "api_key" not in r.json(), "a refusal must not carry a credential"
+
+
+# ── the unresolvable-department rejection ────────────────────────────────────
+
+@pytest.mark.asyncio
+async def test_creating_a_key_with_no_resolvable_department_names_the_field(
+    client, admin_jwt_headers,
+):
+    """A tenant-wide ADMIN sends neither `dept_id` nor `app_id`.
+
+    The refusal used to be an English sentence and nothing else; the caller had
+    to read prose to learn which field was missing. The status, the code and the
+    catalog message are unchanged -- what is new is `invalid_params`, which says
+    the same thing in the form a client can act on.
+
+    `app_id` is asserted ABSENT from the entries on purpose: supplying it is one
+    way to resolve a department, so marking it REQUIRED would tell the caller to
+    send two fields when either one suffices.
+    """
+    r = await client.post("/v1/keys", headers=admin_jwt_headers, json={"name": "no-dept"})
+
+    assert r.status_code == 422, r.text
+    error = r.json()["error"]
+    assert error["code"]     == "VALIDATION_ERROR"
+    assert error["severity"] == "WARNING"
+    assert error["key"]      == "errors.VALIDATION_ERROR"
+    assert error["params"]   == {}
+    assert error["message"]  == "The submitted data is invalid."
+    assert error["trace_id"].startswith("req_")
+
+    assert error["invalid_params"] == [{
+        "field": "dept_id", "code": "REQUIRED",
+        "key": "forms.errors.REQUIRED", "params": {},
+    }], "the rejection no longer names the field it is about"
+
+    fields = {e["field"] for e in error["invalid_params"]}
+    assert "app_id" not in fields
+
+
+@pytest.mark.asyncio
+async def test_the_department_rejection_leaks_no_identifiers(client, admin_jwt_headers):
+    """The detailed guidance moved to `debug_message`, which is logged and never
+    serialized. Nothing about the tenant, the principal or the storage may appear
+    in the body -- the entry carries a field NAME and a code, and no values."""
+    r = await client.post("/v1/keys", headers=admin_jwt_headers, json={"name": "no-dept-leak"})
+
+    assert r.status_code == 422
+    for leaked in ("tenant", "dept_id (dept-scoped", "derived from app",
+                   "api_keys", "SELECT", "uuid.UUID"):
+        assert leaked not in r.text, f"the 422 body carried {leaked!r}"
+    for entry in r.json()["error"]["invalid_params"]:
+        assert set(entry) == {"field", "code", "key", "params"}
+        assert entry["params"] == {}

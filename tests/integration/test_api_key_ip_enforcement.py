@@ -480,11 +480,23 @@ class TestTenantIsolation:
 class TestDenialEnvelope:
 
     @pytest.mark.asyncio
-    async def test_the_proxy_refusal_is_shaped_for_an_openai_client(self, app, test_db):
-        """
-        Proxy callers are OpenAI client libraries, which parse the body before
-        the status. A refusal in the standard envelope raises inside the library
-        rather than surfacing as a 403 the caller can act on.
+    async def test_the_proxy_refusal_uses_the_standard_envelope_like_every_other(
+        self, app, test_db,
+    ):
+        """CONVERTED. This refusal used to render an OpenAI-shaped body on the
+        proxy route alone.
+
+        The envelope follows the PRODUCER, not the route. This denial is the
+        gateway's -- authentication middleware, before any route runs, about the
+        credential rather than about anything the OpenAI protocol describes -- so
+        it answers canonically wherever it fires.
+
+        The old shaping was justified by a client library parsing the body before
+        the status. Shaping one refusal never satisfied that: the same caller
+        already received the canonical envelope from this route for 401, 403
+        TENANT_SUSPENDED, 409, 422, a gateway 429 and 500. `type` is asserted
+        ABSENT because it is the OpenAI envelope's discriminator, and its absence
+        is what proves the shape actually changed.
         """
         raw, _ = await _seed_key(test_db, [ALLOWED_NET])
         resp = await _request(
@@ -494,9 +506,35 @@ class TestDenialEnvelope:
         )
         assert resp.status_code == 403
         body = resp.json()
-        assert body["error"]["code"] == "IP_NOT_ALLOWED"
-        assert body["error"]["type"] == "forbidden"
-        assert resp.headers.get("X-WrapSec-Trace-Id")
+        assert set(body) == {"error"}, (
+            f"the OpenAI envelope's sibling keys are still present: {sorted(body)}"
+        )
+        error = body["error"]
+        assert set(error) == {"code", "severity", "key", "params", "message", "trace_id"}
+        assert error["code"]     == "IP_NOT_ALLOWED"
+        assert error["severity"] == "WARNING"
+        assert error["key"]      == "errors.IP_NOT_ALLOWED"
+        assert "type" not in error, "the OpenAI-shaped body is back"
+
+    @pytest.mark.asyncio
+    async def test_the_proxy_and_scan_refusals_are_now_byte_identical(self, app, test_db):
+        """One producer, one body. The two routes differed only in rendering, and
+        a caller handling one had to special-case the other; asserting them equal
+        is what keeps a future protocol tweak from quietly reintroducing that."""
+        raw, _ = await _seed_key(test_db, [ALLOWED_NET])
+
+        proxy = await _request(
+            app, api_key=raw, peer_ip=DENIED_IP, path="/v1/chat/completions",
+            json_body={"model": "openai/gpt-4o",
+                       "messages": [{"role": "user", "content": "hi"}]},
+        )
+        scan = await _request(app, api_key=raw, peer_ip=DENIED_IP)
+
+        assert proxy.status_code == scan.status_code == 403
+        strip = lambda r: {k: v for k, v in r.json()["error"].items() if k != "trace_id"}
+        assert strip(proxy) == strip(scan), (
+            "the proxy and scan refusals describe the same denial differently"
+        )
 
     @pytest.mark.asyncio
     async def test_every_other_refusal_uses_the_standard_envelope(self, app, test_db):
@@ -516,10 +554,11 @@ class TestDenialEnvelope:
         self, app, test_db, path, body,
     ):
         """
-        The shape differs by protocol; the code must not. An alert keyed on the
-        code has to fire for this denial on every route, or its author learns
-        the wrong lesson: that the restriction only applies where their rule
-        happened to match.
+        The code identifies the denial on every route. It mattered when the
+        shape varied by protocol and it still matters now that it does not: an
+        alert keyed on the code has to fire for this denial everywhere, or its
+        author learns the wrong lesson -- that the restriction only applies
+        where their rule happened to match.
         """
         raw, _ = await _seed_key(test_db, [ALLOWED_NET])
         resp = await _request(app, api_key=raw, peer_ip=DENIED_IP, path=path,

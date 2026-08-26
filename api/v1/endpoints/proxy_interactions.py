@@ -14,7 +14,6 @@ import uuid
 from typing import Any
 
 from fastapi import APIRouter, Depends, Request
-from fastapi.responses import JSONResponse
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from api.v1.dependencies.auth import get_current_principal
@@ -27,6 +26,7 @@ from api.v1.schemas.response import (
 from db.models import ProxyInteractionModel
 from db.repositories.proxy_interaction import ProxyInteractionRepository
 from domain.entities.principal import Principal
+from errors.exceptions import NotFoundError
 from services.time import to_iso_z
 
 router = APIRouter()
@@ -36,15 +36,21 @@ logger = logging.getLogger("wrapsec.proxy.interactions")
 # catalog envelope for a request-validation failure -- `?limit=abc` on the list
 # route -- while FastAPI's generated entry described a shape this application
 # never emits.
-#
-# The detail route's 404 is deliberately NOT declared. It returns a REDUCED body
-# (`{"error": {"code", "message"}}`), not the catalog envelope, and this pass
-# preserves error behaviour rather than changing it. Declaring ErrorEnvelope
-# there would advertise fields the route does not return, which is the exact
-# defect this phase exists to remove. Recorded for the error-contract pass.
 _INTERACTION_ERRORS: dict[int | str, dict[str, Any]] = {
     401: {"model": ErrorEnvelope, "description": "Missing or invalid credentials."},
     422: {"model": ErrorEnvelope, "description": "A query parameter could not be parsed."},
+}
+
+# Only the DETAIL route has a 404. The list route answers an empty result with
+# `{"total": 0, "items": []}`, so declaring one there would document a status it
+# never produces.
+#
+# The description says "or is out of scope" on purpose: the route answers both
+# with the same body, and a contract that promised 404 meant only "absent" would
+# invite a caller to read it as proof of non-existence.
+_INTERACTION_DETAIL_ERRORS: dict[int | str, dict[str, Any]] = {
+    **_INTERACTION_ERRORS,
+    404: {"model": ErrorEnvelope, "description": "No interaction with this trace_id, or it is out of the caller's scope. The two are deliberately indistinguishable."},
 }
 
 
@@ -128,7 +134,7 @@ async def list_proxy_interactions(
     "/interactions/{trace_id}",
     response_model               = ProxyInteractionDetail,
     response_model_exclude_unset = True,
-    responses                    = _INTERACTION_ERRORS,
+    responses                    = _INTERACTION_DETAIL_ERRORS,
 )
 async def get_proxy_interaction(
     trace_id:   str,
@@ -139,25 +145,30 @@ async def get_proxy_interaction(
     repo = ProxyInteractionRepository(db)
     item = await repo.get_by_trace_id(trace_id)
 
-    not_found = JSONResponse(
-        status_code=404,
-        content={"error": {"code": "NOT_FOUND", "message": f"Interaction {trace_id} not found."}},
-    )
+    # All three 404 branches raise the SAME error with the SAME arguments, which
+    # is the security property this route depends on: a caller must not be able
+    # to distinguish "no such interaction" from "exists, but not yours". The
+    # handler resolves the message from the catalog using only `resource`, a
+    # constant, so the three bodies are identical by construction rather than by
+    # a shared local that a later edit could diverge.
+    #
+    # The trace_id is deliberately NOT in the user-facing message. It travels in
+    # `debug_message`, which is logged and never serialized, and the caller
+    # correlates on the envelope's own trace_id -- the same treatment
+    # `GET /v1/ai/requests/{trace_id}` already gives an identical lookup.
     if not item:
-        return not_found
+        raise NotFoundError("interaction", trace_id)
 
     if request.state.is_admin:
         # Admin: the interaction must belong to this tenant. Check the stored
         # tenant_id directly (M5) - no api_keys resolution, so a revoked/deleted
         # key does not hide its own history.
         if not item.tenant_id or str(item.tenant_id) != request.state.tenant_id:
-            return not_found
+            raise NotFoundError("interaction", trace_id)
     else:
         # Non-admin: must own the interaction. Interactions with no key_id are
         # system/admin records - never accessible to non-admin callers.
         if not item.key_id or item.key_id != request.state.key_id:
-            return not_found
+            raise NotFoundError("interaction", trace_id)
 
-    # The success body as a value; the 404 above stays a constructed Response,
-    # which is correct -- it is an error path and its status is the contract.
     return _serialize(item, detail=True)

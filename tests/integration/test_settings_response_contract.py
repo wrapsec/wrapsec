@@ -312,14 +312,18 @@ async def test_the_llm_read_never_returns_a_provider_key(client, admin_jwt_heade
 @pytest.mark.asyncio
 async def test_the_proxy_config_read_is_admin_only_and_masks_its_key(client, admin_jwt_headers):
     """The proxy family shares the LLM family's credential rule. 404 until a
-    provider is configured -- with the reduced error body this pass preserves."""
+    provider is configured.
+
+    That 404 used to be a reduced body and was pinned here; it is now the catalog
+    envelope. Only the code is checked at this point -- the envelope is asserted
+    field by field in `test_the_proxy_read_answers_a_missing_config_with_the_catalog_envelope`,
+    and duplicating it here would mean two places to update for one contract.
+    """
     from api.v1.schemas.response import ProxyProviderConfigResponse
 
     missing = await client.get("/v1/settings/proxy", headers=admin_jwt_headers)
     assert missing.status_code == 404, missing.text
-    assert set(missing.json()["error"]) == {"code", "message"}, (
-        "the reduced 404 body changed; that is an error-contract change"
-    )
+    assert missing.json()["error"]["code"] == "NOT_FOUND"
 
     secret = "sk-proxy-plaintext-must-not-return-0123456789"
     put = await client.put(
@@ -353,3 +357,245 @@ async def test_a_restricted_caller_is_still_refused(client, scored_key_pair):
                  "/v1/settings/llm", "/v1/settings/rate_limit"):
         r = await client.get(path, headers=trial)
         assert r.status_code == 403, f"{path} admitted a trial key: {r.status_code}"
+
+
+# ── the proxy family's error envelopes ───────────────────────────────────────
+#
+# All three public proxy-settings error paths used to answer with a REDUCED body
+# (`{"error": {"code", "message"}}`) built inline. They now raise into the global
+# handler and answer with the catalog envelope, like every other error on this
+# surface. These tests measure the bodies rather than the construction, so they
+# fail if any of the three regresses.
+#
+# The PUT pair is the point of the change: ONE status, 422, used to answer with
+# TWO different shapes depending on which branch rejected the request, while the
+# schema advertised the canonical one for both.
+
+_CANONICAL_ERROR_FIELDS = {"code", "severity", "key", "params", "message", "trace_id"}
+_REDUCED_FIELDS = {"code", "message"}
+
+
+def _envelope(response):
+    body = response.json()
+    assert set(body) == {"error"}, f"not an error envelope: {sorted(body)}"
+    return body["error"]
+
+
+@pytest.mark.asyncio
+async def test_the_proxy_read_answers_a_missing_config_with_the_catalog_envelope(
+    client, admin_jwt_headers,
+):
+    r = await client.get("/v1/settings/proxy", headers=admin_jwt_headers)
+
+    assert r.status_code == 404, r.text
+    assert r.headers["content-type"].startswith("application/json")
+    error = _envelope(r)
+
+    assert set(error) == _CANONICAL_ERROR_FIELDS, f"envelope changed: {sorted(error)}"
+    assert set(error) != _REDUCED_FIELDS, "the reduced envelope is back"
+    assert error["code"]     == "NOT_FOUND"
+    assert error["severity"] == "WARNING"
+    assert error["key"]      == "errors.NOT_FOUND"
+    assert error["params"]   == {"resource": "proxy provider"}
+    assert error["trace_id"].startswith("req_")
+    # A lookup miss has no per-field detail, and the builder omits the key rather
+    # than sending an empty list.
+    assert "invalid_params" not in error
+
+
+@pytest.mark.asyncio
+async def test_the_proxy_delete_answers_a_missing_config_with_the_same_envelope(
+    client, admin_jwt_headers,
+):
+    """Asserted against the read rather than restated, so the two cannot drift.
+
+    Both mean the same thing -- this tenant has no provider row -- and a caller
+    handling one must not have to special-case the other.
+    """
+    read = await client.get("/v1/settings/proxy", headers=admin_jwt_headers)
+    dele = await client.delete("/v1/settings/proxy", headers=admin_jwt_headers)
+
+    assert dele.status_code == 404, dele.text
+    error = _envelope(dele)
+    assert set(error) == _CANONICAL_ERROR_FIELDS
+    assert error["code"] == "NOT_FOUND"
+    assert "invalid_params" not in error
+
+    strip = lambda e: {k: v for k, v in e.items() if k != "trace_id"}
+    assert strip(error) == strip(_envelope(read)), (
+        "the read and the delete describe the same condition differently"
+    )
+
+
+@pytest.mark.asyncio
+async def test_both_proxy_upsert_422_branches_share_one_envelope(
+    client, admin_jwt_headers,
+):
+    """The defect this pass exists to remove.
+
+    `422: ErrorEnvelope` was published for this route while the missing-api_key
+    branch returned a reduced body -- a live inaccuracy, not merely an
+    undeclared error. Both branches are now the canonical envelope, and they are
+    compared field by field so a future divergence fails here.
+
+    `invalid_params` is asserted PRESENT on both: each rejection is a per-field
+    condition, which is what that array is for. The entries differ, correctly --
+    a missing credential is REQUIRED on `api_key`, an unknown provider is
+    INVALID_VALUE on `provider`.
+    """
+    missing_key = await client.put("/v1/settings/proxy", headers=admin_jwt_headers, json={
+        "provider": "openai", "base_url": "https://api.openai.com/v1",
+        "default_model": "gpt-4o", "timeout": 30,
+    })
+    bad_schema = await client.put("/v1/settings/proxy", headers=admin_jwt_headers, json={
+        "provider": "not-a-provider", "base_url": "https://api.openai.com/v1",
+        "default_model": "gpt-4o", "timeout": 30,
+    })
+
+    assert missing_key.status_code == bad_schema.status_code == 422
+
+    a, b = _envelope(missing_key), _envelope(bad_schema)
+    for error, label in ((a, "missing api_key"), (b, "schema validation")):
+        assert set(error) == _CANONICAL_ERROR_FIELDS | {"invalid_params"}, (
+            f"the {label} branch envelope is {sorted(error)}"
+        )
+        assert set(error) != _REDUCED_FIELDS, f"the {label} branch is reduced again"
+        assert error["code"]     == "VALIDATION_ERROR"
+        assert error["severity"] == "WARNING"
+        assert error["key"]      == "errors.VALIDATION_ERROR"
+        assert error["params"]   == {}
+        assert error["message"]  == "The submitted data is invalid."
+        assert error["trace_id"].startswith("req_")
+
+    assert a["invalid_params"] == [{
+        "field": "api_key", "code": "REQUIRED",
+        "key": "forms.errors.REQUIRED", "params": {},
+    }]
+    assert b["invalid_params"][0]["field"] == "provider"
+    assert b["invalid_params"][0]["code"]  == "INVALID_VALUE"
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("provider", ["openai", "custom"])
+async def test_the_missing_api_key_422_never_reflects_the_request(
+    client, admin_jwt_headers, provider,
+):
+    """The old message quoted the caller's own `provider` back at them.
+
+    The catalog owns the text now, so the response says nothing about what was
+    sent. Both providers that require a credential are covered, because they are
+    two branches of one condition and only one of them was exercised before.
+
+    Also the secrets check for this path: a rejected upsert must not echo the
+    body it rejected, and must carry no credential, tenant id or storage detail.
+    """
+    secret = "sk-must-never-appear-in-an-error-0123456789"
+
+    r = await client.put("/v1/settings/proxy", headers=admin_jwt_headers, json={
+        "provider": provider, "base_url": f"https://{provider}.example.com/v1",
+        "api_key": "", "default_model": "secret-model-name", "timeout": 30,
+    })
+
+    assert r.status_code == 422, r.text
+    for leaked in (provider, secret, "secret-model-name", "example.com",
+                   "api_key_enc", "provider_api_key_enc", "tenant_id",
+                   "proxy_provider_configs"):
+        assert leaked not in r.text, f"the 422 body carried {leaked!r}"
+
+    # `api_key` appears only as the field NAME inside invalid_params, which is
+    # the machine-readable pointer a form needs -- not a value.
+    assert r.json()["error"]["invalid_params"][0]["field"] == "api_key"
+
+
+@pytest.mark.asyncio
+async def test_the_proxy_errors_carry_no_tenant_or_storage_detail(
+    client, admin_jwt_headers,
+):
+    """The 404s gained `params`, the one field a call site controls.
+
+    It carries the resource NAME only. The tenant id passed to `NotFoundError`
+    travels in `debug_message`, which is logged and never serialized, so the
+    caller still learns exactly "no provider configured" and nothing else.
+    """
+    for method in ("get", "delete"):
+        r = await getattr(client, method)("/v1/settings/proxy", headers=admin_jwt_headers)
+        assert r.status_code == 404
+        assert r.json()["error"]["params"] == {"resource": "proxy provider"}
+        for leaked in ("tenant", "proxy_provider_configs", "SELECT", "sqlalchemy",
+                       "asyncpg", "Traceback", "/home/"):
+            assert leaked not in r.text, f"the 404 body carried {leaked!r}"
+
+
+# ── the merged-threshold rejection ───────────────────────────────────────────
+#
+# This check runs in the HANDLER, not the request schema: the schema validates a
+# partial update against system DEFAULTS, so a body that is fine on its own can
+# still produce an invalid pair once merged with what the tenant has stored. That
+# is why reaching it takes a stored value first.
+
+async def _store_thresholds(client, headers, block, sanitize):
+    r = await client.put("/v1/settings/thresholds", headers=headers,
+                         json={"block_threshold": block, "sanitize_threshold": sanitize})
+    assert r.status_code == 200, r.text
+
+
+_RANGE_ENTRY = {"code": "OUT_OF_RANGE", "key": "forms.errors.OUT_OF_RANGE", "params": {}}
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize(
+    ("stored", "update"),
+    [
+        ((0.5, 0.4), {"sanitize_threshold": 0.6}),   # merged sanitize rises above block
+        ((0.9, 0.8), {"block_threshold": 0.7}),      # merged block falls below sanitize
+    ],
+    ids=["sanitize-overtakes-block", "block-falls-under-sanitize"],
+)
+async def test_an_invalid_merged_threshold_pair_names_both_fields(
+    client, admin_jwt_headers, stored, update,
+):
+    """Both directions of the same relational invariant.
+
+    One case was previously unreachable through the schema in either direction,
+    so exercising only one would leave half the branch unproven.
+
+    BOTH fields appear in `invalid_params`, deliberately: the pair is what is
+    invalid, and either value can be moved to satisfy it. OUT_OF_RANGE rather
+    than INVALID_VALUE, because each number is well-formed on its own.
+    """
+    await _store_thresholds(client, admin_jwt_headers, *stored)
+
+    r = await client.put("/v1/settings/thresholds", headers=admin_jwt_headers, json=update)
+
+    assert r.status_code == 422, r.text
+    error = r.json()["error"]
+    assert error["code"]     == "VALIDATION_ERROR"
+    assert error["severity"] == "WARNING"
+    assert error["key"]      == "errors.VALIDATION_ERROR"
+    assert error["params"]   == {}
+    assert error["message"]  == "The submitted data is invalid."
+
+    assert error["invalid_params"] == [
+        {"field": "block_threshold",    **_RANGE_ENTRY},
+        {"field": "sanitize_threshold", **_RANGE_ENTRY},
+    ], "the merged-pair rejection no longer names both thresholds"
+
+
+@pytest.mark.asyncio
+async def test_the_threshold_rejection_does_not_echo_the_stored_values(
+    client, admin_jwt_headers,
+):
+    """The offending numbers stay in the log line.
+
+    They are the tenant's own configuration rather than a secret, but a
+    validation entry in this codebase carries limit DESCRIPTIONS, never submitted
+    or stored values, and this rejection does not become the exception.
+    """
+    await _store_thresholds(client, admin_jwt_headers, 0.5, 0.4)
+
+    r = await client.put("/v1/settings/thresholds", headers=admin_jwt_headers,
+                         json={"sanitize_threshold": 0.6})
+
+    assert r.status_code == 422
+    for leaked in ("0.5", "0.4", "0.6", "after merge", "Required:"):
+        assert leaked not in r.text, f"the 422 body carried {leaked!r}"

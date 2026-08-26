@@ -11,6 +11,7 @@
     "errors.CANNOT_DEACTIVATE_SELF": "You cannot deactivate your own account.",
     "errors.CONFLICT": "Resource already exists.",
     "errors.DETECTION_ERROR": "Security detection could not be completed.",
+    "errors.FEATURE_UNAVAILABLE": "{feature} is not available.",
     "errors.FORBIDDEN": "You do not have permission to perform this action.",
     "errors.IDEMPOTENCY_CONFLICT": "This request could not be completed because the same idempotency key was already used.",
     "errors.INTERNAL_ERROR": "An unexpected error occurred.",

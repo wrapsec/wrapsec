@@ -46,6 +46,32 @@ _READ_ERRORS: dict[int | str, dict[str, Any]] = {
 }
 
 
+def _unparseable_date_fields(from_value: str | None, to_value: str | None) -> list[str]:
+    """Which of `from` / `to` actually failed to parse.
+
+    `date_range_bounds` parses both under one exception, so the caller cannot
+    tell which value was rejected -- and reporting both would tell a caller that
+    a perfectly good `from` is invalid. Each value is re-checked on its own
+    THROUGH THE SAME HELPER, so the date-only `to` rule (extended to the end of
+    that day) is applied here exactly as it is on the success path; checking the
+    string directly would reject a `to` the API accepts.
+
+    Only runs on the failure path, so the ordinary query pays nothing for it.
+    """
+    bad: list[str] = []
+    if from_value:
+        try:
+            date_range_bounds(from_value, None)
+        except ValueError:
+            bad.append("from")
+    if to_value:
+        try:
+            date_range_bounds(None, to_value)
+        except ValueError:
+            bad.append("to")
+    return bad
+
+
 def _date_range(from_value: str | None, to_value: str | None):
     """Parse from/to query params into aware-UTC created_at bounds via the
     shared services.time helper, surfacing a parse error as a ValidationError.
@@ -54,9 +80,29 @@ def _date_range(from_value: str | None, to_value: str | None):
     try:
         return date_range_bounds(from_value, to_value)
     except ValueError:
+        from errors.catalog import VALIDATION_CATALOG, ValidationCode
         from errors.exceptions import ValidationError
+
+        # The status stays 400 and the code stays INVALID_REQUEST. What is added
+        # is the field attribution: the caller learns WHICH bound it sent is
+        # unparseable instead of reading it out of an English sentence.
+        #
+        # INVALID_VALUE is the existing vocabulary for "this value is not in an
+        # acceptable form"; there is no date-specific ValidationCode and this
+        # pass does not add one.
+        #
+        # The rejected strings stay in `debug_message`, which is logged and never
+        # serialized -- echoing a caller-supplied value into a public body is the
+        # thing the envelope split exists to prevent.
+        fields = _unparseable_date_fields(from_value, to_value)
         raise ValidationError(
-            "Invalid date format. Use ISO 8601, e.g. 2026-01-15T00:00:00Z"
+            "Invalid date format. Use ISO 8601, e.g. 2026-01-15T00:00:00Z",
+            invalid_params=[{
+                "field":  field,
+                "code":   ValidationCode.INVALID_VALUE.value,
+                "key":    VALIDATION_CATALOG[ValidationCode.INVALID_VALUE],
+                "params": {},
+            } for field in fields],
         ) from None
 
 
@@ -71,9 +117,22 @@ def _parse_uuid_filter(value: str | None, field: str) -> str | None:
     try:
         return str(uuid.UUID(value))
     except (ValueError, AttributeError):
+        from errors.catalog import VALIDATION_CATALOG, ValidationCode
         from errors.exceptions import ValidationError
+
+        # `field` is the caller's own parameter name, passed in by the route, so
+        # the attribution is exact. INVALID_UUID already exists for precisely
+        # this condition. The rejected value is NOT echoed: this check exists to
+        # close a substring-probe enumeration path, and reflecting the probe back
+        # would hand the prober a confirmation channel.
         raise ValidationError(
-            f"Invalid {field}: must be a UUID"
+            f"Invalid {field}: must be a UUID",
+            invalid_params=[{
+                "field":  field,
+                "code":   ValidationCode.INVALID_UUID.value,
+                "key":    VALIDATION_CATALOG[ValidationCode.INVALID_UUID],
+                "params": {},
+            }],
         ) from None
 
 
@@ -664,7 +723,14 @@ _EXPORT_RESPONSES: dict[int | str, dict[str, Any]] = {
         "description": "The matching audit rows as a CSV attachment.",
         "content": {"text/csv": {"schema": {"type": "string", "format": "binary"}}},
     },
+    400: {"model": ErrorEnvelope, "description": "Malformed date range."},
+    401: {"model": ErrorEnvelope, "description": "Missing or invalid credentials."},
     422: {"model": ErrorEnvelope, "description": "`limit` or `offset` is outside its allowed range, or is not an integer."},
+    # This route carries its own bucket (`audit_export_rate_limit`), separate
+    # from the global one and much smaller, because an export is expensive. It
+    # is the only public route with an endpoint-level limit, which is why 429
+    # appears here and on no other audit route.
+    429: {"model": ErrorEnvelope, "description": "The export rate limit for this credential is exhausted. `params.retry_after` carries the wait in seconds."},
 }
 
 

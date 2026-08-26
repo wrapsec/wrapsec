@@ -4132,7 +4132,17 @@
                 }
               }
             },
-            "description": "Debug output requires an admin key; proxy mode is closed to trial keys."
+            "description": "Debug output requires an admin key, or the requested capability is not served for this caller (`FEATURE_UNAVAILABLE`, with `params.feature` naming it)."
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "`Idempotency-Key` was reused with a different request body."
           },
           "422": {
             "content": {
@@ -4142,7 +4152,7 @@
                 }
               }
             },
-            "description": "Request body failed validation, or proxy mode was requested with the LLM layer disabled."
+            "description": "Request body failed validation."
           },
           "429": {
             "content": {
@@ -4226,6 +4236,16 @@
               }
             },
             "description": "Request validation failed. Published for every parameterized route; this one validates nothing, so it is not reachable here."
+          },
+          "429": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Rate limit exceeded: this route shares the global `/v1/ai` bucket."
           }
         },
         "summary": "Get Request",
@@ -4460,6 +4480,26 @@
             },
             "description": "The matching audit rows as a CSV attachment."
           },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Malformed date range."
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Missing or invalid credentials."
+          },
           "422": {
             "content": {
               "application/json": {
@@ -4469,6 +4509,16 @@
               }
             },
             "description": "`limit` or `offset` is outside its allowed range, or is not an integer."
+          },
+          "429": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "The export rate limit for this credential is exhausted. `params.retry_after` carries the wait in seconds."
           }
         },
         "summary": "Export Audit Logs",
@@ -5056,6 +5106,16 @@
             },
             "description": "Refused before or during scanning: blocked input, unconfigured provider, or a model not in `provider/model` form."
           },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Missing or invalid credentials. Answered by the auth middleware, which does not shape 401 for this protocol -- measured, not assumed."
+          },
           "403": {
             "content": {
               "application/json": {
@@ -5064,7 +5124,17 @@
                 }
               }
             },
-            "description": "A dashboard session was used. This route is API-key only, and the refusal precedes the OpenAI-compatible path."
+            "description": "Refused by the gateway before the OpenAI-compatible path begins: a dashboard session on an API-key-only route, a credential presented from a disallowed address, or a suspended tenant. All three are gateway refusals and carry the catalog envelope."
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "`Idempotency-Key` was reused with a different request body. Answered by middleware before this route runs, so it is not OpenAI-shaped."
           },
           "413": {
             "content": {
@@ -5090,11 +5160,19 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/OpenAIErrorResponse"
+                  "anyOf": [
+                    {
+                      "$ref": "#/components/schemas/OpenAIErrorResponse"
+                    },
+                    {
+                      "$ref": "#/components/schemas/ErrorEnvelope"
+                    }
+                  ],
+                  "title": "Response 429 Proxy Chat Completions V1 Chat Completions Post"
                 }
               }
             },
-            "description": "Rate limited, by this gateway or by the upstream provider."
+            "description": "Rate limited. The gateway's own limiter answers with the catalog envelope; an upstream provider refusal is OpenAI-shaped and carries `Retry-After` when the provider supplied one."
           },
           "500": {
             "content": {
@@ -5349,6 +5427,16 @@
             },
             "description": "Missing or invalid credentials."
           },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "No interaction with this trace_id, or it is out of the caller's scope. The two are deliberately indistinguishable."
+          },
           "422": {
             "content": {
               "application/json": {
@@ -5597,6 +5685,16 @@
               }
             },
             "description": "Proxy provider configuration is admin-only, on reads as well as writes."
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "This tenant has no proxy provider configured."
           }
         },
         "summary": "Delete Proxy Settings",
@@ -5637,6 +5735,16 @@
               }
             },
             "description": "Proxy provider configuration is admin-only, on reads as well as writes."
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "This tenant has no proxy provider configured."
           }
         },
         "summary": "Get Proxy Settings",

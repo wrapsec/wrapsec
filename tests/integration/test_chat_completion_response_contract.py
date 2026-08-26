@@ -299,3 +299,224 @@ async def test_a_provider_reply_cannot_smuggle_fields_into_the_response(client, 
         assert leaked not in r.text, f"{leaked} reached the caller from the provider reply"
     from api.v1.schemas.response import ChatCompletionResponse
     assert set(r.json()) <= set(ChatCompletionResponse.model_fields)
+
+
+# ── the canonical errors on this OpenAI-compatible route ─────────────────────
+#
+# This route speaks a foreign protocol and its own refusals are OpenAI-shaped.
+# These two are not its own: both are answered by middleware before the handler
+# runs, and neither is shaped for the protocol. That is measured rather than
+# assumed -- the IP-denial branch in the same middleware DOES shape its body for
+# this path, so "middleware answers it" does not by itself settle the shape.
+
+@pytest.mark.asyncio
+async def test_the_chat_route_answers_401_with_the_catalog_envelope(client):
+    """Unauthenticated. The auth middleware does not branch on the path for 401,
+    unlike its IP-denial sibling, so an OpenAI client here receives the WrapSec
+    envelope. Declared to match."""
+    r = await client.post("/v1/chat/completions", json={
+        "model": "openai/gpt-4o", "messages": [{"role": "user", "content": "hi"}],
+    })
+
+    assert r.status_code == 401, r.text
+    body = r.json()
+    assert set(body) == {"error"}, f"an OpenAI-shaped 401 would carry more: {sorted(body)}"
+    error = body["error"]
+    assert error["code"]     == "UNAUTHORIZED"
+    assert error["key"]      == "errors.UNAUTHORIZED"
+    assert error["severity"] == "WARNING"
+    # The OpenAI envelope's discriminator. Its absence is what proves the shape.
+    assert "type" not in error
+
+
+@pytest.mark.asyncio
+async def test_reusing_an_idempotency_key_with_a_different_body_is_refused(client, proxy_key):
+    """409 from the idempotency middleware, proven on THIS route rather than
+    inferred from the scan route.
+
+    The middleware is path-gated and both routes share one implementation, but
+    they differ in everything after it -- provider config, body schema, response
+    shape -- so the refusal is measured here in its own right.
+    """
+    key = "chat-idem-conflict-probe"
+    headers = {**proxy_key, "Idempotency-Key": key}
+
+    first = await client.post("/v1/chat/completions", headers=headers, json={
+        "model": "openai/gpt-4o", "messages": [{"role": "user", "content": "first"}],
+    })
+    assert first.status_code != 409, "the first request must claim the key, not conflict"
+
+    secret = "second-chat-body-marker"
+    second = await client.post("/v1/chat/completions", headers=headers, json={
+        "model": "openai/gpt-4o", "messages": [{"role": "user", "content": secret}],
+    })
+
+    assert second.status_code == 409, second.text
+    error = second.json()["error"]
+    assert error["code"] == "IDEMPOTENCY_CONFLICT"
+    assert error["key"]  == "errors.IDEMPOTENCY_CONFLICT"
+    assert "type" not in error, "this 409 is not OpenAI-shaped"
+
+    for leaked in (secret, key, proxy_key["x-api-key"], "sk-"):
+        assert leaked not in second.text, f"the 409 body carried {leaked!r}"
+
+
+# ── producer-based envelope rule ─────────────────────────────────────────────
+#
+# The rule this route now follows: an error the ROUTE builds is OpenAI-shaped,
+# an error the GATEWAY builds is canonical. The IP-denial refusal used to be the
+# single exception -- gateway-produced but protocol-shaped -- and no longer is.
+# What must not drift is the other direction: the route's own refusals stay
+# OpenAI-shaped, because that is the protocol this endpoint implements.
+
+@pytest.mark.asyncio
+async def test_the_routes_own_refusals_are_still_openai_shaped(client, proxy_key):
+    """The half of the rule that did NOT change.
+
+    A malformed `model` is rejected by the endpoint itself, so it keeps the
+    OpenAI envelope -- `type` present, sibling `wrapsec` block present, no
+    catalog fields. If canonicalizing the middleware refusal had leaked into the
+    route's own errors, this is what would catch it.
+    """
+    r = await client.post("/v1/chat/completions", headers=proxy_key, json={
+        "model": "gpt-4o-no-provider-prefix",
+        "messages": [{"role": "user", "content": "hi"}],
+    })
+
+    assert r.status_code == 400, r.text
+    body = r.json()
+    error = body["error"]
+    assert error["type"] == "invalid_request_error", "the route's own refusal lost its OpenAI shape"
+    assert error["code"] == "invalid_model_format"
+    assert "severity" not in error and "key" not in error, (
+        "catalog fields leaked onto an OpenAI-shaped body"
+    )
+    assert "wrapsec" in body
+
+
+@pytest.mark.asyncio
+async def test_an_upstream_rate_limit_stays_openai_shaped(client, proxy_key):
+    """429 has two producers and they keep two shapes, correctly.
+
+    This one is the PROVIDER refusing, mapped by the route, so it is
+    OpenAI-shaped. The gateway limiter's 429 is canonical and is measured in the
+    AI suite. Same status, different producer, different envelope -- which is the
+    rule working, not a defect.
+    """
+    import httpx
+
+    request  = httpx.Request("POST", "https://api.openai.com/v1/chat/completions")
+    upstream_429 = httpx.Response(
+        429, request=request, json={"error": {"message": "slow down"}},
+        headers={"retry-after": "7"},
+    )
+
+    with patch("httpx.AsyncClient") as mock_cls:
+        upstream = AsyncMock()
+        upstream.post = AsyncMock(return_value=upstream_429)
+        mock_cls.return_value.__aenter__ = AsyncMock(return_value=upstream)
+        mock_cls.return_value.__aexit__  = AsyncMock(return_value=False)
+        r = await client.post("/v1/chat/completions", headers=proxy_key, json={
+            "model": "openai/gpt-4o", "messages": [{"role": "user", "content": "hi"}],
+        })
+
+    assert r.status_code == 429, r.text
+    error = r.json()["error"]
+    assert error["type"] == "provider_error"
+    assert error["code"] == "provider_rate_limited"
+    assert "severity" not in error and "key" not in error, (
+        "the upstream refusal gained catalog fields"
+    )
+    assert "slow down" not in r.text, "the provider's error text reached the caller"
+    assert r.headers.get("Retry-After") == "7", (
+        "the provider's own backoff guidance was dropped; a caller retrying "
+        "blind is worse than one told to wait 7 seconds"
+    )
+
+
+# ── the trace header follows the same producer boundary as the envelope ──────
+
+@pytest.mark.asyncio
+async def test_the_trace_header_accompanies_what_the_endpoint_produces(client, proxy_key):
+    """`X-WrapSec-Trace-Id` is set by the endpoint, so it is present exactly when
+    the endpoint runs -- on its success body and on its own early refusals.
+
+    Pinned because the documentation used to claim it was on EVERY response from
+    this route, which was never true: a gateway refusal never reaches the code
+    that sets it. The claim survived because the only test covering it exercised
+    the success path.
+    """
+    with patch("httpx.AsyncClient") as mock_cls:
+        upstream = AsyncMock()
+        upstream.post = AsyncMock(return_value=_provider_reply())
+        mock_cls.return_value.__aenter__ = AsyncMock(return_value=upstream)
+        mock_cls.return_value.__aexit__  = AsyncMock(return_value=False)
+        ok = await client.post("/v1/chat/completions", headers=proxy_key, json={
+            "model": "openai/gpt-4o", "messages": [{"role": "user", "content": "hi"}]})
+    assert ok.status_code == 200
+    assert ok.headers.get("X-WrapSec-Trace-Id", "").startswith("req_")
+
+    # An early refusal the ENDPOINT builds still carries it.
+    refused = await client.post("/v1/chat/completions", headers=proxy_key, json={
+        "model": "no-provider-prefix", "messages": [{"role": "user", "content": "hi"}]})
+    assert refused.status_code == 400
+    assert refused.headers.get("X-WrapSec-Trace-Id", "").startswith("req_")
+
+
+@pytest.mark.asyncio
+async def test_a_gateway_refusal_correlates_through_the_envelope_instead(client):
+    """The other side of the boundary, asserted so the documented fallback is
+    real rather than assumed: a refusal raised before the endpoint runs carries
+    no `X-WrapSec-*` header, and a caller correlates on `X-Trace-Id` or on the
+    `trace_id` inside the envelope -- which must agree."""
+    r = await client.post("/v1/chat/completions", json={
+        "model": "openai/gpt-4o", "messages": [{"role": "user", "content": "hi"}]})
+
+    assert r.status_code == 401
+    assert r.headers.get("X-WrapSec-Trace-Id") is None, (
+        "a gateway refusal now sets an endpoint header; the documented boundary moved"
+    )
+    header_trace = r.headers.get("X-Trace-Id")
+    body_trace   = r.json()["error"]["trace_id"]
+    assert header_trace and header_trace.startswith("req_")
+    assert body_trace == header_trace, (
+        "the two correlation values disagree, so neither can be trusted"
+    )
+
+
+@pytest.mark.asyncio
+async def test_the_gateway_limiter_429_is_canonical_on_this_route(client, proxy_key):
+    """The OTHER producer behind this route's 429, pinned here rather than by
+    analogy with the scan family.
+
+    The schema advertises both branches for THIS operation, so both need runtime
+    evidence on THIS operation -- otherwise the `ErrorEnvelope` branch is a
+    declaration with nothing standing behind it.
+
+    `type` is asserted absent because it is the OpenAI envelope's discriminator:
+    its absence is what distinguishes this producer from the upstream refusal
+    that shares the status.
+
+    The bucket is keyed on the hashed credential and this fixture mints a fresh
+    one per test, so exhausting it cannot affect another test.
+    """
+    body = {"model": "openai/gpt-4o", "messages": [{"role": "user", "content": "hi"}]}
+
+    refused = None
+    for _ in range(130):
+        r = await client.post("/v1/chat/completions", headers=proxy_key, json=body)
+        if r.status_code == 429:
+            refused = r
+            break
+
+    assert refused is not None, "the global bucket was never exhausted"
+    body_json = refused.json()
+    assert set(body_json) == {"error"}, (
+        f"an OpenAI-shaped 429 would carry more keys: {sorted(body_json)}"
+    )
+    error = body_json["error"]
+    assert error["code"]     == "RATE_LIMIT_EXCEEDED"
+    assert error["key"]      == "errors.RATE_LIMIT_EXCEEDED"
+    assert error["severity"] == "WARNING"
+    assert isinstance(error["params"].get("retry_after"), int)
+    assert "type" not in error, "the gateway limiter's refusal is not OpenAI-shaped"
