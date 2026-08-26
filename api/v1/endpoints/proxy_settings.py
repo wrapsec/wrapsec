@@ -156,7 +156,7 @@ async def get_proxy_settings(
         # "proxy provider", and the tenant id travels in `debug_message`, which
         # is logged and never serialized. So the response still says no more
         # than "this tenant has no provider configured".
-        raise NotFoundError("proxy provider", tenant_id)
+        raise NotFoundError(resource="proxy_provider", identifier=tenant_id)
 
     # A value, not a JSONResponse: a Response object bypasses the model.
     return _build_config_response(config)
@@ -281,7 +281,7 @@ async def delete_proxy_settings(
 
     if cast(CursorResult, result).rowcount == 0:
         # Same envelope and same disclosure as the read above.
-        raise NotFoundError("proxy provider", tenant_id)
+        raise NotFoundError(resource="proxy_provider", identifier=tenant_id)
 
     logger.info(f"Proxy config deleted for tenant_id={tenant_id}")
     return Response(status_code=204)

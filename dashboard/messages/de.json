@@ -43,6 +43,13 @@
       "untrusted": "Nicht vertrauenswürdig",
       "unknown": "Unbekannt"
     },
+    "resource": {
+      "request": "Anfrage",
+      "application": "Anwendung",
+      "department": "Abteilung",
+      "interaction": "Interaktion",
+      "proxy_provider": "Proxy-Anbieter"
+    },
     "source_tooltip": {
       "untrusted": "Nicht vertrauenswürdige Quelle - indirekte Prompt-Injection-Angriffsfläche",
       "user": "Endbenutzer-Prompt"

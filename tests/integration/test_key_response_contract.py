@@ -265,3 +265,37 @@ async def test_the_department_rejection_leaks_no_identifiers(client, admin_jwt_h
     for entry in r.json()["error"]["invalid_params"]:
         assert set(entry) == {"field", "code", "key", "params"}
         assert entry["params"] == {}
+
+
+# -- NOT_FOUND resource tokens ------------------------------------------------
+#
+# Both 404s on this route name a resource. The value is a machine token, so a
+# localized client can render its own word for it; the identifier the caller
+# sent stays out of the body entirely.
+
+@pytest.mark.asyncio
+async def test_an_unknown_application_names_the_resource_by_token(client, admin_jwt_headers):
+    ghost = "11111111-1111-1111-1111-111111111111"
+    r = await client.post("/v1/keys", headers=admin_jwt_headers,
+                          json={"name": "ghost-app", "app_id": ghost})
+
+    assert r.status_code == 404, r.text
+    error = r.json()["error"]
+    assert error["code"]   == "NOT_FOUND"
+    assert error["key"]    == "errors.NOT_FOUND"
+    assert error["params"] == {"resource": "application"}
+    # The identifier is debug-only: echoing it back confirms a probe.
+    assert ghost not in r.text
+
+
+@pytest.mark.asyncio
+async def test_an_unknown_department_names_the_resource_by_token(client, admin_jwt_headers):
+    ghost = "22222222-2222-2222-2222-222222222222"
+    r = await client.post("/v1/keys", headers=admin_jwt_headers,
+                          json={"name": "ghost-dept", "dept_id": ghost})
+
+    assert r.status_code == 404, r.text
+    error = r.json()["error"]
+    assert error["code"]   == "NOT_FOUND"
+    assert error["params"] == {"resource": "department"}
+    assert ghost not in r.text

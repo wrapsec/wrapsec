@@ -157,18 +157,18 @@ async def get_proxy_interaction(
     # correlates on the envelope's own trace_id -- the same treatment
     # `GET /v1/ai/requests/{trace_id}` already gives an identical lookup.
     if not item:
-        raise NotFoundError("interaction", trace_id)
+        raise NotFoundError(resource="interaction", identifier=trace_id)
 
     if request.state.is_admin:
         # Admin: the interaction must belong to this tenant. Check the stored
         # tenant_id directly (M5) - no api_keys resolution, so a revoked/deleted
         # key does not hide its own history.
         if not item.tenant_id or str(item.tenant_id) != request.state.tenant_id:
-            raise NotFoundError("interaction", trace_id)
+            raise NotFoundError(resource="interaction", identifier=trace_id)
     else:
         # Non-admin: must own the interaction. Interactions with no key_id are
         # system/admin records - never accessible to non-admin callers.
         if not item.key_id or item.key_id != request.state.key_id:
-            raise NotFoundError("interaction", trace_id)
+            raise NotFoundError(resource="interaction", identifier=trace_id)
 
     return _serialize(item, detail=True)

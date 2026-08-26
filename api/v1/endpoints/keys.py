@@ -230,7 +230,7 @@ async def create_key(
         app_repo = ApplicationRepository(db)
         app      = await app_repo.get_by_id(uuid.UUID(body.app_id))
         if not app or str(app.tenant_id) != request.state.tenant_id:
-            raise NotFoundError("application", body.app_id)
+            raise NotFoundError(resource="application", identifier=body.app_id)
         app_id    = app.id
         dept_id   = app.dept_id
         tenant_id = app.tenant_id
@@ -239,7 +239,7 @@ async def create_key(
         dept_repo = DepartmentRepository(db)
         dept      = await dept_repo.get_by_id(uuid.UUID(body.dept_id))
         if not dept or str(dept.tenant_id) != request.state.tenant_id:
-            raise NotFoundError("department", body.dept_id)
+            raise NotFoundError(resource="department", identifier=body.dept_id)
         dept_id   = dept.id
         tenant_id = dept.tenant_id
     else:

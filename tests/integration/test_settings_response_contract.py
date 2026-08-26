@@ -396,7 +396,9 @@ async def test_the_proxy_read_answers_a_missing_config_with_the_catalog_envelope
     assert error["code"]     == "NOT_FOUND"
     assert error["severity"] == "WARNING"
     assert error["key"]      == "errors.NOT_FOUND"
-    assert error["params"]   == {"resource": "proxy provider"}
+    # The machine TOKEN, not the English label. A localized client renders
+    # "Proxy-Anbieter nicht gefunden." from common.resource.proxy_provider.
+    assert error["params"]   == {"resource": "proxy_provider"}
     assert error["trace_id"].startswith("req_")
     # A lookup miss has no per-field detail, and the builder omits the key rather
     # than sending an empty list.
@@ -520,7 +522,7 @@ async def test_the_proxy_errors_carry_no_tenant_or_storage_detail(
     for method in ("get", "delete"):
         r = await getattr(client, method)("/v1/settings/proxy", headers=admin_jwt_headers)
         assert r.status_code == 404
-        assert r.json()["error"]["params"] == {"resource": "proxy provider"}
+        assert r.json()["error"]["params"] == {"resource": "proxy_provider"}
         for leaked in ("tenant", "proxy_provider_configs", "SELECT", "sqlalchemy",
                        "asyncpg", "Traceback", "/home/"):
             assert leaked not in r.text, f"the 404 body carried {leaked!r}"

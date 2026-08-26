@@ -602,3 +602,27 @@ async def test_the_capability_refusal_leaks_no_cause_or_configuration(
     for term in ("execution_mode", "openai", "gpt-4o", "wsk_", "sk-",
                  "SELECT", "Traceback", "/home/"):
         assert term not in r.text, f"the capability refusal carried {term!r}"
+
+
+# -- NOT_FOUND resource token -------------------------------------------------
+
+@pytest.mark.asyncio
+async def test_an_unknown_trace_names_the_resource_by_token(client, live_key_headers):
+    """The read-back 404 names WHAT was missing, as a machine token.
+
+    `request` is already the token spelling, so this pins a value that did not
+    change -- which is exactly why it is worth pinning: nothing in the diff
+    would reveal it drifting to prose later.
+    """
+    ghost = "req_00000000000000000000000000000000"
+    r = await client.get(f"/v1/ai/requests/{ghost}", headers=live_key_headers)
+
+    assert r.status_code == 404, r.text
+    error = r.json()["error"]
+    assert error["code"]   == "NOT_FOUND"
+    assert error["key"]    == "errors.NOT_FOUND"
+    assert error["params"] == {"resource": "request"}
+    # The requested trace is not echoed; the caller correlates on the envelope's
+    # own trace_id instead.
+    assert ghost not in r.text
+    assert error["trace_id"] != ghost

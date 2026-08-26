@@ -153,6 +153,21 @@ class PasswordChangedException(WrapSecError):
 
 # -- Not Found -------------------------------------------------
 class NotFoundError(WrapSecError):
+    """A resource this caller asked for does not exist, or is out of their scope.
+
+    On a PUBLIC route `resource` is a stable machine TOKEN, not prose:
+    `request`, `application`, `department`, `interaction`, `proxy_provider`.
+    The token names the kind of thing that was missing; a localized client
+    resolves the human label from `common.resource.<token>` and renders it into
+    its own translation of `errors.NOT_FOUND`. Passing an English label instead
+    would put untranslatable text inside a translated sentence, which is the
+    same reason a validation error carries the machine field name rather than
+    the field's label.
+
+    Non-public routes still pass a free English word. They are read by the
+    dashboard, which is updated alongside them; only the published surface is
+    held to the token vocabulary.
+    """
     code = ErrorCode.NOT_FOUND
     def __init__(self, resource: str, identifier: str):
         self.resource   = resource

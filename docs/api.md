@@ -243,7 +243,7 @@ Security and proxy errors additionally include a `wrapsec` key:
 | `PROXY_REQUIRES_API_KEY` | 403 | `POST /v1/chat/completions` called with a JWT session - the proxy accepts API keys only |
 | `FEATURE_UNAVAILABLE` | 403 | The requested capability is not served for this caller. `params.feature` names it. The cause - a credential class, a detection layer disabled by policy - is deliberately not distinguished, so the response never reveals tenant configuration |
 | `IP_NOT_ALLOWED` | 403 | The API key was presented from an address outside its `ip_allowlist`. Returned on every endpoint the key can reach, in that endpoint's envelope shape |
-| `NOT_FOUND` | 404 | Resource does not exist |
+| `NOT_FOUND` | 404 | Resource does not exist. `params.resource` names which kind, as a stable token (see below) |
 | `CONFLICT` | 409 | Duplicate (e.g. email already registered) |
 | `IDEMPOTENCY_CONFLICT` | 409 | Same Idempotency-Key, different body |
 | `VALIDATION_ERROR` | 422 | Body failed validation |
@@ -260,6 +260,23 @@ Security and proxy errors additionally include a `wrapsec` key:
 | `trial_proxy_disabled` | 403 | Proxy: not available for trial keys |
 
 **Convention:** `UPPERCASE` = platform/infrastructure errors. `lowercase` = security/proxy runtime errors.
+
+**`NOT_FOUND` resource tokens:** a `NOT_FOUND` carries `error.params.resource`, naming what was
+not found. It is a stable machine-readable localization token, not presentation text: it is
+lowercase, unspaced, and does not change with the caller's language. Display
+`error.message`, which is already resolved, or resolve your own label from the token. Do not
+render `params.resource` directly.
+
+| Token | Returned by |
+|---|---|
+| `request` | `GET /v1/ai/requests/{trace_id}` |
+| `application` | `POST /v1/keys` |
+| `department` | `POST /v1/keys` |
+| `interaction` | `GET /v1/proxy/interactions/{trace_id}` |
+| `proxy_provider` | `GET /v1/settings/proxy`, `DELETE /v1/settings/proxy` |
+
+The vocabulary is add-only: a new resource may appear, an existing token is not renamed or
+repurposed. Treat an unrecognised token as opaque and fall back to `error.message`.
 
 ---
 

@@ -1001,7 +1001,7 @@ async def get_request(
     record = await get_scoped_audit_record(repo, trace_id, request)
 
     if not record:
-        raise NotFoundError("request", trace_id)
+        raise NotFoundError(resource="request", identifier=trace_id)
 
     # Enrich with human-readable names
     dept_name = None

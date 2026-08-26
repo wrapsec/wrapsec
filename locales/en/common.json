@@ -42,6 +42,13 @@
     "untrusted": "Untrusted",
     "unknown": "Unknown"
   },
+  "resource": {
+    "request": "request",
+    "application": "application",
+    "department": "department",
+    "interaction": "interaction",
+    "proxy_provider": "proxy provider"
+  },
   "source_tooltip": {
     "untrusted": "Untrusted origin - indirect prompt-injection surface",
     "user": "End-user prompt"

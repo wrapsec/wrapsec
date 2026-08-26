@@ -25,10 +25,34 @@ export type Severity = "ERROR" | "WARNING" | "INFO"
 export function useErrorMessage() {
   const t = useTranslations()
 
+  /**
+   * Params as the catalog template wants to render them.
+   *
+   * `resource` on a public NOT_FOUND is a machine TOKEN (`proxy_provider`), not
+   * a label, for the same reason `invalid_params[].field` is: an English word
+   * interpolated into a German sentence is not a translation. The label lives in
+   * `common.resource.<token>` and is resolved HERE, in the active locale, before
+   * the template renders.
+   *
+   * An unknown token falls through unchanged rather than blanking the message --
+   * a server that adds a resource before this catalog knows it still produces a
+   * readable sentence, just an untranslated word.
+   */
+  function localizeParams(params?: Record<string, unknown>) {
+    if (!params) return undefined
+    const resource = params.resource
+    if (typeof resource !== "string") return params as Record<string, string | number>
+    const key = `common.resource.${resource}`
+    return {
+      ...params,
+      resource: t.has(key) ? t(key) : resource,
+    } as Record<string, string | number>
+  }
+
   function resolve(err: unknown): { message: string; severity: Severity } {
     if (err instanceof ApiError && err.key && t.has(err.key)) {
       return {
-        message:  t(err.key, err.params as Record<string, string | number> | undefined),
+        message:  t(err.key, localizeParams(err.params)),
         severity: (err.severity as Severity) ?? "ERROR",
       }
     }

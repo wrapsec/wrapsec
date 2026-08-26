@@ -243,6 +243,13 @@ async def test_admin_detail_includes_raw_and_cross_tenant_404(client, test_db, a
 
     r_other = await client.get(f"/v1/proxy/interactions/{other}", headers=_bearer(auth_setup["admin_token"]))
     assert r_other.status_code == 404              # cross-tenant not exposed
+    # This is the only test that reaches the ADMIN wrong-tenant branch, so the
+    # body is asserted here rather than in the contract suite, which cannot get
+    # an admin into that branch without duplicating this fixture. The token must
+    # match the other two 404 branches: one that varied by branch would tell an
+    # admin which trace_ids are real in tenants they cannot read.
+    assert r_other.json()["error"]["params"] == {"resource": "interaction"}
+    assert other not in r_other.text               # the trace_id stays debug-only
 
 
 @pytest.mark.asyncio
