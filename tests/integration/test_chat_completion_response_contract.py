@@ -499,15 +499,41 @@ async def test_the_gateway_limiter_429_is_canonical_on_this_route(client, proxy_
 
     The bucket is keyed on the hashed credential and this fixture mints a fresh
     one per test, so exhausting it cannot affect another test.
+
+    THE UPSTREAM IS STUBBED, AND THE STUB RETURNS SUCCESS. Both halves matter.
+
+    Stubbed, because the limiter is a SLIDING sixty-second window: filling it
+    needs sixty requests inside sixty seconds. Left unstubbed this loop reaches
+    the real provider, which costs seconds per call, so roughly twenty requests
+    land in the window and the bucket never fills -- the test then fails with no
+    regression behind it, and passes again when the network happens to be slow
+    to connect. Nothing about the limiter is faked here: the requests are real,
+    they travel the real middleware, and the real Redis window counts them.
+
+    Returning SUCCESS, because a stub that returned an upstream 429 would let
+    this test pass on the wrong producer. The provider's own refusal is mapped by
+    the route and is OpenAI-shaped; the gateway's is canonical. With the upstream
+    answering 200 to everything, the only thing that can produce a 429 is the
+    limiter -- which is the claim being made.
     """
     body = {"model": "openai/gpt-4o", "messages": [{"role": "user", "content": "hi"}]}
 
     refused = None
-    for _ in range(130):
-        r = await client.post("/v1/chat/completions", headers=proxy_key, json=body)
-        if r.status_code == 429:
-            refused = r
-            break
+    with patch("httpx.AsyncClient") as mock_cls:
+        upstream = AsyncMock()
+        upstream.post = AsyncMock(return_value=_provider_reply())
+        mock_cls.return_value.__aenter__ = AsyncMock(return_value=upstream)
+        mock_cls.return_value.__aexit__  = AsyncMock(return_value=False)
+
+        for _ in range(130):
+            r = await client.post("/v1/chat/completions", headers=proxy_key, json=body)
+            if r.status_code == 429:
+                refused = r
+                break
+            assert r.status_code == 200, (
+                f"the stubbed upstream should answer 200 until the limiter bites, "
+                f"got {r.status_code}: {r.text}"
+            )
 
     assert refused is not None, "the global bucket was never exhausted"
     body_json = refused.json()
