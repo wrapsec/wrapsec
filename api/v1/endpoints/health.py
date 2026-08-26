@@ -2,20 +2,39 @@
 # Copyright (c) 2026 WrapSec. All rights reserved.
 # WrapSec v1.0 | AI Security Gateway - https://wrapsec.com
 
-from fastapi import APIRouter, Depends, Request
-from fastapi.responses import JSONResponse
+from typing import Any
+
+from fastapi import APIRouter, Depends, Request, Response
 from sqlalchemy import text
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from api.v1.dependencies.auth import get_current_principal
 from api.v1.dependencies.db import get_db
+from api.v1.schemas.response import (
+    ErrorEnvelope,
+    HealthConfigResponse,
+    HealthResponse,
+    LivenessResponse,
+    ReadinessResponse,
+)
 from config.settings import get_settings
 from domain.entities.principal import Principal
 
 router = APIRouter()
 
+# `/health`, `/health/live` and `/health/ready` are unauthenticated, so they have
+# no 401 to document. `/health/config` admits any authenticated caller and has no
+# parameters to validate, so 401 is its only reachable failure.
+_CONFIG_ERRORS: dict[int | str, dict[str, Any]] = {
+    401: {"model": ErrorEnvelope, "description": "Missing or invalid credentials."},
+}
 
-@router.get("/health")
+
+@router.get(
+    "/health",
+    response_model               = HealthResponse,
+    response_model_exclude_unset = True,
+)
 async def health():
     return {
         "status":  "ok",
@@ -23,8 +42,16 @@ async def health():
     }
 
 
-@router.get("/health/ready")
-async def health_ready():
+@router.get(
+    "/health/ready",
+    response_model               = ReadinessResponse,
+    response_model_exclude_unset = True,
+    responses = {
+        200: {"model": ReadinessResponse, "description": "Every required component is up. The body may still read `degraded` when an optional one is absent."},
+        503: {"model": ReadinessResponse, "description": "A required component is down; the instance cannot serve. Same body shape."},
+    },
+)
+async def health_ready(response: Response):
     """
     Readiness check. Used by container orchestrators to decide whether to route
     traffic, so the STATUS CODE is the contract and the body is the detail.
@@ -103,18 +130,35 @@ async def health_ready():
     # returning 200 here kept an orchestrator routing to an instance that
     # refused every request with SYSTEM_ERROR, and never restarted it. The body
     # is unchanged in both cases; the code is what the orchestrator acts on.
-    return JSONResponse(
-        content     = body,
-        status_code = 200 if required_ok else 503,
-    )
+    # The code is set on the injected Response rather than by constructing one,
+    # so the BODY still passes through the response model. Returning a
+    # JSONResponse here would carry the same bytes and the same code while
+    # bypassing validation and filtering entirely -- which is exactly the
+    # advertised-but-unenforced shape this phase exists to remove.
+    response.status_code = 200 if required_ok else 503
+    return body
 
 
-@router.get("/health/live")
+@router.get(
+    "/health/live",
+    response_model               = LivenessResponse,
+    response_model_exclude_unset = True,
+)
 async def health_live():
     return {"status": "alive"}
 
 
-@router.get("/health/config")
+@router.get(
+    "/health/config",
+    response_model               = HealthConfigResponse,
+    # Load-bearing here, not merely conventional: a caller without
+    # `settings:read` receives each section reduced to its `source` marker, and
+    # the withheld values must be ABSENT. exclude_none would drop legitimate
+    # nulls elsewhere; exclude_unset drops exactly the keys the handler did not
+    # set, which is the restriction itself.
+    response_model_exclude_unset = True,
+    responses                    = _CONFIG_ERRORS,
+)
 async def health_config(
     request:    Request,
     db:         AsyncSession = Depends(get_db),

@@ -308,9 +308,194 @@ async def test_snapshot_settings_reads(client, scored_key_pair):
 
 
 @pytest.mark.asyncio
+async def test_snapshot_agent_run(client, scored_key_pair):
+    """The agent-run timeline, recorded from a run this test produces.
+
+    Shape rather than value: a turn carries the hash-chain fields, whose values
+    depend on every row written before them, and an input hash that depends on
+    the probe text. The CONTRACT here is which fields a turn has and of what
+    type, which is exactly what shape mode records.
+    """
+    live, _ = scored_key_pair       # header dicts, not raw keys
+    run_id  = f"run-{_unique()}"
+
+    for turn in range(2):
+        scan = await client.post(
+            "/v1/ai/request", headers=live,
+            json={"input": f"agent turn {turn} {_unique()}",
+                  "run_id": run_id, "session_id": f"sess-{run_id}", "turn_index": turn},
+        )
+        assert scan.status_code == 200, scan.text
+
+    await _snap(client, "agent_run_live_key", "GET", f"/v1/agent-runs/{run_id}",
+                headers=live, shape_only=True)
+
+
+@pytest.mark.asyncio
+async def test_snapshot_proxy_interaction_detail(client, test_db):
+    """The detail route, recorded from an interaction the caller owns.
+
+    Seeded rather than produced, because reaching the proxy needs a live
+    provider. Shape mode: the body carries `input_raw` / `output_raw`, and a
+    golden is the wrong place to keep prompt text -- the contract here is the
+    field set and the types, including which fields come back null.
+    """
+    import hashlib
+
+    from db.models import APIKeyModel, DepartmentModel, ProxyInteractionModel
+    from db.repositories.tenant import TenantRepository
+    from services.time import utc_now
+
+    tenant = await TenantRepository(test_db).get_bootstrap_default()
+    assert tenant is not None
+
+    dept_id = uuid.uuid4()
+    test_db.add(DepartmentModel(
+        id=dept_id, tenant_id=tenant.id, slug=f"px-{dept_id.hex[:8]}",
+        name="Proxy snapshot dept", is_active=True,
+    ))
+    await test_db.flush()
+
+    key_id = "key_" + uuid.uuid4().hex[:8]
+    raw    = "wsk_live_" + uuid.uuid4().hex
+    test_db.add(APIKeyModel(
+        id=uuid.uuid4(), key_id=key_id, tenant_id=tenant.id, dept_id=dept_id,
+        app_id=None, name="proxy-snapshot",
+        key_hash=hashlib.sha256(raw.encode()).hexdigest(),
+        key_type="live", is_admin=False, revoked=False,
+    ))
+    trace_id = "px-" + uuid.uuid4().hex[:12]
+    test_db.add(ProxyInteractionModel(
+        id=uuid.uuid4(), trace_id=trace_id, tenant_id=tenant.id, dept_id=dept_id,
+        # Stored with the `key:` prefix the auth middleware sets on request.state;
+        # the response strips it.
+        key_id=f"key:{key_id}",
+        input_decision="ALLOW", input_primary_reason="NO_THREAT_DETECTED",
+        input_confidence=1.0, input_threats=[], execution_status="completed",
+        provider="openai", model="gpt-4o", provider_latency_ms=100,
+        total_latency_ms=120, output_decision="ALLOW", output_threats=[],
+        input_raw="hello", output_raw="hi", created_at=utc_now(),
+    ))
+    await test_db.commit()
+
+    await _snap(client, "proxy_interaction_detail", "GET",
+                f"/v1/proxy/interactions/{trace_id}",
+                headers={"x-api-key": raw}, shape_only=True)
+
+
+@pytest.mark.asyncio
+async def test_snapshot_key_creation(client, admin_jwt_headers, admin_key_scope):
+    """Key creation, including the one response that carries a credential.
+
+    The raw key is returned exactly once, at creation. `_normalize` maps
+    `api_key` to "<secret>", so the golden records that the FIELD is present and
+    a string without ever storing a real credential. Creation needs JWT + ADMIN
+    and an explicit dept, which is what `admin_key_scope` supplies.
+    """
+    await _snap(client, "key_created", "POST", "/v1/keys",
+                headers=admin_jwt_headers,
+                json_body={"name": "contract baseline key",
+                           "dept_id": admin_key_scope})
+
+
+@pytest.mark.asyncio
 async def test_snapshot_keys_list(client, scored_key_pair):
     live, _ = scored_key_pair       # header dicts, not raw keys
     await _snap(client, "keys_list", "GET", "/v1/keys", headers=live)
+
+
+# ── the OpenAI-compatible route ──────────────────────────────────────────────
+
+def _mock_provider(content="Paris is the capital of France.", model="gpt-4o", usage=None):
+    """A provider reply, as httpx would hand it back."""
+    from unittest.mock import MagicMock
+
+    body = {
+        "choices": [{"message": {"role": "assistant", "content": content},
+                     "finish_reason": "stop", "index": 0}],
+        "model": model, "id": "chatcmpl-test123",
+    }
+    if usage is not None:
+        body["usage"] = usage
+    resp = MagicMock()
+    resp.raise_for_status = MagicMock()
+    resp.json.return_value = body
+    return resp
+
+
+async def _with_provider(client, snap_name, headers, *, usage=None, extra_headers=None):
+    """Drive one proxied call with the upstream mocked, and record the body."""
+    from unittest.mock import AsyncMock, patch
+
+    with patch("httpx.AsyncClient") as mock_cls:
+        upstream = AsyncMock()
+        upstream.post = AsyncMock(return_value=_mock_provider(usage=usage))
+        mock_cls.return_value.__aenter__ = AsyncMock(return_value=upstream)
+        mock_cls.return_value.__aexit__  = AsyncMock(return_value=False)
+        await _snap(client, snap_name, "POST", "/v1/chat/completions",
+                    headers={**headers, **(extra_headers or {})},
+                    json_body={"model": "openai/gpt-4o",
+                               "messages": [{"role": "user", "content": "What is the capital of France?"}]})
+
+
+@pytest.fixture
+async def proxy_configured_key(test_db):
+    """A live key whose tenant has a proxy provider configured."""
+    import hashlib
+
+    from config.settings import get_settings
+    from db.models import APIKeyModel, DepartmentModel, ProxyProviderConfigModel
+    from db.repositories.tenant import TenantRepository
+    from security.encryption import encrypt
+
+    tenant = await TenantRepository(test_db).get_bootstrap_default()
+    assert tenant is not None
+
+    dept_id = uuid.uuid4()
+    test_db.add(DepartmentModel(id=dept_id, tenant_id=tenant.id,
+                                slug=f"cc-{dept_id.hex[:8]}", name="Chat snapshot dept",
+                                is_active=True))
+    await test_db.flush()
+    raw = "wsk_live_" + uuid.uuid4().hex
+    test_db.add(APIKeyModel(
+        id=uuid.uuid4(), key_id="key_" + uuid.uuid4().hex[:8], tenant_id=tenant.id,
+        dept_id=dept_id, app_id=None, name="chat-snapshot",
+        key_hash=hashlib.sha256(raw.encode()).hexdigest(),
+        key_type="live", is_admin=False, revoked=False,
+    ))
+    test_db.add(ProxyProviderConfigModel(
+        tenant_id=str(tenant.id), provider="openai",
+        base_url="https://api.openai.com/v1",
+        provider_api_key_enc=encrypt("sk-test-key-1234567890", get_settings().secret_key),
+        default_model="gpt-4o", timeout_seconds=30,
+    ))
+    await test_db.commit()
+    return {"x-api-key": raw}
+
+
+@pytest.mark.asyncio
+async def test_snapshot_chat_completion(client, proxy_configured_key):
+    """The OpenAI-compatible success body, with the upstream mocked.
+
+    Three recordings, because they are three different bodies: without provider
+    usage, with it, and with the opt-in `wrapsec` meta block. `usage` and
+    `wrapsec` are the two conditionally-present fields on this route.
+    """
+    await _with_provider(client, "chat_completion", proxy_configured_key)
+    await _with_provider(client, "chat_completion_with_usage", proxy_configured_key,
+                         usage={"prompt_tokens": 9, "completion_tokens": 12, "total_tokens": 21})
+    await _with_provider(client, "chat_completion_inline_meta", proxy_configured_key,
+                         extra_headers={"X-WrapSec-Inline-Meta": "true"})
+
+
+@pytest.mark.asyncio
+async def test_snapshot_chat_validation_error(client, proxy_configured_key):
+    """What a request-validation failure actually returns on the OpenAI route --
+    the shape the generated HTTPValidationError entry claims to describe."""
+    await _snap(client, "chat_validation_error", "POST", "/v1/chat/completions",
+                headers=proxy_configured_key,
+                json_body={"model": "openai/gpt-4o", "stream": True,
+                           "messages": [{"role": "user", "content": "hi"}]})
 
 
 # ── documented error envelopes ───────────────────────────────────────────────

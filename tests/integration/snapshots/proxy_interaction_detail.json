@@ -1,0 +1,31 @@
+{
+  "body": {
+    "behavior_flag": null,
+    "created_at": "<str>",
+    "execution_status": "<str>",
+    "id": "<str>",
+    "input_attack_type": null,
+    "input_confidence": "<float>",
+    "input_decision": "<str>",
+    "input_primary_reason": "<str>",
+    "input_raw": "<str>",
+    "input_sanitized": null,
+    "input_threats": [],
+    "key_id": "<str>",
+    "model": "<str>",
+    "output_confidence": null,
+    "output_decision": "<str>",
+    "output_flags": null,
+    "output_primary_reason": null,
+    "output_raw": "<str>",
+    "output_sanitized": null,
+    "output_threats": [],
+    "provider": "<str>",
+    "provider_latency_ms": "<int>",
+    "total_latency_ms": "<int>",
+    "trace_id": "<str>",
+    "user_id": null
+  },
+  "mode": "shape",
+  "status": 200
+}

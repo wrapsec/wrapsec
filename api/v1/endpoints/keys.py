@@ -8,6 +8,7 @@ import secrets
 import uuid
 from datetime import timedelta
 from enum import Enum
+from typing import Any
 
 from fastapi import APIRouter, Depends, Request
 from fastapi.responses import JSONResponse
@@ -18,6 +19,11 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from api.v1.dependencies.auth import get_current_principal, require_admin
 from api.v1.dependencies.db import get_db
 from api.v1.middleware.auth import get_client_ip
+from api.v1.schemas.response import (
+    ApiKeyCreated,
+    ApiKeyListResponse,
+    ErrorEnvelope,
+)
 from db.models import AuditLogModel, AuthEventModel
 from db.repositories.admin_event import AdminEventRepository
 from db.repositories.api_key import ApiKeyRepository
@@ -31,6 +37,21 @@ from services.time import parse_utc_iso, to_iso_z, utc_now
 logger = logging.getLogger("wrapsec.keys")
 
 router = APIRouter()
+
+# Reachable failures on the two PUBLIC key routes. Creation is JWT + ADMIN, so a
+# key presented here is refused before the handler runs. 422 is declared because
+# the runtime handler returns the catalog envelope -- an invalid `key_type`, a
+# malformed `expires_at`, or an admin with no department and no explicit scope.
+_CREATE_ERRORS: dict[int | str, dict[str, Any]] = {
+    401: {"model": ErrorEnvelope, "description": "Missing or invalid credentials."},
+    403: {"model": ErrorEnvelope, "description": "Not an ADMIN, or the principal has no tenant scope."},
+    404: {"model": ErrorEnvelope, "description": "The named application or department does not exist in this tenant."},
+    422: {"model": ErrorEnvelope, "description": "Request body failed validation, or no department could be resolved for the key."},
+}
+
+_LIST_ERRORS: dict[int | str, dict[str, Any]] = {
+    401: {"model": ErrorEnvelope, "description": "Missing or invalid credentials."},
+}
 
 
 def _hash_key(api_key: str) -> str:
@@ -159,7 +180,16 @@ async def _record_allowlist_change(
         )
 
 
-@router.post("")
+@router.post(
+    "",
+    response_model               = ApiKeyCreated,
+    # 201 stays the contract: it was carried by the constructed JSONResponse and
+    # now sits on the route, so the body can be returned as a value and pass
+    # through the model.
+    status_code                  = 201,
+    response_model_exclude_unset = True,
+    responses                    = _CREATE_ERRORS,
+)
 async def create_key(
     body:      CreateKeySchema,
     request:   Request,
@@ -262,7 +292,10 @@ async def create_key(
             previous=None, current=body.ip_allowlist,
         )
 
-    return JSONResponse(content={
+    # A value, not a JSONResponse: a Response object bypasses the response model,
+    # and this is the one body in the API that carries a credential -- the last
+    # place to leave unfiltered.
+    return {
         "key_id":     key_id,
         "name":       body.name,
         "api_key":    api_key,
@@ -272,10 +305,15 @@ async def create_key(
         "tenant_id":  str(tenant_id) if tenant_id else None,
         "created_at": to_iso_z(record.created_at),
         "expires_at": to_iso_z(record.expires_at) if record.expires_at else None,
-    }, status_code=201)
+    }
 
 
-@router.get("")
+@router.get(
+    "",
+    response_model               = ApiKeyListResponse,
+    response_model_exclude_unset = True,
+    responses                    = _LIST_ERRORS,
+)
 async def list_keys(
     request:   Request,
     db:        AsyncSession = Depends(get_db),
@@ -318,7 +356,9 @@ async def list_keys(
             except Exception:
                 app_names[str(k.app_id)] = None
 
-    return JSONResponse(content={
+    # A value, not a JSONResponse. The model here declares no credential field at
+    # all, so the filter cannot pass one through even if a writer added it.
+    return {
         "keys": [
             {
                 "key_id":       k.key_id,
@@ -334,7 +374,7 @@ async def list_keys(
             }
             for k in keys
         ]
-    })
+    }
 
 # Key lifecycle beyond list and create is dashboard surface today: the
 # published integrator contract is GET and POST /v1/keys. These five stay

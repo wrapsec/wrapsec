@@ -1,0 +1,15 @@
+{
+  "body": {
+    "api_key": "<secret>",
+    "app_id": null,
+    "created_at": "<timestamp>",
+    "dept_id": "<uuid>",
+    "expires_at": null,
+    "key_id": "<id>",
+    "key_type": "live",
+    "name": "contract baseline key",
+    "tenant_id": "<uuid>"
+  },
+  "mode": "value",
+  "status": 201
+}

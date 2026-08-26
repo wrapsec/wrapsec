@@ -213,45 +213,137 @@ def test_nothing_outside_the_public_surface_is_published():
     )
 
 
+def test_the_read_back_route_declares_a_422_it_cannot_reach():
+    """Why `GET /v1/ai/requests/{trace_id}` documents a status nothing produces.
+
+    Everywhere else in this work an unreachable status is left undeclared -- a
+    documented failure nothing emits is a promise nothing keeps. This route is the
+    exception, and the exception is FastAPI's doing: it publishes a 422 for any
+    route with a parameter, and there is no way to remove that entry, only to
+    override it. Left alone it names `HTTPValidationError`; overridden it names
+    the envelope a caller would actually get. Neither is reachable, so the choice
+    is between two unreachable entries, and the correct shape wins.
+
+    The premise is asserted, not asserted-about: the route's flattened parameters
+    (which is what FastAPI itself reads) are exactly one unconstrained path string.
+    Adding a bounded query parameter here makes the 422 reachable and fails this
+    test, which is the point -- the declaration would then need a real description.
+    """
+    from fastapi.dependencies.utils import get_flat_params
+    from fastapi.routing import APIRoute
+
+    from api.main import app
+
+    route = next(
+        r for r in app.routes
+        if isinstance(r, APIRoute) and r.path == "/v1/ai/requests/{trace_id}"
+    )
+    params = get_flat_params(route.dependant)
+
+    assert [p.name for p in params] == ["trace_id"], (
+        f"the route now validates {[p.name for p in params]}; if any of those can "
+        "fail, its 422 is reachable and must be described as such"
+    )
+    assert params[0].field_info.annotation is str
+    assert params[0].field_info.metadata == [], (
+        "the path parameter gained a constraint, so validation can now fail here"
+    )
+    assert route.body_field is None, "the route gained a body, which can fail validation"
+
+
 # ── the two deliberate special cases ─────────────────────────────────────────
 
-def test_audit_export_is_advertised_as_json_although_it_returns_csv():
-    """A KNOWN MISREPRESENTATION, pinned rather than asserted as correct.
+def test_audit_export_is_advertised_as_csv():
+    """The CSV route advertises CSV. This replaces a pinned misrepresentation.
 
-    The route returns CSV, and it is a deliberate non-model exception. But a
-    FastAPI route with no response_model still gets a default 200 of
-    `application/json` with an empty schema, so the published contract currently
-    tells a generator to expect JSON here. Nothing breaks today -- an empty schema
-    constrains nothing -- but the media type is wrong.
+    It used to publish a 200 of `application/json` with an empty schema, because
+    a FastAPI route derives its advertised media type from its response class and
+    the default one is JSON. The handler streams `text/csv`, so the published
+    contract told a generator to expect the wrong thing. Declaring the response
+    class fixed the derivation; the empty JSON entry is gone rather than sitting
+    alongside the CSV one.
 
-    Pinned so the state is visible and so fixing it (a `responses=` entry naming
-    text/csv) fails this test and prompts an update, instead of being mistaken for
-    an unrelated schema diff. Not fixed here: this pass changes no route.
+    The route is still a deliberate non-model exception -- see NON_MODEL_ROUTES.
+    This asserts the media type, which is the contract for a file download; the
+    absence of a response model is asserted separately, next to that record.
     """
     spec = _committed()
     ok = spec["paths"]["/v1/audit/export"]["get"]["responses"]["200"]
     content = ok.get("content") or {}
 
-    assert list(content) == ["application/json"], (
-        f"the advertised media types for audit/export changed: {list(content)}. "
-        "If text/csv was declared, this known misrepresentation is fixed -- "
-        "update this test to assert the corrected contract."
+    assert list(content) == ["text/csv"], (
+        f"audit/export advertises {list(content)}; it streams text/csv, and an "
+        "application/json entry here tells a generator to parse a CSV body as JSON"
     )
-    assert content["application/json"]["schema"] == {}, (
-        "audit/export now advertises a non-empty JSON schema; it returns CSV"
+    assert content["text/csv"]["schema"] == {"type": "string", "format": "binary"}, (
+        "the CSV body is advertised as something other than a binary string"
     )
 
 
-def test_chat_completions_is_present_and_not_forced_into_the_normal_pattern():
-    """The OpenAI-compatible route. Its body is provider-shaped and it answers
-    through many constructed Response paths, so it must not be given the ordinary
-    response model during the family conversion."""
+def test_no_published_operation_advertises_the_generated_validation_schema():
+    """`HTTPValidationError` describes a body this application never emits.
+
+    FastAPI generates it for any parameterized route, but a request-validation
+    failure is answered by the global handler with the catalog `ErrorEnvelope` --
+    different field names, different nesting. A caller coding against the
+    generated schema would parse `detail[].loc` and find nothing.
+
+    Asserted over the whole published surface rather than per route, so a NEW
+    route cannot quietly reintroduce it: adding one without declaring its 422 is
+    what fails here. The two component schemas are checked as well, because they
+    are dropped only while nothing references them, and their reappearance is the
+    same defect one level down.
+    """
     spec = _committed()
-    assert "/v1/chat/completions" in spec["paths"]
-    op = spec["paths"]["/v1/chat/completions"]["post"]
-    ok = op["responses"].get("200", {})
-    schema = (ok.get("content") or {}).get("application/json", {}).get("schema")
-    assert schema in (None, {}), (
-        "chat/completions advertises a response schema; its contract is the "
-        "OpenAI-compatible shape and is verified separately"
+
+    offenders = [
+        f"{method.upper()} {path}"
+        for path, ops in spec["paths"].items()
+        for method, op in ops.items()
+        if "HTTPValidationError" in json.dumps(op)
+    ]
+    assert offenders == [], (
+        f"these operations advertise HTTPValidationError: {offenders}. Declare the "
+        "route's 422 as ErrorEnvelope -- that is the body the runtime returns."
     )
+
+    schemas = spec["components"]["schemas"]
+    assert "HTTPValidationError" not in schemas and "ValidationError" not in schemas, (
+        "the generated validation schemas are back in components, so something "
+        "references them again"
+    )
+
+
+def test_chat_completions_advertises_its_own_protocol_shape():
+    """The OpenAI-compatible route, modelled on its OWN protocol.
+
+    This pinned the opposite until the chat family was converted: the route
+    advertised no response schema at all, on the reasoning that its body is
+    provider-shaped. It now advertises a model built from the measured body --
+    which is not the OpenAI specification's, since this implementation sends no
+    `created`, exactly one choice, and an optional `wrapsec` block.
+
+    What must NOT happen is the WrapSec envelope leaking onto its OpenAI-shaped
+    errors. Two statuses are the measured exceptions: 422 is answered by the
+    global validation handler, and 403 refuses a dashboard session before the
+    OpenAI-compatible path begins. Every other error stays OpenAI-shaped.
+    """
+    op = _committed()["paths"]["/v1/chat/completions"]["post"]
+    ref = lambda code: (
+        (op["responses"][code].get("content") or {})
+        .get("application/json", {}).get("schema", {}).get("$ref", "").split("/")[-1]
+    )
+
+    assert ref("200") == "ChatCompletionResponse"
+
+    for code in ("400", "413", "429", "500", "502", "504"):
+        assert ref(code) == "OpenAIErrorResponse", (
+            f"{code} on the OpenAI-compatible route advertises {ref(code)!r}; its "
+            "callers parse error.message / error.type / error.code"
+        )
+
+    for code in ("403", "422"):
+        assert ref(code) == "ErrorEnvelope", (
+            f"{code} is answered by WrapSec rather than by the OpenAI-compatible "
+            f"path, so it must advertise the catalog envelope, not {ref(code)!r}"
+        )

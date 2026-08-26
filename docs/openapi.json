@@ -90,6 +90,1317 @@
         "title": "AIRequestSchema",
         "type": "object"
       },
+      "AgentRunResponse": {
+        "description": "A run's scans as an ordered timeline (turn_index, then time).\n\nAn unknown or out-of-scope run_id is not an error: it returns this same\nenvelope with `count: 0` and an empty `turns`, which is what keeps one\ntenant's run ids from being probed against another's.",
+        "properties": {
+          "count": {
+            "description": "Number of turns returned, bounded by `limit`.",
+            "title": "Count",
+            "type": "integer"
+          },
+          "run_id": {
+            "description": "Echoed back exactly as requested.",
+            "title": "Run Id",
+            "type": "string"
+          },
+          "turns": {
+            "items": {
+              "$ref": "#/components/schemas/AuditItem"
+            },
+            "title": "Turns",
+            "type": "array"
+          }
+        },
+        "required": [
+          "run_id",
+          "count",
+          "turns"
+        ],
+        "title": "AgentRunResponse",
+        "type": "object"
+      },
+      "ApiKeyCreated": {
+        "description": "The one response in the API that carries a credential.\n\n`api_key` is the raw key, returned exactly once. It is not stored in\nrecoverable form -- only a hash is persisted -- so a caller that loses it\nmust create another key.",
+        "properties": {
+          "api_key": {
+            "description": "The raw key. Returned ONLY here, only at creation, and never again.",
+            "title": "Api Key",
+            "type": "string"
+          },
+          "app_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Set when the key is application-scoped.",
+            "title": "App Id"
+          },
+          "created_at": {
+            "description": "ISO-8601 UTC with a Z suffix.",
+            "title": "Created At",
+            "type": "string"
+          },
+          "dept_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Owning department. Creation requires one, directly or derived from the application.",
+            "title": "Dept Id"
+          },
+          "expires_at": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Null when the key does not expire.",
+            "title": "Expires At"
+          },
+          "key_id": {
+            "description": "Stable identifier for this key. Safe to log and to display.",
+            "title": "Key Id",
+            "type": "string"
+          },
+          "key_type": {
+            "description": "`live` or `trial`.",
+            "title": "Key Type",
+            "type": "string"
+          },
+          "name": {
+            "title": "Name",
+            "type": "string"
+          },
+          "tenant_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Tenant Id"
+          }
+        },
+        "required": [
+          "key_id",
+          "name",
+          "api_key",
+          "key_type",
+          "app_id",
+          "dept_id",
+          "tenant_id",
+          "created_at",
+          "expires_at"
+        ],
+        "title": "ApiKeyCreated",
+        "type": "object"
+      },
+      "ApiKeyListItem": {
+        "description": "A key as listed. Metadata only -- no credential, no hash.\n\nCarries three fields creation does not: the resolved department and\napplication names, and `last_used_at`.",
+        "properties": {
+          "app_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "App Id"
+          },
+          "app_name": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Resolved name; null when the application no longer exists.",
+            "title": "App Name"
+          },
+          "created_at": {
+            "title": "Created At",
+            "type": "string"
+          },
+          "dept_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Dept Id"
+          },
+          "dept_name": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Resolved name; null when the department no longer exists.",
+            "title": "Dept Name"
+          },
+          "expires_at": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Expires At"
+          },
+          "key_id": {
+            "title": "Key Id",
+            "type": "string"
+          },
+          "key_type": {
+            "description": "`live` or `trial`; defaults to `live` for a row that predates the column.",
+            "title": "Key Type",
+            "type": "string"
+          },
+          "last_used_at": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Null until the key is first used.",
+            "title": "Last Used At"
+          },
+          "name": {
+            "title": "Name",
+            "type": "string"
+          }
+        },
+        "required": [
+          "key_id",
+          "name",
+          "app_id",
+          "dept_id",
+          "dept_name",
+          "app_name",
+          "key_type",
+          "created_at",
+          "expires_at",
+          "last_used_at"
+        ],
+        "title": "ApiKeyListItem",
+        "type": "object"
+      },
+      "ApiKeyListResponse": {
+        "description": "Active, non-expired keys visible to the caller.\n\nScope is not a field: an admin sees the tenant's keys, a non-admin sees only\nits own department's. Revoked and expired keys are excluded rather than\nflagged.",
+        "properties": {
+          "keys": {
+            "items": {
+              "$ref": "#/components/schemas/ApiKeyListItem"
+            },
+            "title": "Keys",
+            "type": "array"
+          }
+        },
+        "required": [
+          "keys"
+        ],
+        "title": "ApiKeyListResponse",
+        "type": "object"
+      },
+      "Assessment": {
+        "description": "The self-contained verdict. Agents and the protocol adapter consume this\nobject; the flat top-level fields duplicate part of it for compatibility.",
+        "properties": {
+          "confidence": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Confidence in the decision, 0.0-1.0.",
+            "title": "Confidence"
+          },
+          "confidence_band": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "LOW, MEDIUM or HIGH.",
+            "title": "Confidence Band"
+          },
+          "decision": {
+            "description": "ALLOW, SANITIZE or BLOCK.",
+            "title": "Decision",
+            "type": "string"
+          },
+          "layers": {
+            "description": "Per-detector contributions.",
+            "items": {
+              "$ref": "#/components/schemas/AssessmentLayer"
+            },
+            "title": "Layers",
+            "type": "array"
+          },
+          "posture": {
+            "anyOf": [
+              {
+                "additionalProperties": true,
+                "type": "object"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Source-aware threshold shift. Absent unless provenance changed the posture.",
+            "title": "Posture"
+          },
+          "primary_reason": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Dominant reason for the decision, null if none applied.",
+            "title": "Primary Reason"
+          },
+          "risk_level": {
+            "description": "Banded risk: NONE, LOW, MEDIUM, HIGH or CRITICAL.",
+            "title": "Risk Level",
+            "type": "string"
+          },
+          "risk_score": {
+            "description": "Aggregate risk, 0.0-1.0.",
+            "title": "Risk Score",
+            "type": "number"
+          },
+          "threats": {
+            "description": "Threat categories detected.",
+            "items": {
+              "type": "string"
+            },
+            "title": "Threats",
+            "type": "array"
+          }
+        },
+        "required": [
+          "decision",
+          "risk_score",
+          "risk_level",
+          "primary_reason",
+          "confidence",
+          "confidence_band",
+          "threats",
+          "layers"
+        ],
+        "title": "Assessment",
+        "type": "object"
+      },
+      "AssessmentLayer": {
+        "description": "One detector's contribution.\n\n`score` is omitted -- not nulled -- for a caller that does not hold\n`settings:read`, or for any trial key. `name` and `decision` are always\npresent, so a restricted caller still sees which layer landed in which\nbucket.",
+        "properties": {
+          "decision": {
+            "description": "This layer's classification: ALLOW, SANITIZE or BLOCK.",
+            "title": "Decision",
+            "type": "string"
+          },
+          "name": {
+            "description": "Detector name, for example `rule_score` or `ml_score`.",
+            "title": "Name",
+            "type": "string"
+          },
+          "score": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "0.0-1.0 contribution. Absent when the caller may not read layer scores.",
+            "title": "Score"
+          }
+        },
+        "required": [
+          "name",
+          "decision"
+        ],
+        "title": "AssessmentLayer",
+        "type": "object"
+      },
+      "AuditItem": {
+        "description": "One audited scan, as persisted.\n\nNo per-layer detector scores appear in this projection at all -- neither\n`detection_scores` nor `guardrail_scores` nor `assessment` -- so unlike the\nscan response and the single-request read-back it carries no caller-dependent\nfield. There is nothing here to restrict.",
+        "properties": {
+          "app_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "App Id"
+          },
+          "app_name": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Resolved name; null when the application no longer exists.",
+            "title": "App Name"
+          },
+          "attribution_verified": {
+            "title": "Attribution Verified",
+            "type": "boolean"
+          },
+          "confidence": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Confidence"
+          },
+          "confidence_band": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Confidence Band"
+          },
+          "decision": {
+            "description": "ALLOW, SANITIZE or BLOCK for the input scan.",
+            "title": "Decision",
+            "type": "string"
+          },
+          "dept_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Dept Id"
+          },
+          "dept_name": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Resolved name; null when the department no longer exists.",
+            "title": "Dept Name"
+          },
+          "detection_mode": {
+            "title": "Detection Mode",
+            "type": "string"
+          },
+          "execution_mode": {
+            "title": "Execution Mode",
+            "type": "string"
+          },
+          "input_hash": {
+            "description": "Hash of the scanned input; the input itself is not stored here.",
+            "title": "Input Hash",
+            "type": "string"
+          },
+          "input_length": {
+            "title": "Input Length",
+            "type": "integer"
+          },
+          "input_source": {
+            "description": "Declared provenance, for example `user_prompt` or `retrieved_document`.",
+            "title": "Input Source",
+            "type": "string"
+          },
+          "ip_address": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Ip Address"
+          },
+          "key_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Key Id"
+          },
+          "latency_ms": {
+            "title": "Latency Ms",
+            "type": "number"
+          },
+          "model": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Null unless this turn went through the proxy.",
+            "title": "Model"
+          },
+          "output_decision": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Verdict on the model's reply. Null unless this turn went through the proxy.",
+            "title": "Output Decision"
+          },
+          "policy_source": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Which policy layer resolved the decision, or `cache` for a cache hit.",
+            "title": "Policy Source"
+          },
+          "prev_hash": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Preceding row's hash. Null for the first row in a tenant's chain.",
+            "title": "Prev Hash"
+          },
+          "primary_reason": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Primary Reason"
+          },
+          "provider": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Null unless this turn went through the proxy.",
+            "title": "Provider"
+          },
+          "record_hash": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Hash-chain value for this row.",
+            "title": "Record Hash"
+          },
+          "risk_score": {
+            "title": "Risk Score",
+            "type": "number"
+          },
+          "run_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Run Id"
+          },
+          "session_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Caller-supplied correlation; never an authorization input.",
+            "title": "Session Id"
+          },
+          "severity": {
+            "description": "INFO, WARNING, ERROR or CRITICAL.",
+            "title": "Severity",
+            "type": "string"
+          },
+          "source": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Source"
+          },
+          "tenant_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Tenant Id"
+          },
+          "threats": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Threats",
+            "type": "array"
+          },
+          "timestamp": {
+            "description": "ISO-8601 UTC with a Z suffix.",
+            "title": "Timestamp",
+            "type": "string"
+          },
+          "trace_id": {
+            "description": "Identifier of this scan.",
+            "title": "Trace Id",
+            "type": "string"
+          },
+          "turn_index": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Zero-based position within the session, as the caller supplied it.",
+            "title": "Turn Index"
+          },
+          "user_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "User Id"
+          }
+        },
+        "required": [
+          "trace_id",
+          "timestamp",
+          "tenant_id",
+          "decision",
+          "output_decision",
+          "provider",
+          "model",
+          "primary_reason",
+          "risk_score",
+          "confidence",
+          "confidence_band",
+          "threats",
+          "input_hash",
+          "detection_mode",
+          "execution_mode",
+          "latency_ms",
+          "key_id",
+          "dept_id",
+          "dept_name",
+          "app_id",
+          "app_name",
+          "user_id",
+          "source",
+          "ip_address",
+          "attribution_verified",
+          "policy_source",
+          "input_length",
+          "severity",
+          "session_id",
+          "turn_index",
+          "run_id",
+          "input_source",
+          "record_hash",
+          "prev_hash"
+        ],
+        "title": "AuditItem",
+        "type": "object"
+      },
+      "AuditLogsResponse": {
+        "description": "A page of audited scans.\n\n`total` counts everything matching the filters, not the page, so a caller\npaginates on it. The page itself is bounded by `limit`/`offset`, which are\nquery parameters and are not echoed in the body. No match is `total: 0` with\nan empty `items` -- never a 404.",
+        "properties": {
+          "items": {
+            "description": "This page, in the requested sort order.",
+            "items": {
+              "$ref": "#/components/schemas/AuditItem"
+            },
+            "title": "Items",
+            "type": "array"
+          },
+          "total": {
+            "description": "Matching rows across all pages, for pagination.",
+            "title": "Total",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "total",
+          "items"
+        ],
+        "title": "AuditLogsResponse",
+        "type": "object"
+      },
+      "AuditStatsResponse": {
+        "description": "Aggregates over the filtered range.\n\nAn empty range returns this same shape with every count and rate zeroed --\nthe handler has a separate zero branch precisely so the contract does not\nchange when there is nothing to aggregate.\n\nCounts sit alongside rates deliberately: reconstructing a count from\n`rate * total` drifts by one against `GET /v1/audit/logs?decision=BLOCK`,\nbecause the rate is rounded to four decimals.",
+        "properties": {
+          "allow_count": {
+            "title": "Allow Count",
+            "type": "integer"
+          },
+          "allow_rate": {
+            "title": "Allow Rate",
+            "type": "number"
+          },
+          "avg_latency_ms": {
+            "title": "Avg Latency Ms",
+            "type": "number"
+          },
+          "avg_risk": {
+            "title": "Avg Risk",
+            "type": "number"
+          },
+          "block_count": {
+            "title": "Block Count",
+            "type": "integer"
+          },
+          "block_rate": {
+            "description": "Fraction of matching requests blocked, rounded to 4 decimals.",
+            "title": "Block Rate",
+            "type": "number"
+          },
+          "p95_latency_ms": {
+            "description": "95th percentile, interpolated on PostgreSQL.",
+            "title": "P95 Latency Ms",
+            "type": "number"
+          },
+          "period_from": {
+            "description": "Start of the range, echoed from the query or defaulted to now.",
+            "title": "Period From",
+            "type": "string"
+          },
+          "period_to": {
+            "description": "End of the range, echoed from the query or defaulted to now.",
+            "title": "Period To",
+            "type": "string"
+          },
+          "sanitize_count": {
+            "title": "Sanitize Count",
+            "type": "integer"
+          },
+          "sanitize_rate": {
+            "title": "Sanitize Rate",
+            "type": "number"
+          },
+          "severity_counts": {
+            "$ref": "#/components/schemas/SeverityCounts"
+          },
+          "top_threats": {
+            "description": "Most frequent categories first; empty when nothing matched.",
+            "items": {
+              "$ref": "#/components/schemas/TopThreat"
+            },
+            "title": "Top Threats",
+            "type": "array"
+          },
+          "total_requests": {
+            "title": "Total Requests",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "period_from",
+          "period_to",
+          "total_requests",
+          "block_count",
+          "sanitize_count",
+          "allow_count",
+          "block_rate",
+          "sanitize_rate",
+          "allow_rate",
+          "avg_latency_ms",
+          "p95_latency_ms",
+          "avg_risk",
+          "top_threats",
+          "severity_counts"
+        ],
+        "title": "AuditStatsResponse",
+        "type": "object"
+      },
+      "BatchItemResult": {
+        "properties": {
+          "assessment": {
+            "$ref": "#/components/schemas/Assessment"
+          },
+          "decision": {
+            "description": "ALLOW, SANITIZE or BLOCK.",
+            "title": "Decision",
+            "type": "string"
+          },
+          "id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "The caller's own reference for this item, echoed back. Null if none was sent.",
+            "title": "Id"
+          },
+          "trace_id": {
+            "description": "Identifier for this item's scan; each item is audited independently.",
+            "title": "Trace Id",
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "trace_id",
+          "decision",
+          "assessment"
+        ],
+        "title": "BatchItemResult",
+        "type": "object"
+      },
+      "BatchSummary": {
+        "properties": {
+          "allowed": {
+            "description": "Items decided ALLOW.",
+            "title": "Allowed",
+            "type": "integer"
+          },
+          "blocked": {
+            "description": "Items decided BLOCK.",
+            "title": "Blocked",
+            "type": "integer"
+          },
+          "highest_risk": {
+            "description": "Highest risk score across the batch.",
+            "title": "Highest Risk",
+            "type": "number"
+          },
+          "highest_risk_item": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Caller-supplied id of the riskiest item. Null when no item scored above zero, and null when the riskiest item carried no id.",
+            "title": "Highest Risk Item"
+          },
+          "sanitized": {
+            "description": "Items decided SANITIZE.",
+            "title": "Sanitized",
+            "type": "integer"
+          },
+          "threats": {
+            "description": "Union of threat categories across the batch, sorted.",
+            "items": {
+              "type": "string"
+            },
+            "title": "Threats",
+            "type": "array"
+          }
+        },
+        "required": [
+          "blocked",
+          "sanitized",
+          "allowed",
+          "highest_risk",
+          "highest_risk_item",
+          "threats"
+        ],
+        "title": "BatchSummary",
+        "type": "object"
+      },
+      "CapabilitiesResponse": {
+        "description": "Which optional plugin capabilities are effective in this DEPLOYMENT.\n\nProcess-global, not per tenant, and informational only -- never an\nauthorization control. The OSS build returns an empty list and `oss`.",
+        "properties": {
+          "capabilities": {
+            "description": "Effective capability names; empty on the OSS build.",
+            "items": {
+              "type": "string"
+            },
+            "title": "Capabilities",
+            "type": "array"
+          },
+          "edition": {
+            "description": "`oss` with no capabilities registered, `enterprise` otherwise. Display metadata, not a claim.",
+            "title": "Edition",
+            "type": "string"
+          }
+        },
+        "required": [
+          "edition",
+          "capabilities"
+        ],
+        "title": "CapabilitiesResponse",
+        "type": "object"
+      },
+      "ChatChoice": {
+        "properties": {
+          "finish_reason": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Passed through from the provider, for example `stop`.",
+            "title": "Finish Reason"
+          },
+          "index": {
+            "description": "Always 0: this proxy returns a single choice.",
+            "title": "Index",
+            "type": "integer"
+          },
+          "message": {
+            "$ref": "#/components/schemas/ChatMessage"
+          }
+        },
+        "required": [
+          "index",
+          "message",
+          "finish_reason"
+        ],
+        "title": "ChatChoice",
+        "type": "object"
+      },
+      "ChatCompletionMeta": {
+        "description": "The opt-in `wrapsec` block. Present only with `X-WrapSec-Inline-Meta:\ntrue`; the same values are always available on the response headers.",
+        "properties": {
+          "decision": {
+            "description": "Verdict on the input: ALLOW, SANITIZE or BLOCK.",
+            "title": "Decision",
+            "type": "string"
+          },
+          "execution_status": {
+            "title": "Execution Status",
+            "type": "string"
+          },
+          "input_confidence": {
+            "title": "Input Confidence",
+            "type": "number"
+          },
+          "input_primary_reason": {
+            "title": "Input Primary Reason",
+            "type": "string"
+          },
+          "input_sanitized": {
+            "title": "Input Sanitized",
+            "type": "boolean"
+          },
+          "model": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Model"
+          },
+          "output_decision": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Output Decision"
+          },
+          "output_sanitized": {
+            "title": "Output Sanitized",
+            "type": "boolean"
+          },
+          "provider": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Provider"
+          },
+          "total_latency_ms": {
+            "description": "End to end, including detection on both sides.",
+            "title": "Total Latency Ms",
+            "type": "integer"
+          },
+          "trace_id": {
+            "title": "Trace Id",
+            "type": "string"
+          }
+        },
+        "required": [
+          "trace_id",
+          "decision",
+          "input_primary_reason",
+          "input_confidence",
+          "input_sanitized",
+          "output_decision",
+          "output_sanitized",
+          "execution_status",
+          "provider",
+          "model",
+          "total_latency_ms"
+        ],
+        "title": "ChatCompletionMeta",
+        "type": "object"
+      },
+      "ChatCompletionResponse": {
+        "description": "OpenAI-compatible chat completion.\n\nCompatible, not equivalent: see the module note above for what this\nimplementation omits and adds.",
+        "properties": {
+          "choices": {
+            "items": {
+              "$ref": "#/components/schemas/ChatChoice"
+            },
+            "title": "Choices",
+            "type": "array"
+          },
+          "id": {
+            "description": "`wrapsec-{trace_id}`, not the provider's completion id.",
+            "title": "Id",
+            "type": "string"
+          },
+          "model": {
+            "description": "The model the provider reported using.",
+            "title": "Model",
+            "type": "string"
+          },
+          "object": {
+            "description": "Always `chat.completion`.",
+            "title": "Object",
+            "type": "string"
+          },
+          "usage": {
+            "anyOf": [
+              {
+                "additionalProperties": true,
+                "type": "object"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "The provider's own token counts, passed through when it sent them; absent otherwise. Observability only.",
+            "title": "Usage"
+          },
+          "wrapsec": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/ChatCompletionMeta"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Present only when the caller sets `X-WrapSec-Inline-Meta: true`."
+          }
+        },
+        "required": [
+          "id",
+          "object",
+          "model",
+          "choices"
+        ],
+        "title": "ChatCompletionResponse",
+        "type": "object"
+      },
+      "ChatMessage": {
+        "properties": {
+          "content": {
+            "description": "The reply, after the output guard has run. Sanitized in place when it was rewritten.",
+            "title": "Content",
+            "type": "string"
+          },
+          "role": {
+            "description": "Always `assistant` on a response.",
+            "title": "Role",
+            "type": "string"
+          }
+        },
+        "required": [
+          "role",
+          "content"
+        ],
+        "title": "ChatMessage",
+        "type": "object"
+      },
+      "ConfigDetectionLayers": {
+        "properties": {
+          "llm": {
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Absent without `settings:read`.",
+            "title": "Llm"
+          },
+          "ml": {
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Absent without `settings:read`.",
+            "title": "Ml"
+          },
+          "rule": {
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Absent without `settings:read`.",
+            "title": "Rule"
+          },
+          "source": {
+            "title": "Source",
+            "type": "string"
+          }
+        },
+        "required": [
+          "source"
+        ],
+        "title": "ConfigDetectionLayers",
+        "type": "object"
+      },
+      "ConfigLLM": {
+        "properties": {
+          "llm_trigger": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Absent without `settings:read`.",
+            "title": "Llm Trigger"
+          },
+          "model": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Absent without `settings:read`.",
+            "title": "Model"
+          },
+          "provider": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Absent without `settings:read`.",
+            "title": "Provider"
+          },
+          "source": {
+            "title": "Source",
+            "type": "string"
+          },
+          "timeout": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Absent without `settings:read`.",
+            "title": "Timeout"
+          }
+        },
+        "required": [
+          "source"
+        ],
+        "title": "ConfigLLM",
+        "type": "object"
+      },
+      "ConfigRateLimit": {
+        "properties": {
+          "per_minute": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Absent without `settings:read`.",
+            "title": "Per Minute"
+          },
+          "source": {
+            "title": "Source",
+            "type": "string"
+          }
+        },
+        "required": [
+          "source"
+        ],
+        "title": "ConfigRateLimit",
+        "type": "object"
+      },
+      "ConfigThresholds": {
+        "description": "`source` always; the values only for a caller holding `settings:read`.\n\nThe restricted form is the same object with the numbers ABSENT, not nulled:\na null would still confirm a threshold exists and is being withheld, and the\npoint of the restriction is that a caller cannot calibrate against it.",
+        "properties": {
+          "block": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Absent without `settings:read`.",
+            "title": "Block"
+          },
+          "sanitize": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Absent without `settings:read`.",
+            "title": "Sanitize"
+          },
+          "source": {
+            "description": "`database` when stored for this tenant, `environment` otherwise.",
+            "title": "Source",
+            "type": "string"
+          }
+        },
+        "required": [
+          "source"
+        ],
+        "title": "ConfigThresholds",
+        "type": "object"
+      },
       "CreateKeySchema": {
         "properties": {
           "app_id": {
@@ -156,6 +1467,58 @@
         "title": "CreateKeySchema",
         "type": "object"
       },
+      "DetectionLayersResponse": {
+        "description": "Which detection layers run. Disabling the LLM layer also closes proxy\nexecution, which requires it.",
+        "properties": {
+          "llm_enabled": {
+            "title": "Llm Enabled",
+            "type": "boolean"
+          },
+          "ml_enabled": {
+            "title": "Ml Enabled",
+            "type": "boolean"
+          },
+          "rule_enabled": {
+            "title": "Rule Enabled",
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "rule_enabled",
+          "ml_enabled",
+          "llm_enabled"
+        ],
+        "title": "DetectionLayersResponse",
+        "type": "object"
+      },
+      "DetectionLayersUpdatedResponse": {
+        "properties": {
+          "llm_enabled": {
+            "title": "Llm Enabled",
+            "type": "boolean"
+          },
+          "ml_enabled": {
+            "title": "Ml Enabled",
+            "type": "boolean"
+          },
+          "rule_enabled": {
+            "title": "Rule Enabled",
+            "type": "boolean"
+          },
+          "updated_at": {
+            "title": "Updated At",
+            "type": "string"
+          }
+        },
+        "required": [
+          "rule_enabled",
+          "ml_enabled",
+          "llm_enabled",
+          "updated_at"
+        ],
+        "title": "DetectionLayersUpdatedResponse",
+        "type": "object"
+      },
       "DetectionMode": {
         "enum": [
           "fast",
@@ -163,6 +1526,79 @@
         ],
         "title": "DetectionMode",
         "type": "string"
+      },
+      "ErrorDetail": {
+        "properties": {
+          "code": {
+            "description": "Stable machine-readable error code from the catalog.",
+            "title": "Code",
+            "type": "string"
+          },
+          "invalid_params": {
+            "anyOf": [
+              {
+                "items": {
+                  "additionalProperties": true,
+                  "type": "object"
+                },
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Per-field detail, present only on validation failures.",
+            "title": "Invalid Params"
+          },
+          "key": {
+            "description": "Localization key; clients may resolve their own text from it.",
+            "title": "Key",
+            "type": "string"
+          },
+          "message": {
+            "description": "English message. Localized clients should prefer key + params.",
+            "title": "Message",
+            "type": "string"
+          },
+          "params": {
+            "additionalProperties": true,
+            "description": "Values interpolated into the localized message.",
+            "title": "Params",
+            "type": "object"
+          },
+          "severity": {
+            "description": "Catalog severity: INFO, WARNING, ERROR or CRITICAL.",
+            "title": "Severity",
+            "type": "string"
+          },
+          "trace_id": {
+            "description": "Correlates the failure with the audit trail.",
+            "title": "Trace Id",
+            "type": "string"
+          }
+        },
+        "required": [
+          "code",
+          "severity",
+          "key",
+          "params",
+          "message",
+          "trace_id"
+        ],
+        "title": "ErrorDetail",
+        "type": "object"
+      },
+      "ErrorEnvelope": {
+        "properties": {
+          "error": {
+            "$ref": "#/components/schemas/ErrorDetail"
+          }
+        },
+        "required": [
+          "error"
+        ],
+        "title": "ErrorEnvelope",
+        "type": "object"
       },
       "ExecutionMode": {
         "enum": [
@@ -172,17 +1608,86 @@
         "title": "ExecutionMode",
         "type": "string"
       },
-      "HTTPValidationError": {
+      "HealthChecks": {
+        "description": "Per-component status. `ok` / `unavailable` for infrastructure,\n`healthy` / `degraded` / `unavailable` for the detector tiers.",
         "properties": {
-          "detail": {
-            "items": {
-              "$ref": "#/components/schemas/ValidationError"
-            },
-            "title": "Detail",
-            "type": "array"
+          "database": {
+            "title": "Database",
+            "type": "string"
+          },
+          "redis": {
+            "title": "Redis",
+            "type": "string"
+          },
+          "tfidf_detector": {
+            "description": "Tier 1, REQUIRED. Degraded here means the instance refuses traffic fail-closed.",
+            "title": "Tfidf Detector",
+            "type": "string"
+          },
+          "transformer_detector": {
+            "description": "Tier 2, OPTIONAL. Degraded on a default build and does not affect the status code.",
+            "title": "Transformer Detector",
+            "type": "string"
           }
         },
-        "title": "HTTPValidationError",
+        "required": [
+          "database",
+          "redis",
+          "tfidf_detector",
+          "transformer_detector"
+        ],
+        "title": "HealthChecks",
+        "type": "object"
+      },
+      "HealthConfigResponse": {
+        "description": "The configuration in force, for deployment verification.\n\nEvery caller gets the same TOP-LEVEL keys; the difference is inside each\nsection. A caller without `settings:read` -- VIEWER, or any trial key -- sees\neach section reduced to its `source` marker, which says whether configuration\nwas customised without saying what it was set to. No provider credential is\never included, for any caller.",
+        "properties": {
+          "detection_layers": {
+            "$ref": "#/components/schemas/ConfigDetectionLayers"
+          },
+          "llm": {
+            "$ref": "#/components/schemas/ConfigLLM"
+          },
+          "rate_limit": {
+            "$ref": "#/components/schemas/ConfigRateLimit"
+          },
+          "thresholds": {
+            "$ref": "#/components/schemas/ConfigThresholds"
+          },
+          "version": {
+            "title": "Version",
+            "type": "string"
+          }
+        },
+        "required": [
+          "version",
+          "thresholds",
+          "detection_layers",
+          "llm",
+          "rate_limit"
+        ],
+        "title": "HealthConfigResponse",
+        "type": "object"
+      },
+      "HealthResponse": {
+        "description": "Unauthenticated liveness plus build identity.",
+        "properties": {
+          "status": {
+            "description": "Always `ok` -- reaching this endpoint at all is the signal.",
+            "title": "Status",
+            "type": "string"
+          },
+          "version": {
+            "description": "Running build. Deliberately unauthenticated: it is how a deployment is verified.",
+            "title": "Version",
+            "type": "string"
+          }
+        },
+        "required": [
+          "status",
+          "version"
+        ],
+        "title": "HealthResponse",
         "type": "object"
       },
       "InputSource": {
@@ -203,6 +1708,55 @@
         ],
         "title": "KeyType",
         "type": "string"
+      },
+      "LLMSettingsResponse": {
+        "description": "The LLM detector's provider configuration.\n\n`api_key_masked` is the ONLY credential-derived field, and it is a mask --\nnever the key. It is null when no key is stored, and `****` when one is\nstored but cannot be decrypted with the current secret.",
+        "properties": {
+          "api_key_masked": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Masked provider key, or null when none is stored. Never the key itself.",
+            "title": "Api Key Masked"
+          },
+          "base_url": {
+            "title": "Base Url",
+            "type": "string"
+          },
+          "llm_trigger": {
+            "description": "Risk score at which the LLM detector is invoked.",
+            "title": "Llm Trigger",
+            "type": "number"
+          },
+          "model": {
+            "title": "Model",
+            "type": "string"
+          },
+          "provider": {
+            "title": "Provider",
+            "type": "string"
+          },
+          "timeout": {
+            "description": "Seconds.",
+            "title": "Timeout",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "provider",
+          "model",
+          "base_url",
+          "timeout",
+          "llm_trigger",
+          "api_key_masked"
+        ],
+        "title": "LLMSettingsResponse",
+        "type": "object"
       },
       "LLMSettingsSchema": {
         "properties": {
@@ -278,6 +1832,59 @@
         "title": "LLMSettingsSchema",
         "type": "object"
       },
+      "LLMSettingsUpdatedResponse": {
+        "properties": {
+          "api_key_masked": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Masked provider key, or null when none is stored. Never the key itself.",
+            "title": "Api Key Masked"
+          },
+          "base_url": {
+            "title": "Base Url",
+            "type": "string"
+          },
+          "llm_trigger": {
+            "description": "Risk score at which the LLM detector is invoked.",
+            "title": "Llm Trigger",
+            "type": "number"
+          },
+          "model": {
+            "title": "Model",
+            "type": "string"
+          },
+          "provider": {
+            "title": "Provider",
+            "type": "string"
+          },
+          "timeout": {
+            "description": "Seconds.",
+            "title": "Timeout",
+            "type": "integer"
+          },
+          "updated_at": {
+            "title": "Updated At",
+            "type": "string"
+          }
+        },
+        "required": [
+          "provider",
+          "model",
+          "base_url",
+          "timeout",
+          "llm_trigger",
+          "api_key_masked",
+          "updated_at"
+        ],
+        "title": "LLMSettingsUpdatedResponse",
+        "type": "object"
+      },
       "LayersUpdateSchema": {
         "properties": {
           "llm_enabled": {
@@ -315,6 +1922,65 @@
           }
         },
         "title": "LayersUpdateSchema",
+        "type": "object"
+      },
+      "LivenessResponse": {
+        "properties": {
+          "status": {
+            "description": "Always `alive`. The process answered; nothing else is checked.",
+            "title": "Status",
+            "type": "string"
+          }
+        },
+        "required": [
+          "status"
+        ],
+        "title": "LivenessResponse",
+        "type": "object"
+      },
+      "OpenAIErrorDetail": {
+        "properties": {
+          "code": {
+            "description": "Stable code, for example `input_blocked` or `invalid_model_format`.",
+            "title": "Code",
+            "type": "string"
+          },
+          "message": {
+            "title": "Message",
+            "type": "string"
+          },
+          "type": {
+            "description": "OpenAI error family, for example `invalid_request_error`.",
+            "title": "Type",
+            "type": "string"
+          }
+        },
+        "required": [
+          "message",
+          "type",
+          "code"
+        ],
+        "title": "OpenAIErrorDetail",
+        "type": "object"
+      },
+      "OpenAIErrorResponse": {
+        "description": "The OpenAI-compatible error envelope this route returns for its OWN\nrefusals and upstream failures.\n\nDeliberately NOT `ErrorEnvelope`: the callers here are OpenAI client\nlibraries, which parse `error.message` / `error.type` / `error.code`.\n\n`wrapsec` carries diagnostic context whose keys vary by path -- a refusal\nbefore any scanning has only the trace id, while a policy block adds the\ndecision, reason, threats and confidence. Typed as a free-form object for\nthat reason, rather than enumerating one path's keys and misdescribing the\nothers.",
+        "properties": {
+          "error": {
+            "$ref": "#/components/schemas/OpenAIErrorDetail"
+          },
+          "wrapsec": {
+            "additionalProperties": true,
+            "description": "Diagnostic context. Always carries `trace_id`; other keys depend on the path.",
+            "title": "Wrapsec",
+            "type": "object"
+          }
+        },
+        "required": [
+          "error",
+          "wrapsec"
+        ],
+        "title": "OpenAIErrorResponse",
         "type": "object"
       },
       "ProxyChatRequest": {
@@ -379,6 +2045,586 @@
         "title": "ProxyChatRequest",
         "type": "object"
       },
+      "ProxyInteraction": {
+        "description": "One proxied request, as persisted. The list projection.",
+        "properties": {
+          "behavior_flag": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Behavior Flag"
+          },
+          "created_at": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "ISO-8601 UTC with a Z suffix.",
+            "title": "Created At"
+          },
+          "execution_status": {
+            "description": "How the proxied call ended, for example `completed`.",
+            "title": "Execution Status",
+            "type": "string"
+          },
+          "id": {
+            "description": "Row identifier.",
+            "title": "Id",
+            "type": "string"
+          },
+          "input_attack_type": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Input Attack Type"
+          },
+          "input_confidence": {
+            "title": "Input Confidence",
+            "type": "number"
+          },
+          "input_decision": {
+            "description": "Verdict on the prompt: ALLOW, SANITIZE or BLOCK.",
+            "title": "Input Decision",
+            "type": "string"
+          },
+          "input_primary_reason": {
+            "title": "Input Primary Reason",
+            "type": "string"
+          },
+          "input_threats": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Input Threats",
+            "type": "array"
+          },
+          "key_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Owning API key, with the internal `key:` prefix stripped. Null for a system record.",
+            "title": "Key Id"
+          },
+          "model": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Model"
+          },
+          "output_confidence": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Output Confidence"
+          },
+          "output_decision": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Verdict on the reply. Null when there was no reply to guard.",
+            "title": "Output Decision"
+          },
+          "output_flags": {
+            "anyOf": [
+              {},
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Output Flags"
+          },
+          "output_primary_reason": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Output Primary Reason"
+          },
+          "output_threats": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Output Threats",
+            "type": "array"
+          },
+          "provider": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Null when the request never reached a provider.",
+            "title": "Provider"
+          },
+          "provider_latency_ms": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Provider time only. Null when no call was made.",
+            "title": "Provider Latency Ms"
+          },
+          "total_latency_ms": {
+            "description": "End to end, including detection.",
+            "title": "Total Latency Ms",
+            "type": "integer"
+          },
+          "trace_id": {
+            "description": "Correlates with the audit trail.",
+            "title": "Trace Id",
+            "type": "string"
+          },
+          "user_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "User Id"
+          }
+        },
+        "required": [
+          "id",
+          "trace_id",
+          "created_at",
+          "key_id",
+          "user_id",
+          "input_decision",
+          "input_primary_reason",
+          "input_confidence",
+          "input_threats",
+          "input_attack_type",
+          "provider",
+          "model",
+          "provider_latency_ms",
+          "execution_status",
+          "output_decision",
+          "output_primary_reason",
+          "output_confidence",
+          "output_threats",
+          "behavior_flag",
+          "output_flags",
+          "total_latency_ms"
+        ],
+        "title": "ProxyInteraction",
+        "type": "object"
+      },
+      "ProxyInteractionDetail": {
+        "description": "The single-record projection: everything above plus the stored text.\n\nThese four fields are the reason this route is scoped to the interaction's\nowner. They are returned exactly as persisted -- this model describes that\nand does not add, redact or reshape anything.",
+        "properties": {
+          "behavior_flag": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Behavior Flag"
+          },
+          "created_at": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "ISO-8601 UTC with a Z suffix.",
+            "title": "Created At"
+          },
+          "execution_status": {
+            "description": "How the proxied call ended, for example `completed`.",
+            "title": "Execution Status",
+            "type": "string"
+          },
+          "id": {
+            "description": "Row identifier.",
+            "title": "Id",
+            "type": "string"
+          },
+          "input_attack_type": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Input Attack Type"
+          },
+          "input_confidence": {
+            "title": "Input Confidence",
+            "type": "number"
+          },
+          "input_decision": {
+            "description": "Verdict on the prompt: ALLOW, SANITIZE or BLOCK.",
+            "title": "Input Decision",
+            "type": "string"
+          },
+          "input_primary_reason": {
+            "title": "Input Primary Reason",
+            "type": "string"
+          },
+          "input_raw": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Prompt as received. Null when storage mode did not retain it.",
+            "title": "Input Raw"
+          },
+          "input_sanitized": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Prompt after redaction. Null when nothing was rewritten.",
+            "title": "Input Sanitized"
+          },
+          "input_threats": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Input Threats",
+            "type": "array"
+          },
+          "key_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Owning API key, with the internal `key:` prefix stripped. Null for a system record.",
+            "title": "Key Id"
+          },
+          "model": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Model"
+          },
+          "output_confidence": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Output Confidence"
+          },
+          "output_decision": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Verdict on the reply. Null when there was no reply to guard.",
+            "title": "Output Decision"
+          },
+          "output_flags": {
+            "anyOf": [
+              {},
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Output Flags"
+          },
+          "output_primary_reason": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Output Primary Reason"
+          },
+          "output_raw": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Provider reply as received.",
+            "title": "Output Raw"
+          },
+          "output_sanitized": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Reply after redaction.",
+            "title": "Output Sanitized"
+          },
+          "output_threats": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Output Threats",
+            "type": "array"
+          },
+          "provider": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Null when the request never reached a provider.",
+            "title": "Provider"
+          },
+          "provider_latency_ms": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Provider time only. Null when no call was made.",
+            "title": "Provider Latency Ms"
+          },
+          "total_latency_ms": {
+            "description": "End to end, including detection.",
+            "title": "Total Latency Ms",
+            "type": "integer"
+          },
+          "trace_id": {
+            "description": "Correlates with the audit trail.",
+            "title": "Trace Id",
+            "type": "string"
+          },
+          "user_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "User Id"
+          }
+        },
+        "required": [
+          "id",
+          "trace_id",
+          "created_at",
+          "key_id",
+          "user_id",
+          "input_decision",
+          "input_primary_reason",
+          "input_confidence",
+          "input_threats",
+          "input_attack_type",
+          "provider",
+          "model",
+          "provider_latency_ms",
+          "execution_status",
+          "output_decision",
+          "output_primary_reason",
+          "output_confidence",
+          "output_threats",
+          "behavior_flag",
+          "output_flags",
+          "total_latency_ms",
+          "input_raw",
+          "input_sanitized",
+          "output_raw",
+          "output_sanitized"
+        ],
+        "title": "ProxyInteractionDetail",
+        "type": "object"
+      },
+      "ProxyInteractionsResponse": {
+        "description": "A page of proxy interactions, newest first.\n\nUnlike the audit page, this one echoes `limit` and `offset` back, and both\nare CLAMPED by the handler (limit to 1-200, offset to >= 0) -- so the values\nreturned are the ones actually applied, not the ones requested.",
+        "properties": {
+          "items": {
+            "description": "Newest first; empty when nothing matched.",
+            "items": {
+              "$ref": "#/components/schemas/ProxyInteraction"
+            },
+            "title": "Items",
+            "type": "array"
+          },
+          "limit": {
+            "description": "Page size actually applied after clamping.",
+            "title": "Limit",
+            "type": "integer"
+          },
+          "offset": {
+            "description": "Offset actually applied after clamping.",
+            "title": "Offset",
+            "type": "integer"
+          },
+          "total": {
+            "description": "Matching rows across all pages.",
+            "title": "Total",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "total",
+          "limit",
+          "offset",
+          "items"
+        ],
+        "title": "ProxyInteractionsResponse",
+        "type": "object"
+      },
+      "ProxyProviderConfigResponse": {
+        "description": "The tenant's proxy provider configuration.\n\nReturned identically by the read and the upsert, so one model serves both.\n`api_key_masked` follows the same rule as the LLM family: a mask or null,\nnever the stored key, which is encrypted at rest.",
+        "properties": {
+          "api_key_masked": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Masked provider key, or null when the provider needs none.",
+            "title": "Api Key Masked"
+          },
+          "base_url": {
+            "title": "Base Url",
+            "type": "string"
+          },
+          "created_at": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "ISO-8601 UTC with a Z suffix.",
+            "title": "Created At"
+          },
+          "default_model": {
+            "title": "Default Model",
+            "type": "string"
+          },
+          "provider": {
+            "description": "`openai`, `ollama` or `custom`.",
+            "title": "Provider",
+            "type": "string"
+          },
+          "timeout_seconds": {
+            "title": "Timeout Seconds",
+            "type": "integer"
+          },
+          "updated_at": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Updated At"
+          }
+        },
+        "required": [
+          "provider",
+          "base_url",
+          "api_key_masked",
+          "default_model",
+          "timeout_seconds",
+          "created_at",
+          "updated_at"
+        ],
+        "title": "ProxyProviderConfigResponse",
+        "type": "object"
+      },
       "ProxySettingsPutSchema": {
         "properties": {
           "api_key": {
@@ -420,6 +2666,26 @@
         "title": "ProxySettingsPutSchema",
         "type": "object"
       },
+      "RateLimitResponse": {
+        "description": "The enforced per-minute limit for live keys.\n\nThe only settings family that reports its `source`. Trial keys are limited\nseparately by deployment configuration and are not represented here.",
+        "properties": {
+          "per_minute": {
+            "title": "Per Minute",
+            "type": "integer"
+          },
+          "source": {
+            "description": "`database` when stored for this tenant, `environment` when the default is in force.",
+            "title": "Source",
+            "type": "string"
+          }
+        },
+        "required": [
+          "per_minute",
+          "source"
+        ],
+        "title": "RateLimitResponse",
+        "type": "object"
+      },
       "RateLimitUpdateSchema": {
         "properties": {
           "per_minute": {
@@ -435,6 +2701,480 @@
           }
         },
         "title": "RateLimitUpdateSchema",
+        "type": "object"
+      },
+      "RateLimitUpdatedResponse": {
+        "properties": {
+          "per_minute": {
+            "title": "Per Minute",
+            "type": "integer"
+          },
+          "source": {
+            "description": "`database` when stored for this tenant, `environment` when the default is in force.",
+            "title": "Source",
+            "type": "string"
+          },
+          "updated_at": {
+            "title": "Updated At",
+            "type": "string"
+          }
+        },
+        "required": [
+          "per_minute",
+          "source",
+          "updated_at"
+        ],
+        "title": "RateLimitUpdatedResponse",
+        "type": "object"
+      },
+      "ReadinessResponse": {
+        "description": "Readiness. The STATUS CODE is the contract and the body is the detail --\nan orchestrator routes on the code.\n\nThe same body shape is returned with 200 and with 503, so one model\ndescribes both. `status: degraded` with 200 means serving with less signal\n(Tier 2 absent); 503 means a required component is down.",
+        "properties": {
+          "checks": {
+            "$ref": "#/components/schemas/HealthChecks"
+          },
+          "status": {
+            "description": "`ready` when every check passed, `degraded` when any did not.",
+            "title": "Status",
+            "type": "string"
+          }
+        },
+        "required": [
+          "status",
+          "checks"
+        ],
+        "title": "ReadinessResponse",
+        "type": "object"
+      },
+      "RecordAttribution": {
+        "properties": {
+          "app_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "App Id"
+          },
+          "app_name": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Resolved application name; null when the lookup found nothing.",
+            "title": "App Name"
+          },
+          "attribution_verified": {
+            "title": "Attribution Verified",
+            "type": "boolean"
+          },
+          "dept_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Dept Id"
+          },
+          "dept_name": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Resolved department name; null when the lookup found nothing.",
+            "title": "Dept Name"
+          },
+          "ip_address": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Ip Address"
+          },
+          "key_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Key Id"
+          },
+          "source": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Source"
+          },
+          "tenant_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Tenant Id"
+          },
+          "user_agent": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "User Agent"
+          },
+          "user_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "User Id"
+          }
+        },
+        "required": [
+          "tenant_id",
+          "dept_id",
+          "dept_name",
+          "app_id",
+          "app_name",
+          "source",
+          "user_id",
+          "key_id",
+          "ip_address",
+          "user_agent",
+          "attribution_verified"
+        ],
+        "title": "RecordAttribution",
+        "type": "object"
+      },
+      "RecordProcessing": {
+        "properties": {
+          "detection_mode": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Detection Mode"
+          },
+          "execution_mode": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Execution Mode"
+          },
+          "latency_ms": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Latency Ms"
+          },
+          "llm_invoked": {
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Llm Invoked"
+          },
+          "policy_source": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Which policy layer resolved the decision, or `cache` for a cache hit.",
+            "title": "Policy Source"
+          }
+        },
+        "required": [
+          "latency_ms",
+          "llm_invoked",
+          "detection_mode",
+          "execution_mode",
+          "policy_source"
+        ],
+        "title": "RecordProcessing",
+        "type": "object"
+      },
+      "RecordProxyDetail": {
+        "description": "Proxy lifecycle, joined from `proxy_interactions`. Present only for a\nrequest executed in proxy mode.",
+        "properties": {
+          "behavior_flag": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Behavior Flag"
+          },
+          "execution_status": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Execution Status"
+          },
+          "input_attack_type": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Input Attack Type"
+          },
+          "input_confidence": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Input Confidence"
+          },
+          "input_primary_reason": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Input Primary Reason"
+          },
+          "input_raw": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Input Raw"
+          },
+          "input_sanitized": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Input Sanitized"
+          },
+          "input_threats": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Input Threats",
+            "type": "array"
+          },
+          "model": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Model"
+          },
+          "output_confidence": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Output Confidence"
+          },
+          "output_decision": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Output Decision"
+          },
+          "output_flags": {
+            "anyOf": [
+              {},
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Output Flags"
+          },
+          "output_primary_reason": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Output Primary Reason"
+          },
+          "output_raw": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Output Raw"
+          },
+          "output_sanitized": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Output Sanitized"
+          },
+          "output_threats": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Output Threats",
+            "type": "array"
+          },
+          "provider": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Provider"
+          },
+          "provider_latency_ms": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Provider Latency Ms"
+          },
+          "total_latency_ms": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Total Latency Ms"
+          }
+        },
+        "required": [
+          "provider",
+          "model",
+          "provider_latency_ms",
+          "total_latency_ms",
+          "execution_status",
+          "input_primary_reason",
+          "input_confidence",
+          "input_threats",
+          "input_attack_type",
+          "input_raw",
+          "input_sanitized",
+          "output_decision",
+          "output_primary_reason",
+          "output_confidence",
+          "output_threats",
+          "output_raw",
+          "output_sanitized",
+          "behavior_flag",
+          "output_flags"
+        ],
+        "title": "RecordProxyDetail",
         "type": "object"
       },
       "RequestContextSchema": {
@@ -509,6 +3249,214 @@
         "title": "RequestOptionsSchema",
         "type": "object"
       },
+      "RequestRecordResponse": {
+        "properties": {
+          "attribution": {
+            "$ref": "#/components/schemas/RecordAttribution"
+          },
+          "confidence": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Confidence"
+          },
+          "confidence_band": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Confidence Band"
+          },
+          "decision": {
+            "title": "Decision",
+            "type": "string"
+          },
+          "detection_scores": {
+            "additionalProperties": {
+              "type": "number"
+            },
+            "description": "Per-detector scores as persisted. EMPTY for a caller that may not read layer scores -- the key stays present so consumers need no special case.",
+            "title": "Detection Scores",
+            "type": "object"
+          },
+          "execution_mode": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Execution Mode"
+          },
+          "guardrail_scores": {
+            "additionalProperties": {
+              "type": "number"
+            },
+            "description": "Guardrail scores as persisted. Empty under the same restriction as detection_scores.",
+            "title": "Guardrail Scores",
+            "type": "object"
+          },
+          "input_hash": {
+            "description": "Hash of the scanned input; the input itself is never stored here.",
+            "title": "Input Hash",
+            "type": "string"
+          },
+          "input_length": {
+            "title": "Input Length",
+            "type": "integer"
+          },
+          "input_source": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Declared provenance, for example `user_prompt` or `retrieved_document`.",
+            "title": "Input Source"
+          },
+          "is_proxy": {
+            "title": "Is Proxy",
+            "type": "boolean"
+          },
+          "primary_reason": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Primary Reason"
+          },
+          "processing": {
+            "$ref": "#/components/schemas/RecordProcessing"
+          },
+          "proxy": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/RecordProxyDetail"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Proxy lifecycle detail. Absent for a scan-only request."
+          },
+          "risk_score": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Risk Score"
+          },
+          "run_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Caller-supplied agent-run correlation; never an authorization input.",
+            "title": "Run Id"
+          },
+          "session_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Session Id"
+          },
+          "severity": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "INFO, WARNING, ERROR or CRITICAL.",
+            "title": "Severity"
+          },
+          "threats": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Threats",
+            "type": "array"
+          },
+          "timestamp": {
+            "description": "ISO-8601 UTC with a Z suffix.",
+            "title": "Timestamp",
+            "type": "string"
+          },
+          "trace_id": {
+            "title": "Trace Id",
+            "type": "string"
+          },
+          "turn_index": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Turn Index"
+          }
+        },
+        "required": [
+          "trace_id",
+          "timestamp",
+          "execution_mode",
+          "is_proxy",
+          "severity",
+          "attribution",
+          "decision",
+          "risk_score",
+          "primary_reason",
+          "confidence",
+          "confidence_band",
+          "threats",
+          "input_hash",
+          "input_length",
+          "run_id",
+          "session_id",
+          "turn_index",
+          "input_source",
+          "detection_scores",
+          "guardrail_scores",
+          "processing"
+        ],
+        "title": "RequestRecordResponse",
+        "type": "object"
+      },
       "ScanBatchItem": {
         "description": "One item in a batch scan. Carries its own provenance and an optional\ncaller-supplied id echoed back on the result so callers can correlate\ninputs to outcomes (e.g. map a chunk back to its document).",
         "properties": {
@@ -542,6 +3490,33 @@
         "title": "ScanBatchItem",
         "type": "object"
       },
+      "ScanBatchResponse": {
+        "properties": {
+          "count": {
+            "description": "Number of items scanned.",
+            "title": "Count",
+            "type": "integer"
+          },
+          "results": {
+            "description": "One result per item, in request order.",
+            "items": {
+              "$ref": "#/components/schemas/BatchItemResult"
+            },
+            "title": "Results",
+            "type": "array"
+          },
+          "summary": {
+            "$ref": "#/components/schemas/BatchSummary"
+          }
+        },
+        "required": [
+          "count",
+          "summary",
+          "results"
+        ],
+        "title": "ScanBatchResponse",
+        "type": "object"
+      },
       "ScanBatchSchema": {
         "description": "Generic multi-item scan. Every item runs the same pipeline as a single\nscan (scan-only; no proxy/LLM forwarding) and is audited independently.",
         "properties": {
@@ -562,6 +3537,292 @@
           "items"
         ],
         "title": "ScanBatchSchema",
+        "type": "object"
+      },
+      "ScanDebug": {
+        "description": "Admin-only diagnostics. Present only when an admin key sets\n`options.debug`, and never cached.",
+        "properties": {
+          "layer_decisions": {
+            "additionalProperties": {
+              "type": "string"
+            },
+            "title": "Layer Decisions",
+            "type": "object"
+          },
+          "llm_score": {
+            "title": "Llm Score",
+            "type": "number"
+          },
+          "ml_score": {
+            "title": "Ml Score",
+            "type": "number"
+          },
+          "pii_score": {
+            "title": "Pii Score",
+            "type": "number"
+          },
+          "rule_score": {
+            "title": "Rule Score",
+            "type": "number"
+          }
+        },
+        "required": [
+          "rule_score",
+          "ml_score",
+          "llm_score",
+          "pii_score",
+          "layer_decisions"
+        ],
+        "title": "ScanDebug",
+        "type": "object"
+      },
+      "ScanProcessing": {
+        "properties": {
+          "detection_mode": {
+            "description": "fast, balanced or thorough.",
+            "title": "Detection Mode",
+            "type": "string"
+          },
+          "execution_mode": {
+            "description": "scan_only or proxy.",
+            "title": "Execution Mode",
+            "type": "string"
+          },
+          "latency_ms": {
+            "description": "Detection time in milliseconds.",
+            "title": "Latency Ms",
+            "type": "number"
+          },
+          "llm_invoked": {
+            "description": "Whether the LLM detector ran.",
+            "title": "Llm Invoked",
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "latency_ms",
+          "llm_invoked",
+          "detection_mode",
+          "execution_mode"
+        ],
+        "title": "ScanProcessing",
+        "type": "object"
+      },
+      "ScanResponse": {
+        "example": {
+          "assessment": {
+            "confidence": 1.0,
+            "confidence_band": "HIGH",
+            "decision": "ALLOW",
+            "layers": [
+              {
+                "decision": "ALLOW",
+                "name": "rule_score",
+                "score": 0.0
+              },
+              {
+                "decision": "ALLOW",
+                "name": "ml_score",
+                "score": 0.0
+              }
+            ],
+            "primary_reason": "NO_THREAT_DETECTED",
+            "risk_level": "NONE",
+            "risk_score": 0.0,
+            "threats": []
+          },
+          "confidence": 1.0,
+          "confidence_band": "HIGH",
+          "decision": "ALLOW",
+          "decision_version": "v1.0",
+          "primary_reason": "NO_THREAT_DETECTED",
+          "processing": {
+            "detection_mode": "fast",
+            "execution_mode": "scan_only",
+            "latency_ms": 41.2,
+            "llm_invoked": false
+          },
+          "risk_score": 0.0,
+          "sanitization_applied": false,
+          "threats": [],
+          "trace_id": "req_2c31dee1bfda40a0b178c932d659f039"
+        },
+        "properties": {
+          "assessment": {
+            "$ref": "#/components/schemas/Assessment"
+          },
+          "confidence": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Confidence in the decision, 0.0-1.0.",
+            "title": "Confidence"
+          },
+          "confidence_band": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "LOW, MEDIUM or HIGH.",
+            "title": "Confidence Band"
+          },
+          "debug": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/ScanDebug"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Admin-only detector diagnostics. Present only when requested by an admin key."
+          },
+          "decision": {
+            "description": "ALLOW, SANITIZE or BLOCK.",
+            "title": "Decision",
+            "type": "string"
+          },
+          "decision_version": {
+            "description": "Version of the decision contract.",
+            "title": "Decision Version",
+            "type": "string"
+          },
+          "output": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Model output. Present only in proxy execution mode.",
+            "title": "Output"
+          },
+          "primary_reason": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Dominant reason, null if none applied.",
+            "title": "Primary Reason"
+          },
+          "processing": {
+            "$ref": "#/components/schemas/ScanProcessing"
+          },
+          "risk_score": {
+            "description": "Aggregate risk, 0.0-1.0.",
+            "title": "Risk Score",
+            "type": "number"
+          },
+          "sanitization_applied": {
+            "description": "True only when the input text was actually rewritten.",
+            "title": "Sanitization Applied",
+            "type": "boolean"
+          },
+          "sanitized_input": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Rewritten input. Present only when the text was redacted; forward this instead of the original.",
+            "title": "Sanitized Input"
+          },
+          "threats": {
+            "description": "Threat categories detected.",
+            "items": {
+              "type": "string"
+            },
+            "title": "Threats",
+            "type": "array"
+          },
+          "trace_id": {
+            "description": "Identifier for this scan; reads back via GET /v1/ai/requests/{trace_id}.",
+            "title": "Trace Id",
+            "type": "string"
+          }
+        },
+        "required": [
+          "trace_id",
+          "decision",
+          "decision_version",
+          "risk_score",
+          "primary_reason",
+          "confidence",
+          "confidence_band",
+          "threats",
+          "sanitization_applied",
+          "processing",
+          "assessment"
+        ],
+        "title": "ScanResponse",
+        "type": "object"
+      },
+      "SeverityCounts": {
+        "description": "Always all four keys, zero-filled. A severity absent from the range is a\nzero rather than a missing key, so a dashboard needs no defaulting.",
+        "properties": {
+          "CRITICAL": {
+            "title": "Critical",
+            "type": "integer"
+          },
+          "HIGH": {
+            "title": "High",
+            "type": "integer"
+          },
+          "LOW": {
+            "title": "Low",
+            "type": "integer"
+          },
+          "MEDIUM": {
+            "title": "Medium",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "CRITICAL",
+          "HIGH",
+          "MEDIUM",
+          "LOW"
+        ],
+        "title": "SeverityCounts",
+        "type": "object"
+      },
+      "ThresholdsResponse": {
+        "description": "Active decision thresholds. Stored per tenant, or the environment default\nwhen nothing has been stored.",
+        "properties": {
+          "block_threshold": {
+            "description": "At or above this risk score the decision is BLOCK.",
+            "title": "Block Threshold",
+            "type": "number"
+          },
+          "sanitize_threshold": {
+            "description": "At or above this, and below the block threshold, the decision is SANITIZE.",
+            "title": "Sanitize Threshold",
+            "type": "number"
+          }
+        },
+        "required": [
+          "block_threshold",
+          "sanitize_threshold"
+        ],
+        "title": "ThresholdsResponse",
         "type": "object"
       },
       "ThresholdsUpdateSchema": {
@@ -592,44 +3853,50 @@
         "title": "ThresholdsUpdateSchema",
         "type": "object"
       },
-      "ValidationError": {
+      "ThresholdsUpdatedResponse": {
         "properties": {
-          "ctx": {
-            "title": "Context",
-            "type": "object"
+          "block_threshold": {
+            "description": "At or above this risk score the decision is BLOCK.",
+            "title": "Block Threshold",
+            "type": "number"
           },
-          "input": {
-            "title": "Input"
+          "sanitize_threshold": {
+            "description": "At or above this, and below the block threshold, the decision is SANITIZE.",
+            "title": "Sanitize Threshold",
+            "type": "number"
           },
-          "loc": {
-            "items": {
-              "anyOf": [
-                {
-                  "type": "string"
-                },
-                {
-                  "type": "integer"
-                }
-              ]
-            },
-            "title": "Location",
-            "type": "array"
-          },
-          "msg": {
-            "title": "Message",
-            "type": "string"
-          },
-          "type": {
-            "title": "Error Type",
+          "updated_at": {
+            "description": "When this update was applied, ISO-8601 UTC with a Z suffix.",
+            "title": "Updated At",
             "type": "string"
           }
         },
         "required": [
-          "loc",
-          "msg",
-          "type"
+          "block_threshold",
+          "sanitize_threshold",
+          "updated_at"
         ],
-        "title": "ValidationError",
+        "title": "ThresholdsUpdatedResponse",
+        "type": "object"
+      },
+      "TopThreat": {
+        "properties": {
+          "category": {
+            "description": "Threat category, for example PROMPT_INJECTION.",
+            "title": "Category",
+            "type": "string"
+          },
+          "count": {
+            "description": "Occurrences within the filtered range.",
+            "title": "Count",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "category",
+          "count"
+        ],
+        "title": "TopThreat",
         "type": "object"
       }
     }
@@ -648,7 +3915,9 @@
           "200": {
             "content": {
               "application/json": {
-                "schema": {}
+                "schema": {
+                  "$ref": "#/components/schemas/HealthResponse"
+                }
               }
             },
             "description": "Successful Response"
@@ -668,10 +3937,22 @@
           "200": {
             "content": {
               "application/json": {
-                "schema": {}
+                "schema": {
+                  "$ref": "#/components/schemas/HealthConfigResponse"
+                }
               }
             },
             "description": "Successful Response"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Missing or invalid credentials."
           }
         },
         "summary": "Health Config",
@@ -687,7 +3968,9 @@
           "200": {
             "content": {
               "application/json": {
-                "schema": {}
+                "schema": {
+                  "$ref": "#/components/schemas/LivenessResponse"
+                }
               }
             },
             "description": "Successful Response"
@@ -707,10 +3990,22 @@
           "200": {
             "content": {
               "application/json": {
-                "schema": {}
+                "schema": {
+                  "$ref": "#/components/schemas/ReadinessResponse"
+                }
               }
             },
-            "description": "Successful Response"
+            "description": "Every required component is up. The body may still read `degraded` when an optional one is absent."
+          },
+          "503": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ReadinessResponse"
+                }
+              }
+            },
+            "description": "A required component is down; the instance cannot serve. Same body shape."
           }
         },
         "summary": "Health Ready",
@@ -750,20 +4045,32 @@
           "200": {
             "content": {
               "application/json": {
-                "schema": {}
+                "schema": {
+                  "$ref": "#/components/schemas/AgentRunResponse"
+                }
               }
             },
             "description": "Successful Response"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Missing or invalid credentials."
           },
           "422": {
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/HTTPValidationError"
+                  "$ref": "#/components/schemas/ErrorEnvelope"
                 }
               }
             },
-            "description": "Validation Error"
+            "description": "`limit` is outside 1-1000."
           }
         },
         "summary": "Get Agent Run",
@@ -790,20 +4097,72 @@
           "200": {
             "content": {
               "application/json": {
-                "schema": {}
+                "schema": {
+                  "$ref": "#/components/schemas/ScanResponse"
+                }
               }
             },
             "description": "Successful Response"
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Input exceeds the trial-key character cap."
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Missing or invalid credentials."
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Debug output requires an admin key; proxy mode is closed to trial keys."
           },
           "422": {
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/HTTPValidationError"
+                  "$ref": "#/components/schemas/ErrorEnvelope"
                 }
               }
             },
-            "description": "Validation Error"
+            "description": "Request body failed validation, or proxy mode was requested with the LLM layer disabled."
+          },
+          "429": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Rate limit exceeded: the global, trial, per-application or debug bucket."
+          },
+          "502": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Proxy execution reached the provider and it returned nothing usable. The scan itself ran and is audited under the returned trace_id."
           }
         },
         "summary": "Ai Request",
@@ -831,20 +4190,42 @@
           "200": {
             "content": {
               "application/json": {
-                "schema": {}
+                "schema": {
+                  "$ref": "#/components/schemas/RequestRecordResponse"
+                }
               }
             },
             "description": "Successful Response"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Missing or invalid credentials."
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "No such trace_id, or it belongs to another scope."
           },
           "422": {
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/HTTPValidationError"
+                  "$ref": "#/components/schemas/ErrorEnvelope"
                 }
               }
             },
-            "description": "Validation Error"
+            "description": "Request validation failed. Published for every parameterized route; this one validates nothing, so it is not reachable here."
           }
         },
         "summary": "Get Request",
@@ -871,20 +4252,52 @@
           "200": {
             "content": {
               "application/json": {
-                "schema": {}
+                "schema": {
+                  "$ref": "#/components/schemas/ScanBatchResponse"
+                }
               }
             },
             "description": "Successful Response"
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "An item exceeds the trial-key character cap."
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Missing or invalid credentials."
           },
           "422": {
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/HTTPValidationError"
+                  "$ref": "#/components/schemas/ErrorEnvelope"
                 }
               }
             },
-            "description": "Validation Error"
+            "description": "Request body failed validation, including the batch-size and per-item length caps."
+          },
+          "429": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Rate limit exceeded. A batch is charged as N units, not one."
           }
         },
         "summary": "Ai Scan Batch",
@@ -1038,21 +4451,24 @@
         "responses": {
           "200": {
             "content": {
-              "application/json": {
-                "schema": {}
+              "text/csv": {
+                "schema": {
+                  "format": "binary",
+                  "type": "string"
+                }
               }
             },
-            "description": "Successful Response"
+            "description": "The matching audit rows as a CSV attachment."
           },
           "422": {
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/HTTPValidationError"
+                  "$ref": "#/components/schemas/ErrorEnvelope"
                 }
               }
             },
-            "description": "Validation Error"
+            "description": "`limit` or `offset` is outside its allowed range, or is not an integer."
           }
         },
         "summary": "Export Audit Logs",
@@ -1348,20 +4764,42 @@
           "200": {
             "content": {
               "application/json": {
-                "schema": {}
+                "schema": {
+                  "$ref": "#/components/schemas/AuditLogsResponse"
+                }
               }
             },
             "description": "Successful Response"
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Malformed date range, or a `user_id` filter that is not a UUID."
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Missing or invalid credentials."
           },
           "422": {
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/HTTPValidationError"
+                  "$ref": "#/components/schemas/ErrorEnvelope"
                 }
               }
             },
-            "description": "Validation Error"
+            "description": "A query parameter is outside its allowed range or set."
           }
         },
         "summary": "Get Audit Logs",
@@ -1508,20 +4946,42 @@
           "200": {
             "content": {
               "application/json": {
-                "schema": {}
+                "schema": {
+                  "$ref": "#/components/schemas/AuditStatsResponse"
+                }
               }
             },
             "description": "Successful Response"
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Malformed date range, or a `user_id` filter that is not a UUID."
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Missing or invalid credentials."
           },
           "422": {
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/HTTPValidationError"
+                  "$ref": "#/components/schemas/ErrorEnvelope"
                 }
               }
             },
-            "description": "Validation Error"
+            "description": "A query parameter is outside its allowed range or set."
           }
         },
         "summary": "Get Audit Stats",
@@ -1537,10 +4997,22 @@
           "200": {
             "content": {
               "application/json": {
-                "schema": {}
+                "schema": {
+                  "$ref": "#/components/schemas/CapabilitiesResponse"
+                }
               }
             },
             "description": "Successful Response"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Missing or invalid credentials."
           }
         },
         "summary": "List Capabilities",
@@ -1567,20 +5039,92 @@
           "200": {
             "content": {
               "application/json": {
-                "schema": {}
+                "schema": {
+                  "$ref": "#/components/schemas/ChatCompletionResponse"
+                }
               }
             },
             "description": "Successful Response"
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/OpenAIErrorResponse"
+                }
+              }
+            },
+            "description": "Refused before or during scanning: blocked input, unconfigured provider, or a model not in `provider/model` form."
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "A dashboard session was used. This route is API-key only, and the refusal precedes the OpenAI-compatible path."
+          },
+          "413": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/OpenAIErrorResponse"
+                }
+              }
+            },
+            "description": "Request exceeds a configured input bound."
           },
           "422": {
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/HTTPValidationError"
+                  "$ref": "#/components/schemas/ErrorEnvelope"
                 }
               }
             },
-            "description": "Validation Error"
+            "description": "Request body failed validation. Answered by the global validation handler, so this one is NOT OpenAI-shaped."
+          },
+          "429": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/OpenAIErrorResponse"
+                }
+              }
+            },
+            "description": "Rate limited, by this gateway or by the upstream provider."
+          },
+          "500": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/OpenAIErrorResponse"
+                }
+              }
+            },
+            "description": "Output guard failure, or an unexpected error after the provider replied."
+          },
+          "502": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/OpenAIErrorResponse"
+                }
+              }
+            },
+            "description": "The provider was unreachable or returned an unusable reply."
+          },
+          "504": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/OpenAIErrorResponse"
+                }
+              }
+            },
+            "description": "The provider timed out."
           }
         },
         "summary": "Proxy Chat Completions",
@@ -1597,10 +5141,22 @@
           "200": {
             "content": {
               "application/json": {
-                "schema": {}
+                "schema": {
+                  "$ref": "#/components/schemas/ApiKeyListResponse"
+                }
               }
             },
             "description": "Successful Response"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Missing or invalid credentials."
           }
         },
         "summary": "List Keys",
@@ -1622,23 +5178,55 @@
           "required": true
         },
         "responses": {
-          "200": {
+          "201": {
             "content": {
               "application/json": {
-                "schema": {}
+                "schema": {
+                  "$ref": "#/components/schemas/ApiKeyCreated"
+                }
               }
             },
             "description": "Successful Response"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Missing or invalid credentials."
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Not an ADMIN, or the principal has no tenant scope."
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "The named application or department does not exist in this tenant."
           },
           "422": {
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/HTTPValidationError"
+                  "$ref": "#/components/schemas/ErrorEnvelope"
                 }
               }
             },
-            "description": "Validation Error"
+            "description": "Request body failed validation, or no department could be resolved for the key."
           }
         },
         "summary": "Create Key",
@@ -1692,20 +5280,32 @@
           "200": {
             "content": {
               "application/json": {
-                "schema": {}
+                "schema": {
+                  "$ref": "#/components/schemas/ProxyInteractionsResponse"
+                }
               }
             },
             "description": "Successful Response"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Missing or invalid credentials."
           },
           "422": {
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/HTTPValidationError"
+                  "$ref": "#/components/schemas/ErrorEnvelope"
                 }
               }
             },
-            "description": "Validation Error"
+            "description": "A query parameter could not be parsed."
           }
         },
         "summary": "List Proxy Interactions",
@@ -1732,20 +5332,32 @@
           "200": {
             "content": {
               "application/json": {
-                "schema": {}
+                "schema": {
+                  "$ref": "#/components/schemas/ProxyInteractionDetail"
+                }
               }
             },
             "description": "Successful Response"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Missing or invalid credentials."
           },
           "422": {
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/HTTPValidationError"
+                  "$ref": "#/components/schemas/ErrorEnvelope"
                 }
               }
             },
-            "description": "Validation Error"
+            "description": "A query parameter could not be parsed."
           }
         },
         "summary": "Get Proxy Interaction",
@@ -1762,10 +5374,32 @@
           "200": {
             "content": {
               "application/json": {
-                "schema": {}
+                "schema": {
+                  "$ref": "#/components/schemas/DetectionLayersResponse"
+                }
               }
             },
             "description": "Successful Response"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Missing or invalid credentials."
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Caller does not hold `settings:read`, or is using a trial key."
           }
         },
         "summary": "Get Layers",
@@ -1790,20 +5424,42 @@
           "200": {
             "content": {
               "application/json": {
-                "schema": {}
+                "schema": {
+                  "$ref": "#/components/schemas/DetectionLayersUpdatedResponse"
+                }
               }
             },
             "description": "Successful Response"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Missing or invalid credentials."
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Writes require an ADMIN session; an API key is not accepted."
           },
           "422": {
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/HTTPValidationError"
+                  "$ref": "#/components/schemas/ErrorEnvelope"
                 }
               }
             },
-            "description": "Validation Error"
+            "description": "Request body failed validation, or the merged result is not a valid configuration."
           }
         },
         "summary": "Update Layers",
@@ -1820,10 +5476,32 @@
           "200": {
             "content": {
               "application/json": {
-                "schema": {}
+                "schema": {
+                  "$ref": "#/components/schemas/LLMSettingsResponse"
+                }
               }
             },
             "description": "Successful Response"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Missing or invalid credentials."
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Caller does not hold `settings:read`, or is using a trial key."
           }
         },
         "summary": "Get Llm Settings",
@@ -1848,20 +5526,42 @@
           "200": {
             "content": {
               "application/json": {
-                "schema": {}
+                "schema": {
+                  "$ref": "#/components/schemas/LLMSettingsUpdatedResponse"
+                }
               }
             },
             "description": "Successful Response"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Missing or invalid credentials."
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Writes require an ADMIN session; an API key is not accepted."
           },
           "422": {
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/HTTPValidationError"
+                  "$ref": "#/components/schemas/ErrorEnvelope"
                 }
               }
             },
-            "description": "Validation Error"
+            "description": "Request body failed validation, or the merged result is not a valid configuration."
           }
         },
         "summary": "Update Llm Settings",
@@ -1875,13 +5575,28 @@
         "description": "Removes the proxy provider config for the current tenant.\nAfter deletion, proxy mode requests will fail with proxy_not_configured.\n404 if no config exists.",
         "operationId": "delete_proxy_settings_v1_settings_proxy_delete",
         "responses": {
-          "200": {
+          "204": {
+            "description": "Successful Response"
+          },
+          "401": {
             "content": {
               "application/json": {
-                "schema": {}
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
               }
             },
-            "description": "Successful Response"
+            "description": "Missing or invalid credentials."
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Proxy provider configuration is admin-only, on reads as well as writes."
           }
         },
         "summary": "Delete Proxy Settings",
@@ -1896,10 +5611,32 @@
           "200": {
             "content": {
               "application/json": {
-                "schema": {}
+                "schema": {
+                  "$ref": "#/components/schemas/ProxyProviderConfigResponse"
+                }
               }
             },
             "description": "Successful Response"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Missing or invalid credentials."
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Proxy provider configuration is admin-only, on reads as well as writes."
           }
         },
         "summary": "Get Proxy Settings",
@@ -1924,20 +5661,42 @@
           "200": {
             "content": {
               "application/json": {
-                "schema": {}
+                "schema": {
+                  "$ref": "#/components/schemas/ProxyProviderConfigResponse"
+                }
               }
             },
             "description": "Successful Response"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Missing or invalid credentials."
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Proxy provider configuration is admin-only, on reads as well as writes."
           },
           "422": {
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/HTTPValidationError"
+                  "$ref": "#/components/schemas/ErrorEnvelope"
                 }
               }
             },
-            "description": "Validation Error"
+            "description": "Request body failed validation."
           }
         },
         "summary": "Put Proxy Settings",
@@ -1954,10 +5713,32 @@
           "200": {
             "content": {
               "application/json": {
-                "schema": {}
+                "schema": {
+                  "$ref": "#/components/schemas/RateLimitResponse"
+                }
               }
             },
             "description": "Successful Response"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Missing or invalid credentials."
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Caller does not hold `settings:read`, or is using a trial key."
           }
         },
         "summary": "Get Rate Limit Settings",
@@ -1982,20 +5763,42 @@
           "200": {
             "content": {
               "application/json": {
-                "schema": {}
+                "schema": {
+                  "$ref": "#/components/schemas/RateLimitUpdatedResponse"
+                }
               }
             },
             "description": "Successful Response"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Missing or invalid credentials."
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Writes require an ADMIN session; an API key is not accepted."
           },
           "422": {
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/HTTPValidationError"
+                  "$ref": "#/components/schemas/ErrorEnvelope"
                 }
               }
             },
-            "description": "Validation Error"
+            "description": "Request body failed validation, or the merged result is not a valid configuration."
           }
         },
         "summary": "Update Rate Limit Settings",
@@ -2012,10 +5815,32 @@
           "200": {
             "content": {
               "application/json": {
-                "schema": {}
+                "schema": {
+                  "$ref": "#/components/schemas/ThresholdsResponse"
+                }
               }
             },
             "description": "Successful Response"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Missing or invalid credentials."
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Caller does not hold `settings:read`, or is using a trial key."
           }
         },
         "summary": "Get Thresholds",
@@ -2040,20 +5865,42 @@
           "200": {
             "content": {
               "application/json": {
-                "schema": {}
+                "schema": {
+                  "$ref": "#/components/schemas/ThresholdsUpdatedResponse"
+                }
               }
             },
             "description": "Successful Response"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Missing or invalid credentials."
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Writes require an ADMIN session; an API key is not accepted."
           },
           "422": {
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/HTTPValidationError"
+                  "$ref": "#/components/schemas/ErrorEnvelope"
                 }
               }
             },
-            "description": "Validation Error"
+            "description": "Request body failed validation, or the merged result is not a valid configuration."
           }
         },
         "summary": "Update Thresholds",

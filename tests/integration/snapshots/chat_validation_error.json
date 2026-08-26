@@ -1,0 +1,22 @@
+{
+  "body": {
+    "error": {
+      "code": "VALIDATION_ERROR",
+      "invalid_params": [
+        {
+          "code": "INVALID_VALUE",
+          "field": "stream",
+          "key": "<secret>",
+          "params": {}
+        }
+      ],
+      "key": "<secret>",
+      "message": "The submitted data is invalid.",
+      "params": {},
+      "severity": "WARNING",
+      "trace_id": "<trace_id>"
+    }
+  },
+  "mode": "value",
+  "status": 422
+}

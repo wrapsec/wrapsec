@@ -41,9 +41,10 @@ import logging
 import time
 import uuid
 from dataclasses import dataclass
+from typing import Any
 
 import httpx
-from fastapi import APIRouter, BackgroundTasks, Depends, Request
+from fastapi import APIRouter, BackgroundTasks, Depends, Request, Response
 from fastapi.responses import JSONResponse
 from pydantic import BaseModel, field_validator
 from sqlalchemy import select
@@ -51,6 +52,11 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from api.v1.dependencies.auth import get_current_principal
 from api.v1.dependencies.db import get_db
+from api.v1.schemas.response import (
+    ChatCompletionResponse,
+    ErrorEnvelope,
+    OpenAIErrorResponse,
+)
 from config.settings import get_settings
 from db.models import ProxyInteractionModel, ProxyProviderConfigModel
 from db.repositories.audit import AuditRepository
@@ -743,10 +749,42 @@ async def _log_interaction(
 
 # ── Endpoint ───────────────────────────────────────────────────────────────────
 
-@router.post("/chat/completions", response_model=None)
+# The documented responses for the OpenAI-compatible route.
+#
+# The 4xx/5xx entries use the OPENAI envelope, not `ErrorEnvelope`: those bodies
+# are shaped for OpenAI client libraries and this pass preserves them exactly.
+#
+# Two statuses are the exception, and both are measured rather than assumed:
+# 422 is FastAPI request validation, answered by the global handler with the
+# catalog envelope; and 403 PROXY_REQUIRES_API_KEY is a catalog error too,
+# because a dashboard session is refused before the OpenAI-compatible path
+# begins. Advertising the OpenAI shape for either would misdescribe the body a
+# caller actually receives.
+_CHAT_RESPONSES: dict[int | str, dict[str, Any]] = {
+    400: {"model": OpenAIErrorResponse, "description": "Refused before or during scanning: blocked input, unconfigured provider, or a model not in `provider/model` form."},
+    403: {"model": ErrorEnvelope, "description": "A dashboard session was used. This route is API-key only, and the refusal precedes the OpenAI-compatible path."},
+    413: {"model": OpenAIErrorResponse, "description": "Request exceeds a configured input bound."},
+    422: {"model": ErrorEnvelope, "description": "Request body failed validation. Answered by the global validation handler, so this one is NOT OpenAI-shaped."},
+    429: {"model": OpenAIErrorResponse, "description": "Rate limited, by this gateway or by the upstream provider."},
+    500: {"model": OpenAIErrorResponse, "description": "Output guard failure, or an unexpected error after the provider replied."},
+    502: {"model": OpenAIErrorResponse, "description": "The provider was unreachable or returned an unusable reply."},
+    504: {"model": OpenAIErrorResponse, "description": "The provider timed out."},
+}
+
+
+@router.post(
+    "/chat/completions",
+    response_model               = ChatCompletionResponse,
+    # `usage` and `wrapsec` are absent unless the provider sent token counts or
+    # the caller opted into inline meta. Absence is the contract for both, and
+    # exclude_none would be wrong here for the same reason it is elsewhere.
+    response_model_exclude_unset = True,
+    responses                    = _CHAT_RESPONSES,
+)
 async def proxy_chat_completions(
     body:             ProxyChatRequest,
     request:          Request,
+    response:         Response,
     background_tasks: BackgroundTasks,
     db:               AsyncSession = Depends(get_db),
     _principal:       Principal    = Depends(get_current_principal),
@@ -1520,4 +1558,10 @@ async def proxy_chat_completions(
         f"latency={total_ms}ms"
     )
 
-    return JSONResponse(content=response_body, headers=headers)
+    # The BODY is returned as a value so it passes through the response model;
+    # the X-WrapSec-* headers are set on the injected Response, which carries
+    # them onto the same reply. Returning a JSONResponse would keep the headers
+    # and skip the model -- the advertised-but-unenforced shape this phase
+    # exists to remove.
+    response.headers.update(headers)
+    return response_body

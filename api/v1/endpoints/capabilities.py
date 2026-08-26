@@ -11,22 +11,35 @@ the enterprise package registers capabilities as it wires licensed features in.
 `edition` is descriptive display metadata, not an authorization claim.
 """
 
+from typing import Any
+
 from fastapi import APIRouter, Depends
-from fastapi.responses import JSONResponse
 
 from api.v1.dependencies.auth import get_current_principal
+from api.v1.schemas.response import CapabilitiesResponse, ErrorEnvelope
 from domain.entities.principal import Principal
 from services.capabilities import effective_capabilities
 
 router = APIRouter()
 
+# The route takes no parameters, so authentication is its only reachable failure.
+_CAPABILITY_ERRORS: dict[int | str, dict[str, Any]] = {
+    401: {"model": ErrorEnvelope, "description": "Missing or invalid credentials."},
+}
 
-@router.get("/v1/capabilities")
+
+@router.get(
+    "/v1/capabilities",
+    response_model               = CapabilitiesResponse,
+    response_model_exclude_unset = True,
+    responses                    = _CAPABILITY_ERRORS,
+)
 async def list_capabilities(
     principal: Principal = Depends(get_current_principal),
 ):
     caps = effective_capabilities()
-    return JSONResponse(content={
+    # A value, not a JSONResponse: a Response object bypasses the model.
+    return {
         "edition":      "enterprise" if caps else "oss",
         "capabilities": caps,
-    })
+    }

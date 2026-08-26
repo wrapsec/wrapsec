@@ -3,6 +3,7 @@
 # WrapSec v1.0 | AI Security Gateway - https://wrapsec.com
 
 import uuid
+from typing import Any
 
 from fastapi import APIRouter, Depends, Request
 from fastapi.responses import JSONResponse
@@ -12,6 +13,17 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from api.v1.dependencies.auth import require_admin, require_permission
 from api.v1.dependencies.db import get_db
 from api.v1.middleware.auth import get_client_ip
+from api.v1.schemas.response import (
+    DetectionLayersResponse,
+    DetectionLayersUpdatedResponse,
+    ErrorEnvelope,
+    LLMSettingsResponse,
+    LLMSettingsUpdatedResponse,
+    RateLimitResponse,
+    RateLimitUpdatedResponse,
+    ThresholdsResponse,
+    ThresholdsUpdatedResponse,
+)
 from cache.redis_client import get_redis
 from config.settings import get_settings
 from db.repositories.admin_event import AdminEventRepository
@@ -72,6 +84,22 @@ class _BoundTenantSettings:
 
 router = APIRouter()
 
+# The failures the PUBLIC settings routes actually produce. A read needs
+# `settings:read` and refuses a VIEWER or a trial key with 403; a write needs
+# JWT + ADMIN. 422 is declared on the writes because the runtime handler returns
+# the catalog envelope -- a merged threshold pair that breaks the ordering
+# invariant, or a body that fails schema validation.
+_SETTINGS_READ_ERRORS: dict[int | str, dict[str, Any]] = {
+    401: {"model": ErrorEnvelope, "description": "Missing or invalid credentials."},
+    403: {"model": ErrorEnvelope, "description": "Caller does not hold `settings:read`, or is using a trial key."},
+}
+
+_SETTINGS_WRITE_ERRORS: dict[int | str, dict[str, Any]] = {
+    401: {"model": ErrorEnvelope, "description": "Missing or invalid credentials."},
+    403: {"model": ErrorEnvelope, "description": "Writes require an ADMIN session; an API key is not accepted."},
+    422: {"model": ErrorEnvelope, "description": "Request body failed validation, or the merged result is not a valid configuration."},
+}
+
 THRESHOLD_KEY = "policy_thresholds"
 LAYERS_KEY    = "detection_layers"
 
@@ -120,7 +148,12 @@ class LayersUpdateSchema(BaseModel):
     llm_enabled:  bool | None = None
 
 
-@router.get("/thresholds")
+@router.get(
+    "/thresholds",
+    response_model               = ThresholdsResponse,
+    response_model_exclude_unset = True,
+    responses                    = _SETTINGS_READ_ERRORS,
+)
 async def get_thresholds(
     db:        AsyncSession = Depends(get_db),
     _principal = Depends(require_permission("settings:read")),
@@ -131,10 +164,16 @@ async def get_thresholds(
     """
     repo   = _BoundTenantSettings(db, _principal)
     stored = await repo.get(THRESHOLD_KEY)
-    return JSONResponse(content=stored or _default_thresholds())
+    # A value, not a JSONResponse: a Response object bypasses the model.
+    return stored or _default_thresholds()
 
 
-@router.put("/thresholds")
+@router.put(
+    "/thresholds",
+    response_model               = ThresholdsUpdatedResponse,
+    response_model_exclude_unset = True,
+    responses                    = _SETTINGS_WRITE_ERRORS,
+)
 async def update_thresholds(
     body:      ThresholdsUpdateSchema,
     db:        AsyncSession = Depends(get_db),
@@ -173,13 +212,18 @@ async def update_thresholds(
     await repo.set(THRESHOLD_KEY, current)
     await db.commit()
 
-    return JSONResponse(content={
+    return {
         **current,
         "updated_at": to_iso_z(utc_now()),
-    })
+    }
 
 
-@router.get("/layers")
+@router.get(
+    "/layers",
+    response_model               = DetectionLayersResponse,
+    response_model_exclude_unset = True,
+    responses                    = _SETTINGS_READ_ERRORS,
+)
 async def get_layers(
     db:        AsyncSession = Depends(get_db),
     _principal = Depends(require_permission("settings:read")),
@@ -187,10 +231,15 @@ async def get_layers(
     """Returns the active detection layer configuration (rule, ML, LLM enabled flags)."""
     repo   = _BoundTenantSettings(db, _principal)
     stored = await repo.get(LAYERS_KEY)
-    return JSONResponse(content=stored or DEFAULT_LAYERS)
+    return stored or DEFAULT_LAYERS
 
 
-@router.put("/layers")
+@router.put(
+    "/layers",
+    response_model               = DetectionLayersUpdatedResponse,
+    response_model_exclude_unset = True,
+    responses                    = _SETTINGS_WRITE_ERRORS,
+)
 async def update_layers(
     body:      LayersUpdateSchema,
     db:        AsyncSession = Depends(get_db),
@@ -214,10 +263,10 @@ async def update_layers(
     await repo.set(LAYERS_KEY, current)
     await db.commit()
 
-    return JSONResponse(content={
+    return {
         **current,
         "updated_at": to_iso_z(utc_now()),
-    })
+    }
 
 LLM_KEY         = "llm_settings"
 LLM_API_KEY_KEY = "llm_api_key_enc"
@@ -262,7 +311,12 @@ class LLMSettingsSchema(BaseModel):
         return self
 
 
-@router.get("/llm")
+@router.get(
+    "/llm",
+    response_model               = LLMSettingsResponse,
+    response_model_exclude_unset = True,
+    responses                    = _SETTINGS_READ_ERRORS,
+)
 async def get_llm_settings(
     db:        AsyncSession = Depends(get_db),
     _principal = Depends(require_permission("settings:read")),
@@ -283,10 +337,15 @@ async def get_llm_settings(
             api_key_masked = "****"
 
     payload["api_key_masked"] = api_key_masked
-    return JSONResponse(content=payload)
+    return payload
 
 
-@router.put("/llm")
+@router.put(
+    "/llm",
+    response_model               = LLMSettingsUpdatedResponse,
+    response_model_exclude_unset = True,
+    responses                    = _SETTINGS_WRITE_ERRORS,
+)
 async def update_llm_settings(
     body:      LLMSettingsSchema,
     db:        AsyncSession = Depends(get_db),
@@ -332,11 +391,11 @@ async def update_llm_settings(
 
     await db.commit()
 
-    return JSONResponse(content={
+    return {
         **current,
         "api_key_masked": api_key_masked,
         "updated_at":     to_iso_z(utc_now()),
-    })
+    }
 
 RETENTION_KEY = "audit_retention"
 
@@ -423,7 +482,12 @@ class RateLimitUpdateSchema(BaseModel):
         return self
 
 
-@router.get("/rate_limit")
+@router.get(
+    "/rate_limit",
+    response_model               = RateLimitResponse,
+    response_model_exclude_unset = True,
+    responses                    = _SETTINGS_READ_ERRORS,
+)
 async def get_rate_limit_settings(
     db:        AsyncSession = Depends(get_db),
     _principal = Depends(require_permission("settings:read")),
@@ -436,17 +500,22 @@ async def get_rate_limit_settings(
     repo   = _BoundTenantSettings(db, _principal)
     stored = await repo.get(RATE_LIMIT_KEY)
     if stored:
-        return JSONResponse(content={
+        return {
             **stored,
             "source": "database",
-        })
-    return JSONResponse(content={
+        }
+    return {
         **_default_rate_limit(),
         "source": "environment",
-    })
+    }
 
 
-@router.put("/rate_limit")
+@router.put(
+    "/rate_limit",
+    response_model               = RateLimitUpdatedResponse,
+    response_model_exclude_unset = True,
+    responses                    = _SETTINGS_WRITE_ERRORS,
+)
 async def update_rate_limit_settings(
     body:      RateLimitUpdateSchema,
     db:        AsyncSession = Depends(get_db),
@@ -474,11 +543,11 @@ async def update_rate_limit_settings(
     except Exception:
         pass  # Cache invalidation is best-effort
 
-    return JSONResponse(content={
+    return {
         **current,
         "source":     "database",
         "updated_at": to_iso_z(utc_now()),
-    })
+    }
 
 
 @router.get("/storage", include_in_schema=False)

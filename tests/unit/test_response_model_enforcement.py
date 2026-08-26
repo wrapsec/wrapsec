@@ -24,15 +24,27 @@ narrower and is the one that actually protects a consumer:
     a route may declare a response model, or it may return a Response object,
     but if it does both it must be a recorded exception.
 
-RETURN ANALYSIS. Two mistakes make this kind of check report nonsense, and both
-are handled:
+RETURN ANALYSIS. Three mistakes make this kind of check report nonsense, and all
+three are handled:
 
   * a `return` inside a nested helper defined in the endpoint body is not the
     endpoint's return -- an earlier pass counted `_rows()` inside
     `get_key_addresses` and misread the route as returning a value;
-  * a call to `error_response()` / `_reject()` / `_bad_request()` / `_set_status()`
-    IS a Response return, because those helpers construct one. Reading only the
-    literal `JSONResponse(` calls misses them and overstates enforcement.
+  * a call to `_set_status()` or any other helper that builds a Response IS a
+    Response return. Reading only the literal `JSONResponse(` calls misses them
+    and overstates enforcement;
+  * an ERROR-ENVELOPE return is not a success-path bypass. A route may return a
+    value on success and `error_response(...)` on a failure, and it is fully
+    enforced: the model applies to every success body, while the error carries
+    the catalog envelope and is declared through `responses={...}` instead.
+    `POST /v1/ai/request` is exactly this shape -- a provider failure returns
+    502 LLM_UNAVAILABLE rather than a scan body. Counting that as a bypass would
+    force the choice between an unenforced success path and raising an error the
+    route deliberately returns, so the audit row it just wrote still lands.
+
+The distinction is drawn by name, over the small closed set of builders whose
+entire purpose is an error envelope. A helper added to that set is a claim that
+it can never produce a success body.
 """
 
 from __future__ import annotations
@@ -50,6 +62,16 @@ from pydantic import BaseModel
 _RESPONSE_CLASSES = {
     "JSONResponse", "Response", "StreamingResponse", "PlainTextResponse",
     "FileResponse", "RedirectResponse", "ORJSONResponse", "HTMLResponse",
+}
+
+# Builders that can only ever produce an error body: the canonical catalog
+# envelope, and the OpenAI-compatible rejections on the proxy route. A return of
+# one of these is a failure path, not a success path that skipped its model.
+_ERROR_ENVELOPE_BUILDERS = {
+    "error_response",    # errors/response.py -- the single canonical envelope
+    "_error_response",   # proxy.py -- OpenAI-compatible envelope
+    "_reject",           # proxy.py -- OpenAI-compatible refusal
+    "_bad_request",      # admin/tenants.py
 }
 
 # The frozen public API surface: the routes an SDK, the MCP adapter or a
@@ -83,14 +105,13 @@ DOCUMENTATION_ONLY_EXCEPTIONS: dict[tuple[str, str], str] = {}
 # reason survives, and so a later pass does not "complete" the coverage by
 # converting them.
 NON_MODEL_ROUTES: dict[tuple[str, str], str] = {
+    ("/v1/settings/proxy", "DELETE"):
+        "Answers 204 with an empty body. A response model describes a body, and "
+        "there is none -- giving it one would advertise an empty schema for a "
+        "response that carries no content.",
     ("/v1/audit/export", "GET"):
         "Returns CSV, not JSON. A response model describes a JSON body and would "
         "misdescribe this one; the media type is the contract here.",
-    ("/v1/chat/completions", "POST"):
-        "OpenAI-compatible. The success body is provider-shaped and passed "
-        "through, and the route answers through many constructed Response paths "
-        "including the OpenAI error envelope. Its compatibility contract is "
-        "verified separately, not by a WrapSec response model.",
 }
 
 
@@ -147,14 +168,37 @@ def _own_returns(fndef: ast.AST) -> list[ast.Return]:
     return found
 
 
-def _returns_a_response_object(endpoint) -> bool:
+def _is_error_construction(call: ast.Call) -> bool:
+    """Whether a Response construction carries an explicit non-2xx status.
+
+    `JSONResponse(status_code=404, content=...)` can only be a failure path, so a
+    return of it is not a success body that skipped its model. Read from the
+    literal keyword rather than inferred from the variable name, so renaming
+    `not_found` to anything else changes nothing.
+    """
+    for kw in call.keywords:
+        if kw.arg == "status_code" and isinstance(kw.value, ast.Constant):
+            return isinstance(kw.value.value, int) and kw.value.value >= 400
+    return False
+
+
+def _returns_a_response_object(endpoint, *, count_error_envelopes: bool = True) -> bool:
     """Whether any of the endpoint's own returns yields a Response object.
 
     Resolves three forms: a direct construction, a call to a Response-returning
     helper, and a name bound to a Response earlier in the function (the
     `response = JSONResponse(...); ...; return response` shape used by the auth
     routes).
+
+    With `count_error_envelopes=False`, a return of an error-envelope builder is
+    ignored, and so is a Response constructed with an explicit non-2xx status --
+    both answer the narrower question the bypass invariant asks: does a SUCCESS
+    body leave this endpoint without passing through its model. The proxy
+    interaction detail route is the second shape: it binds a 404 to a name,
+    returns that name on three scoping branches, and returns its success body as
+    a value.
     """
+    error_builders = set() if count_error_envelopes else _ERROR_ENVELOPE_BUILDERS
     try:
         source = inspect.getsource(endpoint)
     except OSError:  # pragma: no cover
@@ -171,6 +215,7 @@ def _returns_a_response_object(endpoint) -> bool:
             (isinstance(node.value.func, ast.Name) and node.value.func.id in _RESPONSE_CLASSES)
             or getattr(node.value.func, "attr", "") in _RESPONSE_CLASSES
         )
+        and not (not count_error_envelopes and _is_error_construction(node.value))
     }
 
     for node in _own_returns(fndef):
@@ -178,6 +223,10 @@ def _returns_a_response_object(endpoint) -> bool:
         if isinstance(value, ast.Call):
             fn = value.func
             called = fn.id if isinstance(fn, ast.Name) else getattr(fn, "attr", "")
+            if called in error_builders:
+                continue
+            if not count_error_envelopes and _is_error_construction(value):
+                continue
             if called in _RESPONSE_CLASSES or called in _HELPERS:
                 return True
         elif isinstance(value, ast.Name) and value.id in response_names:
@@ -187,6 +236,8 @@ def _returns_a_response_object(endpoint) -> bool:
             if isinstance(inner, ast.Call):
                 fn = inner.func
                 called = fn.id if isinstance(fn, ast.Name) else getattr(fn, "attr", "")
+                if called in error_builders:
+                    continue
                 if called in _HELPERS or called in _RESPONSE_CLASSES:
                     return True
     return False
@@ -253,7 +304,7 @@ def test_no_public_route_advertises_a_model_it_bypasses():
             continue
         if (route.path, method) in DOCUMENTATION_ONLY_EXCEPTIONS:
             continue
-        if _returns_a_response_object(route.endpoint):
+        if _returns_a_response_object(route.endpoint, count_error_envelopes=False):
             offenders.append(
                 f"{method} {route.path} declares "
                 f"{route.response_model.__name__} but returns a Response object"
@@ -289,12 +340,67 @@ def test_non_model_routes_still_declare_no_model(key):
     )
 
 
+# Routes whose success body reaches the response model. The list grows one API
+# family at a time; each entry is a route whose success return was converted from
+# a constructed Response to a value, or that already returned one.
+MODELLED_ROUTES: set[tuple[str, str]] = {
+    ("/v1/ai/request", "POST"),
+    ("/v1/ai/scan-batch", "POST"),
+    ("/v1/ai/requests/{trace_id}", "GET"),
+    ("/v1/agent-runs/{run_id}", "GET"),
+    ("/v1/audit/logs", "GET"),
+    ("/v1/audit/stats", "GET"),
+    ("/health", "GET"),
+    ("/health/live", "GET"),
+    ("/health/ready", "GET"),
+    ("/health/config", "GET"),
+    ("/v1/capabilities", "GET"),
+    ("/v1/proxy/interactions", "GET"),
+    ("/v1/proxy/interactions/{trace_id}", "GET"),
+    ("/v1/keys", "GET"),
+    ("/v1/keys", "POST"),
+    ("/v1/settings/thresholds", "GET"), ("/v1/settings/thresholds", "PUT"),
+    ("/v1/settings/layers", "GET"), ("/v1/settings/layers", "PUT"),
+    ("/v1/settings/llm", "GET"), ("/v1/settings/llm", "PUT"),
+    ("/v1/settings/rate_limit", "GET"), ("/v1/settings/rate_limit", "PUT"),
+    ("/v1/settings/proxy", "GET"), ("/v1/settings/proxy", "PUT"),
+    # OpenAI-compatible, and modelled on its own protocol shape rather than the
+    # WrapSec one: its success body has a response model, while its OpenAI error
+    # bodies stay constructed Responses, which is what they must be.
+    ("/v1/chat/completions", "POST"),
+}
+
+
+def test_every_modelled_route_declares_a_model_and_enforces_it():
+    """The two halves have to hold together: declaring a model the runtime skips
+    advertises a promise nothing keeps, and converting a success return without
+    declaring a model enforces nothing."""
+    for key in sorted(MODELLED_ROUTES):
+        route = next((r for r, m in _public_routes() if (r.path, m) == key), None)
+        assert route is not None, f"{key} is recorded as modelled but no longer exists"
+        assert route.response_model is not None, (
+            f"{key} is recorded as modelled but declares no response_model"
+        )
+        assert not _returns_a_response_object(route.endpoint, count_error_envelopes=False), (
+            f"{key} declares {route.response_model.__name__} but returns a Response "
+            "object on a success path, so the model is never applied"
+        )
+
+
 def test_the_enforcement_classification_is_reported():
     """Not an assertion about the desired state -- a census, so the split is
-    visible in the run and a regression in it is legible."""
+    visible in the run and a regression in it is legible.
+
+    `enforced` here means "no success body leaves without passing the model",
+    which is why the error-envelope returns are not counted: a route that answers
+    a provider failure with the catalog envelope still enforces its success
+    contract.
+    """
     enforced, bypassing, advertised = [], [], []
     for route, method in _public_routes():
-        returns_response = _returns_a_response_object(route.endpoint)
+        returns_response = _returns_a_response_object(
+            route.endpoint, count_error_envelopes=False,
+        )
         if route.response_model is not None:
             advertised.append((method, route.path))
         if returns_response:
@@ -306,8 +412,14 @@ def test_the_enforcement_classification_is_reported():
     assert total == len(PUBLIC_ROUTES), (
         f"matched {total} routes against {len(PUBLIC_ROUTES)} declared public ones"
     )
-    # Today: three routes return values, the rest return Response objects, and
-    # none declares a model. Pinned so a change in the split is deliberate.
-    assert len(enforced) == 3, f"routes returning a value: {sorted(enforced)}"
-    assert len(bypassing) == total - 3
-    assert advertised == [], f"routes now advertising a model: {sorted(advertised)}"
+    # Today: the health and capabilities family, the converted scan family, the
+    # agent-run timeline and the two audit read-back routes return values; every
+    # other public route still returns a constructed Response and declares
+    # nothing. Pinned so a change in the split is deliberate. `/health/ready`
+    # joined the enforced set by moving its 503 onto the injected Response,
+    # which is what lets its body pass through the model.
+    assert len(enforced) == 26, f"routes returning a value: {sorted(enforced)}"
+    assert len(bypassing) == total - 26
+    assert sorted(advertised) == sorted(
+        (method, path) for path, method in MODELLED_ROUTES
+    ), f"routes advertising a model: {sorted(advertised)}"

@@ -1,0 +1,46 @@
+{
+  "body": {
+    "count": "<int>",
+    "run_id": "<str>",
+    "turns": [
+      {
+        "app_id": null,
+        "app_name": null,
+        "attribution_verified": "<bool>",
+        "confidence": "<float>",
+        "confidence_band": "<str>",
+        "decision": "<str>",
+        "dept_id": "<str>",
+        "dept_name": "<str>",
+        "detection_mode": "<str>",
+        "execution_mode": "<str>",
+        "input_hash": "<str>",
+        "input_length": "<int>",
+        "input_source": "<str>",
+        "ip_address": "<str>",
+        "key_id": "<str>",
+        "latency_ms": "<float>",
+        "model": null,
+        "output_decision": null,
+        "policy_source": "<str>",
+        "prev_hash": null,
+        "primary_reason": "<str>",
+        "provider": null,
+        "record_hash": "<str>",
+        "risk_score": "<float>",
+        "run_id": "<str>",
+        "session_id": "<str>",
+        "severity": "<str>",
+        "source": "<str>",
+        "tenant_id": "<str>",
+        "threats": [],
+        "timestamp": "<str>",
+        "trace_id": "<str>",
+        "turn_index": "<int>",
+        "user_id": null
+      }
+    ]
+  },
+  "mode": "shape",
+  "status": 200
+}

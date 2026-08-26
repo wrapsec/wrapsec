@@ -245,6 +245,49 @@ async def test_get_request_includes_proxy_interaction(client, admin_headers, tes
 
 # ── B2: semantic-cache hits are audited too ──────────────────────────────────
 
+def _cached_body(trace_id: str) -> dict:
+    """A cached body of the shape the cache actually holds.
+
+    The entry a hit reads was written by `_build_response` minus `debug`, so it
+    carries every field of the scan contract. These tests used to seed a partial
+    dict -- enough for the audit assertions they make, but a body no cache could
+    contain. Once the route's response model applied to the cache-hit exit that
+    fixture became a 500, correctly: the shape it invented is not a scan
+    response. Completing it keeps the tests aimed at what they are about, which
+    is the audit row a hit produces.
+    """
+    return {
+        "trace_id":             trace_id,
+        "decision":             "ALLOW",
+        "decision_version":     "v1.0",
+        "risk_score":           0.05,
+        "primary_reason":       "NO_THREAT_DETECTED",
+        "confidence":           0.9,
+        "confidence_band":      "HIGH",
+        "threats":              [],
+        "sanitization_applied": False,
+        "processing": {
+            "llm_invoked":    False,
+            "latency_ms":     2.0,
+            "detection_mode": "fast",
+            "execution_mode": "scan_only",
+        },
+        "assessment": {
+            "decision":        "ALLOW",
+            "risk_score":      0.05,
+            "risk_level":      "LOW",
+            "primary_reason":  "NO_THREAT_DETECTED",
+            "confidence":      0.9,
+            "confidence_band": "HIGH",
+            "threats":         [],
+            "layers": [
+                {"name": "rule_score", "score": 0.05, "decision": "ALLOW"},
+                {"name": "ml_score",   "score": 0.02, "decision": "ALLOW"},
+            ],
+        },
+    }
+
+
 @pytest.mark.asyncio
 async def test_cache_hit_writes_audit_row(client, test_db):
     # Force a cache hit deterministically (no Redis dependency) by patching the
@@ -257,16 +300,7 @@ async def test_cache_hit_writes_audit_row(client, test_db):
     from db.models import AuditLogModel
 
     raw, ids = await _seed_key(test_db)
-    cached_body = {
-        "trace_id":        "orig-trace",
-        "decision":        "ALLOW",
-        "risk_score":      0.05,
-        "primary_reason":  "NO_THREAT_DETECTED",
-        "confidence":      0.9,
-        "confidence_band": "HIGH",
-        "threats":         [],
-        "processing":      {"llm_invoked": False, "latency_ms": 2.0},
-    }
+    cached_body = _cached_body("orig-trace")
     with patch("cache.semantic_cache.get_cached_result", AsyncMock(return_value=cached_body)):
         r = await client.post("/v1/ai/request", json={"input": "hello world"}, headers={"x-api-key": raw})
 
@@ -295,16 +329,7 @@ async def test_two_hits_on_one_cached_entry_both_audit(client, test_db):
     from db.models import AuditLogModel
 
     raw, ids = await _seed_key(test_db)
-    cached_body = {
-        "trace_id":        "req_" + "a" * 32,
-        "decision":        "ALLOW",
-        "risk_score":      0.05,
-        "primary_reason":  "NO_THREAT_DETECTED",
-        "confidence":      0.9,
-        "confidence_band": "HIGH",
-        "threats":         [],
-        "processing":      {"llm_invoked": False, "latency_ms": 2.0},
-    }
+    cached_body = _cached_body("req_" + "a" * 32)
     with patch("cache.semantic_cache.get_cached_result", AsyncMock(return_value=cached_body)):
         r1 = await client.post("/v1/ai/request", json={"input": "hello world"}, headers={"x-api-key": raw})
         r2 = await client.post("/v1/ai/request", json={"input": "hello world"}, headers={"x-api-key": raw})

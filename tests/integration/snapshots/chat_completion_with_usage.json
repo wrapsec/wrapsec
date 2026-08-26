@@ -1,0 +1,24 @@
+{
+  "body": {
+    "choices": [
+      {
+        "finish_reason": "stop",
+        "index": 0,
+        "message": {
+          "content": "Paris is the capital of France.",
+          "role": "assistant"
+        }
+      }
+    ],
+    "id": "<id>",
+    "model": "gpt-4o",
+    "object": "chat.completion",
+    "usage": {
+      "completion_tokens": 12,
+      "prompt_tokens": 9,
+      "total_tokens": 21
+    }
+  },
+  "mode": "value",
+  "status": 200
+}

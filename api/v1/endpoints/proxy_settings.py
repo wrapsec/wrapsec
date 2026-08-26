@@ -15,7 +15,7 @@ Endpoints:
 
 import logging
 import time
-from typing import cast
+from typing import Any, cast
 
 import httpx
 from fastapi import APIRouter, Depends, Request
@@ -26,6 +26,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from api.v1.dependencies.auth import require_any_admin
 from api.v1.dependencies.db import get_db
+from api.v1.schemas.response import ErrorEnvelope, ProxyProviderConfigResponse
 from config.settings import get_settings
 from db.models import ProxyProviderConfigModel
 from domain.entities.principal import Principal
@@ -34,6 +35,25 @@ from security.url_validator import validate_llm_base_url
 from services.time import to_iso_z
 
 router = APIRouter()
+
+# Reachable failures on the three PUBLIC proxy-settings routes.
+#
+# 404 is deliberately NOT declared on the read and the delete: both return a
+# REDUCED body (`{"error": {"code", "message"}}`), not the catalog envelope, and
+# this pass preserves error behaviour rather than changing it. Declaring
+# ErrorEnvelope there would advertise fields the routes do not return. Recorded
+# for the error-contract pass, alongside the same divergence on the proxy
+# interaction detail route.
+#
+# 422 on the upsert has TWO branches: request-schema validation, which the global
+# handler answers with the catalog envelope, and a hand-built reduced body for a
+# provider that requires an api_key. Declaring ErrorEnvelope describes the first
+# correctly -- which is what FastAPI's generated entry got wrong -- and leaves
+# the second undocumented, exactly as it is today.
+_PROXY_SETTINGS_ERRORS: dict[int | str, dict[str, Any]] = {
+    401: {"model": ErrorEnvelope, "description": "Missing or invalid credentials."},
+    403: {"model": ErrorEnvelope, "description": "Proxy provider configuration is admin-only, on reads as well as writes."},
+}
 logger = logging.getLogger("wrapsec.proxy.settings")
 
 SUPPORTED_PROVIDERS = {"openai", "ollama", "custom"}
@@ -112,7 +132,12 @@ async def _get_config(tenant_id: str, db: AsyncSession) -> ProxyProviderConfigMo
 
 # ── GET /v1/settings/proxy ─────────────────────────────────────────────────────
 
-@router.get("/proxy")
+@router.get(
+    "/proxy",
+    response_model               = ProxyProviderConfigResponse,
+    response_model_exclude_unset = True,
+    responses                    = _PROXY_SETTINGS_ERRORS,
+)
 async def get_proxy_settings(
     request:    Request,
     db:         AsyncSession = Depends(get_db),
@@ -132,12 +157,21 @@ async def get_proxy_settings(
             content={"error": {"code": "NOT_FOUND", "message": "No proxy provider configured."}},
         )
 
-    return JSONResponse(status_code=200, content=_build_config_response(config))
+    # A value, not a JSONResponse: a Response object bypasses the model.
+    return _build_config_response(config)
 
 
 # ── PUT /v1/settings/proxy ─────────────────────────────────────────────────────
 
-@router.put("/proxy")
+@router.put(
+    "/proxy",
+    response_model               = ProxyProviderConfigResponse,
+    response_model_exclude_unset = True,
+    responses = {
+        **_PROXY_SETTINGS_ERRORS,
+        422: {"model": ErrorEnvelope, "description": "Request body failed validation."},
+    },
+)
 async def put_proxy_settings(
     request:    Request,
     body:       ProxySettingsPutSchema,
@@ -195,12 +229,20 @@ async def put_proxy_settings(
 
     logger.info(f"Proxy config saved for tenant_id={tenant_id} provider={body.provider}")
 
-    return JSONResponse(status_code=200, content=_build_config_response(config))
+    # A value, not a JSONResponse: a Response object bypasses the model.
+    return _build_config_response(config)
 
 
 # ── DELETE /v1/settings/proxy ──────────────────────────────────────────────────
 
-@router.delete("/proxy")
+@router.delete(
+    "/proxy",
+    # NO response model, deliberately: this route answers 204 with an empty body.
+    # A model describes a body, and there is none to describe -- recorded in
+    # NON_MODEL_ROUTES with that reason rather than given an empty schema.
+    status_code = 204,
+    responses   = _PROXY_SETTINGS_ERRORS,
+)
 async def delete_proxy_settings(
     request:    Request,
     db:         AsyncSession = Depends(get_db),

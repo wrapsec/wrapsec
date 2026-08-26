@@ -6,7 +6,7 @@ import csv
 import hashlib
 import io
 import uuid
-from typing import Literal
+from typing import Any, Literal
 
 from fastapi import APIRouter, Depends, Query, Request
 from fastapi.responses import JSONResponse
@@ -17,6 +17,11 @@ from starlette.responses import StreamingResponse
 from api.v1.dependencies.auth import endpoint_rate_limit, get_current_principal
 from api.v1.dependencies.db import get_db
 from api.v1.dependencies.scope import get_audit_scope
+from api.v1.schemas.response import (
+    AuditLogsResponse,
+    AuditStatsResponse,
+    ErrorEnvelope,
+)
 from db.models import (
     ApplicationModel,
     AuditLogModel,
@@ -29,6 +34,16 @@ from domain.value_objects.severity import compute_severity
 from services.time import date_range_bounds, to_iso_z, utc_now
 
 router = APIRouter()
+
+# The failures these two routes actually produce. A bad date range or a non-UUID
+# `user_id` filter is a 400 from `ValidationError`, not a 422 -- the 422 comes
+# from the query bounds FastAPI checks first. Both are the catalog envelope at
+# runtime, which is what the generated HTTPValidationError misdescribed.
+_READ_ERRORS: dict[int | str, dict[str, Any]] = {
+    400: {"model": ErrorEnvelope, "description": "Malformed date range, or a `user_id` filter that is not a UUID."},
+    401: {"model": ErrorEnvelope, "description": "Missing or invalid credentials."},
+    422: {"model": ErrorEnvelope, "description": "A query parameter is outside its allowed range or set."},
+}
 
 
 def _date_range(from_value: str | None, to_value: str | None):
@@ -160,7 +175,15 @@ async def _enrich(
     return dept_names, app_names, proxy_map
 
 
-@router.get("/logs")
+@router.get(
+    "/logs",
+    response_model               = AuditLogsResponse,
+    # The convention. Nothing in this projection is ever absent -- every field is
+    # present and sometimes null -- so the flag changes no output here; it keeps
+    # the family consistent and stays correct if an optional field is added.
+    response_model_exclude_unset = True,
+    responses                    = _READ_ERRORS,
+)
 async def get_audit_logs(
     request:         Request,
     tenant_id:       str | None = Query(None),
@@ -222,13 +245,19 @@ async def get_audit_logs(
 
     dept_names, app_names, proxy_map = await _enrich(db, items)
 
-    return JSONResponse(content={
+    # A value, not a JSONResponse: a Response object bypasses the response model.
+    return {
         "total": total,
         "items": [_format_item(i, dept_names, app_names, proxy_map) for i in items],
-    })
+    }
 
 
-@router.get("/stats")
+@router.get(
+    "/stats",
+    response_model               = AuditStatsResponse,
+    response_model_exclude_unset = True,
+    responses                    = _READ_ERRORS,
+)
 async def get_audit_stats(
     request:         Request,
     tenant_id:       str | None = Query(None),
@@ -276,7 +305,7 @@ async def get_audit_stats(
 
     total = stats["total"]
     if total == 0:
-        return JSONResponse(content={
+        return {
             "period_from":    from_ or to_iso_z(utc_now()),
             "period_to":      to    or to_iso_z(utc_now()),
             "total_requests": 0,
@@ -291,7 +320,7 @@ async def get_audit_stats(
             "avg_risk":       0.0,
             "top_threats":    [],
             "severity_counts": {"CRITICAL": 0, "HIGH": 0, "MEDIUM": 0, "LOW": 0},
-        })
+        }
 
     # Severity breakdown - for SIEM compatibility and dashboard triage
     sev_map        = stats.get("severities_map", {})
@@ -302,7 +331,7 @@ async def get_audit_stats(
         "LOW":      sev_map.get("LOW",      0),
     }
 
-    return JSONResponse(content={
+    return {
         "period_from":    from_ or to_iso_z(utc_now()),
         "period_to":      to    or to_iso_z(utc_now()),
         "total_requests": total,
@@ -321,7 +350,7 @@ async def get_audit_stats(
         "avg_risk":       round(stats["avg_risk"], 4),
         "top_threats":    stats["top_threats"],
         "severity_counts": severity_counts,
-    })
+    }
 
 # Dashboard analytics. The integrator surface is logs, stats and export.
 @router.get("/attribution", include_in_schema=False)
@@ -616,7 +645,30 @@ def _csv_safe(value):
     return value
 
 
-@router.get("/export")
+# This route stays out of the response-model conversion on purpose: it answers
+# with CSV, and a response model describes a JSON body. The media type is the
+# contract here, so it is declared instead.
+#
+# Declaring `response_class` is what makes that possible. FastAPI derives the
+# advertised media type from the route's response class, and the default one is
+# JSON -- which is why the generated 200 said `application/json` with an empty
+# schema while the handler streamed `text/csv`. It changes nothing at runtime:
+# the handler returns a constructed `StreamingResponse` on every path, and a
+# returned Response is passed through untouched. The response class only decides
+# what an UNRETURNED value would have been wrapped in, and there is no such path.
+#
+# The body is typed `string`/`binary` because that is how OpenAPI describes a
+# file download; the column order is documented in the docstring, not the schema.
+_EXPORT_RESPONSES: dict[int | str, dict[str, Any]] = {
+    200: {
+        "description": "The matching audit rows as a CSV attachment.",
+        "content": {"text/csv": {"schema": {"type": "string", "format": "binary"}}},
+    },
+    422: {"model": ErrorEnvelope, "description": "`limit` or `offset` is outside its allowed range, or is not an integer."},
+}
+
+
+@router.get("/export", response_class=StreamingResponse, responses=_EXPORT_RESPONSES)
 async def export_audit_logs(
     request:         Request,
     dept_id:         str | None = Query(None),

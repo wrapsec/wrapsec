@@ -1,0 +1,32 @@
+{
+  "body": {
+    "choices": [
+      {
+        "finish_reason": "stop",
+        "index": 0,
+        "message": {
+          "content": "Paris is the capital of France.",
+          "role": "assistant"
+        }
+      }
+    ],
+    "id": "<id>",
+    "model": "gpt-4o",
+    "object": "chat.completion",
+    "wrapsec": {
+      "decision": "ALLOW",
+      "execution_status": "SUCCESS",
+      "input_confidence": 1.0,
+      "input_primary_reason": "NO_THREAT_DETECTED",
+      "input_sanitized": false,
+      "model": "gpt-4o",
+      "output_decision": "ALLOW",
+      "output_sanitized": false,
+      "provider": "openai",
+      "total_latency_ms": "<float>",
+      "trace_id": "<trace_id>"
+    }
+  },
+  "mode": "value",
+  "status": 200
+}

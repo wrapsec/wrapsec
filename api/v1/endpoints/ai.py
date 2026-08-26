@@ -5,9 +5,9 @@
 import hashlib
 import logging
 import uuid
+from typing import Any
 
 from fastapi import APIRouter, BackgroundTasks, Depends, Request
-from fastapi.responses import JSONResponse
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -15,6 +15,12 @@ from api.v1.dependencies.auth import get_current_principal
 from api.v1.dependencies.db import get_db
 from api.v1.dependencies.scope import get_scoped_audit_record
 from api.v1.schemas.request import AIRequestSchema, ScanBatchSchema
+from api.v1.schemas.response import (
+    ErrorEnvelope,
+    RequestRecordResponse,
+    ScanBatchResponse,
+    ScanResponse,
+)
 from config.settings import get_settings
 from db.repositories.audit import AuditRepository
 from domain.entities.principal import Principal
@@ -40,6 +46,43 @@ from services.webhooks.emitter import emit_from_audit_background
 
 router   = APIRouter()
 _gateway = GatewayService()
+
+# Documented failures for this family, each carrying the canonical error
+# envelope. Only errors these routes actually produce are listed: a status
+# documented but unreachable is a promise nothing keeps. 401 arrives from the
+# auth middleware and applies to every route here.
+_UNAUTHORIZED: dict[int | str, dict[str, Any]] = {401: {"model": ErrorEnvelope, "description": "Missing or invalid credentials."}}
+
+_SCAN_ERRORS: dict[int | str, dict[str, Any]] = {
+    **_UNAUTHORIZED,
+    400: {"model": ErrorEnvelope, "description": "Input exceeds the trial-key character cap."},
+    403: {"model": ErrorEnvelope, "description": "Debug output requires an admin key; proxy mode is closed to trial keys."},
+    422: {"model": ErrorEnvelope, "description": "Request body failed validation, or proxy mode was requested with the LLM layer disabled."},
+    429: {"model": ErrorEnvelope, "description": "Rate limit exceeded: the global, trial, per-application or debug bucket."},
+    502: {"model": ErrorEnvelope, "description": "Proxy execution reached the provider and it returned nothing usable. The scan itself ran and is audited under the returned trace_id."},
+}
+
+_BATCH_ERRORS: dict[int | str, dict[str, Any]] = {
+    **_UNAUTHORIZED,
+    400: {"model": ErrorEnvelope, "description": "An item exceeds the trial-key character cap."},
+    422: {"model": ErrorEnvelope, "description": "Request body failed validation, including the batch-size and per-item length caps."},
+    429: {"model": ErrorEnvelope, "description": "Rate limit exceeded. A batch is charged as N units, not one."},
+}
+
+# The 422 below corrects a SHAPE, it does not add a promise. This route takes one
+# unconstrained path string and nothing else -- no query, header or body param --
+# so request validation cannot fail on it; measured, not assumed. FastAPI
+# publishes a 422 for every parameterized route regardless, and the entry it
+# generates names `HTTPValidationError`, a body this application never emits: a
+# validation failure anywhere is answered by the global handler with the catalog
+# envelope. The generated entry cannot be dropped (a declared response overrides
+# it, nothing deletes it), so it is declared with the shape a caller would
+# actually receive and the description says plainly that nothing reaches it.
+_RECORD_ERRORS: dict[int | str, dict[str, Any]] = {
+    **_UNAUTHORIZED,
+    404: {"model": ErrorEnvelope, "description": "No such trace_id, or it belongs to another scope."},
+    422: {"model": ErrorEnvelope, "description": "Request validation failed. Published for every parameterized route; this one validates nothing, so it is not reachable here."},
+}
 
 
 def _mode_str(value) -> str:
@@ -327,7 +370,18 @@ def _build_cache_hit_audit(
     }
 
 
-@router.post("/request", response_model=None)
+@router.post(
+    "/request",
+    response_model               = ScanResponse,
+    # Absence is contractual here: `sanitized_input`, `output`, `debug`,
+    # `assessment.posture` and a restricted caller's `layers[].score` are keys the
+    # handler never sets, and they must stay missing rather than appear as null.
+    # exclude_unset drops exactly those while keeping a key the handler set to
+    # None -- `primary_reason: null` survives. exclude_none could not tell the two
+    # apart.
+    response_model_exclude_unset = True,
+    responses                    = _SCAN_ERRORS,
+)
 async def ai_request(
     body:            AIRequestSchema,
     request:         Request,
@@ -532,7 +586,13 @@ async def ai_request(
         # fresh-response path below for why the cache holds full bodies.
         if not _may_read_layer_scores:
             cached = restrict_layer_scores(cached)
-        return JSONResponse(content=cached)
+        # Returned as a VALUE, not a JSONResponse: a Response object bypasses the
+        # response model entirely, and the cache-hit body would then be the one
+        # path in this handler that nothing validates or filters. The cached body
+        # was built by the same `_build_response`, so the model applies to it
+        # unchanged -- and the restriction above has already run, so what the
+        # model sees is what this caller is allowed to see.
+        return cached
     CACHE_MISSES.inc()
 
     incoming = IncomingRequest(
@@ -701,10 +761,18 @@ async def ai_request(
     if not _may_read_layer_scores:
         response = restrict_layer_scores(response)
 
-    return JSONResponse(content=response)
+    return response
 
 
-@router.post("/scan-batch", response_model=None)
+@router.post(
+    "/scan-batch",
+    response_model               = ScanBatchResponse,
+    # Same reasoning as the single scan. Note what must NOT be dropped here:
+    # `summary.highest_risk_item` and an item's `id` are set to None when the
+    # caller sent no id, and stay null.
+    response_model_exclude_unset = True,
+    responses                    = _BATCH_ERRORS,
+)
 async def ai_scan_batch(
     body:            ScanBatchSchema,
     request:         Request,
@@ -866,10 +934,17 @@ async def ai_scan_batch(
     summary["threats"]      = sorted(threat_set)
     summary["highest_risk"] = round(summary["highest_risk"], 4)
 
-    return JSONResponse(content={"count": n, "summary": summary, "results": results})
+    return {"count": n, "summary": summary, "results": results}
 
 
-@router.get("/requests/{trace_id}")
+@router.get(
+    "/requests/{trace_id}",
+    response_model               = RequestRecordResponse,
+    # `proxy` is absent for a scan-only request rather than null. Every other
+    # field here is always set, and the nulls among them are real values.
+    response_model_exclude_unset = True,
+    responses                    = _RECORD_ERRORS,
+)
 async def get_request(
     trace_id:   str,
     request:    Request,
@@ -1006,4 +1081,4 @@ async def get_request(
                 "Failed to join proxy_interactions for trace_id=%s: %s", trace_id, exc
             )
 
-    return JSONResponse(content=response)
+    return response

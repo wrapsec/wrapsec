@@ -11,6 +11,7 @@ GET /v1/proxy/interactions/:trace_id -- get single interaction detail
 
 import logging
 import uuid
+from typing import Any
 
 from fastapi import APIRouter, Depends, Request
 from fastapi.responses import JSONResponse
@@ -18,6 +19,11 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from api.v1.dependencies.auth import get_current_principal
 from api.v1.dependencies.db import get_db
+from api.v1.schemas.response import (
+    ErrorEnvelope,
+    ProxyInteractionDetail,
+    ProxyInteractionsResponse,
+)
 from db.models import ProxyInteractionModel
 from db.repositories.proxy_interaction import ProxyInteractionRepository
 from domain.entities.principal import Principal
@@ -25,6 +31,21 @@ from services.time import to_iso_z
 
 router = APIRouter()
 logger = logging.getLogger("wrapsec.proxy.interactions")
+
+# Reachable failures. 422 is declared because the runtime handler returns the
+# catalog envelope for a request-validation failure -- `?limit=abc` on the list
+# route -- while FastAPI's generated entry described a shape this application
+# never emits.
+#
+# The detail route's 404 is deliberately NOT declared. It returns a REDUCED body
+# (`{"error": {"code", "message"}}`), not the catalog envelope, and this pass
+# preserves error behaviour rather than changing it. Declaring ErrorEnvelope
+# there would advertise fields the route does not return, which is the exact
+# defect this phase exists to remove. Recorded for the error-contract pass.
+_INTERACTION_ERRORS: dict[int | str, dict[str, Any]] = {
+    401: {"model": ErrorEnvelope, "description": "Missing or invalid credentials."},
+    422: {"model": ErrorEnvelope, "description": "A query parameter could not be parsed."},
+}
 
 
 def _serialize(item: ProxyInteractionModel, detail: bool = False) -> dict:
@@ -61,7 +82,15 @@ def _serialize(item: ProxyInteractionModel, detail: bool = False) -> dict:
     return base
 
 
-@router.get("/interactions")
+@router.get(
+    "/interactions",
+    response_model               = ProxyInteractionsResponse,
+    # The convention. Nothing in this projection is conditionally absent, so the
+    # flag changes no output here; it keeps the family consistent and stays
+    # correct if an optional field is ever added.
+    response_model_exclude_unset = True,
+    responses                    = _INTERACTION_ERRORS,
+)
 async def list_proxy_interactions(
     request:          Request,
     execution_status: str | None = None,
@@ -86,15 +115,21 @@ async def list_proxy_interactions(
         offset           = offset,
     )
 
-    return JSONResponse(content={
+    # A value, not a JSONResponse: a Response object bypasses the response model.
+    return {
         "total":  total,
         "limit":  limit,
         "offset": offset,
         "items":  [_serialize(item) for item in items],
-    })
+    }
 
 
-@router.get("/interactions/{trace_id}")
+@router.get(
+    "/interactions/{trace_id}",
+    response_model               = ProxyInteractionDetail,
+    response_model_exclude_unset = True,
+    responses                    = _INTERACTION_ERRORS,
+)
 async def get_proxy_interaction(
     trace_id:   str,
     request:    Request,
@@ -123,4 +158,6 @@ async def get_proxy_interaction(
         if not item.key_id or item.key_id != request.state.key_id:
             return not_found
 
-    return JSONResponse(content=_serialize(item, detail=True))
+    # The success body as a value; the 404 above stays a constructed Response,
+    # which is correct -- it is an error path and its status is the contract.
+    return _serialize(item, detail=True)

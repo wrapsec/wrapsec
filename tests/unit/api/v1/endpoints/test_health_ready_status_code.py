@@ -21,11 +21,28 @@ direction: it is degraded on every default deployment, so keying the code on
 "anything degraded" would fail readiness for a correctly-installed gateway.
 """
 
+from dataclasses import dataclass
 from unittest.mock import AsyncMock, patch
 
 import pytest
+from fastapi import Response
 
 from api.v1.endpoints.health import health_ready
+
+
+@dataclass
+class _Answer:
+    """What the endpoint answered: the code it set, and the body it returned.
+
+    The handler now returns the body as a VALUE and sets the code on the
+    Response FastAPI injects, so that the body passes through the route's
+    response model instead of bypassing it inside a constructed JSONResponse.
+    Driving it directly therefore means supplying that Response and reading the
+    code back off it. The status-code contract these tests pin is unchanged.
+    """
+
+    status_code: int
+    body:        dict
 
 
 async def _ready(*, db_ok=True, redis_ok=True, tfidf=True, transformer=True):
@@ -45,12 +62,14 @@ async def _ready(*, db_ok=True, redis_ok=True, tfidf=True, transformer=True):
                return_value=tfidf), \
          patch("engine.detection.transformer_detector.TransformerDetector.is_model_loaded",
                return_value=transformer):
-        return await health_ready()
+        carrier = Response()
+        body    = await health_ready(carrier)
+        # FastAPI defaults an injected Response to 200; the handler overwrites it.
+        return _Answer(status_code=carrier.status_code, body=body)
 
 
-def _body(response) -> dict:
-    import json
-    return json.loads(response.body)
+def _body(answer) -> dict:
+    return answer.body
 
 
 # ── everything healthy ───────────────────────────────────────────────────────

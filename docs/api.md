@@ -1080,6 +1080,13 @@ Message **roles** are validated too, and separately: `tool` and any unrecognised
 rejected with `422` even when no tool-calling parameter is present. See "What gets
 scanned" below.
 
+**Two errors on this route are NOT OpenAI-shaped.** A request that fails schema
+validation (`422`) is answered by the gateway's global validation handler, and a
+dashboard session (`403 PROXY_REQUIRES_API_KEY`) is refused before the
+OpenAI-compatible path begins. Both carry the standard WrapSec error envelope
+rather than `{"error": {message, type, code}}`. Every other error on this
+endpoint is OpenAI-shaped.
+
 **Response differences from the OpenAI schema:**
 
 - `usage` is **optional**. The provider's own token counts are passed through
@@ -1265,8 +1272,9 @@ counter-intuitive -- lowering it improves refusals and latency together. See "Tu
 **Input blocked (400):**
 ```json
 {
-  "error": {"code": "input_blocked", "message": "Request blocked by security policy.", "trace_id": "req_01..."},
+  "error": {"message": "Request blocked by security policy.", "type": "invalid_request_error", "code": "input_blocked"},
   "wrapsec": {
+    "trace_id":             "req_01...",
     "decision":             "BLOCK",
     "input_primary_reason": "RULE_DETECTOR",
     "input_threats":        ["PROMPT_INJECTION"],
@@ -1279,8 +1287,9 @@ counter-intuitive -- lowering it improves refusals and latency together. See "Tu
 **Output blocked (400):**
 ```json
 {
-  "error": {"code": "output_blocked", "message": "Model response blocked.", "trace_id": "req_01..."},
+  "error": {"message": "Model response blocked.", "type": "invalid_request_error", "code": "output_blocked"},
   "wrapsec": {
+    "trace_id":              "req_01...",
     "decision":              "ALLOW",
     "output_decision":       "BLOCK",
     "output_primary_reason": "PII_GUARDRAIL_BLOCK",
@@ -1332,7 +1341,7 @@ Lists proxy interaction records.
     {
       "id":                    "uuid",
       "trace_id":              "req_01...",
-      "created_at":            "2026-04-25T10:00:00",
+      "created_at":            "2026-04-25T10:00:00Z",
       "key_id":                "key_abc123",
       "user_id":               null,
       "input_decision":        "ALLOW",
@@ -1416,8 +1425,8 @@ Provider API key is encrypted AES-256-GCM at rest. Never returned in responses -
   "api_key_masked":  "sk-...7890",
   "default_model":   "gpt-4o",
   "timeout_seconds": 60,
-  "created_at":      "2026-04-25T10:00:00",
-  "updated_at":      "2026-04-25T10:00:00"
+  "created_at":      "2026-04-25T10:00:00Z",
+  "updated_at":      "2026-04-25T10:00:00Z"
 }
 ```
 
@@ -1501,7 +1510,7 @@ List audit log records.
   "items": [
     {
       "trace_id":             "req_01...",
-      "timestamp":            "2026-04-20T01:29:46",
+      "timestamp":            "2026-04-20T01:29:46Z",
       "tenant_id":            "42a083bf-...",
       "decision":             "BLOCK",
       "primary_reason":       "RULE_DETECTOR",
@@ -1528,6 +1537,15 @@ List audit log records.
 }
 ```
 
+The example is abbreviated. Every item also carries `dept_name`, `app_name`,
+`output_decision`, `provider`, `model` (the last three null unless the request
+went through the proxy), `session_id`, `turn_index`, `run_id`, `input_source`,
+`record_hash` and `prev_hash`. It is the same item `GET /v1/agent-runs/{run_id}`
+returns as a turn -- one projection, one schema (`AuditItem`).
+
+No match returns `{"total": 0, "items": []}`, never a 404. Fields that do not
+apply are present and null; nothing is omitted.
+
 ### GET /v1/audit/stats
 
 *PUBLIC - in the published OpenAPI contract.*
@@ -1539,17 +1557,29 @@ Aggregate statistics for a time range.
 **Response 200:**
 ```json
 {
-  "period_from":    "2026-04-01T00:00:00",
-  "period_to":      "2026-04-25T00:00:00",
-  "total_requests": 1250,
-  "block_rate":     0.0856,
-  "sanitize_rate":  0.0512,
-  "allow_rate":     0.8632,
-  "avg_latency_ms": 5.4,
-  "p95_latency_ms": 12.1,
-  "top_threats":    [{"category": "PROMPT_INJECTION", "count": 87}]
+  "period_from":     "2026-04-01T00:00:00Z",
+  "period_to":       "2026-04-25T00:00:00Z",
+  "total_requests":  1250,
+  "block_count":     107,
+  "sanitize_count":  64,
+  "allow_count":     1079,
+  "block_rate":      0.0856,
+  "sanitize_rate":   0.0512,
+  "allow_rate":      0.8632,
+  "avg_latency_ms":  5.4,
+  "p95_latency_ms":  12.1,
+  "avg_risk":        0.1204,
+  "top_threats":     [{"category": "PROMPT_INJECTION", "count": 87}],
+  "severity_counts": {"CRITICAL": 12, "HIGH": 95, "MEDIUM": 64, "LOW": 1079}
 }
 ```
+
+Use the raw counts, not `rate * total_requests`: the rates are rounded to four
+decimals, so a reconstructed count drifts by one against
+`GET /v1/audit/logs?decision=BLOCK`.
+
+A range matching nothing returns this same shape with every count, rate and
+severity zeroed and `top_threats: []` -- not a 404, and not a shorter body.
 
 **Severity values:**
 
@@ -1735,7 +1765,7 @@ Updates detection thresholds. `block_threshold` must be greater than `sanitize_t
 
 **Response 200:**
 ```json
-{"block_threshold": 0.8, "sanitize_threshold": 0.5, "updated_at": "2026-04-25T10:00:00+00:00"}
+{"block_threshold": 0.8, "sanitize_threshold": 0.5, "updated_at": "2026-04-25T10:00:00Z"}
 ```
 
 ### GET /v1/settings/layers
@@ -1773,8 +1803,10 @@ Returns LLM detector configuration (detection layer only - separate from proxy p
 
 **Response 200:**
 ```json
-{"provider": "ollama", "model": "llama3.2", "base_url": "http://localhost:11434", "timeout": 30, "llm_trigger": 0.2}
+{"provider": "ollama", "model": "llama3.2", "base_url": "http://localhost:11434", "timeout": 30, "llm_trigger": 0.2, "api_key_masked": null}
 ```
+
+`api_key_masked` is always present: `null` when no provider key is stored, a mask such as `sk-...7890` when one is, and `****` when a stored key cannot be decrypted with the current `SECRET_KEY`. The key itself is never returned.
 
 ### PUT /v1/settings/llm
 
@@ -1906,7 +1938,7 @@ The refusal is shaped for the caller it is sent to, but identified the same way 
   "app_id":    null,
   "dept_id":   "4111d663-...",
   "tenant_id": "42a083bf-...",
-  "created_at": "2026-04-25T10:00:00",
+  "created_at": "2026-04-25T10:00:00Z",
   "expires_at": null
 }
 ```
@@ -1929,9 +1961,9 @@ Lists all active (non-revoked, non-expired-grace-period) keys with department an
       "dept_name":    "Engineering",
       "app_name":     null,
       "key_type":     "live",
-      "created_at":   "2026-04-25T10:00:00",
+      "created_at":   "2026-04-25T10:00:00Z",
       "expires_at":   null,
-      "last_used_at": "2026-04-25T10:05:00"
+      "last_used_at": "2026-04-25T10:05:00Z"
     }
   ]
 }
