@@ -547,3 +547,43 @@ def test_the_chat_429_advertises_both_of_its_producers():
         "-- the gateway limiter (catalog envelope) and the upstream provider "
         "refusal (OpenAI-shaped)"
     )
+
+
+def test_the_settings_family_describes_every_published_field():
+    """Phase C, one family at a time: the settings schemas describe what they serve.
+
+    A description is documentation, not a runtime control -- nothing enforces it,
+    and nothing about a response changes when one is added. That is exactly why it
+    needs a test: a field added later without one costs nothing at runtime, fails
+    no other check, and quietly leaves a hole in the published contract.
+
+    Read from the GENERATED artifact rather than the models, because the artifact
+    is what an integrator and a code generator consume. A description that exists
+    on the model but does not reach `docs/openapi.json` has not been delivered.
+
+    Scoped to the settings family on purpose. The other families are converted in
+    their own passes; widening this list before their pass would fail for work
+    that has not been done yet, which is a broken test rather than a finding.
+    """
+    schemas = _committed()["components"]["schemas"]
+
+    family = [
+        "ThresholdsResponse", "ThresholdsUpdatedResponse",
+        "DetectionLayersResponse", "DetectionLayersUpdatedResponse",
+        "RateLimitResponse", "RateLimitUpdatedResponse",
+        "LLMSettingsResponse", "LLMSettingsUpdatedResponse",
+        "ProxyProviderConfigResponse",
+    ]
+
+    undescribed = [
+        f"{name}.{prop}"
+        for name in family
+        for prop, spec in schemas[name]["properties"].items()
+        if not (spec.get("description") or "").strip()
+    ]
+
+    assert not undescribed, (
+        f"published settings fields with no description: {undescribed}. "
+        "Add one that says something the field name does not, or state here why "
+        "the field is self-explanatory."
+    )

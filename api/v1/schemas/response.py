@@ -482,13 +482,13 @@ class DetectionLayersResponse(BaseModel):
     """Which detection layers run. Disabling the LLM layer also closes proxy
     execution, which requires it."""
 
-    rule_enabled: bool
-    ml_enabled:   bool
-    llm_enabled:  bool
+    rule_enabled: bool = Field(description="Deterministic pattern matching. The cheapest layer, and the only one that needs neither a model nor a provider.")
+    ml_enabled:   bool = Field(description="The local classifier. Runs in-process and calls no external provider.")
+    llm_enabled:  bool = Field(description="Semantic analysis by the configured LLM provider. Disabling it also closes proxy execution on `POST /v1/ai/request`, which requires this layer.")
 
 
 class DetectionLayersUpdatedResponse(DetectionLayersResponse):
-    updated_at: str
+    updated_at: str = Field(description="When this update was applied, ISO-8601 UTC with a Z suffix.")
 
 
 class LLMSettingsResponse(BaseModel):
@@ -499,16 +499,16 @@ class LLMSettingsResponse(BaseModel):
     stored but cannot be decrypted with the current secret.
     """
 
-    provider:       str
-    model:          str
-    base_url:       str
-    timeout:        int = Field(description="Seconds.")
+    provider:       str = Field(description="Which provider the LLM detector calls.")
+    model:          str = Field(description="Model the detector asks for, spelled as that provider names it.")
+    base_url:       str = Field(description="Endpoint the detector calls. Points at the provider, or at a compatible gateway in front of it.")
+    timeout:        int = Field(description="Seconds the detector waits before giving up on the provider. A detector timeout fails closed: the request is blocked, not allowed through unscanned.")
     llm_trigger:    float = Field(description="Risk score at which the LLM detector is invoked.")
     api_key_masked: str | None = Field(description="Masked provider key, or null when none is stored. Never the key itself.")
 
 
 class LLMSettingsUpdatedResponse(LLMSettingsResponse):
-    updated_at: str
+    updated_at: str = Field(description="When this update was applied, ISO-8601 UTC with a Z suffix.")
 
 
 class RateLimitResponse(BaseModel):
@@ -518,12 +518,12 @@ class RateLimitResponse(BaseModel):
     separately by deployment configuration and are not represented here.
     """
 
-    per_minute: int
+    per_minute: int = Field(description="Requests a live key may make per minute on this tenant.")
     source:     str = Field(description="`database` when stored for this tenant, `environment` when the default is in force.")
 
 
 class RateLimitUpdatedResponse(RateLimitResponse):
-    updated_at: str
+    updated_at: str = Field(description="When this update was applied, ISO-8601 UTC with a Z suffix.")
 
 
 class ProxyProviderConfigResponse(BaseModel):
@@ -535,12 +535,12 @@ class ProxyProviderConfigResponse(BaseModel):
     """
 
     provider:        str = Field(description="`openai`, `ollama` or `custom`.")
-    base_url:        str
+    base_url:        str = Field(description="Endpoint the proxy forwards to.")
     api_key_masked:  str | None = Field(description="Masked provider key, or null when the provider needs none.")
-    default_model:   str
-    timeout_seconds: int
+    default_model:   str = Field(description="Used when a chat request omits `model`. A request may name its own as `provider/model`; with neither, the request is refused.")
+    timeout_seconds: int = Field(description="Seconds the proxy waits for the provider before answering `504`.")
     created_at:      str | None = Field(description="ISO-8601 UTC with a Z suffix.")
-    updated_at:      str | None
+    updated_at:      str | None = Field(description="ISO-8601 UTC with a Z suffix.")
 
 
 # ── POST /v1/chat/completions, the OpenAI-compatible route ───────────────────

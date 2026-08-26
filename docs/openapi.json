@@ -1471,14 +1471,17 @@
         "description": "Which detection layers run. Disabling the LLM layer also closes proxy\nexecution, which requires it.",
         "properties": {
           "llm_enabled": {
+            "description": "Semantic analysis by the configured LLM provider. Disabling it also closes proxy execution on `POST /v1/ai/request`, which requires this layer.",
             "title": "Llm Enabled",
             "type": "boolean"
           },
           "ml_enabled": {
+            "description": "The local classifier. Runs in-process and calls no external provider.",
             "title": "Ml Enabled",
             "type": "boolean"
           },
           "rule_enabled": {
+            "description": "Deterministic pattern matching. The cheapest layer, and the only one that needs neither a model nor a provider.",
             "title": "Rule Enabled",
             "type": "boolean"
           }
@@ -1494,18 +1497,22 @@
       "DetectionLayersUpdatedResponse": {
         "properties": {
           "llm_enabled": {
+            "description": "Semantic analysis by the configured LLM provider. Disabling it also closes proxy execution on `POST /v1/ai/request`, which requires this layer.",
             "title": "Llm Enabled",
             "type": "boolean"
           },
           "ml_enabled": {
+            "description": "The local classifier. Runs in-process and calls no external provider.",
             "title": "Ml Enabled",
             "type": "boolean"
           },
           "rule_enabled": {
+            "description": "Deterministic pattern matching. The cheapest layer, and the only one that needs neither a model nor a provider.",
             "title": "Rule Enabled",
             "type": "boolean"
           },
           "updated_at": {
+            "description": "When this update was applied, ISO-8601 UTC with a Z suffix.",
             "title": "Updated At",
             "type": "string"
           }
@@ -1725,6 +1732,7 @@
             "title": "Api Key Masked"
           },
           "base_url": {
+            "description": "Endpoint the detector calls. Points at the provider, or at a compatible gateway in front of it.",
             "title": "Base Url",
             "type": "string"
           },
@@ -1734,15 +1742,17 @@
             "type": "number"
           },
           "model": {
+            "description": "Model the detector asks for, spelled as that provider names it.",
             "title": "Model",
             "type": "string"
           },
           "provider": {
+            "description": "Which provider the LLM detector calls.",
             "title": "Provider",
             "type": "string"
           },
           "timeout": {
-            "description": "Seconds.",
+            "description": "Seconds the detector waits before giving up on the provider. A detector timeout fails closed: the request is blocked, not allowed through unscanned.",
             "title": "Timeout",
             "type": "integer"
           }
@@ -1847,6 +1857,7 @@
             "title": "Api Key Masked"
           },
           "base_url": {
+            "description": "Endpoint the detector calls. Points at the provider, or at a compatible gateway in front of it.",
             "title": "Base Url",
             "type": "string"
           },
@@ -1856,19 +1867,22 @@
             "type": "number"
           },
           "model": {
+            "description": "Model the detector asks for, spelled as that provider names it.",
             "title": "Model",
             "type": "string"
           },
           "provider": {
+            "description": "Which provider the LLM detector calls.",
             "title": "Provider",
             "type": "string"
           },
           "timeout": {
-            "description": "Seconds.",
+            "description": "Seconds the detector waits before giving up on the provider. A detector timeout fails closed: the request is blocked, not allowed through unscanned.",
             "title": "Timeout",
             "type": "integer"
           },
           "updated_at": {
+            "description": "When this update was applied, ISO-8601 UTC with a Z suffix.",
             "title": "Updated At",
             "type": "string"
           }
@@ -2573,6 +2587,7 @@
             "title": "Api Key Masked"
           },
           "base_url": {
+            "description": "Endpoint the proxy forwards to.",
             "title": "Base Url",
             "type": "string"
           },
@@ -2589,6 +2604,7 @@
             "title": "Created At"
           },
           "default_model": {
+            "description": "Used when a chat request omits `model`. A request may name its own as `provider/model`; with neither, the request is refused.",
             "title": "Default Model",
             "type": "string"
           },
@@ -2598,6 +2614,7 @@
             "type": "string"
           },
           "timeout_seconds": {
+            "description": "Seconds the proxy waits for the provider before answering `504`.",
             "title": "Timeout Seconds",
             "type": "integer"
           },
@@ -2610,6 +2627,7 @@
                 "type": "null"
               }
             ],
+            "description": "ISO-8601 UTC with a Z suffix.",
             "title": "Updated At"
           }
         },
@@ -2670,6 +2688,7 @@
         "description": "The enforced per-minute limit for live keys.\n\nThe only settings family that reports its `source`. Trial keys are limited\nseparately by deployment configuration and are not represented here.",
         "properties": {
           "per_minute": {
+            "description": "Requests a live key may make per minute on this tenant.",
             "title": "Per Minute",
             "type": "integer"
           },
@@ -2706,6 +2725,7 @@
       "RateLimitUpdatedResponse": {
         "properties": {
           "per_minute": {
+            "description": "Requests a live key may make per minute on this tenant.",
             "title": "Per Minute",
             "type": "integer"
           },
@@ -2715,6 +2735,7 @@
             "type": "string"
           },
           "updated_at": {
+            "description": "When this update was applied, ISO-8601 UTC with a Z suffix.",
             "title": "Updated At",
             "type": "string"
           }
