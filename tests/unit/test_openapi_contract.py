@@ -729,6 +729,11 @@ _NEVER_ENUMERATED = {
     ("HealthResponse", "version"):              "the running build string",
     ("HealthConfigResponse", "version"):        "the running build string",
     ("AgentRunResponse", "run_id"):             "echoed back exactly as the caller sent it",
+    # F-037. Both were bare and unrecorded, which is what let the omissions in
+    # the same sweep go unnoticed: nothing distinguished "considered and left
+    # alone" from "never looked at".
+    ("RecordAttribution", "source"):            "same field as AuditItem.source -- the caller's own metadata label, free text",
+    ("OpenAIErrorDetail", "code"):              "the proxy's OpenAI-shaped vocabulary, assembled from literals; not the error catalog",
 }
 
 
@@ -1268,3 +1273,736 @@ def test_an_agent_run_still_round_trips_an_unknown_turn_value():
 
     assert run.turns[0].decision == "ESCALATE"
     assert run.model_dump()["turns"][0]["decision"] == "ESCALATE"
+
+
+# ── Phase C / §17: field descriptions, by family ─────────────────────────────
+
+_HEALTH_DESCRIBED_MODELS = [
+    "HealthResponse", "LivenessResponse", "ReadinessResponse", "HealthChecks",
+    "HealthConfigResponse", "ConfigThresholds", "ConfigDetectionLayers",
+    "ConfigLLM", "ConfigRateLimit", "CapabilitiesResponse",
+]
+
+
+def test_the_health_family_describes_every_published_field():
+    """§17 for the health and capabilities family, read from the artifact.
+
+    Same reasoning as the settings guard: a description is documentation, so
+    nothing at runtime notices when one is missing, and a field added later
+    without one costs nothing and fails no other check.
+
+    Scoped to this family. The remaining families are converted in their own
+    passes, and widening the list before then would fail for work that has not
+    been done yet.
+    """
+    schemas = _committed()["components"]["schemas"]
+
+    undescribed = [
+        f"{name}.{prop}"
+        for name in _HEALTH_DESCRIBED_MODELS
+        for prop, spec in schemas[name]["properties"].items()
+        if not (spec.get("description") or "").strip()
+    ]
+
+    assert not undescribed, (
+        f"published health fields with no description: {undescribed}. "
+        "Add one that says something the field name does not, or state here why "
+        "the field is self-explanatory."
+    )
+
+
+def test_the_four_config_sections_describe_source_identically():
+    """The gap the §19 health pass found and left for §17.
+
+    `source` is produced by one ternary per section, so the four sections carry
+    the same field with the same meaning. Only `ConfigThresholds` described it;
+    the other three said nothing, which reads as though they differ. The wording
+    is now shared, and this asserts it stays shared rather than drifting into
+    four paraphrases of one sentence.
+    """
+    schemas = _committed()["components"]["schemas"]
+    wording = {
+        model: schemas[model]["properties"]["source"].get("description")
+        for model in ("ConfigThresholds", "ConfigDetectionLayers",
+                      "ConfigLLM", "ConfigRateLimit")
+    }
+    assert len(set(wording.values())) == 1, f"the four sections describe source differently: {wording}"
+    assert wording["ConfigThresholds"], "the shared wording is empty"
+
+
+def test_a_described_nested_model_keeps_its_reference():
+    """Describing a nested field must not inline the model it points to.
+
+    Five health fields point at another schema and now carry a description
+    beside the `$ref`. This document is OpenAPI 3.1, where sibling keywords are
+    honoured rather than ignored, and six pre-existing fields already do the
+    same. What must not happen is the generator dropping the reference or
+    wrapping it in `allOf`, which would give these operations a private copy of
+    a shared schema.
+    """
+    schemas = _committed()["components"]["schemas"]
+    for model, prop, target in (
+        ("ReadinessResponse", "checks", "HealthChecks"),
+        ("HealthConfigResponse", "thresholds", "ConfigThresholds"),
+        ("HealthConfigResponse", "detection_layers", "ConfigDetectionLayers"),
+        ("HealthConfigResponse", "llm", "ConfigLLM"),
+        ("HealthConfigResponse", "rate_limit", "ConfigRateLimit"),
+    ):
+        spec = schemas[model]["properties"][prop]
+        assert spec.get("$ref") == f"#/components/schemas/{target}", (model, prop, spec)
+        assert "allOf" not in spec, f"{model}.{prop} gained an allOf wrapper"
+        assert (spec.get("description") or "").strip(), f"{model}.{prop} lost its description"
+
+
+_SCAN_DESCRIBED_MODELS = [
+    "ScanResponse", "Assessment", "AssessmentLayer", "ScanProcessing", "ScanDebug",
+    "ScanBatchResponse", "BatchItemResult", "BatchSummary",
+    "RequestRecordResponse", "RecordProcessing", "RecordAttribution", "RecordProxyDetail",
+]
+
+
+def test_the_scan_family_describes_every_published_field():
+    """§17 for the scan family: the two scan routes and the read-back.
+
+    The largest family in the API, and the one an integrator meets first. Same
+    reasoning as the settings and health guards -- a missing description costs
+    nothing at runtime and fails no other check, so only a test notices.
+    """
+    schemas = _committed()["components"]["schemas"]
+
+    undescribed = [
+        f"{name}.{prop}"
+        for name in _SCAN_DESCRIBED_MODELS
+        for prop, spec in schemas[name]["properties"].items()
+        if not (spec.get("description") or "").strip()
+    ]
+
+    assert not undescribed, (
+        f"published scan fields with no description: {undescribed}. "
+        "Add one that says something the field name does not, or state here why "
+        "the field is self-explanatory."
+    )
+
+
+def test_the_read_back_reuses_the_scan_wording_for_the_same_field():
+    """The read-back repeats the scan's own fields, and must describe them the
+    same way.
+
+    `GET /v1/ai/requests/{trace_id}` returns the persisted form of the decision
+    the scan already reported. Where the two carry the same field, a reader
+    comparing them should not have to work out whether two different sentences
+    mean two different things.
+    """
+    schemas = _committed()["components"]["schemas"]
+    scan = schemas["ScanResponse"]["properties"]
+    back = schemas["RequestRecordResponse"]["properties"]
+
+    for prop in ("decision", "risk_score", "primary_reason", "confidence",
+                 "confidence_band", "threats"):
+        assert scan[prop].get("description") == back[prop].get("description"), (
+            f"ScanResponse.{prop} and RequestRecordResponse.{prop} describe the "
+            "same value differently"
+        )
+
+
+_AUDIT_DESCRIBED_MODELS = ["AuditItem", "AuditLogsResponse", "AuditStatsResponse",
+                           "SeverityCounts", "TopThreat"]
+
+
+def test_the_audit_family_describes_every_published_field():
+    """§17 for the audit family.
+
+    `AuditItem` is worth more than its own two routes: `GET /v1/agent-runs/{run_id}`
+    reaches it by `$ref`, so a field left undescribed here is undescribed on three
+    published operations rather than two.
+    """
+    schemas = _committed()["components"]["schemas"]
+
+    undescribed = [
+        f"{name}.{prop}"
+        for name in _AUDIT_DESCRIBED_MODELS
+        for prop, spec in schemas[name]["properties"].items()
+        if not (spec.get("description") or "").strip()
+    ]
+
+    assert not undescribed, (
+        f"published audit fields with no description: {undescribed}. "
+        "Add one that says something the field name does not, or state here why "
+        "the field is self-explanatory."
+    )
+
+
+def test_the_audit_record_reuses_the_scan_wording_for_the_same_field():
+    """The audit row and the scan read-back carry the same values.
+
+    `GET /v1/audit/logs` and `GET /v1/ai/requests/{trace_id}` project the same
+    persisted row through different models. Where a field means the same thing in
+    both, it should not be explained twice in two voices -- a reader comparing the
+    two responses would have to work out whether the difference is meaningful.
+    """
+    schemas = _committed()["components"]["schemas"]
+    audit  = schemas["AuditItem"]["properties"]
+    record = schemas["RequestRecordResponse"]["properties"]
+
+    for prop in ("primary_reason", "risk_score", "confidence", "confidence_band",
+                 "threats", "input_length", "session_id", "turn_index"):
+        assert audit[prop].get("description") == record[prop].get("description"), (
+            f"AuditItem.{prop} and RequestRecordResponse.{prop} describe the same "
+            "value differently"
+        )
+
+
+_PROXY_DESCRIBED_MODELS = ["ProxyInteraction", "ProxyInteractionDetail",
+                           "ProxyInteractionsResponse"]
+
+
+def test_the_proxy_interaction_family_describes_every_published_field():
+    """§17 for the proxy-interactions family.
+
+    Both published schemas are checked, not just the base. The fields are
+    declared once on `ProxyInteraction` and inherited, so a description reaches
+    the detail schema only because the generator carries it there -- which is a
+    property of the generator, not something the source guarantees.
+    """
+    schemas = _committed()["components"]["schemas"]
+
+    undescribed = [
+        f"{name}.{prop}"
+        for name in _PROXY_DESCRIBED_MODELS
+        for prop, spec in schemas[name]["properties"].items()
+        if not (spec.get("description") or "").strip()
+    ]
+
+    assert not undescribed, (
+        f"published proxy-interaction fields with no description: {undescribed}. "
+        "Add one that says something the field name does not, or state here why "
+        "the field is self-explanatory."
+    )
+
+
+def test_the_threat_arrays_are_described_without_claiming_an_item_vocabulary():
+    """The arrays hold ThreatCategory values, and the schema does not say so.
+
+    There is no item-schema convention in this repository, so §19 left the item
+    enum unpublished rather than inventing one. The descriptions must therefore
+    explain what the array holds WITHOUT the schema asserting a closed set --
+    and the absence of that enum is asserted here so a later pass cannot add one
+    on the strength of the wording alone.
+    """
+    schemas = _committed()["components"]["schemas"]
+    for model in ("ProxyInteraction", "ProxyInteractionDetail"):
+        for prop in ("input_threats", "output_threats"):
+            spec = schemas[model]["properties"][prop]
+            assert (spec.get("description") or "").strip(), f"{model}.{prop}"
+            assert "enum" not in spec, f"{model}.{prop} gained an enum on the array"
+            assert "enum" not in spec.get("items", {}), (
+                f"{model}.{prop} gained an item enum without an agreed convention"
+            )
+
+
+def test_the_two_projections_of_a_proxy_column_agree():
+    """`RecordProxyDetail` projects the same `proxy_interactions` columns into the
+    scan read-back. Where both expose a column, they describe it the same way --
+    otherwise a reader comparing the two responses has to decide whether the
+    difference is meaningful."""
+    schemas = _committed()["components"]["schemas"]
+    proxy  = schemas["ProxyInteraction"]["properties"]
+    record = schemas["RecordProxyDetail"]["properties"]
+
+    for prop in ("model", "input_primary_reason", "input_confidence", "input_threats",
+                 "input_attack_type", "output_primary_reason", "output_confidence",
+                 "output_threats", "behavior_flag", "output_flags", "execution_status"):
+        assert proxy[prop].get("description") == record[prop].get("description"), (
+            f"ProxyInteraction.{prop} and RecordProxyDetail.{prop} describe the "
+            "same column differently"
+        )
+
+
+def test_every_published_response_field_is_described():
+    """§17 complete: the whole response surface, not one family at a time.
+
+    The per-family guards above were each scoped to work that had been done, so
+    none of them could catch a family nobody had started. This one derives the
+    model set from `api.v1.schemas.response` itself, so a response model added
+    later is covered the day it appears rather than the day someone remembers to
+    add it to a list.
+
+    REQUEST schemas are deliberately outside this check. Phase C is "enrich
+    RESPONSE models" and the 336-field baseline was measured over that module;
+    the request side is a separate scope question, recorded as F-033. Asserting
+    it here would fail for work nobody has agreed to do.
+    """
+    import inspect
+
+    from pydantic import BaseModel
+
+    import api.v1.schemas.response as response_module
+
+    response_models = {
+        name for name, obj in vars(response_module).items()
+        if inspect.isclass(obj) and issubclass(obj, BaseModel) and obj is not BaseModel
+    }
+
+    schemas = _committed()["components"]["schemas"]
+    undescribed = [
+        f"{name}.{prop}"
+        for name, schema in schemas.items()
+        if name in response_models
+        for prop, spec in schema.get("properties", {}).items()
+        if not (spec.get("description") or "").strip()
+    ]
+
+    assert not undescribed, (
+        f"published response fields with no description: {undescribed}. "
+        "§17 is complete for the response surface; a new field needs one too."
+    )
+
+
+def test_the_shared_error_envelope_describes_its_whole_contract():
+    """The envelope is referenced by most operations, so a gap here is a gap
+    everywhere.
+
+    The split it documents is the point: `code`, `key`, `severity` and `params`
+    are machine-readable, `message` is presentation, and `invalid_params` appears
+    only where there is field detail. A client that reads `message` when it
+    should branch on `code` is the failure this wording exists to prevent.
+    """
+    schemas = _committed()["components"]["schemas"]
+
+    envelope = schemas["ErrorEnvelope"]["properties"]
+    assert (envelope["error"].get("description") or "").strip()
+
+    detail = schemas["ErrorDetail"]["properties"]
+    for prop in ("code", "severity", "key", "params", "message", "trace_id", "invalid_params"):
+        assert (detail[prop].get("description") or "").strip(), f"ErrorDetail.{prop}"
+
+
+# ── F-035 / F-036: examples and the vocabularies they must agree with ─────────
+#
+# F-035 was a published example asserting `risk_level: "NONE"`, a value
+# `RiskLevel` has never held. It survived Phase A, §17 and §19 because every
+# check it could have failed was structural, and structurally it was fine: the
+# field was a bare `str`, so both `model_validate` and full JSON-Schema
+# validation passed on it. Confirmed by running them -- neither catches this.
+#
+# So the guard that matters is the one below that reads example values back
+# against the DOMAIN ENUM. Structural validation is kept as well, for the
+# classes it does catch, but on its own it is not a detector.
+
+def _threat_categories():
+    from domain.enums import ThreatCategory
+
+    return {m.value for m in ThreatCategory}
+
+
+_VOCAB_FIELDS = {
+    # example key -> the source of truth its value must belong to
+    "risk_level":        lambda: {m.value for m in _risk_level_enum()},
+    "decision":          lambda: {"BLOCK", "SANITIZE", "ALLOW"},
+    "confidence_band":   lambda: {"HIGH", "MEDIUM", "LOW"},
+    "detection_mode":    lambda: {"fast", "full"},
+    "execution_mode":    lambda: {"scan_only", "proxy"},
+    # Array-valued and single-valued threat vocabularies. `input_attack_type`
+    # is checked here rather than through the schema on purpose: it is the ONE
+    # model where the vocabulary is not published (see the F-037 evidence), so
+    # schema validation cannot see a wrong value.
+    "threats":           _threat_categories,
+    "input_threats":     _threat_categories,
+    "output_threats":    _threat_categories,
+    "input_attack_type": _threat_categories,
+    "policy_source":     lambda: {"system_default", "department_override",
+                                  "application_override"},
+    "input_source":      lambda: {"user_prompt", "tool_output",
+                                  "retrieved_document", "external_content"},
+    "tier":              lambda: {"trusted", "untrusted", "unknown"},
+}
+
+
+def _risk_level_enum():
+    from domain.enums import RiskLevel
+
+    return RiskLevel
+
+
+def _published_examples(schemas: dict) -> list[tuple[str, dict]]:
+    """Every model-level example in the artifact, as (model, value) pairs."""
+    found = []
+    for name, schema in schemas.items():
+        for value in schema.get("examples", []):
+            found.append((name, value))
+    return found
+
+
+def _published_field_examples(schemas: dict) -> list[tuple[str, str, object]]:
+    """Every FIELD-level example, as (model, property, value) triples."""
+    found = []
+    for name, schema in schemas.items():
+        for prop, spec in schema.get("properties", {}).items():
+            for value in spec.get("examples", []):
+                found.append((name, prop, value))
+    return found
+
+
+def _walk(value, path="", key=None):
+    """Yield (key, leaf_value, path) for every scalar in a nested example.
+
+    A list of scalars yields each ITEM under the list's own key, so
+    `threats: ["PROMPT_INJECTION"]` is checked rather than skipped. Getting that
+    wrong is how an array-valued vocabulary passes a guard that only reads
+    dict leaves.
+    """
+    if isinstance(value, dict):
+        for k, v in value.items():
+            if isinstance(v, (dict, list)):
+                yield from _walk(v, f"{path}.{k}", k)
+            else:
+                yield k, v, f"{path}.{k}"
+    elif isinstance(value, list):
+        for i, v in enumerate(value):
+            if isinstance(v, (dict, list)):
+                yield from _walk(v, f"{path}[{i}]", key)
+            else:
+                yield key, v, f"{path}[{i}]"
+
+
+def test_every_published_example_value_belongs_to_its_domain_enum():
+    """F-035's actual detector.
+
+    Mutation check: putting `"NONE"` back on the example's `risk_level` fails
+    here, and fails ONLY here -- the model and schema guards below both pass on
+    it, which is exactly why this test exists.
+    """
+    schemas = _committed()["components"]["schemas"]
+    examples = _published_examples(schemas)
+    assert examples, "no published examples found; this guard would pass vacuously"
+
+    # field-level examples are inspected under their own property name, so a
+    # bare string like `{"examples": ["PROMPT_INJECTIN"]}` is caught too
+    fields = _published_field_examples(schemas)
+    assert fields, "no field-level examples found; §18 regressed"
+    for model, prop, value in fields:
+        examples.append((f"{model}.{prop}", {prop: value}))
+
+    wrong = []
+    for model, example in examples:
+        for key, value, path in _walk(example, model):
+            source = _VOCAB_FIELDS.get(key)
+            if source is None or not isinstance(value, str):
+                continue
+            allowed = source()
+            if value not in allowed:
+                wrong.append(f"{path} = {value!r}, not in {sorted(allowed)}")
+
+    assert not wrong, (
+        "a published example carries a value the API cannot emit:\n  "
+        + "\n  ".join(wrong)
+    )
+
+
+def test_every_published_example_validates_against_its_own_model():
+    """Kept for the classes it DOES catch -- a missing required field, a wrong
+    type, a misspelled key. It does not catch a wrong enum member on a bare
+    `str`, which is why it is not the only guard."""
+    import api.v1.schemas.response as R
+
+    schemas = _committed()["components"]["schemas"]
+    for model, example in _published_examples(schemas):
+        cls = getattr(R, model, None)
+        if cls is None:
+            continue
+        cls.model_validate(example)
+
+
+def test_examples_use_the_3_1_keyword_not_the_deprecated_singular():
+    """This document is OpenAPI 3.1, whose Schema Object IS JSON Schema
+    2020-12. `examples` (an array) is the keyword there; the singular `example`
+    is an OpenAPI 3.0 carry-over that 3.1 deprecates."""
+    schemas = _committed()["components"]["schemas"]
+
+    singular = [name for name, schema in schemas.items() if "example" in schema]
+    assert not singular, (
+        f"these schemas use the deprecated singular `example`: {singular}. "
+        "Use `examples: [{...}]`."
+    )
+    assert any("examples" in schema for schema in schemas.values()), (
+        "no schema publishes `examples`; the mechanism regressed"
+    )
+
+
+def test_risk_level_publishes_its_vocabulary_without_enforcing_it():
+    """F-036. The field was enum-backed from the start and published as a bare
+    string, so it was never in F-030's inventory NOR in its recorded
+    exclusions -- it was missed rather than considered."""
+    import api.v1.schemas.response as R
+    from domain.enums import RiskLevel
+
+    schemas = _committed()["components"]["schemas"]
+    published = schemas["Assessment"]["properties"]["risk_level"]
+
+    # the artifact carries exactly the enum's members
+    assert published["enum"] == R.RISK_LEVELS
+    assert set(published["enum"]) == {m.value for m in RiskLevel}
+    assert published["enum"] == ["CRITICAL", "HIGH", "MEDIUM", "LOW"]
+
+    # non-nullable, so the enum sits at the top level rather than inside anyOf
+    assert published["type"] == "string"
+    assert "anyOf" not in published
+
+    # and the description no longer names a fifth value that does not exist
+    assert "NONE" not in published["description"]
+
+
+def test_risk_level_stays_a_plain_string_at_runtime():
+    """Option B publishes the vocabulary as METADATA. The field is still `str`:
+    a value outside the list is accepted, exactly as before. If this ever fails,
+    someone has turned documentation into fail-closed validation on a response
+    model, which is how a persisted legacy value becomes a 500."""
+    import api.v1.schemas.response as R
+
+    layer = {"name": "rule_score", "decision": "ALLOW", "score": 0.0}
+    assessment = R.Assessment(
+        decision="ALLOW", risk_score=0.0, risk_level="SOMETHING_NEW",
+        primary_reason=None, confidence=None, confidence_band=None,
+        threats=[], layers=[R.AssessmentLayer(**layer)],
+    )
+    assert assessment.risk_level == "SOMETHING_NEW"
+
+
+def test_the_error_envelope_publishes_the_catalog_vocabularies():
+    """F-030, corrected inventory. `ErrorDetail` is reachable from most
+    operations, so a caller branching on `code` gets the whole set or none."""
+    import api.v1.schemas.response as R
+    from errors.catalog import ERROR_CATALOG, ErrorCode
+
+    schemas = _committed()["components"]["schemas"]
+
+    code = schemas["ErrorDetail"]["properties"]["code"]
+    assert code["enum"] == R.ERROR_CODES
+    assert set(code["enum"]) == {c.value for c in ErrorCode}
+    assert len(code["enum"]) == 26
+
+    severity = schemas["ErrorDetail"]["properties"]["severity"]
+    assert severity["enum"] == R.ERROR_SEVERITIES
+    in_use = {
+        m.severity.value if hasattr(m.severity, "value") else m.severity
+        for m in ERROR_CATALOG.values()
+    }
+    assert set(severity["enum"]) == in_use, (
+        "ERROR_SEVERITIES must list what the catalog actually carries. "
+        "`ErrorSeverity` also defines INFO; no entry uses it, and publishing it "
+        "would promise a value no response can hold."
+    )
+
+
+def test_the_openai_error_code_stays_out_of_the_catalog_vocabulary():
+    """Deliberate. `OpenAIErrorDetail` is the proxy's OpenAI-shaped refusal and
+    carries its own lowercase vocabulary (`input_blocked`,
+    `invalid_model_format`, ...) assembled from literals at the call sites, not
+    from a closed type. Sharing `ErrorDetail`'s catalog enum would be wrong in
+    both directions."""
+    schemas = _committed()["components"]["schemas"]
+    published = schemas["OpenAIErrorDetail"]["properties"]["code"]
+
+    assert "enum" not in published, (
+        "OpenAIErrorDetail.code gained an enum. It is not the error catalog; "
+        "if it is to be enumerated it needs its own audited vocabulary."
+    )
+
+
+def test_every_field_example_validates_against_its_own_property_schema():
+    """§18's generic type guard.
+
+    One check for all 48 rather than a test per field: an example that is the
+    wrong type, or outside a published enum, fails against the property's own
+    schema. Nested `$ref`s are resolved so an object-valued example is checked
+    against the model it points at rather than skipped.
+    """
+    from jsonschema import Draft202012Validator
+
+    document = _committed()
+    schemas = document["components"]["schemas"]
+
+    failures = []
+    for model, prop, value in _published_field_examples(schemas):
+        spec = dict(schemas[model]["properties"][prop])
+        spec.pop("examples", None)
+        # re-root $refs so the validator can resolve them locally
+        spec = json.loads(
+            json.dumps(spec).replace("#/components/schemas/", "#/$defs/")
+        )
+        spec["$defs"] = json.loads(
+            json.dumps(schemas).replace("#/components/schemas/", "#/$defs/")
+        )
+        for error in Draft202012Validator(spec).iter_errors(value):
+            failures.append(f"{model}.{prop} = {value!r}: {error.message}")
+
+    assert not failures, "field examples that do not satisfy their own schema:\n  " + "\n  ".join(failures)
+
+
+def test_no_example_is_attached_to_a_field_whose_enum_already_says_everything():
+    """§18's selection rule, held to.
+
+    An enum already publishes the complete domain, so an example there picks one
+    member arbitrarily and tells a reader nothing new. This is what stops §18
+    drifting into a coverage sweep.
+
+    There is no exception list, deliberately. `RecordProxyDetail.input_attack_type`
+    carries an example and looks like it should need one -- but its vocabulary is
+    NOT published on that model (F-037 evidence), so it has no enum and this
+    guard does not flag it. An allowlist entry for it would be dead weight that
+    reads like a real exemption; verified by emptying it and watching this still
+    pass.
+    """
+    schemas = _committed()["components"]["schemas"]
+
+    both = []
+    for model, prop, _ in _published_field_examples(schemas):
+        spec = schemas[model]["properties"][prop]
+        if any("enum" in b for b in (spec.get("anyOf") or [spec])):
+            both.append(f"{model}.{prop}")
+
+    assert not both, (
+        f"these fields carry BOTH an enum and an example: {both}. The enum "
+        "already states the whole domain; see the §18 selection rule."
+    )
+
+
+def test_a_vocabulary_published_on_one_projection_is_published_on_all_of_them():
+    """F-037's guard, and the one §19's per-family shape needed from the start.
+
+    §19 ran one FAMILY per pass, but a persisted column is often projected by
+    more than one model -- `input_attack_type` is read by both
+    `ProxyInteraction` and `RecordProxyDetail`, `policy_source` by both
+    `AuditItem` and `RecordProcessing`. A property enumerated in the family
+    being worked stayed bare everywhere else, and nothing failed.
+
+    Name-based on purpose. The Enum-derived sweep that found F-036 structurally
+    could not find these: five of the six read from persisted columns rather
+    than from an `Enum` member, so no amount of producer analysis reaches them.
+    Two methods, two blind spots; this closes the second.
+
+    A field that SHOULD stay bare goes in `_NEVER_ENUMERATED` with its reason,
+    which is what makes "deliberately excluded" distinguishable from "missed".
+    """
+    import inspect
+
+    from pydantic import BaseModel
+
+    import api.v1.schemas.response as response_module
+
+    response_models = {
+        name for name, obj in vars(response_module).items()
+        if inspect.isclass(obj) and issubclass(obj, BaseModel) and obj is not BaseModel
+    }
+    schemas = _committed()["components"]["schemas"]
+
+    by_name: dict[str, list[tuple[str, tuple | None]]] = {}
+    for model, schema in schemas.items():
+        if model not in response_models:
+            continue
+        for prop in schema.get("properties", {}):
+            enum = _published_enum(schemas, model, prop)
+            by_name.setdefault(prop, []).append((model, tuple(enum) if enum else None))
+
+    inconsistent = []
+    for prop, rows in sorted(by_name.items()):
+        enumerated = {m for m, e in rows if e}
+        bare = {m for m, e in rows if not e}
+        if not enumerated or not bare:
+            continue
+        unexplained = sorted(m for m in bare if (m, prop) not in _NEVER_ENUMERATED)
+        if unexplained:
+            inconsistent.append(
+                f"{prop}: enumerated on {sorted(enumerated)} but bare on "
+                f"{unexplained} with no recorded reason"
+            )
+
+    assert not inconsistent, (
+        "a vocabulary is published on one projection and silently absent from "
+        "another:\n  " + "\n  ".join(inconsistent)
+        + "\n\nEither publish it on both, or record the exclusion in "
+          "_NEVER_ENUMERATED with the reason it stays bare."
+    )
+
+
+def test_the_audit_rate_examples_describe_one_coherent_period():
+    """A new class the other guards cannot see: examples that are each valid
+    but incoherent TOGETHER.
+
+    `block_rate`, `sanitize_rate` and `allow_rate` are `count / total` over one
+    period (`audit.py:404-406`), so the three partition the same denominator and
+    sum to 1. Three separately-plausible numbers that sum to 0.99 pass the type
+    guard, pass the domain guard, and still describe a period that cannot exist
+    -- which an integrator sizing a chart would discover the hard way.
+
+    Scoped to the relationship that actually exists rather than generalised: a
+    framework for declaring arbitrary field relationships would be more code
+    than the one invariant this family has.
+    """
+    props = _committed()["components"]["schemas"]["AuditStatsResponse"]["properties"]
+
+    rates = {
+        name: props[name]["examples"][0]
+        for name in ("block_rate", "sanitize_rate", "allow_rate")
+    }
+    total = sum(rates.values())
+    assert abs(total - 1.0) < 1e-9, (
+        f"the rate examples sum to {total}, not 1.0: {rates}. They partition one "
+        "period's requests, so a caller cannot reconcile them."
+    )
+
+    for name, value in rates.items():
+        assert 0.0 <= value <= 1.0, f"{name} example {value} is not a fraction"
+
+    # the period bounds are ordered, and in the format the API emits
+    assert props["period_from"]["examples"][0] < props["period_to"]["examples"][0]
+    for bound in ("period_from", "period_to"):
+        assert props[bound]["examples"][0].endswith("Z"), (
+            f"{bound} example is not the ISO-8601 Z form `to_iso_z` produces"
+        )
+
+
+def test_the_threshold_examples_keep_block_above_sanitize():
+    """A real relationship the property guards cannot see.
+
+    `ThresholdsUpdateSchema` refuses an update where `block <= sanitize`
+    (`settings.py`), so a pair of examples that inverts them describes a
+    configuration the API would reject on write and never produce on read. Both
+    projections of the pair are checked: the settings response and the health
+    config view, which read the same two numbers.
+    """
+    schemas = _committed()["components"]["schemas"]
+
+    pairs = [
+        ("ThresholdsResponse", "block_threshold", "sanitize_threshold"),
+        ("ConfigThresholds",   "block",           "sanitize"),
+    ]
+    for model, block_name, sanitize_name in pairs:
+        props = schemas[model]["properties"]
+        block    = props[block_name]["examples"][0]
+        sanitize = props[sanitize_name]["examples"][0]
+        assert block > sanitize, (
+            f"{model}: block example {block} is not above sanitize {sanitize}; "
+            "the settings validator refuses that pair"
+        )
+        for name, value in ((block_name, block), (sanitize_name, sanitize)):
+            assert 0.0 < value <= 1.0, f"{model}.{name} example {value} is out of range"
+
+
+def test_the_chat_id_example_is_derived_from_the_trace_id_example():
+    """The proxy builds `id` as `wrapsec-{trace_id}` (`proxy.py:1531`).
+
+    Two independently-plausible examples would let a reader think the id is the
+    provider's completion id -- which is exactly the misreading the `wrapsec-`
+    prefix exists to prevent, and which no per-property check can catch because
+    each value is valid alone.
+    """
+    schemas = _committed()["components"]["schemas"]
+
+    chat_id  = schemas["ChatCompletionResponse"]["properties"]["id"]["examples"][0]
+    trace_id = schemas["ChatCompletionMeta"]["properties"]["trace_id"]["examples"][0]
+
+    assert chat_id == f"wrapsec-{trace_id}", (
+        f"chat id example {chat_id!r} is not `wrapsec-` + the meta trace_id "
+        f"example {trace_id!r}; the two describe different calls"
+    )

@@ -100,10 +100,14 @@
           },
           "run_id": {
             "description": "Echoed back exactly as requested.",
+            "examples": [
+              "run_4d81aa27"
+            ],
             "title": "Run Id",
             "type": "string"
           },
           "turns": {
+            "description": "The run's scans in timeline order. Empty when the run is unknown or out of the caller's scope, which is not an error.",
             "items": {
               "$ref": "#/components/schemas/AuditItem"
             },
@@ -137,10 +141,16 @@
               }
             ],
             "description": "Set when the key is application-scoped.",
+            "examples": [
+              "6bc1bee2-2e40-4b0f-9f1a-1e031fa8088a"
+            ],
             "title": "App Id"
           },
           "created_at": {
             "description": "ISO-8601 UTC with a Z suffix.",
+            "examples": [
+              "2026-08-26T09:05:12.004Z"
+            ],
             "title": "Created At",
             "type": "string"
           },
@@ -154,6 +164,9 @@
               }
             ],
             "description": "Owning department. Creation requires one, directly or derived from the application.",
+            "examples": [
+              "2b7e1516-28ae-4d2a-a6ab-f7158809cf4f"
+            ],
             "title": "Dept Id"
           },
           "expires_at": {
@@ -166,10 +179,16 @@
               }
             ],
             "description": "Null when the key does not expire.",
+            "examples": [
+              "2027-08-26T00:00:00.000Z"
+            ],
             "title": "Expires At"
           },
           "key_id": {
             "description": "Stable identifier for this key. Safe to log and to display.",
+            "examples": [
+              "key_3f9a1c7d2e40"
+            ],
             "title": "Key Id",
             "type": "string"
           },
@@ -183,6 +202,7 @@
             "type": "string"
           },
           "name": {
+            "description": "Label supplied at creation.",
             "title": "Name",
             "type": "string"
           },
@@ -194,6 +214,10 @@
               {
                 "type": "null"
               }
+            ],
+            "description": "Owning tenant.",
+            "examples": [
+              "8f14e45f-ceea-467a-9f2b-3c1a7d05e9b4"
             ],
             "title": "Tenant Id"
           }
@@ -224,6 +248,10 @@
                 "type": "null"
               }
             ],
+            "description": "Set when the key is application-scoped.",
+            "examples": [
+              "6bc1bee2-2e40-4b0f-9f1a-1e031fa8088a"
+            ],
             "title": "App Id"
           },
           "app_name": {
@@ -239,6 +267,10 @@
             "title": "App Name"
           },
           "created_at": {
+            "description": "ISO-8601 UTC with a Z suffix.",
+            "examples": [
+              "2026-08-26T09:05:12.004Z"
+            ],
             "title": "Created At",
             "type": "string"
           },
@@ -250,6 +282,10 @@
               {
                 "type": "null"
               }
+            ],
+            "description": "Owning department.",
+            "examples": [
+              "2b7e1516-28ae-4d2a-a6ab-f7158809cf4f"
             ],
             "title": "Dept Id"
           },
@@ -274,9 +310,17 @@
                 "type": "null"
               }
             ],
+            "description": "Null when the key does not expire.",
+            "examples": [
+              "2027-08-26T00:00:00.000Z"
+            ],
             "title": "Expires At"
           },
           "key_id": {
+            "description": "Stable identifier for this key. Safe to log and to display.",
+            "examples": [
+              "key_3f9a1c7d2e40"
+            ],
             "title": "Key Id",
             "type": "string"
           },
@@ -299,9 +343,13 @@
               }
             ],
             "description": "Null until the key is first used.",
+            "examples": [
+              "2026-08-26T14:22:31.482Z"
+            ],
             "title": "Last Used At"
           },
           "name": {
+            "description": "Label supplied at creation.",
             "title": "Name",
             "type": "string"
           }
@@ -325,6 +373,7 @@
         "description": "Active, non-expired keys visible to the caller.\n\nScope is not a field: an admin sees the tenant's keys, a non-admin sees only\nits own department's. Revoked and expired keys are excluded rather than\nflagged.",
         "properties": {
           "keys": {
+            "description": "Keys within the caller's scope.",
             "items": {
               "$ref": "#/components/schemas/ApiKeyListItem"
             },
@@ -351,6 +400,9 @@
               }
             ],
             "description": "Confidence in the decision, 0.0-1.0.",
+            "examples": [
+              0.91
+            ],
             "title": "Confidence"
           },
           "confidence_band": {
@@ -399,6 +451,16 @@
               }
             ],
             "description": "Source-aware threshold shift. Absent unless provenance changed the posture.",
+            "examples": [
+              {
+                "applied_delta": 0.1,
+                "dimension": "source",
+                "effective_block": 0.6,
+                "effective_sanitize": 0.3,
+                "input_source": "retrieved_document",
+                "tier": "untrusted"
+              }
+            ],
             "title": "Posture"
           },
           "primary_reason": {
@@ -424,17 +486,31 @@
             "title": "Primary Reason"
           },
           "risk_level": {
-            "description": "Banded risk: NONE, LOW, MEDIUM, HIGH or CRITICAL.",
+            "description": "Banded risk: LOW, MEDIUM, HIGH or CRITICAL.",
+            "enum": [
+              "CRITICAL",
+              "HIGH",
+              "MEDIUM",
+              "LOW"
+            ],
             "title": "Risk Level",
             "type": "string"
           },
           "risk_score": {
             "description": "Aggregate risk, 0.0-1.0.",
+            "examples": [
+              0.86
+            ],
             "title": "Risk Score",
             "type": "number"
           },
           "threats": {
             "description": "Threat categories detected.",
+            "examples": [
+              [
+                "PROMPT_INJECTION"
+              ]
+            ],
             "items": {
               "type": "string"
             },
@@ -470,6 +546,9 @@
           },
           "name": {
             "description": "Detector name, for example `rule_score` or `ml_score`.",
+            "examples": [
+              "rule_score"
+            ],
             "title": "Name",
             "type": "string"
           },
@@ -483,6 +562,9 @@
               }
             ],
             "description": "0.0-1.0 contribution. Absent when the caller may not read layer scores.",
+            "examples": [
+              0.86
+            ],
             "title": "Score"
           }
         },
@@ -505,6 +587,10 @@
                 "type": "null"
               }
             ],
+            "description": "Owning application; null when the key is not application-scoped.",
+            "examples": [
+              "6bc1bee2-2e40-4b0f-9f1a-1e031fa8088a"
+            ],
             "title": "App Id"
           },
           "app_name": {
@@ -520,6 +606,7 @@
             "title": "App Name"
           },
           "attribution_verified": {
+            "description": "Always false today: both writers set it literally and nothing updates it. Do not branch on it.",
             "title": "Attribution Verified",
             "type": "boolean"
           },
@@ -531,6 +618,10 @@
               {
                 "type": "null"
               }
+            ],
+            "description": "Confidence in the decision, 0.0-1.0.",
+            "examples": [
+              0.91
             ],
             "title": "Confidence"
           },
@@ -548,6 +639,7 @@
                 "type": "null"
               }
             ],
+            "description": "LOW, MEDIUM or HIGH.",
             "title": "Confidence Band"
           },
           "decision": {
@@ -569,6 +661,10 @@
                 "type": "null"
               }
             ],
+            "description": "Owning department.",
+            "examples": [
+              "2b7e1516-28ae-4d2a-a6ab-f7158809cf4f"
+            ],
             "title": "Dept Id"
           },
           "dept_name": {
@@ -584,6 +680,7 @@
             "title": "Dept Name"
           },
           "detection_mode": {
+            "description": "`fast` runs the cheap layers; `full` adds the LLM detector.",
             "enum": [
               "fast",
               "full"
@@ -592,6 +689,7 @@
             "type": "string"
           },
           "execution_mode": {
+            "description": "scan_only or proxy.",
             "enum": [
               "scan_only",
               "proxy"
@@ -601,10 +699,14 @@
           },
           "input_hash": {
             "description": "Hash of the scanned input; the input itself is not stored here.",
+            "examples": [
+              "sha256:9f2c4a1e7b3d5086af41c9d2e6b70835154cf9a2d7e0b6134c8fa259e7d3b041"
+            ],
             "title": "Input Hash",
             "type": "string"
           },
           "input_length": {
+            "description": "Characters scanned.",
             "title": "Input Length",
             "type": "integer"
           },
@@ -628,6 +730,10 @@
                 "type": "null"
               }
             ],
+            "description": "Client address as recorded when the request was scanned.",
+            "examples": [
+              "203.0.113.42"
+            ],
             "title": "Ip Address"
           },
           "key_id": {
@@ -639,9 +745,17 @@
                 "type": "null"
               }
             ],
+            "description": "API key the request was made with.",
+            "examples": [
+              "key:key_3f9a1c7d2e40"
+            ],
             "title": "Key Id"
           },
           "latency_ms": {
+            "description": "Detection time for this scan.",
+            "examples": [
+              41.2
+            ],
             "title": "Latency Ms",
             "type": "number"
           },
@@ -655,6 +769,9 @@
               }
             ],
             "description": "Null unless this turn went through the proxy.",
+            "examples": [
+              "gpt-4o"
+            ],
             "title": "Model"
           },
           "output_decision": {
@@ -702,6 +819,9 @@
               }
             ],
             "description": "Preceding row's hash. Null for the first row in a tenant's chain.",
+            "examples": [
+              "e07c3a95124fb86d0e51937ac2648bd7f395021ce8ab4d76195f0c3e28ad641b"
+            ],
             "title": "Prev Hash"
           },
           "primary_reason": {
@@ -723,6 +843,7 @@
                 "type": "null"
               }
             ],
+            "description": "Dominant reason, null if none applied.",
             "title": "Primary Reason"
           },
           "provider": {
@@ -752,9 +873,16 @@
               }
             ],
             "description": "Hash-chain value for this row.",
+            "examples": [
+              "4b8d1f60c27ae9531d0fa4c8e7b25396081decaf35176e2b9c40af8d61e3752c"
+            ],
             "title": "Record Hash"
           },
           "risk_score": {
+            "description": "Aggregate risk, 0.0-1.0.",
+            "examples": [
+              0.86
+            ],
             "title": "Risk Score",
             "type": "number"
           },
@@ -766,6 +894,10 @@
               {
                 "type": "null"
               }
+            ],
+            "description": "Caller-supplied identifier grouping one agent run; its turns read back via GET /v1/agent-runs/{run_id}.",
+            "examples": [
+              "run_4d81aa27"
             ],
             "title": "Run Id"
           },
@@ -779,6 +911,9 @@
               }
             ],
             "description": "Caller-supplied correlation; never an authorization input.",
+            "examples": [
+              "sess_9f31c02b"
+            ],
             "title": "Session Id"
           },
           "severity": {
@@ -801,6 +936,7 @@
                 "type": "null"
               }
             ],
+            "description": "Caller-supplied label from the request metadata. Free text, and never an authorization input.",
             "title": "Source"
           },
           "tenant_id": {
@@ -812,9 +948,19 @@
                 "type": "null"
               }
             ],
+            "description": "Owning tenant.",
+            "examples": [
+              "8f14e45f-ceea-467a-9f2b-3c1a7d05e9b4"
+            ],
             "title": "Tenant Id"
           },
           "threats": {
+            "description": "Threat categories detected.",
+            "examples": [
+              [
+                "PROMPT_INJECTION"
+              ]
+            ],
             "items": {
               "type": "string"
             },
@@ -823,11 +969,17 @@
           },
           "timestamp": {
             "description": "ISO-8601 UTC with a Z suffix.",
+            "examples": [
+              "2026-08-26T14:22:31.482Z"
+            ],
             "title": "Timestamp",
             "type": "string"
           },
           "trace_id": {
             "description": "Identifier of this scan.",
+            "examples": [
+              "req_2c31dee1bfda40a0b178c932d659f039"
+            ],
             "title": "Trace Id",
             "type": "string"
           },
@@ -852,6 +1004,7 @@
                 "type": "null"
               }
             ],
+            "description": "Caller-supplied end-user identifier from the request metadata. Never an authorization input.",
             "title": "User Id"
           }
         },
@@ -922,55 +1075,87 @@
         "description": "Aggregates over the filtered range.\n\nAn empty range returns this same shape with every count and rate zeroed --\nthe handler has a separate zero branch precisely so the contract does not\nchange when there is nothing to aggregate.\n\nCounts sit alongside rates deliberately: reconstructing a count from\n`rate * total` drifts by one against `GET /v1/audit/logs?decision=BLOCK`,\nbecause the rate is rounded to four decimals.",
         "properties": {
           "allow_count": {
+            "description": "Requests allowed. Prefer this to rate times total, which drifts once the rate is rounded.",
             "title": "Allow Count",
             "type": "integer"
           },
           "allow_rate": {
+            "description": "Fraction of matching requests allowed, rounded to 4 decimals.",
+            "examples": [
+              0.855
+            ],
             "title": "Allow Rate",
             "type": "number"
           },
           "avg_latency_ms": {
+            "description": "Mean detection time across matching requests.",
+            "examples": [
+              38.71
+            ],
             "title": "Avg Latency Ms",
             "type": "number"
           },
           "avg_risk": {
+            "description": "Mean aggregate risk across matching requests, 0.0-1.0.",
+            "examples": [
+              0.1873
+            ],
             "title": "Avg Risk",
             "type": "number"
           },
           "block_count": {
+            "description": "Requests blocked. Prefer this to rate times total, which drifts once the rate is rounded.",
             "title": "Block Count",
             "type": "integer"
           },
           "block_rate": {
             "description": "Fraction of matching requests blocked, rounded to 4 decimals.",
+            "examples": [
+              0.0412
+            ],
             "title": "Block Rate",
             "type": "number"
           },
           "p95_latency_ms": {
             "description": "95th percentile, interpolated on PostgreSQL.",
+            "examples": [
+              96.4
+            ],
             "title": "P95 Latency Ms",
             "type": "number"
           },
           "period_from": {
             "description": "Start of the range, echoed from the query or defaulted to now.",
+            "examples": [
+              "2026-08-26T00:00:00.000Z"
+            ],
             "title": "Period From",
             "type": "string"
           },
           "period_to": {
             "description": "End of the range, echoed from the query or defaulted to now.",
+            "examples": [
+              "2026-08-26T23:59:59.999Z"
+            ],
             "title": "Period To",
             "type": "string"
           },
           "sanitize_count": {
+            "description": "Requests sanitized. Prefer this to rate times total, which drifts once the rate is rounded.",
             "title": "Sanitize Count",
             "type": "integer"
           },
           "sanitize_rate": {
+            "description": "Fraction of matching requests sanitized, rounded to 4 decimals.",
+            "examples": [
+              0.1038
+            ],
             "title": "Sanitize Rate",
             "type": "number"
           },
           "severity_counts": {
-            "$ref": "#/components/schemas/SeverityCounts"
+            "$ref": "#/components/schemas/SeverityCounts",
+            "description": "How many matching requests fell into each risk level."
           },
           "top_threats": {
             "description": "Most frequent categories first; empty when nothing matched.",
@@ -981,6 +1166,7 @@
             "type": "array"
           },
           "total_requests": {
+            "description": "Requests matching the range and filters.",
             "title": "Total Requests",
             "type": "integer"
           }
@@ -1007,7 +1193,8 @@
       "BatchItemResult": {
         "properties": {
           "assessment": {
-            "$ref": "#/components/schemas/Assessment"
+            "$ref": "#/components/schemas/Assessment",
+            "description": "The same decision in detail, as on a single scan."
           },
           "decision": {
             "description": "ALLOW, SANITIZE or BLOCK.",
@@ -1029,10 +1216,16 @@
               }
             ],
             "description": "The caller's own reference for this item, echoed back. Null if none was sent.",
+            "examples": [
+              "chunk-7"
+            ],
             "title": "Id"
           },
           "trace_id": {
             "description": "Identifier for this item's scan; each item is audited independently.",
+            "examples": [
+              "req_2c31dee1bfda40a0b178c932d659f039"
+            ],
             "title": "Trace Id",
             "type": "string"
           }
@@ -1060,6 +1253,9 @@
           },
           "highest_risk": {
             "description": "Highest risk score across the batch.",
+            "examples": [
+              0.86
+            ],
             "title": "Highest Risk",
             "type": "number"
           },
@@ -1073,6 +1269,9 @@
               }
             ],
             "description": "Caller-supplied id of the riskiest item. Null when no item scored above zero, and null when the riskiest item carried no id.",
+            "examples": [
+              "chunk-7"
+            ],
             "title": "Highest Risk Item"
           },
           "sanitized": {
@@ -1082,6 +1281,11 @@
           },
           "threats": {
             "description": "Union of threat categories across the batch, sorted.",
+            "examples": [
+              [
+                "PROMPT_INJECTION"
+              ]
+            ],
             "items": {
               "type": "string"
             },
@@ -1148,7 +1352,8 @@
             "type": "integer"
           },
           "message": {
-            "$ref": "#/components/schemas/ChatMessage"
+            "$ref": "#/components/schemas/ChatMessage",
+            "description": "The assistant turn. Its content is what the output guard released."
           }
         },
         "required": [
@@ -1172,6 +1377,7 @@
             "type": "string"
           },
           "execution_status": {
+            "description": "How the call ended. A body carrying this block is a success; a failure is returned as an error instead.",
             "enum": [
               "SUCCESS"
             ],
@@ -1179,10 +1385,15 @@
             "type": "string"
           },
           "input_confidence": {
+            "description": "Confidence in the verdict on the prompt, 0.0-1.0.",
+            "examples": [
+              0.91
+            ],
             "title": "Input Confidence",
             "type": "number"
           },
           "input_primary_reason": {
+            "description": "Dominant reason behind the verdict on the prompt.",
             "enum": [
               "SYSTEM_ERROR",
               "PII_GUARDRAIL_BLOCK",
@@ -1197,6 +1408,7 @@
             "type": "string"
           },
           "input_sanitized": {
+            "description": "True when the prompt was rewritten before being forwarded.",
             "title": "Input Sanitized",
             "type": "boolean"
           },
@@ -1209,6 +1421,7 @@
                 "type": "null"
               }
             ],
+            "description": "The model the provider reported using.",
             "title": "Model"
           },
           "output_decision": {
@@ -1224,9 +1437,11 @@
                 "type": "null"
               }
             ],
+            "description": "Verdict on the reply. A blocked reply never reaches this body.",
             "title": "Output Decision"
           },
           "output_sanitized": {
+            "description": "True when the reply was rewritten before being returned.",
             "title": "Output Sanitized",
             "type": "boolean"
           },
@@ -1244,14 +1459,22 @@
                 "type": "null"
               }
             ],
+            "description": "Which provider served the call.",
             "title": "Provider"
           },
           "total_latency_ms": {
             "description": "End to end, including detection on both sides.",
+            "examples": [
+              468
+            ],
             "title": "Total Latency Ms",
             "type": "integer"
           },
           "trace_id": {
+            "description": "The scan's identifier, the same value the `wrapsec-` prefix on `id` carries.",
+            "examples": [
+              "req_2c31dee1bfda40a0b178c932d659f039"
+            ],
             "title": "Trace Id",
             "type": "string"
           }
@@ -1276,6 +1499,7 @@
         "description": "OpenAI-compatible chat completion.\n\nCompatible, not equivalent: see the module note above for what this\nimplementation omits and adds.",
         "properties": {
           "choices": {
+            "description": "Always a single choice; this proxy does not return alternatives.",
             "items": {
               "$ref": "#/components/schemas/ChatChoice"
             },
@@ -1284,11 +1508,17 @@
           },
           "id": {
             "description": "`wrapsec-{trace_id}`, not the provider's completion id.",
+            "examples": [
+              "wrapsec-req_2c31dee1bfda40a0b178c932d659f039"
+            ],
             "title": "Id",
             "type": "string"
           },
           "model": {
             "description": "The model the provider reported using.",
+            "examples": [
+              "gpt-4o"
+            ],
             "title": "Model",
             "type": "string"
           },
@@ -1396,6 +1626,7 @@
             "title": "Rule"
           },
           "source": {
+            "description": "`database` when stored for this tenant, `environment` otherwise.",
             "enum": [
               "database",
               "environment"
@@ -1422,6 +1653,9 @@
               }
             ],
             "description": "Absent without `settings:read`.",
+            "examples": [
+              0.2
+            ],
             "title": "Llm Trigger"
           },
           "model": {
@@ -1434,6 +1668,9 @@
               }
             ],
             "description": "Absent without `settings:read`.",
+            "examples": [
+              "llama3.2"
+            ],
             "title": "Model"
           },
           "provider": {
@@ -1449,6 +1686,7 @@
             "title": "Provider"
           },
           "source": {
+            "description": "`database` when stored for this tenant, `environment` otherwise.",
             "enum": [
               "database",
               "environment"
@@ -1466,6 +1704,9 @@
               }
             ],
             "description": "Absent without `settings:read`.",
+            "examples": [
+              30
+            ],
             "title": "Timeout"
           }
         },
@@ -1487,9 +1728,13 @@
               }
             ],
             "description": "Absent without `settings:read`.",
+            "examples": [
+              60
+            ],
             "title": "Per Minute"
           },
           "source": {
+            "description": "`database` when stored for this tenant, `environment` otherwise.",
             "enum": [
               "database",
               "environment"
@@ -1517,6 +1762,9 @@
               }
             ],
             "description": "Absent without `settings:read`.",
+            "examples": [
+              0.7
+            ],
             "title": "Block"
           },
           "sanitize": {
@@ -1529,6 +1777,9 @@
               }
             ],
             "description": "Absent without `settings:read`.",
+            "examples": [
+              0.4
+            ],
             "title": "Sanitize"
           },
           "source": {
@@ -1659,6 +1910,9 @@
           },
           "updated_at": {
             "description": "When this update was applied, ISO-8601 UTC with a Z suffix.",
+            "examples": [
+              "2026-08-26T14:22:31.482Z"
+            ],
             "title": "Updated At",
             "type": "string"
           }
@@ -1684,6 +1938,34 @@
         "properties": {
           "code": {
             "description": "Stable machine-readable error code from the catalog.",
+            "enum": [
+              "ACCOUNT_DISABLED",
+              "ACCOUNT_LOCKED",
+              "CANNOT_DEACTIVATE_SELF",
+              "CONFLICT",
+              "DETECTION_ERROR",
+              "FEATURE_UNAVAILABLE",
+              "FORBIDDEN",
+              "IDEMPOTENCY_CONFLICT",
+              "INTERNAL_ERROR",
+              "INVALID_CREDENTIALS",
+              "INVALID_PASSWORD",
+              "INVALID_REQUEST",
+              "INVALID_TOKEN",
+              "IP_NOT_ALLOWED",
+              "LAST_ADMIN",
+              "LLM_UNAVAILABLE",
+              "MODEL_REQUIRED",
+              "NOT_FOUND",
+              "PASSWORD_CHANGE_REQUIRED",
+              "PROXY_REQUIRES_API_KEY",
+              "RATE_LIMIT_EXCEEDED",
+              "SESSION_INVALIDATED",
+              "STREAM_NOT_SUPPORTED",
+              "TENANT_SUSPENDED",
+              "UNAUTHORIZED",
+              "VALIDATION_ERROR"
+            ],
             "title": "Code",
             "type": "string"
           },
@@ -1701,10 +1983,23 @@
               }
             ],
             "description": "Per-field detail, present only on validation failures.",
+            "examples": [
+              [
+                {
+                  "code": "INVALID_VALUE",
+                  "field": "trace_id",
+                  "key": "forms.errors.INVALID_VALUE",
+                  "params": {}
+                }
+              ]
+            ],
             "title": "Invalid Params"
           },
           "key": {
             "description": "Localization key; clients may resolve their own text from it.",
+            "examples": [
+              "errors.NOT_FOUND"
+            ],
             "title": "Key",
             "type": "string"
           },
@@ -1716,16 +2011,28 @@
           "params": {
             "additionalProperties": true,
             "description": "Values interpolated into the localized message.",
+            "examples": [
+              {
+                "resource": "request"
+              }
+            ],
             "title": "Params",
             "type": "object"
           },
           "severity": {
-            "description": "Catalog severity: INFO, WARNING, ERROR or CRITICAL.",
+            "description": "How bad the failure is: ERROR or WARNING. Not threat severity.",
+            "enum": [
+              "ERROR",
+              "WARNING"
+            ],
             "title": "Severity",
             "type": "string"
           },
           "trace_id": {
             "description": "Correlates the failure with the audit trail.",
+            "examples": [
+              "req_2c31dee1bfda40a0b178c932d659f039"
+            ],
             "title": "Trace Id",
             "type": "string"
           }
@@ -1744,7 +2051,8 @@
       "ErrorEnvelope": {
         "properties": {
           "error": {
-            "$ref": "#/components/schemas/ErrorDetail"
+            "$ref": "#/components/schemas/ErrorDetail",
+            "description": "The failure. Every error this API returns is a single object under this key."
           }
         },
         "required": [
@@ -1765,6 +2073,7 @@
         "description": "Per-component status. `ok` / `unavailable` for infrastructure,\n`healthy` / `degraded` / `unavailable` for the detector tiers.",
         "properties": {
           "database": {
+            "description": "`ok` when a trivial query succeeded. Required: `unavailable` here answers 503.",
             "enum": [
               "ok",
               "unavailable"
@@ -1773,6 +2082,7 @@
             "type": "string"
           },
           "redis": {
+            "description": "`ok` when the cache answered a ping. Required: `unavailable` here answers 503.",
             "enum": [
               "ok",
               "unavailable"
@@ -1814,18 +2124,26 @@
         "description": "The configuration in force, for deployment verification.\n\nEvery caller gets the same TOP-LEVEL keys; the difference is inside each\nsection. A caller without `settings:read` -- VIEWER, or any trial key -- sees\neach section reduced to its `source` marker, which says whether configuration\nwas customised without saying what it was set to. No provider credential is\never included, for any caller.",
         "properties": {
           "detection_layers": {
-            "$ref": "#/components/schemas/ConfigDetectionLayers"
+            "$ref": "#/components/schemas/ConfigDetectionLayers",
+            "description": "Which detection layers run. `source` reaches every caller; the values need `settings:read`."
           },
           "llm": {
-            "$ref": "#/components/schemas/ConfigLLM"
+            "$ref": "#/components/schemas/ConfigLLM",
+            "description": "LLM detector configuration. `source` reaches every caller; the values need `settings:read`."
           },
           "rate_limit": {
-            "$ref": "#/components/schemas/ConfigRateLimit"
+            "$ref": "#/components/schemas/ConfigRateLimit",
+            "description": "The enforced per-minute limit. `source` reaches every caller; the value needs `settings:read`."
           },
           "thresholds": {
-            "$ref": "#/components/schemas/ConfigThresholds"
+            "$ref": "#/components/schemas/ConfigThresholds",
+            "description": "Decision thresholds. `source` reaches every caller; the values need `settings:read`."
           },
           "version": {
+            "description": "Running build. Unrestricted here, because the unauthenticated `GET /health` already returns it.",
+            "examples": [
+              "1.0.0"
+            ],
             "title": "Version",
             "type": "string"
           }
@@ -1853,6 +2171,9 @@
           },
           "version": {
             "description": "Running build. Deliberately unauthenticated: it is how a deployment is verified.",
+            "examples": [
+              "1.0.0"
+            ],
             "title": "Version",
             "type": "string"
           }
@@ -1896,20 +2217,32 @@
               }
             ],
             "description": "Masked provider key, or null when none is stored. Never the key itself.",
+            "examples": [
+              "sk-a...mnop"
+            ],
             "title": "Api Key Masked"
           },
           "base_url": {
             "description": "Endpoint the detector calls. Points at the provider, or at a compatible gateway in front of it.",
+            "examples": [
+              "http://localhost:11434"
+            ],
             "title": "Base Url",
             "type": "string"
           },
           "llm_trigger": {
             "description": "Risk score at which the LLM detector is invoked.",
+            "examples": [
+              0.2
+            ],
             "title": "Llm Trigger",
             "type": "number"
           },
           "model": {
             "description": "Model the detector asks for, spelled as that provider names it.",
+            "examples": [
+              "llama3.2"
+            ],
             "title": "Model",
             "type": "string"
           },
@@ -1920,6 +2253,9 @@
           },
           "timeout": {
             "description": "Seconds the detector waits before giving up on the provider. A detector timeout fails closed: the request is blocked, not allowed through unscanned.",
+            "examples": [
+              30
+            ],
             "title": "Timeout",
             "type": "integer"
           }
@@ -2021,20 +2357,32 @@
               }
             ],
             "description": "Masked provider key, or null when none is stored. Never the key itself.",
+            "examples": [
+              "sk-a...mnop"
+            ],
             "title": "Api Key Masked"
           },
           "base_url": {
             "description": "Endpoint the detector calls. Points at the provider, or at a compatible gateway in front of it.",
+            "examples": [
+              "http://localhost:11434"
+            ],
             "title": "Base Url",
             "type": "string"
           },
           "llm_trigger": {
             "description": "Risk score at which the LLM detector is invoked.",
+            "examples": [
+              0.2
+            ],
             "title": "Llm Trigger",
             "type": "number"
           },
           "model": {
             "description": "Model the detector asks for, spelled as that provider names it.",
+            "examples": [
+              "llama3.2"
+            ],
             "title": "Model",
             "type": "string"
           },
@@ -2045,11 +2393,17 @@
           },
           "timeout": {
             "description": "Seconds the detector waits before giving up on the provider. A detector timeout fails closed: the request is blocked, not allowed through unscanned.",
+            "examples": [
+              30
+            ],
             "title": "Timeout",
             "type": "integer"
           },
           "updated_at": {
             "description": "When this update was applied, ISO-8601 UTC with a Z suffix.",
+            "examples": [
+              "2026-08-26T14:22:31.482Z"
+            ],
             "title": "Updated At",
             "type": "string"
           }
@@ -2126,15 +2480,22 @@
         "properties": {
           "code": {
             "description": "Stable code, for example `input_blocked` or `invalid_model_format`.",
+            "examples": [
+              "input_blocked"
+            ],
             "title": "Code",
             "type": "string"
           },
           "message": {
+            "description": "Human-readable summary. The provider's own error text is never echoed here.",
             "title": "Message",
             "type": "string"
           },
           "type": {
             "description": "OpenAI error family, for example `invalid_request_error`.",
+            "examples": [
+              "invalid_request_error"
+            ],
             "title": "Type",
             "type": "string"
           }
@@ -2151,7 +2512,8 @@
         "description": "The OpenAI-compatible error envelope this route returns for its OWN\nrefusals and upstream failures.\n\nDeliberately NOT `ErrorEnvelope`: the callers here are OpenAI client\nlibraries, which parse `error.message` / `error.type` / `error.code`.\n\n`wrapsec` carries diagnostic context whose keys vary by path -- a refusal\nbefore any scanning has only the trace id, while a policy block adds the\ndecision, reason, threats and confidence. Typed as a free-form object for\nthat reason, rather than enumerating one path's keys and misdescribing the\nothers.",
         "properties": {
           "error": {
-            "$ref": "#/components/schemas/OpenAIErrorDetail"
+            "$ref": "#/components/schemas/OpenAIErrorDetail",
+            "description": "The failure, in the shape an OpenAI client expects."
           },
           "wrapsec": {
             "additionalProperties": true,
@@ -2241,6 +2603,7 @@
                 "type": "null"
               }
             ],
+            "description": "No writer sets this, so it is always null.",
             "title": "Behavior Flag"
           },
           "created_at": {
@@ -2253,6 +2616,9 @@
               }
             ],
             "description": "ISO-8601 UTC with a Z suffix.",
+            "examples": [
+              "2026-08-26T14:22:31.482Z"
+            ],
             "title": "Created At"
           },
           "execution_status": {
@@ -2269,6 +2635,9 @@
           },
           "id": {
             "description": "Row identifier.",
+            "examples": [
+              "0f9c1d3e-5a72-4b18-9e6d-2c84f1057ab3"
+            ],
             "title": "Id",
             "type": "string"
           },
@@ -2290,9 +2659,14 @@
                 "type": "null"
               }
             ],
+            "description": "The first threat category detected in the prompt, or null when none was.",
             "title": "Input Attack Type"
           },
           "input_confidence": {
+            "description": "Confidence in the verdict on the prompt, 0.0-1.0.",
+            "examples": [
+              0.91
+            ],
             "title": "Input Confidence",
             "type": "number"
           },
@@ -2307,6 +2681,7 @@
             "type": "string"
           },
           "input_primary_reason": {
+            "description": "Dominant reason behind the verdict on the prompt.",
             "enum": [
               "SYSTEM_ERROR",
               "PII_GUARDRAIL_BLOCK",
@@ -2321,6 +2696,7 @@
             "type": "string"
           },
           "input_threats": {
+            "description": "Threat categories detected in the prompt.",
             "items": {
               "type": "string"
             },
@@ -2337,6 +2713,9 @@
               }
             ],
             "description": "Owning API key, with the internal `key:` prefix stripped. Null for a system record.",
+            "examples": [
+              "key_3f9a1c7d2e40"
+            ],
             "title": "Key Id"
           },
           "model": {
@@ -2348,6 +2727,10 @@
                 "type": "null"
               }
             ],
+            "description": "Model the provider reported using.",
+            "examples": [
+              "gpt-4o"
+            ],
             "title": "Model"
           },
           "output_confidence": {
@@ -2358,6 +2741,10 @@
               {
                 "type": "null"
               }
+            ],
+            "description": "Confidence in the verdict on the reply, 0.0-1.0.",
+            "examples": [
+              0.12
             ],
             "title": "Output Confidence"
           },
@@ -2385,6 +2772,7 @@
                 "type": "null"
               }
             ],
+            "description": "No writer sets this, so it is always null.",
             "title": "Output Flags"
           },
           "output_primary_reason": {
@@ -2406,9 +2794,11 @@
                 "type": "null"
               }
             ],
+            "description": "Dominant reason behind the verdict on the reply.",
             "title": "Output Primary Reason"
           },
           "output_threats": {
+            "description": "Threat categories detected in the reply.",
             "items": {
               "type": "string"
             },
@@ -2442,15 +2832,24 @@
               }
             ],
             "description": "Provider time only. Null when no call was made.",
+            "examples": [
+              412
+            ],
             "title": "Provider Latency Ms"
           },
           "total_latency_ms": {
             "description": "End to end, including detection.",
+            "examples": [
+              468
+            ],
             "title": "Total Latency Ms",
             "type": "integer"
           },
           "trace_id": {
             "description": "Correlates with the audit trail.",
+            "examples": [
+              "req_2c31dee1bfda40a0b178c932d659f039"
+            ],
             "title": "Trace Id",
             "type": "string"
           },
@@ -2463,6 +2862,7 @@
                 "type": "null"
               }
             ],
+            "description": "The proxy path records no end-user identifier, so this is always null.",
             "title": "User Id"
           }
         },
@@ -2504,6 +2904,7 @@
                 "type": "null"
               }
             ],
+            "description": "No writer sets this, so it is always null.",
             "title": "Behavior Flag"
           },
           "created_at": {
@@ -2516,6 +2917,9 @@
               }
             ],
             "description": "ISO-8601 UTC with a Z suffix.",
+            "examples": [
+              "2026-08-26T14:22:31.482Z"
+            ],
             "title": "Created At"
           },
           "execution_status": {
@@ -2532,6 +2936,9 @@
           },
           "id": {
             "description": "Row identifier.",
+            "examples": [
+              "0f9c1d3e-5a72-4b18-9e6d-2c84f1057ab3"
+            ],
             "title": "Id",
             "type": "string"
           },
@@ -2553,9 +2960,14 @@
                 "type": "null"
               }
             ],
+            "description": "The first threat category detected in the prompt, or null when none was.",
             "title": "Input Attack Type"
           },
           "input_confidence": {
+            "description": "Confidence in the verdict on the prompt, 0.0-1.0.",
+            "examples": [
+              0.91
+            ],
             "title": "Input Confidence",
             "type": "number"
           },
@@ -2570,6 +2982,7 @@
             "type": "string"
           },
           "input_primary_reason": {
+            "description": "Dominant reason behind the verdict on the prompt.",
             "enum": [
               "SYSTEM_ERROR",
               "PII_GUARDRAIL_BLOCK",
@@ -2608,6 +3021,7 @@
             "title": "Input Sanitized"
           },
           "input_threats": {
+            "description": "Threat categories detected in the prompt.",
             "items": {
               "type": "string"
             },
@@ -2624,6 +3038,9 @@
               }
             ],
             "description": "Owning API key, with the internal `key:` prefix stripped. Null for a system record.",
+            "examples": [
+              "key_3f9a1c7d2e40"
+            ],
             "title": "Key Id"
           },
           "model": {
@@ -2635,6 +3052,10 @@
                 "type": "null"
               }
             ],
+            "description": "Model the provider reported using.",
+            "examples": [
+              "gpt-4o"
+            ],
             "title": "Model"
           },
           "output_confidence": {
@@ -2645,6 +3066,10 @@
               {
                 "type": "null"
               }
+            ],
+            "description": "Confidence in the verdict on the reply, 0.0-1.0.",
+            "examples": [
+              0.12
             ],
             "title": "Output Confidence"
           },
@@ -2672,6 +3097,7 @@
                 "type": "null"
               }
             ],
+            "description": "No writer sets this, so it is always null.",
             "title": "Output Flags"
           },
           "output_primary_reason": {
@@ -2693,6 +3119,7 @@
                 "type": "null"
               }
             ],
+            "description": "Dominant reason behind the verdict on the reply.",
             "title": "Output Primary Reason"
           },
           "output_raw": {
@@ -2720,6 +3147,7 @@
             "title": "Output Sanitized"
           },
           "output_threats": {
+            "description": "Threat categories detected in the reply.",
             "items": {
               "type": "string"
             },
@@ -2753,15 +3181,24 @@
               }
             ],
             "description": "Provider time only. Null when no call was made.",
+            "examples": [
+              412
+            ],
             "title": "Provider Latency Ms"
           },
           "total_latency_ms": {
             "description": "End to end, including detection.",
+            "examples": [
+              468
+            ],
             "title": "Total Latency Ms",
             "type": "integer"
           },
           "trace_id": {
             "description": "Correlates with the audit trail.",
+            "examples": [
+              "req_2c31dee1bfda40a0b178c932d659f039"
+            ],
             "title": "Trace Id",
             "type": "string"
           },
@@ -2774,6 +3211,7 @@
                 "type": "null"
               }
             ],
+            "description": "The proxy path records no end-user identifier, so this is always null.",
             "title": "User Id"
           }
         },
@@ -2856,10 +3294,16 @@
               }
             ],
             "description": "Masked provider key, or null when the provider needs none.",
+            "examples": [
+              "sk-a...mnop"
+            ],
             "title": "Api Key Masked"
           },
           "base_url": {
             "description": "Endpoint the proxy forwards to.",
+            "examples": [
+              "https://api.openai.com/v1"
+            ],
             "title": "Base Url",
             "type": "string"
           },
@@ -2873,20 +3317,34 @@
               }
             ],
             "description": "ISO-8601 UTC with a Z suffix.",
+            "examples": [
+              "2026-08-26T09:05:12.004Z"
+            ],
             "title": "Created At"
           },
           "default_model": {
             "description": "Used when a chat request omits `model`. A request may name its own as `provider/model`; with neither, the request is refused.",
+            "examples": [
+              "gpt-4o"
+            ],
             "title": "Default Model",
             "type": "string"
           },
           "provider": {
             "description": "`openai`, `ollama` or `custom`.",
+            "enum": [
+              "custom",
+              "ollama",
+              "openai"
+            ],
             "title": "Provider",
             "type": "string"
           },
           "timeout_seconds": {
             "description": "Seconds the proxy waits for the provider before answering `504`.",
+            "examples": [
+              60
+            ],
             "title": "Timeout Seconds",
             "type": "integer"
           },
@@ -2900,6 +3358,9 @@
               }
             ],
             "description": "ISO-8601 UTC with a Z suffix.",
+            "examples": [
+              "2026-08-26T14:22:31.482Z"
+            ],
             "title": "Updated At"
           }
         },
@@ -2961,11 +3422,18 @@
         "properties": {
           "per_minute": {
             "description": "Requests a live key may make per minute on this tenant.",
+            "examples": [
+              60
+            ],
             "title": "Per Minute",
             "type": "integer"
           },
           "source": {
             "description": "`database` when stored for this tenant, `environment` when the default is in force.",
+            "enum": [
+              "database",
+              "environment"
+            ],
             "title": "Source",
             "type": "string"
           }
@@ -2998,16 +3466,26 @@
         "properties": {
           "per_minute": {
             "description": "Requests a live key may make per minute on this tenant.",
+            "examples": [
+              60
+            ],
             "title": "Per Minute",
             "type": "integer"
           },
           "source": {
             "description": "`database` when stored for this tenant, `environment` when the default is in force.",
+            "enum": [
+              "database",
+              "environment"
+            ],
             "title": "Source",
             "type": "string"
           },
           "updated_at": {
             "description": "When this update was applied, ISO-8601 UTC with a Z suffix.",
+            "examples": [
+              "2026-08-26T14:22:31.482Z"
+            ],
             "title": "Updated At",
             "type": "string"
           }
@@ -3024,7 +3502,8 @@
         "description": "Readiness. The STATUS CODE is the contract and the body is the detail --\nan orchestrator routes on the code.\n\nThe same body shape is returned with 200 and with 503, so one model\ndescribes both. `status: degraded` with 200 means serving with less signal\n(Tier 2 absent); 503 means a required component is down.",
         "properties": {
           "checks": {
-            "$ref": "#/components/schemas/HealthChecks"
+            "$ref": "#/components/schemas/HealthChecks",
+            "description": "Per-component detail behind the status. Informational: an orchestrator routes on the status code."
           },
           "status": {
             "description": "`ready` when every check passed, `degraded` when any did not.",
@@ -3054,6 +3533,10 @@
                 "type": "null"
               }
             ],
+            "description": "Owning application; null when the key is not application-scoped.",
+            "examples": [
+              "6bc1bee2-2e40-4b0f-9f1a-1e031fa8088a"
+            ],
             "title": "App Id"
           },
           "app_name": {
@@ -3069,6 +3552,7 @@
             "title": "App Name"
           },
           "attribution_verified": {
+            "description": "Always false today: both writers set it literally and nothing updates it. Do not branch on it.",
             "title": "Attribution Verified",
             "type": "boolean"
           },
@@ -3080,6 +3564,10 @@
               {
                 "type": "null"
               }
+            ],
+            "description": "Owning department.",
+            "examples": [
+              "2b7e1516-28ae-4d2a-a6ab-f7158809cf4f"
             ],
             "title": "Dept Id"
           },
@@ -3104,6 +3592,10 @@
                 "type": "null"
               }
             ],
+            "description": "Client address as recorded when the request was scanned.",
+            "examples": [
+              "203.0.113.42"
+            ],
             "title": "Ip Address"
           },
           "key_id": {
@@ -3114,6 +3606,10 @@
               {
                 "type": "null"
               }
+            ],
+            "description": "API key the request was made with.",
+            "examples": [
+              "key:key_3f9a1c7d2e40"
             ],
             "title": "Key Id"
           },
@@ -3126,6 +3622,7 @@
                 "type": "null"
               }
             ],
+            "description": "Caller-supplied label from the request metadata. Free text, and never an authorization input.",
             "title": "Source"
           },
           "tenant_id": {
@@ -3136,6 +3633,10 @@
               {
                 "type": "null"
               }
+            ],
+            "description": "Owning tenant.",
+            "examples": [
+              "8f14e45f-ceea-467a-9f2b-3c1a7d05e9b4"
             ],
             "title": "Tenant Id"
           },
@@ -3148,6 +3649,7 @@
                 "type": "null"
               }
             ],
+            "description": "Client user agent as recorded when the request was scanned.",
             "title": "User Agent"
           },
           "user_id": {
@@ -3159,6 +3661,7 @@
                 "type": "null"
               }
             ],
+            "description": "Caller-supplied end-user identifier from the request metadata. Never an authorization input.",
             "title": "User Id"
           }
         },
@@ -3193,6 +3696,7 @@
                 "type": "null"
               }
             ],
+            "description": "`fast` runs the cheap layers; `full` adds the LLM detector.",
             "title": "Detection Mode"
           },
           "execution_mode": {
@@ -3208,6 +3712,7 @@
                 "type": "null"
               }
             ],
+            "description": "scan_only or proxy.",
             "title": "Execution Mode"
           },
           "latency_ms": {
@@ -3218,6 +3723,10 @@
               {
                 "type": "null"
               }
+            ],
+            "description": "Detection time for this scan.",
+            "examples": [
+              41.2
             ],
             "title": "Latency Ms"
           },
@@ -3230,11 +3739,18 @@
                 "type": "null"
               }
             ],
+            "description": "Whether the LLM detector ran.",
             "title": "Llm Invoked"
           },
           "policy_source": {
             "anyOf": [
               {
+                "enum": [
+                  "system_default",
+                  "department_override",
+                  "application_override",
+                  "cache"
+                ],
                 "type": "string"
               },
               {
@@ -3267,6 +3783,7 @@
                 "type": "null"
               }
             ],
+            "description": "No writer sets this, so it is always null.",
             "title": "Behavior Flag"
           },
           "execution_status": {
@@ -3285,17 +3802,28 @@
                 "type": "null"
               }
             ],
+            "description": "How the proxied call ended.",
             "title": "Execution Status"
           },
           "input_attack_type": {
             "anyOf": [
               {
+                "enum": [
+                  "PROMPT_INJECTION",
+                  "JAILBREAK",
+                  "MALICIOUS_INTENT",
+                  "DATA_EXFILTRATION",
+                  "PII",
+                  "TOXICITY",
+                  "BENIGN"
+                ],
                 "type": "string"
               },
               {
                 "type": "null"
               }
             ],
+            "description": "The first threat category detected in the prompt, or null when none was.",
             "title": "Input Attack Type"
           },
           "input_confidence": {
@@ -3306,6 +3834,10 @@
               {
                 "type": "null"
               }
+            ],
+            "description": "Confidence in the verdict on the prompt, 0.0-1.0.",
+            "examples": [
+              0.91
             ],
             "title": "Input Confidence"
           },
@@ -3328,6 +3860,7 @@
                 "type": "null"
               }
             ],
+            "description": "Dominant reason behind the verdict on the prompt.",
             "title": "Input Primary Reason"
           },
           "input_raw": {
@@ -3339,6 +3872,7 @@
                 "type": "null"
               }
             ],
+            "description": "Prompt as received. Null when storage mode did not retain it.",
             "title": "Input Raw"
           },
           "input_sanitized": {
@@ -3350,9 +3884,16 @@
                 "type": "null"
               }
             ],
+            "description": "Prompt after redaction. Null when nothing was rewritten.",
             "title": "Input Sanitized"
           },
           "input_threats": {
+            "description": "Threat categories detected in the prompt.",
+            "examples": [
+              [
+                "PROMPT_INJECTION"
+              ]
+            ],
             "items": {
               "type": "string"
             },
@@ -3368,6 +3909,10 @@
                 "type": "null"
               }
             ],
+            "description": "Model the provider reported using.",
+            "examples": [
+              "gpt-4o"
+            ],
             "title": "Model"
           },
           "output_confidence": {
@@ -3378,6 +3923,10 @@
               {
                 "type": "null"
               }
+            ],
+            "description": "Confidence in the verdict on the reply, 0.0-1.0.",
+            "examples": [
+              0.12
             ],
             "title": "Output Confidence"
           },
@@ -3395,6 +3944,7 @@
                 "type": "null"
               }
             ],
+            "description": "Verdict on the reply. Null when there was no reply to guard.",
             "title": "Output Decision"
           },
           "output_flags": {
@@ -3404,6 +3954,7 @@
                 "type": "null"
               }
             ],
+            "description": "No writer sets this, so it is always null.",
             "title": "Output Flags"
           },
           "output_primary_reason": {
@@ -3425,6 +3976,7 @@
                 "type": "null"
               }
             ],
+            "description": "Dominant reason behind the verdict on the reply.",
             "title": "Output Primary Reason"
           },
           "output_raw": {
@@ -3436,6 +3988,7 @@
                 "type": "null"
               }
             ],
+            "description": "Provider reply as received. Null when storage mode did not retain it.",
             "title": "Output Raw"
           },
           "output_sanitized": {
@@ -3447,9 +4000,14 @@
                 "type": "null"
               }
             ],
+            "description": "Reply after redaction. Null when nothing was rewritten.",
             "title": "Output Sanitized"
           },
           "output_threats": {
+            "description": "Threat categories detected in the reply.",
+            "examples": [
+              []
+            ],
             "items": {
               "type": "string"
             },
@@ -3470,6 +4028,7 @@
                 "type": "null"
               }
             ],
+            "description": "Null when the request never reached a provider.",
             "title": "Provider"
           },
           "provider_latency_ms": {
@@ -3481,6 +4040,10 @@
                 "type": "null"
               }
             ],
+            "description": "Provider time only. Null when no call was made.",
+            "examples": [
+              412
+            ],
             "title": "Provider Latency Ms"
           },
           "total_latency_ms": {
@@ -3491,6 +4054,10 @@
               {
                 "type": "null"
               }
+            ],
+            "description": "End to end, including detection on both sides.",
+            "examples": [
+              468
             ],
             "title": "Total Latency Ms"
           }
@@ -3594,7 +4161,8 @@
       "RequestRecordResponse": {
         "properties": {
           "attribution": {
-            "$ref": "#/components/schemas/RecordAttribution"
+            "$ref": "#/components/schemas/RecordAttribution",
+            "description": "Who and what the request was attributed to."
           },
           "confidence": {
             "anyOf": [
@@ -3604,6 +4172,10 @@
               {
                 "type": "null"
               }
+            ],
+            "description": "Confidence in the decision, 0.0-1.0.",
+            "examples": [
+              0.91
             ],
             "title": "Confidence"
           },
@@ -3621,9 +4193,11 @@
                 "type": "null"
               }
             ],
+            "description": "LOW, MEDIUM or HIGH.",
             "title": "Confidence Band"
           },
           "decision": {
+            "description": "ALLOW, SANITIZE or BLOCK.",
             "enum": [
               "BLOCK",
               "SANITIZE",
@@ -3637,6 +4211,13 @@
               "type": "number"
             },
             "description": "Per-detector scores as persisted. EMPTY for a caller that may not read layer scores -- the key stays present so consumers need no special case.",
+            "examples": [
+              {
+                "llm": 0.31,
+                "ml": 0.74,
+                "rule": 0.86
+              }
+            ],
             "title": "Detection Scores",
             "type": "object"
           },
@@ -3653,6 +4234,7 @@
                 "type": "null"
               }
             ],
+            "description": "How the request ran.",
             "title": "Execution Mode"
           },
           "guardrail_scores": {
@@ -3660,15 +4242,24 @@
               "type": "number"
             },
             "description": "Guardrail scores as persisted. Empty under the same restriction as detection_scores.",
+            "examples": [
+              {
+                "pii": 0.0
+              }
+            ],
             "title": "Guardrail Scores",
             "type": "object"
           },
           "input_hash": {
             "description": "Hash of the scanned input; the input itself is never stored here.",
+            "examples": [
+              "sha256:9f2c4a1e7b3d5086af41c9d2e6b70835154cf9a2d7e0b6134c8fa259e7d3b041"
+            ],
             "title": "Input Hash",
             "type": "string"
           },
           "input_length": {
+            "description": "Characters scanned.",
             "title": "Input Length",
             "type": "integer"
           },
@@ -3691,6 +4282,7 @@
             "title": "Input Source"
           },
           "is_proxy": {
+            "description": "True when `execution_mode` is `proxy`. The same fact, as a boolean.",
             "title": "Is Proxy",
             "type": "boolean"
           },
@@ -3713,10 +4305,12 @@
                 "type": "null"
               }
             ],
+            "description": "Dominant reason, null if none applied.",
             "title": "Primary Reason"
           },
           "processing": {
-            "$ref": "#/components/schemas/RecordProcessing"
+            "$ref": "#/components/schemas/RecordProcessing",
+            "description": "Timing, modes, and which policy layer resolved the decision."
           },
           "proxy": {
             "anyOf": [
@@ -3738,6 +4332,10 @@
                 "type": "null"
               }
             ],
+            "description": "Aggregate risk, 0.0-1.0.",
+            "examples": [
+              0.86
+            ],
             "title": "Risk Score"
           },
           "run_id": {
@@ -3750,6 +4348,9 @@
               }
             ],
             "description": "Caller-supplied agent-run correlation; never an authorization input.",
+            "examples": [
+              "run_4d81aa27"
+            ],
             "title": "Run Id"
           },
           "session_id": {
@@ -3760,6 +4361,10 @@
               {
                 "type": "null"
               }
+            ],
+            "description": "Caller-supplied correlation; never an authorization input.",
+            "examples": [
+              "sess_9f31c02b"
             ],
             "title": "Session Id"
           },
@@ -3782,6 +4387,12 @@
             "title": "Severity"
           },
           "threats": {
+            "description": "Threat categories detected.",
+            "examples": [
+              [
+                "PROMPT_INJECTION"
+              ]
+            ],
             "items": {
               "type": "string"
             },
@@ -3790,10 +4401,17 @@
           },
           "timestamp": {
             "description": "ISO-8601 UTC with a Z suffix.",
+            "examples": [
+              "2026-08-26T14:22:31.482Z"
+            ],
             "title": "Timestamp",
             "type": "string"
           },
           "trace_id": {
+            "description": "Identifier of the scan being read back.",
+            "examples": [
+              "req_2c31dee1bfda40a0b178c932d659f039"
+            ],
             "title": "Trace Id",
             "type": "string"
           },
@@ -3806,6 +4424,7 @@
                 "type": "null"
               }
             ],
+            "description": "Zero-based position within the session, as the caller supplied it.",
             "title": "Turn Index"
           }
         },
@@ -3884,7 +4503,8 @@
             "type": "array"
           },
           "summary": {
-            "$ref": "#/components/schemas/BatchSummary"
+            "$ref": "#/components/schemas/BatchSummary",
+            "description": "Aggregate counts across the batch."
           }
         },
         "required": [
@@ -3924,22 +4544,46 @@
             "additionalProperties": {
               "type": "string"
             },
+            "description": "What each detection layer would have decided on its own score, keyed by layer. The guardrail is not included.",
+            "examples": [
+              {
+                "llm": "ALLOW",
+                "ml": "SANITIZE",
+                "rule": "BLOCK"
+              }
+            ],
             "title": "Layer Decisions",
             "type": "object"
           },
           "llm_score": {
+            "description": "Raw score from the LLM detector, 0.0-1.0.",
+            "examples": [
+              0.31
+            ],
             "title": "Llm Score",
             "type": "number"
           },
           "ml_score": {
+            "description": "Raw score from the classifier, 0.0-1.0.",
+            "examples": [
+              0.74
+            ],
             "title": "Ml Score",
             "type": "number"
           },
           "pii_score": {
+            "description": "Raw score from the PII guardrail, 0.0-1.0.",
+            "examples": [
+              0.0
+            ],
             "title": "Pii Score",
             "type": "number"
           },
           "rule_score": {
+            "description": "Raw score from the pattern layer, 0.0-1.0.",
+            "examples": [
+              0.86
+            ],
             "title": "Rule Score",
             "type": "number"
           }
@@ -3976,6 +4620,9 @@
           },
           "latency_ms": {
             "description": "Detection time in milliseconds.",
+            "examples": [
+              41.2
+            ],
             "title": "Latency Ms",
             "type": "number"
           },
@@ -3995,47 +4642,50 @@
         "type": "object"
       },
       "ScanResponse": {
-        "example": {
-          "assessment": {
+        "examples": [
+          {
+            "assessment": {
+              "confidence": 1.0,
+              "confidence_band": "HIGH",
+              "decision": "ALLOW",
+              "layers": [
+                {
+                  "decision": "ALLOW",
+                  "name": "rule_score",
+                  "score": 0.0
+                },
+                {
+                  "decision": "ALLOW",
+                  "name": "ml_score",
+                  "score": 0.0
+                }
+              ],
+              "primary_reason": "NO_THREAT_DETECTED",
+              "risk_level": "LOW",
+              "risk_score": 0.0,
+              "threats": []
+            },
             "confidence": 1.0,
             "confidence_band": "HIGH",
             "decision": "ALLOW",
-            "layers": [
-              {
-                "decision": "ALLOW",
-                "name": "rule_score",
-                "score": 0.0
-              },
-              {
-                "decision": "ALLOW",
-                "name": "ml_score",
-                "score": 0.0
-              }
-            ],
+            "decision_version": "v1.0",
             "primary_reason": "NO_THREAT_DETECTED",
-            "risk_level": "NONE",
+            "processing": {
+              "detection_mode": "fast",
+              "execution_mode": "scan_only",
+              "latency_ms": 41.2,
+              "llm_invoked": false
+            },
             "risk_score": 0.0,
-            "threats": []
-          },
-          "confidence": 1.0,
-          "confidence_band": "HIGH",
-          "decision": "ALLOW",
-          "decision_version": "v1.0",
-          "primary_reason": "NO_THREAT_DETECTED",
-          "processing": {
-            "detection_mode": "fast",
-            "execution_mode": "scan_only",
-            "latency_ms": 41.2,
-            "llm_invoked": false
-          },
-          "risk_score": 0.0,
-          "sanitization_applied": false,
-          "threats": [],
-          "trace_id": "req_2c31dee1bfda40a0b178c932d659f039"
-        },
+            "sanitization_applied": false,
+            "threats": [],
+            "trace_id": "req_2c31dee1bfda40a0b178c932d659f039"
+          }
+        ],
         "properties": {
           "assessment": {
-            "$ref": "#/components/schemas/Assessment"
+            "$ref": "#/components/schemas/Assessment",
+            "description": "The same decision in detail: per-layer contributions and the summary. Not a second opinion."
           },
           "confidence": {
             "anyOf": [
@@ -4047,6 +4697,9 @@
               }
             ],
             "description": "Confidence in the decision, 0.0-1.0.",
+            "examples": [
+              0.91
+            ],
             "title": "Confidence"
           },
           "confidence_band": {
@@ -4089,6 +4742,9 @@
           },
           "decision_version": {
             "description": "Version of the decision contract.",
+            "examples": [
+              "v1.0"
+            ],
             "title": "Decision Version",
             "type": "string"
           },
@@ -4127,10 +4783,14 @@
             "title": "Primary Reason"
           },
           "processing": {
-            "$ref": "#/components/schemas/ScanProcessing"
+            "$ref": "#/components/schemas/ScanProcessing",
+            "description": "Timing and the modes this scan ran under."
           },
           "risk_score": {
             "description": "Aggregate risk, 0.0-1.0.",
+            "examples": [
+              0.86
+            ],
             "title": "Risk Score",
             "type": "number"
           },
@@ -4149,10 +4809,18 @@
               }
             ],
             "description": "Rewritten input. Present only when the text was redacted; forward this instead of the original.",
+            "examples": [
+              "Contact me at [EMAIL REDACTED] about the invoice."
+            ],
             "title": "Sanitized Input"
           },
           "threats": {
             "description": "Threat categories detected.",
+            "examples": [
+              [
+                "PROMPT_INJECTION"
+              ]
+            ],
             "items": {
               "type": "string"
             },
@@ -4161,6 +4829,9 @@
           },
           "trace_id": {
             "description": "Identifier for this scan; reads back via GET /v1/ai/requests/{trace_id}.",
+            "examples": [
+              "req_2c31dee1bfda40a0b178c932d659f039"
+            ],
             "title": "Trace Id",
             "type": "string"
           }
@@ -4185,18 +4856,22 @@
         "description": "Always all four keys, zero-filled. A severity absent from the range is a\nzero rather than a missing key, so a dashboard needs no defaulting.",
         "properties": {
           "CRITICAL": {
+            "description": "Matching requests recorded at this risk level.",
             "title": "Critical",
             "type": "integer"
           },
           "HIGH": {
+            "description": "Matching requests recorded at this risk level.",
             "title": "High",
             "type": "integer"
           },
           "LOW": {
+            "description": "Matching requests recorded at this risk level.",
             "title": "Low",
             "type": "integer"
           },
           "MEDIUM": {
+            "description": "Matching requests recorded at this risk level.",
             "title": "Medium",
             "type": "integer"
           }
@@ -4215,11 +4890,17 @@
         "properties": {
           "block_threshold": {
             "description": "At or above this risk score the decision is BLOCK.",
+            "examples": [
+              0.7
+            ],
             "title": "Block Threshold",
             "type": "number"
           },
           "sanitize_threshold": {
             "description": "At or above this, and below the block threshold, the decision is SANITIZE.",
+            "examples": [
+              0.4
+            ],
             "title": "Sanitize Threshold",
             "type": "number"
           }
@@ -4263,16 +4944,25 @@
         "properties": {
           "block_threshold": {
             "description": "At or above this risk score the decision is BLOCK.",
+            "examples": [
+              0.7
+            ],
             "title": "Block Threshold",
             "type": "number"
           },
           "sanitize_threshold": {
             "description": "At or above this, and below the block threshold, the decision is SANITIZE.",
+            "examples": [
+              0.4
+            ],
             "title": "Sanitize Threshold",
             "type": "number"
           },
           "updated_at": {
             "description": "When this update was applied, ISO-8601 UTC with a Z suffix.",
+            "examples": [
+              "2026-08-26T14:22:31.482Z"
+            ],
             "title": "Updated At",
             "type": "string"
           }
