@@ -424,6 +424,10 @@ function makeScanResult(data: Record<string, unknown>): ScanResult {
     // v1.7.0 Security Assessment: structured verdict passed through as-is
     // (camelizeKeys has already camelCased its keys).
     assessment:           (d["assessment"] as Record<string, unknown> | undefined) ?? undefined,
+    decisionVersion:      String(d["decisionVersion"] ?? ""),
+    // undefined, not null: this field is ABSENT when not requested or not
+    // permitted, and the SDK keeps that distinction rather than flattening it.
+    debug:                (d["debug"] as Record<string, unknown> | undefined) ?? undefined,
   }
 
   return {
@@ -482,6 +486,19 @@ function makeAuditLog(data: Record<string, unknown>): AuditLog {
 
     // ML detection metadata
     modelVersion:        d["model_version"]  != null ? String(d["model_version"])  : null,
+
+    // Agent correlation. Always present in the body, null when the caller sent
+    // none -- so null means "not supplied", never "not available".
+    runId:               d["runId"]      != null ? String(d["runId"])      : null,
+    sessionId:           d["sessionId"]  != null ? String(d["sessionId"])  : null,
+    turnIndex:           d["turnIndex"]  != null ? Number(d["turnIndex"])  : null,
+
+    // Tamper-evident chain. prevHash is null for the first row in a tenant's
+    // chain, which is a real position in the chain and not missing data.
+    prevHash:            d["prevHash"]   != null ? String(d["prevHash"])   : null,
+    recordHash:          d["recordHash"] != null ? String(d["recordHash"]) : null,
+
+    inputSource:         String(d["inputSource"] ?? ""),
   }
 }
 
@@ -503,6 +520,11 @@ function makeAuditStats(data: Record<string, unknown>): AuditStats {
     severityCounts: (d["severityCounts"] as any) ?? {
       CRITICAL: 0, HIGH: 0, MEDIUM: 0, LOW: 0,
     },
+    allowRate:      ar,
+    sanitizeRate:   sr,
+    avgRisk:        Number(d["avgRisk"] ?? 0),
+    periodFrom:     String(d["periodFrom"] ?? ""),
+    periodTo:       String(d["periodTo"]   ?? ""),
   }
 }
 

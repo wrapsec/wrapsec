@@ -47,6 +47,16 @@ class ScanResult:
     # (decision, reasons, threats, confidence, and per-layer contributions).
     assessment:            dict[str, Any] | None = None
 
+    # Version of the decision contract this verdict was produced under. Always
+    # sent; a caller pinning behaviour reads it rather than inferring from shape.
+    decision_version:      str = ""
+
+    # Admin-only detector diagnostics, and the one field here that is genuinely
+    # ABSENT rather than null when it does not apply: it is returned only when
+    # an admin key asked for it. None therefore means "not requested or not
+    # permitted", not "no diagnostics".
+    debug:                 dict[str, Any] | None = None
+
     @classmethod
     def from_dict(cls, data: dict[str, Any]) -> ScanResult:
         processing = data.get("processing") or {}
@@ -68,6 +78,8 @@ class ScanResult:
             sanitized_input      = data.get("sanitized_input"),
             output               = data.get("output"),
             assessment           = data.get("assessment"),
+            decision_version     = data.get("decision_version", ""),
+            debug                = data.get("debug"),
         )
 
     @property
@@ -222,6 +234,26 @@ class AuditLog:
     # ML detection metadata
     model_version:        str | None = None
 
+    # Agent correlation. Caller-supplied and always present in the body, though
+    # null when the caller sent none; `run_id` is the handle that reads a whole
+    # multi-turn run back via GET /v1/agent-runs/{run_id}. Correlation only --
+    # the gateway never treats any of the three as an authorization input.
+    run_id:               str | None = None
+    session_id:           str | None = None
+    turn_index:           int | None = None
+
+    # Tamper-evident chain. `record_hash` is this row's hash and `prev_hash`
+    # links it to the preceding one, which is null for the first row in a
+    # tenant's chain. Exposed so a caller can verify the chain itself rather
+    # than having to trust the response that carries it.
+    prev_hash:            str | None = None
+    record_hash:          str | None = None
+
+    # Declared provenance of the scanned input, e.g. `user_prompt` or
+    # `retrieved_document`. Always sent; defaulted only for a server that
+    # predates the field.
+    input_source:         str = ""
+
     @classmethod
     def from_dict(cls, data: dict[str, Any]) -> AuditLog:
         return cls(
@@ -255,6 +287,12 @@ class AuditLog:
             provider             = data.get("provider"),
             model                = data.get("model"),
             model_version        = data.get("model_version"),
+            run_id               = data.get("run_id"),
+            session_id           = data.get("session_id"),
+            turn_index           = data.get("turn_index"),
+            prev_hash            = data.get("prev_hash"),
+            record_hash          = data.get("record_hash"),
+            input_source         = data.get("input_source", ""),
         )
 
 
@@ -282,6 +320,21 @@ class AuditStats:
         "CRITICAL": 0, "HIGH": 0, "MEDIUM": 0, "LOW": 0
     })
 
+    # The rates the API reports directly. `block_rate` was already exposed and
+    # these two were not, though both were being read to derive their counts --
+    # so a caller could get the count and not the fraction it came from.
+    allow_rate:      float = 0.0
+    sanitize_rate:   float = 0.0
+
+    # Mean aggregate risk across matching requests, 0.0-1.0. Distinct from the
+    # rates: those are proportions of a decision, this is a severity average.
+    avg_risk:        float = 0.0
+
+    # The window the figures cover, echoed from the query or defaulted by the
+    # server. Without them a caller cannot tell what period a number describes.
+    period_from:     str = ""
+    period_to:       str = ""
+
     @classmethod
     def from_dict(cls, data: dict[str, Any]) -> AuditStats:
         total      = int(data.get("total_requests", 0))
@@ -300,6 +353,11 @@ class AuditStats:
             severity_counts = data.get("severity_counts") or {
                 "CRITICAL": 0, "HIGH": 0, "MEDIUM": 0, "LOW": 0
             },
+            allow_rate      = allow_rate,
+            sanitize_rate   = san_rate,
+            avg_risk        = float(data.get("avg_risk", 0.0)),
+            period_from     = data.get("period_from", ""),
+            period_to       = data.get("period_to", ""),
         )
 
 

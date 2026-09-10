@@ -64,6 +64,18 @@ export interface ScanResult {
    * decision, reasons, threats, confidence, and per-layer contributions.
    */
   assessment?:     Record<string, unknown>
+  /**
+   * Version of the decision contract this verdict was produced under. Always
+   * sent; a caller pinning behaviour reads it rather than inferring from shape.
+   */
+  decisionVersion: string
+  /**
+   * Admin-only detector diagnostics. The one field here that is genuinely
+   * ABSENT rather than null when it does not apply -- returned only when an
+   * admin key asked for it, so undefined means "not requested or not
+   * permitted", not "no diagnostics".
+   */
+  debug?:          Record<string, unknown>
 
   // Convenience properties
   readonly isBlocked:     boolean
@@ -118,6 +130,28 @@ export interface AuditLog {
 
   // ML detection metadata
   modelVersion:        string | null
+
+  /**
+   * Agent correlation. Caller-supplied and always present in the body, though
+   * null when the caller sent none; runId is the handle that reads a whole
+   * multi-turn run back via GET /v1/agent-runs/{run_id}. Correlation only --
+   * the gateway never treats any of the three as an authorization input.
+   */
+  runId:               string | null
+  sessionId:           string | null
+  turnIndex:           number | null
+
+  /**
+   * Tamper-evident chain. recordHash is this row's hash and prevHash links it
+   * to the preceding one, which is null for the first row in a tenant's chain.
+   * Exposed so a caller can verify the chain itself rather than having to trust
+   * the response that carries it.
+   */
+  prevHash:            string | null
+  recordHash:          string | null
+
+  /** Declared provenance of the scanned input, e.g. "user_prompt". */
+  inputSource:         string
 }
 
 // ── Audit stats ────────────────────────────────────────────────────────────
@@ -137,6 +171,19 @@ export interface AuditStats {
     MEDIUM:   number
     LOW:      number
   }
+
+  /**
+   * The rates the API reports directly. blockRate was already exposed and these
+   * two were not, though both were being read to derive their counts -- so a
+   * caller could get the count and not the fraction it came from.
+   */
+  allowRate:      number
+  sanitizeRate:   number
+  /** Mean aggregate risk across matching requests, 0.0-1.0. */
+  avgRisk:        number
+  /** The window the figures cover, echoed from the query or defaulted. */
+  periodFrom:     string
+  periodTo:       string
 }
 
 // ── scan() options ─────────────────────────────────────────────────────────

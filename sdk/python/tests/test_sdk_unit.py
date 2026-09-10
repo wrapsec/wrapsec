@@ -1237,3 +1237,147 @@ class TestScanBatch:
         client = make_client()
         with pytest.raises(ValueError):
             client.scan_batch(["x"], mode="turbo")
+
+
+# ── F-045: fields the API sends that the models must carry ───────────────────
+#
+# Two of these groups are not conveniences. Each is a capability the API
+# deliberately offers that was UNREACHABLE through this client until now: a
+# multi-turn agent run could not be correlated, and the tamper-evident chain
+# could not be verified. The rest close smaller gaps in the same drift.
+#
+# Optionality mirrors the API rather than being chosen: a field the API always
+# sends but may set to null is `X | None`, and null means the value is absent,
+# not that the field is. `debug` is the one field genuinely ABSENT rather than
+# null when it does not apply.
+
+class TestAgentCorrelationFieldsSurvive:
+    """run_id is the handle GET /v1/agent-runs/{run_id} reads a run back by.
+    Without it on the model, a caller holding scan results cannot reconstruct
+    the run they belong to -- the feature exists server-side and is unreachable
+    from here."""
+
+    def test_the_trio_is_carried_through_from_dict(self):
+        from wrapsec.models import AuditLog
+
+        log = AuditLog.from_dict({
+            "trace_id": "req_1", "timestamp": "2026-01-01T00:00:00Z",
+            "decision": "ALLOW", "primary_reason": "NO_THREAT_DETECTED",
+            "run_id": "run_42", "session_id": "sess_7", "turn_index": 3,
+        })
+
+        assert log.run_id     == "run_42"
+        assert log.session_id == "sess_7"
+        assert log.turn_index == 3
+
+    def test_an_uncorrelated_scan_reads_back_as_null_not_missing(self):
+        """The caller supplied none. The API still sends all three as null, and
+        null has to survive as null: a caller distinguishing "not part of a run"
+        from "run data unavailable" reads exactly this."""
+        from wrapsec.models import AuditLog
+
+        log = AuditLog.from_dict({
+            "trace_id": "req_1", "decision": "ALLOW",
+            "run_id": None, "session_id": None, "turn_index": None,
+        })
+
+        assert log.run_id is None
+        assert log.session_id is None
+        assert log.turn_index is None
+
+    def test_turn_index_zero_is_preserved(self):
+        """Zero is a real position -- the FIRST turn. A truthiness test would
+        turn it into None and silently move every run's first turn."""
+        from wrapsec.models import AuditLog
+
+        log = AuditLog.from_dict({"trace_id": "r", "decision": "ALLOW", "turn_index": 0})
+
+        assert log.turn_index == 0, "the first turn of a run was lost"
+
+
+class TestAuditChainFieldsSurvive:
+    """The chain is published so a caller can verify it independently. A client
+    that drops the hashes makes that verification impossible through the SDK,
+    which defeats the reason they are exposed at all."""
+
+    def test_both_hashes_are_carried(self):
+        from wrapsec.models import AuditLog
+
+        log = AuditLog.from_dict({
+            "trace_id": "req_1", "decision": "ALLOW",
+            "prev_hash": "a" * 64, "record_hash": "b" * 64,
+        })
+
+        assert log.prev_hash   == "a" * 64
+        assert log.record_hash == "b" * 64
+
+    def test_a_null_prev_hash_is_the_first_row_not_missing_data(self):
+        """Null `prev_hash` means this row STARTS the tenant's chain. A verifier
+        treating it as absent would report a broken chain on a correct one."""
+        from wrapsec.models import AuditLog
+
+        log = AuditLog.from_dict({
+            "trace_id": "req_1", "decision": "ALLOW",
+            "prev_hash": None, "record_hash": "b" * 64,
+        })
+
+        assert log.prev_hash is None
+        assert log.record_hash == "b" * 64
+
+
+class TestTheRemainingAddedFields:
+
+    def test_input_source_is_carried(self):
+        from wrapsec.models import AuditLog
+
+        log = AuditLog.from_dict({"trace_id": "r", "decision": "ALLOW",
+                                  "input_source": "retrieved_document"})
+        assert log.input_source == "retrieved_document"
+
+    def test_scan_carries_the_decision_version_and_debug(self):
+        from wrapsec.models import ScanResult
+
+        result = ScanResult.from_dict({
+            "decision": "ALLOW", "primary_reason": "NO_THREAT_DETECTED",
+            "decision_version": "v1.0", "debug": {"layers": {"rule": 0.0}},
+        })
+        assert result.decision_version == "v1.0"
+        assert result.debug == {"layers": {"rule": 0.0}}
+
+    def test_debug_is_none_when_not_returned(self):
+        """Absent, not null: it is withheld unless an admin key asked for it, so
+        None here means "not requested or not permitted", not "no diagnostics"."""
+        from wrapsec.models import ScanResult
+
+        result = ScanResult.from_dict({"decision": "ALLOW", "primary_reason": "X"})
+        assert result.debug is None
+
+    def test_stats_carries_the_rates_it_was_already_reading(self):
+        """`allow_rate` and `sanitize_rate` were parsed to derive counts and then
+        discarded, so a caller could get the count and not the fraction."""
+        from wrapsec.models import AuditStats
+
+        stats = AuditStats.from_dict({
+            "total_requests": 100, "block_rate": 0.1, "sanitize_rate": 0.2,
+            "allow_rate": 0.7, "avg_risk": 0.35,
+            "period_from": "2026-01-01T00:00:00Z", "period_to": "2026-01-02T00:00:00Z",
+        })
+
+        assert stats.allow_rate    == 0.7
+        assert stats.sanitize_rate == 0.2
+        assert stats.avg_risk      == 0.35
+        assert stats.period_from   == "2026-01-01T00:00:00Z"
+        assert stats.period_to     == "2026-01-02T00:00:00Z"
+        # the derived counts still work off the same rates
+        assert stats.allow_count == 70
+
+
+def test_no_added_field_is_required_at_construction():
+    """Every field added here carries a default, so existing code constructing
+    these models positionally or by keyword keeps working. That is what makes
+    this an ADDITIVE SDK change rather than one needing a major release."""
+    from wrapsec.models import AuditLog, AuditStats, ScanResult
+
+    ScanResult.from_dict({"decision": "ALLOW", "primary_reason": "X"})
+    AuditLog.from_dict({"trace_id": "r", "decision": "ALLOW"})
+    AuditStats.from_dict({"total_requests": 0})

@@ -861,3 +861,92 @@ describe("auditExport()", () => {
   })
 
 })
+
+// ── F-045: fields the API sends that the types must carry ──────────────────
+//
+// Two groups here are capabilities, not conveniences. Until these fields were
+// added, a caller holding SDK results could not correlate a multi-turn agent
+// run and could not verify the tamper-evident chain -- both are things the API
+// deliberately publishes and neither was reachable from this client.
+//
+// `in` rather than a truthiness check throughout: every one of these is
+// nullable, and null is meaningful. null runId means "not part of a run", null
+// prevHash means "first row in the chain". A truthiness test would erase both
+// distinctions and pass anyway.
+
+describe("F-045 agent correlation fields", () => {
+
+  it("runId, sessionId and turnIndex are present on an audit log", async () => {
+    const client = makeClient()
+    const logs   = await client.auditList({ limit: 1 })
+    if (logs.length > 0) {
+      const log = logs[0]
+      assert.ok("runId"     in log, "runId missing: a run cannot be reconstructed")
+      assert.ok("sessionId" in log)
+      assert.ok("turnIndex" in log)
+    }
+  })
+
+  it("their types are string|null and number|null, never undefined", async () => {
+    const client = makeClient()
+    const logs   = await client.auditList({ limit: 1 })
+    if (logs.length > 0) {
+      const log = logs[0]
+      assert.ok(log.runId     === null || typeof log.runId     === "string")
+      assert.ok(log.sessionId === null || typeof log.sessionId === "string")
+      assert.ok(log.turnIndex === null || typeof log.turnIndex === "number")
+      assert.notEqual(log.runId, undefined, "null was flattened to undefined")
+    }
+  })
+})
+
+describe("F-045 audit chain fields", () => {
+
+  it("prevHash and recordHash are present so the chain can be verified", async () => {
+    const client = makeClient()
+    const logs   = await client.auditList({ limit: 1 })
+    if (logs.length > 0) {
+      const log = logs[0]
+      assert.ok("prevHash"   in log, "prevHash missing: the chain cannot be walked")
+      assert.ok("recordHash" in log, "recordHash missing: the row cannot be checked")
+      assert.ok(log.prevHash   === null || typeof log.prevHash   === "string")
+      assert.ok(log.recordHash === null || typeof log.recordHash === "string")
+    }
+  })
+})
+
+describe("F-045 remaining added fields", () => {
+
+  it("inputSource is carried on an audit log", async () => {
+    const client = makeClient()
+    const logs   = await client.auditList({ limit: 1 })
+    if (logs.length > 0) {
+      assert.equal(typeof logs[0].inputSource, "string")
+    }
+  })
+
+  it("scan carries decisionVersion", async () => {
+    const client = makeClient()
+    const result = await client.scan("hello from the contract check")
+    assert.equal(typeof result.decisionVersion, "string")
+    assert.ok(result.decisionVersion.length > 0, "decisionVersion came back empty")
+  })
+
+  it("debug stays undefined when it was not requested", async () => {
+    // ABSENT, not null: withheld unless an admin key asks for it, and the SDK
+    // keeps that distinct from a null value.
+    const client = makeClient()
+    const result = await client.scan("hello again from the contract check")
+    assert.equal(result.debug, undefined)
+  })
+
+  it("stats carry the rates, the mean risk and the period", async () => {
+    const client = makeClient()
+    const stats  = await client.auditStats()
+    assert.equal(typeof stats.allowRate,    "number")
+    assert.equal(typeof stats.sanitizeRate, "number")
+    assert.equal(typeof stats.avgRisk,      "number")
+    assert.equal(typeof stats.periodFrom,   "string")
+    assert.equal(typeof stats.periodTo,     "string")
+  })
+})
