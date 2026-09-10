@@ -7,7 +7,7 @@ test:
 	pytest tests/unit tests/integration -v
 
 # Integration tests against a DISPOSABLE Postgres AND Redis. Spins an
-# ephemeral postgres:16-alpine on port 55432 and redis:7-alpine on 56379
+# ephemeral postgres:16-alpine and redis:7-alpine, each on a port the daemon picks
 # (both clear of the compose stack on 5432/6379), points the app and the
 # tests at them, then removes both -- even if the tests fail.
 #
@@ -25,18 +25,27 @@ test:
 # already in there. Both stores are now throwaway, which is also what the CI
 # job provides. Requires Docker; without it the integration tier skips
 # gracefully under plain `make test`.
+# Both containers publish on an EPHEMERAL port, read back with `docker port`,
+# rather than on a fixed high port. A host can reserve arbitrary high port
+# blocks for its own use, and a hardcoded port that lands inside one fails to
+# publish -- the tier then dies before it starts, with a daemon error that reads
+# like a Docker fault rather than a taken port. Letting the daemon pick removes
+# the guess.
 test-integration:
 	@bash -c 'set -e; \
 	cleanup() { docker rm -f $$CID $$RID >/dev/null 2>&1 || true; }; \
 	trap cleanup EXIT; \
-	CID=$$(docker run --rm -d -e POSTGRES_USER=wrapsec -e POSTGRES_PASSWORD=wrapsec -e POSTGRES_DB=wrapsec_test -p 55432:5432 postgres:16-alpine \
+	CID=$$(docker run --rm -d -e POSTGRES_USER=wrapsec -e POSTGRES_PASSWORD=wrapsec -e POSTGRES_DB=wrapsec_test -p 0:5432 postgres:16-alpine \
 	  -c fsync=off -c synchronous_commit=off -c full_page_writes=off); \
-	RID=$$(docker run --rm -d -p 56379:6379 redis:7-alpine); \
-	echo "waiting for the disposable postgres and redis..."; \
+	RID=$$(docker run --rm -d -p 0:6379 redis:7-alpine); \
+	PG_PORT=$$(docker port $$CID 5432 | head -1 | sed "s/.*://"); \
+	RD_PORT=$$(docker port $$RID 6379 | head -1 | sed "s/.*://"); \
+	test -n "$$PG_PORT" -a -n "$$RD_PORT" || { echo "could not read the published ports"; exit 1; }; \
+	echo "waiting for the disposable postgres ($$PG_PORT) and redis ($$RD_PORT)..."; \
 	for i in $$(seq 1 30); do docker exec $$CID pg_isready -U wrapsec -d wrapsec_test >/dev/null 2>&1 && break; sleep 1; done; \
 	for i in $$(seq 1 30); do docker exec $$RID redis-cli ping >/dev/null 2>&1 && break; sleep 1; done; \
-	URL=postgresql+asyncpg://wrapsec:wrapsec@localhost:55432/wrapsec_test; \
-	DATABASE_URL=$$URL WRAPSEC_TEST_PG_URL=$$URL REDIS_URL=redis://localhost:56379/0 TESTING=true pytest tests/integration -v'
+	URL=postgresql+asyncpg://wrapsec:wrapsec@localhost:$$PG_PORT/wrapsec_test; \
+	DATABASE_URL=$$URL WRAPSEC_TEST_PG_URL=$$URL REDIS_URL=redis://localhost:$$RD_PORT/0 TESTING=true pytest tests/integration -v'
 
 # End-to-end browser journeys against an EPHEMERAL stack. Brings up postgres,
 # redis, api, and dashboard under their own compose project (separate
@@ -90,13 +99,16 @@ coverage:
 	@bash -c 'set -e; \
 	cleanup() { docker rm -f $$CID $$RID >/dev/null 2>&1 || true; }; \
 	trap cleanup EXIT; \
-	CID=$$(docker run --rm -d -e POSTGRES_USER=wrapsec -e POSTGRES_PASSWORD=wrapsec -e POSTGRES_DB=wrapsec_test -p 55432:5432 postgres:16-alpine \
+	CID=$$(docker run --rm -d -e POSTGRES_USER=wrapsec -e POSTGRES_PASSWORD=wrapsec -e POSTGRES_DB=wrapsec_test -p 0:5432 postgres:16-alpine \
 	  -c fsync=off -c synchronous_commit=off -c full_page_writes=off); \
-	RID=$$(docker run --rm -d -p 56379:6379 redis:7-alpine); \
+	RID=$$(docker run --rm -d -p 0:6379 redis:7-alpine); \
+	PG_PORT=$$(docker port $$CID 5432 | head -1 | sed "s/.*://"); \
+	RD_PORT=$$(docker port $$RID 6379 | head -1 | sed "s/.*://"); \
+	test -n "$$PG_PORT" -a -n "$$RD_PORT" || { echo "could not read the published ports"; exit 1; }; \
 	for i in $$(seq 1 30); do docker exec $$CID pg_isready -U wrapsec -d wrapsec_test >/dev/null 2>&1 && break; sleep 1; done; \
 	for i in $$(seq 1 30); do docker exec $$RID redis-cli ping >/dev/null 2>&1 && break; sleep 1; done; \
-	URL=postgresql+asyncpg://wrapsec:wrapsec@localhost:55432/wrapsec_test; \
-	DATABASE_URL=$$URL WRAPSEC_TEST_PG_URL=$$URL REDIS_URL=redis://localhost:56379/0 TESTING=true coverage run -m pytest tests/unit tests/integration -q; \
+	URL=postgresql+asyncpg://wrapsec:wrapsec@localhost:$$PG_PORT/wrapsec_test; \
+	DATABASE_URL=$$URL WRAPSEC_TEST_PG_URL=$$URL REDIS_URL=redis://localhost:$$RD_PORT/0 TESTING=true coverage run -m pytest tests/unit tests/integration -q; \
 	coverage html; \
 	coverage report'
 
