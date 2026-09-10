@@ -34,6 +34,7 @@ and still belong to the published API surface. Do not merge the three lists.
 from __future__ import annotations
 
 import json
+import re
 import subprocess
 import sys
 from pathlib import Path
@@ -2005,4 +2006,185 @@ def test_the_chat_id_example_is_derived_from_the_trace_id_example():
     assert chat_id == f"wrapsec-{trace_id}", (
         f"chat id example {chat_id!r} is not `wrapsec-` + the meta trace_id "
         f"example {trace_id!r}; the two describe different calls"
+    )
+
+
+# ── Phase D / §23: the checks D1 measured, held as guards ─────────────────────
+#
+# D1 audited four properties of the committed artifact that nothing was watching.
+# Three of them are structural and belong here. Each is written to catch the
+# CLASS rather than the instance that prompted it, so a NEW field inherits the
+# guard without anyone remembering to extend a list.
+
+
+def _response_referenced(doc: dict) -> set[str]:
+    """Every schema reachable from a response body, transitively.
+
+    The request half of the document is deliberately excluded. `api_key` is
+    published on two request bodies -- correctly, and marked `writeOnly` -- so a
+    check that walked the whole document would fire on the one place the field
+    belongs, and its absence there would be the actual defect.
+    """
+    schemas = doc["components"]["schemas"]
+    found: set[str] = set()
+
+    def collect(node) -> None:
+        if isinstance(node, dict):
+            ref = node.get("$ref")
+            if ref:
+                name = ref.rsplit("/", 1)[-1]
+                if name not in found:
+                    found.add(name)
+                    collect(schemas.get(name, {}))
+            for value in node.values():
+                collect(value)
+        elif isinstance(node, list):
+            for value in node:
+                collect(value)
+
+    for operations in doc.get("paths", {}).values():
+        for operation in operations.values():
+            if isinstance(operation, dict) and "responses" in operation:
+                collect(operation["responses"])
+    return found
+
+
+def _response_properties(doc: dict):
+    """(model, property, spec, required) for every property on a response model."""
+    schemas = doc["components"]["schemas"]
+    for name in sorted(_response_referenced(doc)):
+        schema   = schemas.get(name, {})
+        required = set(schema.get("required") or [])
+        for prop, spec in (schema.get("properties") or {}).items():
+            yield name, prop, spec, prop in required
+
+
+# Columns that hold a credential, a key, or a chain secret. None may ever be a
+# published response field. Listed by their ORM names so the second half of the
+# guard can prove the column still exists: a rename that outran this list would
+# otherwise leave a guard that passes because it is checking for nothing.
+_NEVER_PUBLISHED_COLUMNS = {
+    "password_hash", "key_hash", "secret_enc", "token_hash", "token_version",
+    "old_secrets",
+}
+
+# Names that LOOK like the above but are published on purpose. Each is a value a
+# consumer is meant to have, and each is recorded with the reason it is safe.
+_PUBLISHED_HASH_FIELDS = {
+    "input_hash":  "Handle on a prompt the storage mode did not retain. It is the "
+                   "privacy-preserving reference, so withholding it would remove "
+                   "the only way to correlate a scan with its input.",
+    "prev_hash":   "The audit chain's link to the previous record. Publishing it "
+                   "is what lets an auditor verify the chain independently.",
+    "record_hash": "The audit record's own hash, for the same reason.",
+}
+
+_SENSITIVE_NAME = re.compile(
+    r"password|passwd|secret|salt|private|credential|encrypted|cipher"
+    r"|_hash$|^hash$|token_version|refresh_token|session_token|nonce",
+    re.IGNORECASE,
+)
+
+
+def test_no_response_field_carries_a_credential_or_a_chain_secret():
+    """A published response field whose name says credential is either a leak or
+    a lie, and both are worth failing on.
+
+    Mutation check: adding `password_hash` to any response model fails this.
+    """
+    doc = _committed()
+    offenders = [
+        f"{model}.{prop}"
+        for model, prop, _spec, _req in _response_properties(doc)
+        if _SENSITIVE_NAME.search(prop) and prop not in _PUBLISHED_HASH_FIELDS
+    ]
+    assert not offenders, (
+        "response fields whose names indicate a credential or chain secret:\n  "
+        + "\n  ".join(sorted(offenders))
+        + "\nIf one is deliberate, record it in _PUBLISHED_HASH_FIELDS with the "
+          "reason it is safe to publish."
+    )
+
+
+def test_the_credential_columns_this_guard_names_still_exist():
+    """The guard above is only worth as much as its list. If a column is renamed
+    and the list is not, the check quietly stops covering anything -- it would
+    still pass while the renamed column was published under its new name."""
+    from db import models
+
+    source  = Path(models.__file__).read_text(encoding="utf-8")
+    missing = [c for c in sorted(_NEVER_PUBLISHED_COLUMNS) if f"{c}:" not in source]
+    assert not missing, (
+        f"columns named by this guard no longer exist in db/models.py: {missing}. "
+        "They were renamed or removed; update _NEVER_PUBLISHED_COLUMNS so the "
+        "check keeps covering the real credential surface."
+    )
+
+
+def test_no_credential_column_name_appears_as_a_response_field():
+    """The other direction, against the real column names rather than a pattern."""
+    doc = _committed()
+    published = {prop for _m, prop, _s, _r in _response_properties(doc)}
+    leaked    = sorted(_NEVER_PUBLISHED_COLUMNS & published)
+    assert not leaked, f"credential columns published as response fields: {leaked}"
+
+
+# The vocabulary a description uses to say "this field may not be here". Held to
+# a closed set on purpose: the guard below reads descriptions, so a new way of
+# phrasing absence would silently opt a field out of it.
+_ABSENCE_LANGUAGE = re.compile(r"\babsent\b|\bomitted\b|present only|not present",
+                               re.IGNORECASE)
+
+
+def test_optional_response_fields_are_exactly_the_ones_documented_as_absent():
+    """`response_model_exclude_unset=True` is set on all 26 modelled routes, so
+    OPTIONAL in the schema means "may be missing from the body" -- not "may be
+    null". The two are different contracts and a consumer handles them
+    differently.
+
+    Held in both directions because each failure is real and neither is visible
+    from one side alone:
+
+      * required, yet described as absent-able -- the schema promises a field the
+        runtime omits, which is the contract lie this phase exists to prevent;
+      * optional, yet not described as absent-able -- the field can vanish and
+        nothing tells the consumer, so absence reads as a bug in the caller.
+
+    Mutation check: making `ScanResponse.debug` required fails the first half;
+    removing "Present only" from its description fails the second.
+    """
+    doc = _committed()
+
+    optional, documented = set(), set()
+    for model, prop, spec, required in _response_properties(doc):
+        if not required:
+            optional.add(f"{model}.{prop}")
+        if _ABSENCE_LANGUAGE.search(spec.get("description", "")):
+            documented.add(f"{model}.{prop}")
+
+    assert optional, "no optional response fields found; this guard would pass vacuously"
+
+    assert not (documented - optional), (
+        "response fields described as possibly absent but declared REQUIRED:\n  "
+        + "\n  ".join(sorted(documented - optional))
+        + "\nA required field is always emitted. Either the description is wrong "
+          "or the field should carry a default."
+    )
+    assert not (optional - documented), (
+        "response fields that may be absent but do not say so:\n  "
+        + "\n  ".join(sorted(optional - documented))
+        + "\nA consumer cannot tell an optional field from a missing one. State "
+          "the condition in the description, using 'absent', 'omitted', "
+          "'present only' or 'not present'."
+    )
+
+
+def test_health_ready_publishes_both_of_its_statuses():
+    """The probe answers 503 when a dependency is down, and that is the status a
+    consumer most needs declared -- an orchestrator reading only the 200 would
+    treat the schema as saying the probe cannot fail."""
+    doc = _committed()
+    declared = set(doc["paths"]["/health/ready"]["get"]["responses"])
+    assert {"200", "503"} <= declared, (
+        f"/health/ready declares {sorted(declared)}; both 200 and 503 are reachable"
     )
