@@ -241,7 +241,17 @@ async def _enrich(
     # present and sometimes null -- so the flag changes no output here; it keeps
     # the family consistent and stays correct if an optional field is added.
     response_model_exclude_unset = True,
-    responses                    = _READ_ERRORS,
+    # Declared on THIS route rather than added to `_READ_ERRORS`, which
+    # `/v1/audit/stats` also uses. The gate below is not specific to either
+    # route, so putting it in the shared dict would declare it on stats as a
+    # side effect of documenting it here -- and a declaration is a claim that
+    # the status is reachable and tested at that operation. Stats carries the
+    # same exposure and is deliberately left undeclared until it has its own
+    # evidence.
+    responses                    = {
+        **_READ_ERRORS,
+        403: {"model": ErrorEnvelope, "description": "The credential is valid but not usable yet: the account must change its password before any other endpoint is served (`PASSWORD_CHANGE_REQUIRED`)."},
+    },
 )
 async def get_audit_logs(
     request:         Request,

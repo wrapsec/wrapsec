@@ -5406,6 +5406,16 @@
             },
             "description": "Missing or invalid credentials."
           },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "The credential is restricted to named source networks and this request did not come from one (`IP_NOT_ALLOWED`)."
+          },
           "422": {
             "content": {
               "application/json": {
@@ -5947,6 +5957,16 @@
               }
             },
             "description": "Missing or invalid credentials."
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "The credential is valid but not usable yet: the account must change its password before any other endpoint is served (`PASSWORD_CHANGE_REQUIRED`)."
           },
           "422": {
             "content": {

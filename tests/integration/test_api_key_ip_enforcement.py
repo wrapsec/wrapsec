@@ -700,3 +700,61 @@ class TestRateLimitAccounting:
                 )
         finally:
             get_settings.cache_clear()
+
+
+# ── the declared half of the contract ─────────────────────────────────────────
+
+class TestTheBatchRouteDeclaresThisRefusal:
+    """`POST /v1/ai/scan-batch` now publishes a 403 for this control.
+
+    The refusal was reachable there long before it was declared, which is the
+    shape every shared-machinery error in this API has had: the route's own
+    source says nothing about it, so reading the handler never reveals it. It
+    was found by recording what the suite actually receives over HTTP.
+
+    `test_each_api_key_endpoint_refuses` above already proves the STATUS. This
+    proves the CODE, which is the half a declaration actually promises -- a
+    consumer branching on `error.code` needs the value, not just the number, and
+    a 403 carrying some other code would satisfy the status assertion while
+    breaking that consumer.
+    """
+
+    @pytest.mark.asyncio
+    async def test_the_batch_denial_carries_the_declared_code(self, app, test_db):
+        raw, _ = await _seed_key(test_db, [ALLOWED_NET])
+
+        resp = await _request(app, api_key=raw, peer_ip=DENIED_IP,
+                              path="/v1/ai/scan-batch",
+                              json_body={"items": [{"input": "hello"}]})
+
+        assert resp.status_code == 403, resp.text
+        body = resp.json()
+        assert set(body) == {"error"}, (
+            f"the denial is not the catalog envelope: {sorted(body)}"
+        )
+        assert body["error"]["code"] == "IP_NOT_ALLOWED", (
+            f"the batch route declares IP_NOT_ALLOWED but returned "
+            f"{body['error']['code']!r}"
+        )
+
+    @pytest.mark.asyncio
+    async def test_the_batch_route_does_not_claim_the_single_scans_403(self):
+        """The two routes' 403s are different refusals and must not be conflated.
+
+        `/v1/ai/request` declares a 403 for the debug and capability refusal it
+        raises itself. The batch route has neither a debug parameter nor a
+        capability gate, so claiming that cause here would advertise a refusal
+        it cannot produce.
+        """
+        import json as _json
+        from pathlib import Path
+
+        schema = _json.loads(
+            (Path(__file__).resolve().parents[2] / "docs" / "openapi.json")
+            .read_text(encoding="utf-8")
+        )
+        batch = schema["paths"]["/v1/ai/scan-batch"]["post"]["responses"]["403"]
+        assert "IP_NOT_ALLOWED" in batch["description"]
+        assert "FEATURE_UNAVAILABLE" not in batch["description"], (
+            "the batch route advertises a capability refusal it has no gate for"
+        )

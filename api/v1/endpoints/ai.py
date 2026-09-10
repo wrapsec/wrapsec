@@ -74,6 +74,12 @@ _SCAN_ERRORS: dict[int | str, dict[str, Any]] = {
 _BATCH_ERRORS: dict[int | str, dict[str, Any]] = {
     **_UNAUTHORIZED,
     400: {"model": ErrorEnvelope, "description": "An item exceeds the trial-key character cap."},
+    # NOT the same 403 the single-scan route declares. That one is the debug and
+    # capability refusal raised by the route itself; this is the key's own source
+    # restriction, applied by the auth middleware before the handler runs. The
+    # batch route has no debug parameter and no capability gate, so
+    # `FEATURE_UNAVAILABLE` is not reachable here and is deliberately not claimed.
+    403: {"model": ErrorEnvelope, "description": "The credential is restricted to named source networks and this request did not come from one (`IP_NOT_ALLOWED`)."},
     422: {"model": ErrorEnvelope, "description": "Request body failed validation, including the batch-size and per-item length caps."},
     429: {"model": ErrorEnvelope, "description": "Rate limit exceeded. A batch is charged as N units, not one."},
 }

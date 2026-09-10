@@ -456,6 +456,16 @@ _SHARED_ERROR_DECLARATIONS = [
     ("/v1/ai/request",              "post", "409", "IDEMPOTENCY_CONFLICT"),
     ("/v1/chat/completions",        "post", "401", "UNAUTHORIZED"),
     ("/v1/chat/completions",        "post", "409", "IDEMPOTENCY_CONFLICT"),
+    # Both 403s below were reachable and undeclared until a recording of what the
+    # suite actually receives over HTTP found them. Neither is raised by the
+    # route's own body, which is why reading the handler never showed them, and
+    # neither is specific to the operation -- the source restriction applies to
+    # every api-key endpoint and the password gate to every jwt one. They are
+    # declared HERE and not on their siblings because a declaration claims the
+    # status is reachable AND tested at that operation, and these two are the
+    # ones with that evidence.
+    ("/v1/ai/scan-batch",           "post", "403", "IP_NOT_ALLOWED"),
+    ("/v1/audit/logs",              "get",  "403", "PASSWORD_CHANGE_REQUIRED"),
 ]
 
 
