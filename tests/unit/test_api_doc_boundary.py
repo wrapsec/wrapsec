@@ -166,3 +166,147 @@ def test_the_page_documents_more_than_the_public_surface():
     assert any(label == "NOT PUBLIC" for label in documented.values()), (
         "no endpoint is labelled NOT PUBLIC, so the boundary is not being drawn"
     )
+
+
+# ── the page's response examples against the schema ──────────────────────────
+#
+# The tests above hold the page's endpoint LIST to the boundary. Nothing held
+# its CONTENT to anything: a response example could show a field the API does
+# not send, and the only thing that would notice is a reader trying to use it.
+#
+# ASYMMETRIC ON PURPOSE. A field the page OMITS is not a defect -- most examples
+# are deliberately partial, and requiring completeness would make every added
+# field a documentation failure. A field the page SHOWS that the schema does not
+# publish is drift by definition.
+
+import json as _json
+
+_SCHEMA_FILE = Path(__file__).resolve().parents[2] / "docs" / "openapi.json"
+
+# Bold markers that introduce a block. The page writes error examples as
+# "**Input blocked (400):**" as often as "**Response 400:**", so ANY marker
+# naming a 4xx/5xx ends the success context -- matching only the latter leaves
+# the previous success marker in force and reads an error body as the success
+# shape.
+_STATUS_IN_MARKER = re.compile(r"^\*\*.*\b[45]\d\d\b")
+_SUCCESS_MARKER   = re.compile(r"^\*\*(Response|Success)\b")
+_INPUT_MARKER     = re.compile(r"^\*\*(Request|Query|Body|Header)")
+_JSON_KEY         = re.compile(r'^\s*"([A-Za-z_][A-Za-z0-9_]*)"\s*:', re.MULTILINE)
+
+
+def _schema_properties() -> dict[tuple[str, str], set[str]]:
+    """(method, normalized path) -> every property name reachable from its
+    success response, including nested models and list items."""
+    doc     = _json.loads(_SCHEMA_FILE.read_text(encoding="utf-8"))
+    schemas = doc["components"]["schemas"]
+
+    def walk(model: str, seen: set[str]) -> set[str]:
+        if model in seen or model not in schemas:
+            return set()
+        seen.add(model)
+        names: set[str] = set()
+        for prop, spec in (schemas[model].get("properties") or {}).items():
+            names.add(prop)
+            ref = spec.get("$ref") or next(
+                (b["$ref"] for b in spec.get("anyOf", []) if "$ref" in b), None)
+            ref = ref or (spec.get("items") or {}).get("$ref")
+            if ref:
+                names |= walk(ref.rsplit("/", 1)[-1], seen)
+        return names
+
+    out: dict[tuple[str, str], set[str]] = {}
+    for path, operations in doc.get("paths", {}).items():
+        for method, operation in operations.items():
+            if method.lower() not in {"get", "post", "put", "patch", "delete"}:
+                continue
+            ok = (operation.get("responses", {}).get("200")
+                  or operation.get("responses", {}).get("201"))
+            if not ok:
+                continue
+            ref = ((ok.get("content") or {}).get("application/json", {})
+                   .get("schema", {}).get("$ref", ""))
+            if ref:
+                out[(method.upper(), _normalize(path))] = walk(ref.rsplit("/", 1)[-1], set())
+    return out
+
+
+def _documented_success_blocks():
+    """Yield (method, normalized path, block text) for success-response examples.
+
+    Skipped blocks still have their fences tracked: treating a skipped opening
+    fence as absent makes the NEXT closing fence read as an opening one, and
+    every block after it inverts.
+    """
+    endpoint: tuple[str, str] | None = None
+    in_success = False
+    in_fence   = False
+    capturing  = False
+    block: list[str] = []
+
+    for line in _DOC.read_text(encoding="utf-8").splitlines():
+        if not in_fence:
+            heading = _HEADING.match(line)
+            if heading:
+                endpoint   = (heading.group(1), _normalize(heading.group(2)))
+                in_success = False
+                continue
+            if line.startswith("#"):
+                endpoint = None
+            if _STATUS_IN_MARKER.match(line):
+                in_success = False
+                continue
+            if _SUCCESS_MARKER.match(line):
+                in_success = True
+                continue
+            if _INPUT_MARKER.match(line):
+                in_success = False
+                continue
+
+        if line.strip().startswith("```"):
+            if not in_fence:
+                in_fence  = True
+                capturing = bool(endpoint) and in_success
+                block     = []
+            else:
+                if capturing and endpoint:
+                    yield endpoint[0], endpoint[1], "\n".join(block)
+                in_fence  = capturing = False
+            continue
+
+        if capturing:
+            block.append(line)
+
+
+def test_the_page_shows_no_response_field_the_schema_does_not_publish():
+    """Documentation drift, in the direction that misleads a reader.
+
+    Mutation check: adding `"invented_field": 1` to any public endpoint's
+    success example fails this.
+    """
+    properties = _schema_properties()
+
+    checked = 0
+    drift: dict[str, set[str]] = {}
+    for method, path, text in _documented_success_blocks():
+        known = properties.get((method, path))
+        if known is None:
+            continue                       # not a public endpoint with a model
+        keys = set(_JSON_KEY.findall(text))
+        if not keys:
+            continue
+        checked += 1
+        unknown = keys - known
+        if unknown:
+            drift.setdefault(f"{method} {path}", set()).update(unknown)
+
+    assert checked >= 10, (
+        f"only {checked} documented success examples were matched to a public "
+        "endpoint; the page's markup changed and this guard is now reading "
+        "almost nothing"
+    )
+    assert not drift, (
+        "docs/api.md shows response fields the schema does not publish:\n  "
+        + "\n  ".join(f"{e}: {sorted(v)}" for e, v in sorted(drift.items()))
+        + "\nThe schema is the authority for a public operation, as the page "
+          "itself states. Either the example is stale or the field was removed."
+    )
