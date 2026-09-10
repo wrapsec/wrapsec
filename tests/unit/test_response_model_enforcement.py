@@ -283,6 +283,63 @@ def test_fastapi_filters_a_value_return_but_not_a_response_object():
         assert schema == {"$ref": "#/components/schemas/Model"}
 
 
+def test_fastapi_rejects_a_body_the_model_cannot_accept():
+    """The other half of the premise, and the one the per-family probes rest on.
+
+    The test above pins FILTERING: an undeclared field is stripped. That alone
+    does not show the model REJECTS anything, and a suite that only ever adds
+    fields would never find out. These three are the mutations the family probes
+    apply, checked once here against the installed framework so that a change in
+    its behaviour fails in one obvious place rather than as a scatter of
+    per-family tests that quietly stop meaning anything.
+
+    Note what the second case establishes: responses are served with unset
+    fields excluded, so an absent OPTIONAL field is normal. A required field
+    going missing therefore has to be the loud case, or the two are
+    indistinguishable on the wire.
+    """
+    class Nested(BaseModel):
+        depth: int
+
+    class Model(BaseModel):
+        required_field: str
+        number:         float
+        nested:         Nested
+
+    probe = FastAPI()
+    good  = {"required_field": "a", "number": 1.0, "nested": {"depth": 1}}
+
+    @probe.get("/ok", response_model=Model, response_model_exclude_unset=True)
+    def _ok():
+        return dict(good)
+
+    @probe.get("/missing", response_model=Model, response_model_exclude_unset=True)
+    def _missing():
+        return {k: v for k, v in good.items() if k != "required_field"}
+
+    @probe.get("/wrong-type", response_model=Model, response_model_exclude_unset=True)
+    def _wrong_type():
+        return {**good, "number": "not-a-number"}
+
+    @probe.get("/bad-nested", response_model=Model, response_model_exclude_unset=True)
+    def _bad_nested():
+        return {**good, "nested": "not-an-object"}
+
+    client = TestClient(probe, raise_server_exceptions=False)
+
+    assert client.get("/ok").status_code == 200, (
+        "the control body was refused, so the probe proves nothing about the rest"
+    )
+    for path, mutation in (("/missing",    "a missing required field"),
+                           ("/wrong-type", "an uncoercible type"),
+                           ("/bad-nested", "a nested model replaced by a scalar")):
+        assert client.get(path).status_code == 500, (
+            f"the framework SERVED a body carrying {mutation}. Response-model "
+            "validation is not active, and every rejection test in this suite "
+            "is passing for the wrong reason."
+        )
+
+
 # ── the invariant ────────────────────────────────────────────────────────────
 
 def test_the_public_route_list_matches_the_application():

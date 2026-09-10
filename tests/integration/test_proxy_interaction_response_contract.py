@@ -341,3 +341,54 @@ async def test_an_unparseable_limit_returns_the_catalog_envelope(client, owned_i
     assert r.status_code == 422, r.text
     assert r.json()["error"]["code"] == "VALIDATION_ERROR"
     assert r.json()["error"]["invalid_params"][0]["field"] == "limit"
+
+
+# ── the list refuses an item the model cannot accept ─────────────────────────
+
+@pytest.mark.asyncio
+async def test_the_list_will_not_serve_a_wrong_typed_item(
+    client, owned_interaction, monkeypatch,
+):
+    """This family had no rejection probe either -- both existing tests prove
+    filtering.
+
+    `_serialize` builds BOTH bodies, so corrupting it here exercises the list;
+    the detail route shares the helper and the same model inheritance, which is
+    what carries the declaration to it.
+    """
+    from fastapi.exceptions import ResponseValidationError
+
+    from api.v1.endpoints import proxy_interactions
+
+    original = proxy_interactions._serialize
+
+    called = []
+
+    def _corrupt(item, detail=False):
+        called.append(True)
+        body = original(item, detail=detail)
+        body["total_latency_ms"] = "ages"
+        return body
+
+    monkeypatch.setattr(proxy_interactions, "_serialize", _corrupt)
+
+    headers, _ = owned_interaction
+
+    try:
+        r = await client.get("/v1/proxy/interactions", headers=headers)
+    except ResponseValidationError as rejected:
+        assert "total_latency_ms" in str(rejected), (
+            f"validation rejected the listing, but not for total_latency_ms: {rejected}"
+        )
+        return
+
+    # A clean 200 is not evidence: it is what an unapplied corruption also
+    # produces. See the note on the same shape in the scan family.
+    assert called, (
+        "`_serialize` was never called, so no item was corrupted and this test "
+        "proved nothing about validation"
+    )
+    assert r.status_code == 500, (
+        f"an item violating the declared type was served with {r.status_code}, "
+        "so the response model is not validating this route"
+    )

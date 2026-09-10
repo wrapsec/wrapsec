@@ -626,3 +626,115 @@ async def test_an_unknown_trace_names_the_resource_by_token(client, live_key_hea
     # own trace_id instead.
     assert ghost not in r.text
     assert error["trace_id"] != ghost
+
+
+# ── the scan route refuses a body the model cannot accept ────────────────────
+#
+# The three tests above prove FILTERING on this route: a field the model does
+# not declare is stripped. That is a different property from REJECTION, and only
+# rejection shows the model is validating rather than just projecting. The
+# read-back route has a type probe already; the scan route, the busiest exit in
+# the API, had none.
+#
+# Each patches `_build_response`, which is where a real writer bug would sit,
+# and each corrupts one thing so the failure names it. The corrupted body is
+# also what gets CACHED, so every one of these uses a unique input -- a poisoned
+# entry under a shared key would surface as an unrelated failure later in the
+# run.
+
+
+async def _scan_rejects(client, headers, corrupt, expect_named, monkeypatch):
+    """Corrupt the scan writer, then assert the caller never sees the result.
+
+    Validation raises rather than returning, and the test transport re-raises
+    instead of converting it to the 500 a served deployment returns. Both
+    outcomes satisfy the claim -- the invalid body did not reach the caller.
+
+    What is NOT accepted is a clean 200. A probe that merely checks the bad
+    value is absent from the body passes when the corruption never applied,
+    which is the same vacuous pass an unapplied mutation gives: the seam moves,
+    the writer is never called, and the test keeps reporting success while
+    proving nothing. So the writer records that it ran, and the only non-raising
+    outcome allowed is the 500 a served deployment would return.
+    """
+    from fastapi.exceptions import ResponseValidationError
+
+    from api.v1.endpoints import ai
+
+    original = ai._build_response
+    called   = []
+
+    def _corrupt(*args, **kwargs):
+        called.append(True)
+        return corrupt(original(*args, **kwargs))
+
+    monkeypatch.setattr(ai, "_build_response", _corrupt)
+    await _clear_prompt_cache()
+
+    try:
+        served = await client.post("/v1/ai/request",
+                                   json={"input": f"contract rejection {_unique()}"},
+                                   headers=headers)
+    except ResponseValidationError as rejected:
+        assert expect_named in str(rejected), (
+            f"validation rejected the body, but not for {expect_named}: {rejected}"
+        )
+        return
+
+    assert called, (
+        "the scan writer was never called, so nothing was corrupted and this "
+        "test proved nothing -- the patched seam is no longer the one the route "
+        "builds its body with"
+    )
+    assert served.status_code == 500, (
+        f"the corrupted body was served with {served.status_code}, so the "
+        f"response model is not validating this route: {served.text[:200]}"
+    )
+
+
+@pytest.mark.asyncio
+async def test_a_fresh_scan_will_not_serve_a_wrong_typed_risk_score(
+    client, live_key_headers, monkeypatch,
+):
+    """`risk_score` is a float the caller may threshold on. A string that is not
+    a number cannot be coerced, so a writer emitting one must fail rather than
+    serve a body whose most load-bearing field is unusable."""
+    def _corrupt(body):
+        body["risk_score"] = "high"
+        return body
+
+    await _scan_rejects(client, live_key_headers, _corrupt, "risk_score", monkeypatch)
+
+
+@pytest.mark.asyncio
+async def test_a_fresh_scan_will_not_serve_a_body_missing_a_required_field(
+    client, live_key_headers, monkeypatch,
+):
+    """The class no probe in this suite covered: a field REMOVED rather than
+    added or retyped.
+
+    It matters more than it looks. Responses are served with unset fields
+    excluded, so absence is a normal, meaningful outcome for an optional field --
+    which is exactly why a required field going missing has to be the loud case.
+    If it were not, the two would be indistinguishable on the wire and a dropped
+    field would read to a caller as an optional one that simply did not apply.
+    """
+    def _corrupt(body):
+        body.pop("decision")
+        return body
+
+    await _scan_rejects(client, live_key_headers, _corrupt, "decision", monkeypatch)
+
+
+@pytest.mark.asyncio
+async def test_a_fresh_scan_will_not_serve_an_invalid_nested_assessment(
+    client, live_key_headers, monkeypatch,
+):
+    """Nested models are only enforced if validation recurses. `assessment` is a
+    model, not a scalar, so replacing it with a string is rejected only when the
+    nested shape is checked rather than the top-level keys."""
+    def _corrupt(body):
+        body["assessment"] = "not-an-object"
+        return body
+
+    await _scan_rejects(client, live_key_headers, _corrupt, "assessment", monkeypatch)

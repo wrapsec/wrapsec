@@ -240,3 +240,57 @@ async def test_an_out_of_range_limit_returns_the_catalog_envelope(client, live_k
     body = r.json()
     assert body["error"]["code"] == "VALIDATION_ERROR"
     assert body["error"]["invalid_params"][0]["field"] == "limit"
+
+
+# ── the timeline refuses a turn the model cannot accept ──────────────────────
+
+@pytest.mark.asyncio
+async def test_a_timeline_will_not_serve_an_invalid_turn(client, live_key, monkeypatch):
+    """This family had no rejection probe at all: the test above proves the model
+    FILTERS an undeclared field, which a body could also survive by accident.
+
+    The corruption goes inside a LIST item rather than at the envelope, because
+    that is the shape this route actually returns and the one a top-level check
+    would miss. `turns` is a list of models, so a wrong-typed `risk_score` in one
+    turn is caught only if validation recurses into each element rather than
+    checking that the value is a list.
+    """
+    from fastapi.exceptions import ResponseValidationError
+
+    from api.v1.endpoints import agent_runs
+
+    original = agent_runs._format_item
+
+    called = []
+
+    def _corrupt(*args, **kwargs):
+        called.append(True)
+        turn = original(*args, **kwargs)
+        turn["risk_score"] = "very"
+        return turn
+
+    monkeypatch.setattr(agent_runs, "_format_item", _corrupt)
+
+    headers, _, _ = live_key
+    run_id = f"run-{_unique()}"
+    await _record_turns(client, headers, run_id, count=1)
+
+    try:
+        r = await client.get(f"/v1/agent-runs/{run_id}", headers=headers)
+    except ResponseValidationError as rejected:
+        assert "risk_score" in str(rejected), (
+            f"validation rejected the timeline, but not for risk_score: {rejected}"
+        )
+        return
+
+    # A clean 200 is not evidence: it is what an unapplied corruption also
+    # produces. The writer must have run, and the only non-raising outcome
+    # allowed is the 500 a served deployment returns.
+    assert called, (
+        "`_format_item` was never called, so no turn was corrupted and this "
+        "test proved nothing about validation"
+    )
+    assert r.status_code == 500, (
+        f"a turn violating the declared type was served with {r.status_code}, "
+        "so validation is not recursing into the elements of `turns`"
+    )
