@@ -738,3 +738,33 @@ async def test_a_fresh_scan_will_not_serve_an_invalid_nested_assessment(
         return body
 
     await _scan_rejects(client, live_key_headers, _corrupt, "assessment", monkeypatch)
+
+
+# ── the published vocabularies, checked against a real body ──────────────────
+
+@pytest.mark.asyncio
+async def test_a_scan_body_only_carries_published_vocabulary_values(
+    client, live_key_headers,
+):
+    """The scan family publishes vocabularies on bare `str` fields, so the
+    runtime cannot reject a value outside one -- `decision`, `primary_reason`,
+    `confidence_band` and the rest are advertised, not enforced.
+
+    A published example asserting a `risk_level` no code path emits already got
+    through both model validation and full schema validation for exactly this
+    reason. This checks the other direction: what a WRITER actually emits on a
+    real request.
+    """
+    from ._vocabularies import assert_published_vocabulary, vocabulary_count
+
+    assert vocabulary_count("ScanResponse") > 0, (
+        "ScanResponse publishes no vocabularies, so this check walks nothing"
+    )
+
+    await _clear_prompt_cache()
+    r = await client.post("/v1/ai/request",
+                          json={"input": f"vocabulary check {_unique()}"},
+                          headers=live_key_headers)
+
+    assert r.status_code == 200, r.text
+    assert_published_vocabulary(r.json(), "ScanResponse")

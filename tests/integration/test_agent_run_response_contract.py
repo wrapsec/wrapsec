@@ -294,3 +294,28 @@ async def test_a_timeline_will_not_serve_an_invalid_turn(client, live_key, monke
         f"a turn violating the declared type was served with {r.status_code}, "
         "so validation is not recursing into the elements of `turns`"
     )
+
+
+# ── the published vocabularies, checked against a real body ──────────────────
+
+@pytest.mark.asyncio
+async def test_a_timeline_only_carries_published_vocabulary_values(client, live_key):
+    """`turns` is a list of `AuditItem`, which is where this family's
+    vocabularies live -- so the check has to recurse into list elements rather
+    than stopping at the envelope."""
+    from ._vocabularies import assert_published_vocabulary, vocabulary_count
+
+    assert vocabulary_count("AgentRunResponse") > 0, (
+        "AgentRunResponse publishes no vocabularies, so this check walks nothing"
+    )
+
+    headers, _, _ = live_key
+    run_id = f"run-{_unique()}"
+    await _record_turns(client, headers, run_id, count=1)
+
+    r = await client.get(f"/v1/agent-runs/{run_id}", headers=headers)
+
+    assert r.status_code == 200, r.text
+    body = r.json()
+    assert body["turns"], "no turns came back, so nothing was checked"
+    assert_published_vocabulary(body, "AgentRunResponse")

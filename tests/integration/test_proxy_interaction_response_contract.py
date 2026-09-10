@@ -392,3 +392,25 @@ async def test_the_list_will_not_serve_a_wrong_typed_item(
         f"an item violating the declared type was served with {r.status_code}, "
         "so the response model is not validating this route"
     )
+
+
+# ── why this family has no runtime vocabulary check ──────────────────────────
+#
+# The other two families assert that a real body only carries values the schema
+# publishes. This one deliberately does not, and the reason is worth stating so
+# nobody adds it later.
+#
+# These bodies are STORED ROWS, not values a writer just produced. The fixtures
+# here seed `execution_status="completed"` -- a value production never writes
+# and the published vocabulary does not contain -- and
+# `test_the_proxy_interaction_runtime_still_accepts_an_unknown_value` asserts it
+# must still round-trip, because the schema documents the vocabulary and does
+# not enforce it. A historical row holding a retired value has to keep reading
+# back rather than turning into a 500.
+#
+# So a runtime check here would assert the fixture, and would contradict that
+# position the moment it passed. The writer side is guarded instead, in
+# `tests/unit/test_proxy_status_vocabulary.py`: the constants this family's
+# producer can emit must all be published values. That is the half Option C
+# actually needs -- what the API EMITS is closed, what it ACCEPTS on read-back
+# stays open.
