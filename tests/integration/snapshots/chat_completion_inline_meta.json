@@ -18,10 +18,10 @@
       "execution_status": "SUCCESS",
       "input_confidence": 1.0,
       "input_primary_reason": "NO_THREAT_DETECTED",
-      "input_sanitized": false,
+      "input_was_sanitized": false,
       "model": "gpt-4o",
       "output_decision": "ALLOW",
-      "output_sanitized": false,
+      "output_was_sanitized": false,
       "provider": "openai",
       "total_latency_ms": "<float>",
       "trace_id": "<trace_id>"

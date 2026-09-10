@@ -1028,8 +1028,8 @@ def test_the_chat_runtime_still_accepts_an_unknown_value():
 
     meta = R.ChatCompletionMeta(
         trace_id="req_x", decision="BLOCK", input_primary_reason="WHATEVER",
-        input_confidence=1.0, input_sanitized=False, output_decision=None,
-        output_sanitized=False, execution_status="TIMEOUT",
+        input_confidence=1.0, input_was_sanitized=False, output_decision=None,
+        output_was_sanitized=False, execution_status="TIMEOUT",
         provider="something-new", model="m", total_latency_ms=1,
     )
     assert meta.execution_status == "TIMEOUT"

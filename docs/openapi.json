@@ -1407,9 +1407,9 @@
             "title": "Input Primary Reason",
             "type": "string"
           },
-          "input_sanitized": {
-            "description": "True when the prompt was rewritten before being forwarded.",
-            "title": "Input Sanitized",
+          "input_was_sanitized": {
+            "description": "True when the prompt was rewritten before being forwarded. A flag, not the text: the rewritten prompt is `input_sanitized` on the read-back models, and this block never carries it.",
+            "title": "Input Was Sanitized",
             "type": "boolean"
           },
           "model": {
@@ -1440,9 +1440,9 @@
             "description": "Verdict on the reply. A blocked reply never reaches this body.",
             "title": "Output Decision"
           },
-          "output_sanitized": {
-            "description": "True when the reply was rewritten before being returned.",
-            "title": "Output Sanitized",
+          "output_was_sanitized": {
+            "description": "True when the reply was rewritten before being returned. A flag, not the text: the rewritten reply is `output_sanitized` on the read-back models, and this block never carries it.",
+            "title": "Output Was Sanitized",
             "type": "boolean"
           },
           "provider": {
@@ -1484,9 +1484,9 @@
           "decision",
           "input_primary_reason",
           "input_confidence",
-          "input_sanitized",
+          "input_was_sanitized",
           "output_decision",
-          "output_sanitized",
+          "output_was_sanitized",
           "execution_status",
           "provider",
           "model",
