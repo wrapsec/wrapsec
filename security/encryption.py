@@ -30,7 +30,7 @@ import os
 from cryptography.exceptions import InvalidTag
 from cryptography.hazmat.primitives.ciphers.aead import AESGCM
 
-from security.kek import DerivedSecretKEK
+from security.kek import derived_kek_for
 
 _NONCE_LEN = 12
 _TAG_LEN   = 16
@@ -46,7 +46,7 @@ def encrypt(plaintext: str, secret_key: str) -> str:
     Envelope-encrypt a plaintext string. Returns "<key_id>:<base64 payload>" with
     key_id="primary". Safe to store in the database.
     """
-    kek         = DerivedSecretKEK(secret_key)
+    kek         = derived_kek_for(secret_key)
     dek         = os.urandom(_DEK_LEN)
     wrapped_dek = kek.wrap(dek)
 
@@ -78,7 +78,7 @@ def decrypt(encrypted: str, secret_key: str) -> str:
 
 def _decrypt_primary(b64_payload: str, secret_key: str) -> str:
     raw = base64.b64decode(b64_payload.encode("utf-8"))
-    kek = DerivedSecretKEK(secret_key)
+    kek = derived_kek_for(secret_key)
     wrapped_len = kek.wrapped_length
     if len(raw) < wrapped_len + _NONCE_LEN + _TAG_LEN:
         raise ValueError("ciphertext too short")

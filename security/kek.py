@@ -28,6 +28,7 @@ from __future__ import annotations
 import hashlib
 import os
 from abc import ABC, abstractmethod
+from functools import lru_cache
 
 from cryptography.exceptions import InvalidTag
 from cryptography.hazmat.primitives.ciphers.aead import AESGCM
@@ -70,8 +71,14 @@ class DerivedSecretKEK(KeyEncryptionKey):
     holds the same SECRET_KEY. AES-256-GCM wraps the DEK with a fresh
     12-byte nonce; total wrapped length is deterministic (see WRAPPED_LEN).
 
-    The class is safe to instantiate on the hot path -- KEK derivation
-    happens once per instance and the AESGCM object is cheap.
+    Derivation is deliberately expensive: PBKDF2 with 100,000 iterations costs
+    around 20ms, which is the point of a password-based KDF.
+
+    That makes CONSTRUCTION the thing to avoid repeating, not the wrap/unwrap
+    calls. Use `derived_kek_for()` below rather than constructing this directly
+    on a request path: an instance per call pays the 20ms every time, and this
+    key is derived on every policy resolution carrying provider credentials and
+    on every webhook signature.
     """
 
     _PBKDF2_SALT       = b"wrapsec-proxy-enc-salt-v1"
@@ -114,3 +121,24 @@ class DerivedSecretKEK(KeyEncryptionKey):
     @property
     def wrapped_length(self) -> int:
         return self.WRAPPED_LEN
+
+
+@lru_cache(maxsize=8)
+def derived_kek_for(secret_key: str) -> DerivedSecretKEK:
+    """A KEK for this secret, derived once and reused.
+
+    The derivation is ~20ms of PBKDF2 and depends on nothing but the secret, so
+    repeating it per call buys nothing. It was being repeated on every encrypt
+    and every decrypt -- which put it on the policy-resolution path, where a
+    tenant with stored provider credentials paid it on every request.
+
+    KEYED BY THE SECRET, which is what makes rotation correct without an
+    invalidation hook: a changed secret is a different key and therefore a
+    different entry, so nothing stale is ever returned. Bounded, so a deployment
+    that rotates repeatedly cannot grow this without limit.
+
+    The derived key lives in process memory beside the secret it came from,
+    which the process already holds; caching adds no exposure that was not
+    already present.
+    """
+    return DerivedSecretKEK(secret_key)
