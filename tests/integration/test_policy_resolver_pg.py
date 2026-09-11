@@ -21,8 +21,9 @@ import pytest
 from config.settings import get_settings
 from db.models import ApplicationModel, DepartmentModel, TenantModel
 from db.repositories.settings import TenantSettingsRepository
+from errors.exceptions import PolicyResolutionDegraded
 from security.encryption import encrypt
-from services.policy_resolver import resolve_policy
+from services.policy_resolver import resolve_policy, resolve_policy_for_preview
 
 pytestmark = pytest.mark.pg
 
@@ -169,21 +170,38 @@ async def test_invalid_thresholds_revert_to_system_defaults(pg_db):
     assert policy["thresholds"]["sanitize"] == s.sanitize_threshold
 
 
-@pytest.mark.asyncio
-async def test_bad_dept_id_is_swallowed_and_defaults_returned(pg_db):
-    # A malformed dept_id raises inside the department load try/except; the resolver
-    # logs and continues with defaults rather than failing the request.
-    policy, source = await resolve_policy(pg_db, dept_id="not-a-uuid")
-
-    assert source == "system_default"
-    assert policy["thresholds"]["block"] == get_settings().block_threshold
+# These two used to assert the OPPOSITE: that a department or application load
+# failure was swallowed and the system defaults returned as though resolution had
+# succeeded. That was the defect -- an override that failed to load may have
+# TIGHTENED the policy, and serving the un-tightened base silently relaxed the
+# tenant that asked for more strictness. They are re-pinned to the corrected
+# contract rather than removed, so the old behaviour cannot return unnoticed.
 
 
 @pytest.mark.asyncio
-async def test_bad_app_id_is_swallowed_and_defaults_returned(pg_db):
-    # Same fault-tolerance for a malformed app_id in the application load path.
+async def test_a_bad_dept_id_refuses_rather_than_falling_back(pg_db):
+    with pytest.raises(PolicyResolutionDegraded) as refused:
+        await resolve_policy(pg_db, dept_id="not-a-uuid")
+
+    assert "department" in refused.value.failed_layers
+
+
+@pytest.mark.asyncio
+async def test_a_bad_app_id_refuses_rather_than_falling_back(pg_db):
     tid = await _tenant(pg_db)
-    policy, source = await resolve_policy(pg_db, tenant_id=str(tid), app_id="not-a-uuid")
 
-    assert source == "system_default"
+    with pytest.raises(PolicyResolutionDegraded) as refused:
+        await resolve_policy(pg_db, tenant_id=str(tid), app_id="not-a-uuid")
+
+    assert "application" in refused.value.failed_layers
+
+
+@pytest.mark.asyncio
+async def test_the_same_failure_is_rendered_not_refused_for_a_preview(pg_db):
+    """The other half of the decision: a preview renders the policy, it does not
+    apply it, so it degrades visibly instead of refusing."""
+    policy, source, degraded = await resolve_policy_for_preview(pg_db, dept_id="not-a-uuid")
+
+    assert degraded is True
+    assert source == "degraded"
     assert policy["thresholds"]["block"] == get_settings().block_threshold

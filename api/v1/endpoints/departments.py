@@ -339,14 +339,18 @@ async def get_department_policy(
     """
     _require_dept_scope(request, dept_id)
 
-    from services.policy_resolver import resolve_policy
+    from services.policy_resolver import resolve_policy_for_preview
 
     repo   = DepartmentRepository(db)
     dept   = await repo.get_by_id(uuid.UUID(dept_id))
     if not dept or str(dept.tenant_id) != request.state.tenant_id:
         raise NotFoundError("department", dept_id)
 
-    policy, policy_source = await resolve_policy(
+    # Preview, not enforcement: this renders the effective policy, it does not
+    # apply it. A degraded resolution is therefore shown rather than refused --
+    # but it is MARKED, so the page cannot present system defaults as though
+    # they were this department's resolved policy.
+    policy, policy_source, policy_degraded = await resolve_policy_for_preview(
         db        = db,
         tenant_id = str(dept.tenant_id),
         dept_id   = dept_id,
@@ -357,6 +361,7 @@ async def get_department_policy(
         "dept_id":         dept_id,
         "dept_name":       dept.name,
         "policy_source":   policy_source,
+        "policy_degraded": policy_degraded,
         "override_set":    dept.policy_override is not None,
         "policy_override": _mask_policy_override(dept.policy_override),
         "resolved_policy": policy,

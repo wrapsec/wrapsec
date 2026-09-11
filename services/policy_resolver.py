@@ -8,6 +8,7 @@ import uuid
 from config.settings import get_settings
 from db.repositories.application import ApplicationRepository
 from db.repositories.department import DepartmentRepository
+from errors.exceptions import PolicyResolutionDegraded
 from security.encryption import decrypt
 
 logger = logging.getLogger("wrapsec.policy")
@@ -117,10 +118,29 @@ async def resolve_policy(
     # fallback values). system_defaults() also fetches its own snapshot.
     settings = get_settings()
 
-    policy = system_defaults()
+    # The fallback, and never mutated. Everything below builds a SEPARATE
+    # working copy and commits it only when the whole load completes, so the
+    # failure result is always exactly the defaults.
+    #
+    # This is defence in depth, not a live bug fix, and the distinction is
+    # worth keeping accurate. The four stored reads are hoisted above the
+    # assignments that consume them, so today a read failure lands before any
+    # layer has been written and the old in-place code also returned clean
+    # defaults. The invariant held by ACCIDENT OF STATEMENT ORDER: move one
+    # read below one assignment -- or add a fifth setting and read it where it
+    # is used -- and a failure starts returning a mixture of this tenant's
+    # settings and the system's, with the split depending on which read failed.
+    # Building into a working copy makes the invariant structural instead.
+    policy   = system_defaults()
+    resolved = system_defaults()
 
     dept_override   = None
     app_override    = None
+
+    # Every layer that failed to load. A non-empty list means the effective
+    # policy is UNKNOWN, not "the defaults": the tenant may have tightened,
+    # loosened or changed nothing, and a failed read cannot tell those apart.
+    failed_layers: list[str] = []
 
     try:
         # Load DB settings layered env-default -> platform_settings -> tenant_settings
@@ -148,25 +168,25 @@ async def resolve_policy(
 
         # Apply global DB settings as tenant-level defaults
         if stored_thresholds:
-            policy["thresholds"]["block"]    = stored_thresholds.get("block_threshold",    policy["thresholds"]["block"])
-            policy["thresholds"]["sanitize"] = stored_thresholds.get("sanitize_threshold", policy["thresholds"]["sanitize"])
-            policy["guardrails"]["pii"]["block_threshold"]    = policy["thresholds"]["block"]
-            policy["guardrails"]["pii"]["sanitize_threshold"] = policy["thresholds"]["sanitize"]
+            resolved["thresholds"]["block"]    = stored_thresholds.get("block_threshold",    resolved["thresholds"]["block"])
+            resolved["thresholds"]["sanitize"] = stored_thresholds.get("sanitize_threshold", resolved["thresholds"]["sanitize"])
+            resolved["guardrails"]["pii"]["block_threshold"]    = resolved["thresholds"]["block"]
+            resolved["guardrails"]["pii"]["sanitize_threshold"] = resolved["thresholds"]["sanitize"]
 
         if stored_layers:
-            policy["detection"]["rule_enabled"] = stored_layers.get("rule_enabled", True)
-            policy["detection"]["ml_enabled"]   = stored_layers.get("ml_enabled",   True)
-            policy["detection"]["llm_enabled"]  = stored_layers.get("llm_enabled",  True)
+            resolved["detection"]["rule_enabled"] = stored_layers.get("rule_enabled", True)
+            resolved["detection"]["ml_enabled"]   = stored_layers.get("ml_enabled",   True)
+            resolved["detection"]["llm_enabled"]  = stored_layers.get("llm_enabled",  True)
 
         if stored_llm:
-            policy["llm"]["provider"] = stored_llm.get("provider", policy["llm"]["provider"])
-            policy["llm"]["model"]    = stored_llm.get("model",    policy["llm"]["model"])
-            policy["llm"]["base_url"] = stored_llm.get("base_url", policy["llm"]["base_url"])
-            policy["llm"]["timeout"]  = stored_llm.get("timeout",  policy["llm"]["timeout"])
-            policy["detection"]["llm_trigger"] = stored_llm.get("llm_trigger", policy["detection"]["llm_trigger"])
+            resolved["llm"]["provider"] = stored_llm.get("provider", resolved["llm"]["provider"])
+            resolved["llm"]["model"]    = stored_llm.get("model",    resolved["llm"]["model"])
+            resolved["llm"]["base_url"] = stored_llm.get("base_url", resolved["llm"]["base_url"])
+            resolved["llm"]["timeout"]  = stored_llm.get("timeout",  resolved["llm"]["timeout"])
+            resolved["detection"]["llm_trigger"] = stored_llm.get("llm_trigger", resolved["detection"]["llm_trigger"])
 
         if stored_rate_limit:
-            policy["rate_limit"]["per_minute"] = stored_rate_limit.get("per_minute", policy["rate_limit"]["per_minute"])
+            resolved["rate_limit"]["per_minute"] = stored_rate_limit.get("per_minute", resolved["rate_limit"]["per_minute"])
 
         # Tenant global_policy - intentionally skipped.
         # global_policy on the tenant is kept in the DB for future use
@@ -194,9 +214,14 @@ async def resolve_policy(
                     dept = None
                 if dept and dept.policy_override:
                     dept_override = dept.policy_override
-                    policy        = deep_merge(policy, dept_override)
+                    resolved      = deep_merge(resolved, dept_override)
             except Exception as e:
-                logger.warning(f"Failed to load department policy: {e}")
+                # NOT a warning-and-continue. A department override that failed
+                # to load may have TIGHTENED this tenant's policy; continuing
+                # would serve the un-tightened base as though it were the
+                # resolved answer, which is the same defect one layer down.
+                logger.error(f"Failed to load department policy: {e}")
+                failed_layers.append("department")
 
         # Application policy_override - applied if set; null inherits from department
         if app_id:
@@ -212,16 +237,22 @@ async def resolve_policy(
                     app = None
                 if app and app.policy_override:
                     app_override = app.policy_override
-                    policy       = deep_merge(policy, app_override)
+                    resolved     = deep_merge(resolved, app_override)
                 # rate_limit_override is a dedicated integer column - enforced separately
                 # from policy_override so it doesn't require JSONB knowledge to set.
                 if app and app.rate_limit_override is not None:
-                    policy["rate_limit"]["per_minute"] = app.rate_limit_override
+                    resolved["rate_limit"]["per_minute"] = app.rate_limit_override
             except Exception as e:
-                logger.warning(f"Failed to load application policy: {e}")
+                logger.error(f"Failed to load application policy: {e}")
+                failed_layers.append("application")
+
+        # Reached only when every layer above loaded. `policy` keeps the pure
+        # defaults until this point, so the except below needs no cleanup.
+        policy = resolved
 
     except Exception as e:
-        logger.error(f"Policy resolution failed: {e} - using system defaults")
+        logger.error(f"Policy resolution failed: {e} - effective policy is UNKNOWN")
+        failed_layers.append("tenant")
         try:
             from observability.metrics import SYSTEM_ERRORS
             SYSTEM_ERRORS.labels(execution_mode="unknown").inc()
@@ -276,4 +307,50 @@ async def resolve_policy(
         dept_override, app_override
     )
 
+    if failed_layers:
+        # Fail closed. The caller asked for the effective policy and there is
+        # no honest answer: serving the defaults here is precisely the silent
+        # relaxation this refuses to perform.
+        #
+        # Raising rather than returning a flag is deliberate. A returned flag
+        # can be ignored by a caller that never reads it, and the failure mode
+        # of ignoring it is to enforce under an unverified policy. An exception
+        # cannot be ignored by accident, and an enforcement path that does
+        # nothing about it fails SAFE.
+        raise PolicyResolutionDegraded(failed_layers)
+
     return policy, policy_source
+
+
+async def resolve_policy_for_preview(
+    db,
+    tenant_id: str | None = None,
+    dept_id:   str | None = None,
+    app_id:    str | None = None,
+) -> tuple[dict, str, bool]:
+    """Resolve for DISPLAY, tolerating a degraded result.
+
+    For callers that render a policy without applying it. They are not deciding
+    anything, so refusing them helps nobody -- but they must not present system
+    defaults as though they were the tenant's resolved policy.
+
+    Returns (policy, policy_source, degraded). The three-element return is the
+    point: a caller cannot receive a degraded policy from this function without
+    also receiving the fact that it is degraded, and cannot unpack it into the
+    two-element form the enforcement path uses.
+
+    NEVER call this from an enforcement path. `resolve_policy` is the one that
+    decides, and it refuses.
+    """
+    try:
+        policy, source = await resolve_policy(
+            db, tenant_id=tenant_id, dept_id=dept_id, app_id=app_id,
+        )
+        return policy, source, False
+    except PolicyResolutionDegraded as degraded:
+        logger.warning(
+            "policy preview degraded tenant=%s failed_layers=%s - "
+            "rendering system defaults, marked degraded",
+            tenant_id, degraded.failed_layers,
+        )
+        return system_defaults(), "degraded", True

@@ -23,7 +23,7 @@ from domain.enums import AdminEventAction
 from errors.exceptions import ConflictError, NotFoundError, ValidationError
 from security.encryption import decrypt, encrypt, mask
 from security.url_validator import validate_llm_base_url, validate_policy_override_urls
-from services.policy_resolver import resolve_policy
+from services.policy_resolver import resolve_policy_for_preview
 from services.slug import is_reserved_slug, slugify
 from services.time import to_iso_z
 
@@ -305,7 +305,8 @@ async def get_application_policy(
     if not app or str(app.tenant_id) != request.state.tenant_id:
         raise NotFoundError("application", str(app_id))
 
-    policy, policy_source = await resolve_policy(
+    # Preview, not enforcement -- see the note in the departments handler.
+    policy, policy_source, policy_degraded = await resolve_policy_for_preview(
         db        = db,
         tenant_id = str(app.tenant_id),
         dept_id   = str(app.dept_id),
@@ -317,6 +318,7 @@ async def get_application_policy(
         "app_name":        app.name,
         "dept_id":         str(app.dept_id),
         "policy_source":   policy_source,
+        "policy_degraded": policy_degraded,
         "override_set":    app.policy_override is not None,
         "policy_override": _mask_policy_override(app.policy_override),
         "resolved_policy": policy,
@@ -371,7 +373,8 @@ async def set_application_policy(
             app_id, e,
         )
 
-    policy, policy_source = await resolve_policy(
+    # Preview, not enforcement -- see the note in the departments handler.
+    policy, policy_source, policy_degraded = await resolve_policy_for_preview(
         db        = db,
         tenant_id = str(record.tenant_id),
         dept_id   = str(record.dept_id),
@@ -384,6 +387,7 @@ async def set_application_policy(
         "dept_id":         str(record.dept_id),
         "policy_override": _mask_policy_override(record.policy_override),
         "policy_source":   policy_source,
+        "policy_degraded": policy_degraded,
         "resolved_policy": policy,
         "updated":         True,
     })

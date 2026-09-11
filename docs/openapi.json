@@ -5270,6 +5270,16 @@
             },
             "description": "Rate limit exceeded: the global, trial, per-application or debug bucket."
           },
+          "500": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "The effective policy could not be established for this request (`DETECTION_ERROR`). The scan is refused rather than performed under an unverified policy: a failed tenant, department or application read cannot say whether that policy was stricter than the defaults."
+          },
           "502": {
             "content": {
               "application/json": {
@@ -5435,6 +5445,16 @@
               }
             },
             "description": "Rate limit exceeded. A batch is charged as N units, not one."
+          },
+          "500": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "The effective policy could not be established for this request (`DETECTION_ERROR`). The scan is refused rather than performed under an unverified policy: a failed tenant, department or application read cannot say whether that policy was stricter than the defaults."
           }
         },
         "summary": "Ai Scan Batch",

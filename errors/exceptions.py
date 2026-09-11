@@ -235,6 +235,43 @@ class LLMUnavailableError(WrapSecError):
         super().__init__(debug_message=f"LLM provider unavailable: {provider}" if provider else None)
 
 
+# -- Policy ----------------------------------------------------
+class PolicyResolutionDegraded(WrapSecError):
+    """The effective policy could not be established for this request.
+
+    Raised when a tenant, department or application policy layer fails to load.
+    The resolver cannot then say how strictly to judge: the tenant may have
+    TIGHTENED thresholds, disabled nothing, or loosened everything, and a failed
+    read is indistinguishable between those. Serving the system defaults would
+    silently relax a tenant that had tightened, which is the defect this exists
+    to prevent.
+
+    Carries `DETECTION_ERROR` rather than a new code. That is the catalog's
+    existing name for a security control that could not RUN, which is exactly
+    this condition -- the policy is the control that decides how the others
+    behave. It keeps the fail-closed vocabulary in one place instead of adding a
+    parallel one.
+
+    Enforcement callers do not catch this. Propagating IS the fail-closed
+    outcome, and a new endpoint that forgets about it fails safe by default
+    rather than enforcing under an unverified policy. Callers that legitimately
+    want degraded defaults -- previews that render a policy without applying it
+    -- call `resolve_policy_for_preview` instead, whose return arity forces them
+    to handle the degraded flag.
+    """
+
+    code = ErrorCode.DETECTION_ERROR
+
+    def __init__(self, failed_layers: list[str] | None = None):
+        self.failed_layers = failed_layers or []
+        super().__init__(
+            debug_message=(
+                "policy resolution degraded; layers that failed to load: "
+                + (", ".join(self.failed_layers) or "unknown")
+            ),
+        )
+
+
 # -- Internal --------------------------------------------------
 class InternalError(WrapSecError):
     code = ErrorCode.INTERNAL_ERROR

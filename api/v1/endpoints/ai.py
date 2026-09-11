@@ -68,6 +68,7 @@ _SCAN_ERRORS: dict[int | str, dict[str, Any]] = {
     403: {"model": ErrorEnvelope, "description": "Debug output requires an admin key, or the requested capability is not served for this caller (`FEATURE_UNAVAILABLE`, with `params.feature` naming it)."},
     422: {"model": ErrorEnvelope, "description": "Request body failed validation."},
     429: {"model": ErrorEnvelope, "description": "Rate limit exceeded: the global, trial, per-application or debug bucket."},
+    500: {"model": ErrorEnvelope, "description": "The effective policy could not be established for this request (`DETECTION_ERROR`). The scan is refused rather than performed under an unverified policy: a failed tenant, department or application read cannot say whether that policy was stricter than the defaults."},
     502: {"model": ErrorEnvelope, "description": "Proxy execution reached the provider and it returned nothing usable. The scan itself ran and is audited under the returned trace_id."},
 }
 
@@ -82,6 +83,7 @@ _BATCH_ERRORS: dict[int | str, dict[str, Any]] = {
     403: {"model": ErrorEnvelope, "description": "The credential is restricted to named source networks and this request did not come from one (`IP_NOT_ALLOWED`)."},
     422: {"model": ErrorEnvelope, "description": "Request body failed validation, including the batch-size and per-item length caps."},
     429: {"model": ErrorEnvelope, "description": "Rate limit exceeded. A batch is charged as N units, not one."},
+    500: {"model": ErrorEnvelope, "description": "The effective policy could not be established for this request (`DETECTION_ERROR`). The scan is refused rather than performed under an unverified policy: a failed tenant, department or application read cannot say whether that policy was stricter than the defaults."},
 }
 
 # The 422 below corrects a SHAPE, it does not add a promise. This route takes one
