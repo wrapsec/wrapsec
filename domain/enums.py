@@ -90,6 +90,10 @@ class AdminEventAction(str, Enum):
     # Clearing a lockout restores the ability to authenticate, so it is
     # recorded like any other change to who can get in.
     ACCOUNT_UNLOCKED = "account_unlocked"
+    # A create refused because the address is already registered -- possibly in
+    # a tenant this administrator cannot see. The refusal is unavoidable while
+    # identity is global, so the probe is recorded rather than concealed.
+    USER_CREATE_REJECTED_EXISTING_EMAIL = "user_create_rejected_existing_email"
     ROLE_CHANGED     = "role_changed"
     DEPT_CHANGED     = "dept_changed"
     # Changing where a credential may be used is a change to a security
@@ -152,6 +156,16 @@ class AuthFailureReason(str, Enum):
     IP_NOT_ALLOWED      = "ip_not_allowed"
     EXPIRED             = "expired"
     REFRESH_FAILED      = "refresh_failed"
+    # A refresh token that was issued, rotated away, and then presented again.
+    # Distinct from REFRESH_FAILED on purpose: an ordinary bad token says
+    # nothing, while a replay means a token escaped its owner and every session
+    # for that user was revoked in response. An operator reading the event
+    # stream needs to tell those apart.
+    #
+    # Must exist here or the event is silently dropped: the writer coerces the
+    # reason through this enum and the failure is swallowed by its handler, so
+    # an unlisted reason produces a log line and no audit row.
+    TOKEN_REUSE_DETECTED = "token_reuse_detected"
     SESSION_INVALIDATED = "session_invalidated"
     NO_MEMBERSHIP       = "no_membership"
 

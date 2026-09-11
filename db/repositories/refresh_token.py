@@ -64,6 +64,27 @@ class RefreshTokenRepository(BaseRepository):
         )
         return result.scalar_one_or_none()
 
+    async def find_revoked(self, token_hash: str) -> RefreshTokenModel | None:
+        """A token that exists but is no longer usable because it was revoked.
+
+        `get_by_hash` filters revoked rows out, which is right for the happy
+        path and hides the one case worth acting on: a token that WAS issued and
+        has already been rotated away is being presented again. That is either a
+        client replaying a token it should have discarded, or a stolen token
+        whose thief lost the race -- and the two are indistinguishable from here,
+        which is why the response to both is the same.
+
+        Deliberately does not filter on expiry: a revoked-and-then-expired token
+        replayed later is still a replay.
+        """
+        result = await self.session.execute(
+            select(RefreshTokenModel).where(
+                RefreshTokenModel.token_hash == token_hash,
+                RefreshTokenModel.revoked_at.is_not(None),
+            )
+        )
+        return result.scalar_one_or_none()
+
     async def revoke(self, token_hash: str) -> None:
         """
         Sets revoked_at = NOW() on the matching token.

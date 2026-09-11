@@ -345,6 +345,41 @@ class AuthService:
         token_rec  = await rt_repo.get_by_hash(token_hash)
 
         if not token_rec:
+            # Before answering, ask WHY the lookup failed. A hash that matches
+            # nothing is an ordinary bad token. A hash that matches a REVOKED
+            # row is a replay: that token was issued, was rotated away, and has
+            # been presented again.
+            #
+            # Rotation alone does not survive theft. Whoever loses the race --
+            # the legitimate client or the thief -- holds a dead token and gets
+            # a 401, while the winner keeps a live session. The victim sees one
+            # failed refresh, re-authenticates, and the thief's session carries
+            # on beside theirs. Nothing distinguishes that from a flaky network.
+            #
+            # So a replay invalidates the whole family. Both parties are forced
+            # back to authentication, which the legitimate user can complete and
+            # the thief cannot. Revoking more than necessary is the point: the
+            # alternative leaves a live session in unknown hands.
+            replayed = await rt_repo.find_revoked(token_hash)
+            if replayed is not None:
+                revoked_count = await rt_repo.revoke_all_for_user(replayed.user_id)
+                await db.commit()
+                logger.warning(
+                    "auth_event TOKEN_REFRESH_FAILED reason=token_reuse_detected "
+                    "user_id=%s sessions_revoked=%d",
+                    replayed.user_id, revoked_count,
+                )
+                await _log_auth_event(
+                    action         = "token_refresh_failed",
+                    success        = False,
+                    user_id        = replayed.user_id,
+                    failure_reason = "token_reuse_detected",
+                )
+                # Same exception and message as any other invalid token: the
+                # response must not tell a caller whether the token it presented
+                # was once real.
+                raise InvalidTokenException()
+
             logger.warning("auth_event TOKEN_REFRESH_FAILED reason=refresh_failed")
             await _log_auth_event(
                 action         = "token_refresh_failed",
@@ -353,7 +388,14 @@ class AuthService:
             )
             raise InvalidTokenException()
 
-        # expires_at is TIMESTAMPTZ (aware UTC); compare against aware utc_now()
+        # expires_at is TIMESTAMPTZ (aware UTC); compare against aware utc_now().
+        #
+        # Nearly unreachable, and kept deliberately. `get_by_hash` already
+        # filters `expires_at > now()` IN SQL, so this fires only if the token
+        # expires between that evaluation and this one -- a window of
+        # microseconds. It is defence in depth, not a live branch, and the
+        # `token_expired` failure reason should not be expected in the auth
+        # event stream as a matter of course.
         if token_rec.expires_at and token_rec.expires_at < utc_now():
             await rt_repo.revoke(token_hash)
             await db.commit()
