@@ -48,8 +48,14 @@ async def _run() -> int:
         logger.error("configuration refused: %s", exc)
         return EXIT_STARTUP_REFUSED
 
+    try:
+        interceptor = _build_interceptor(config)
+    except Exception as exc:
+        logger.error("cannot build the security interceptor: %s", exc)
+        return EXIT_STARTUP_REFUSED
+
     pool    = DownstreamPool()
-    gateway = Gateway(config, pool)
+    gateway = Gateway(config, pool, interceptor)
 
     try:
         gateway.require_enforcement(
@@ -99,6 +105,47 @@ def _load_config():
             f"and will not guess one"
         )
     return load_config(path)
+
+
+def _build_interceptor(config):
+    """The interceptor this configuration asks for.
+
+    Returns None when the configuration names no detection API, which leaves the
+    gateway with the pass-through interceptor -- and `require_enforcement` then
+    refuses to start outside development. Scanning is never silently skipped: a
+    gateway either inspects, or refuses to run.
+    """
+    import os
+
+    from mcp_gateway.config import ConfigError
+    from mcp_gateway.interceptors.enforcing import EnforcingInterceptor
+    from mcp_gateway.interceptors.scan_tools import ToolDefinitionScanner
+    from mcp_gateway.scanner import Scanner
+
+    if config.wrapsec is None:
+        return None
+
+    api_key = os.environ.get(config.wrapsec.api_key_env)
+    if not api_key:
+        raise ConfigError(
+            f"{config.wrapsec.api_key_env} is not set, so the gateway has no "
+            f"credential to scan with. It will not run unauthenticated."
+        )
+
+    from wrapsec import AsyncClient
+
+    client = AsyncClient(
+        api_key  = api_key,
+        base_url = config.wrapsec.base_url,
+        timeout  = config.wrapsec.timeout_s,
+    )
+    scanner = Scanner(client, mode=config.scan.mode, max_chars=config.scan.max_chars)
+
+    return EnforcingInterceptor(
+        tool_definitions=ToolDefinitionScanner(
+            scanner, enabled=config.scan.tool_definitions,
+        ),
+    )
 
 
 def main() -> int:

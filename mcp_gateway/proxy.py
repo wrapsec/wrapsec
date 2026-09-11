@@ -110,7 +110,7 @@ class Gateway:
 
         published = []
         for name, entry in self._routes.entries():
-            definition = self._interceptor.on_tool_definition(
+            definition = await self._interceptor.on_tool_definition(
                 server_name = entry.server_name,
                 definition  = entry.definition,
             )
@@ -141,7 +141,7 @@ class Gateway:
                 detail   = f"no route for exposed name {name!r}",
             ))
 
-        verdict = self._interceptor.on_tool_call(
+        verdict = await self._interceptor.on_tool_call(
             server_name   = entry.server_name,
             original_name = entry.original_name,
             exposed_name  = name,
@@ -170,7 +170,7 @@ class Gateway:
                 detail   = str(exc),
             ))
 
-        inspected = self._interceptor.on_tool_result(
+        inspected = await self._interceptor.on_tool_result(
             server_name = entry.server_name,
             result      = result,
             trace_id    = trace_id,

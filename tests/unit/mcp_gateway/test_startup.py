@@ -180,3 +180,59 @@ def _raise(exc: BaseException):
     def _fn(*args, **kwargs):
         raise exc
     return _fn
+
+
+# ---------------------------------------------------------------------------
+# building the interceptor
+# ---------------------------------------------------------------------------
+
+def _config_with_api(api_key_env="WRAPSEC_API_KEY"):
+    from mcp_gateway.config import GatewayConfig, ServerConfig, WrapSecConfig
+
+    return GatewayConfig(
+        servers=(ServerConfig(name="a", command=("x",)),),
+        wrapsec=WrapSecConfig(base_url="http://localhost:8000", api_key_env=api_key_env),
+    )
+
+
+def test_no_detection_api_configured_yields_no_interceptor():
+    """Which leaves the pass-through in place, and that is refused outside
+    development -- scanning is never silently skipped."""
+    from mcp_gateway.config import GatewayConfig, ServerConfig
+
+    config = GatewayConfig(servers=(ServerConfig(name="a", command=("x",)),))
+    assert entry._build_interceptor(config) is None
+
+
+def test_a_missing_credential_refuses_rather_than_scanning_anonymously(monkeypatch):
+    monkeypatch.delenv("WRAPSEC_API_KEY", raising=False)
+
+    with pytest.raises(ConfigError, match="no credential"):
+        entry._build_interceptor(_config_with_api())
+
+
+def test_an_empty_credential_is_treated_as_missing(monkeypatch):
+    monkeypatch.setenv("WRAPSEC_API_KEY", "")
+
+    with pytest.raises(ConfigError, match="no credential"):
+        entry._build_interceptor(_config_with_api())
+
+
+def test_the_credential_is_read_from_the_named_variable(monkeypatch):
+    """The config names a variable; the key itself never appears in the file."""
+    monkeypatch.setenv("SOME_OTHER_VAR", "wsk_live_example")
+
+    built = entry._build_interceptor(_config_with_api(api_key_env="SOME_OTHER_VAR"))
+
+    assert built is not None
+    assert type(built).__name__ == "EnforcingInterceptor"
+
+
+def test_an_enforcing_interceptor_is_not_the_pass_through(monkeypatch):
+    """The distinction `require_enforcement` depends on."""
+    from mcp_gateway.interceptors.base import PassThrough
+
+    monkeypatch.setenv("WRAPSEC_API_KEY", "wsk_live_example")
+    built = entry._build_interceptor(_config_with_api())
+
+    assert not isinstance(built, PassThrough)

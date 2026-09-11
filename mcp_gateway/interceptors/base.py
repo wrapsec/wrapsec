@@ -21,13 +21,19 @@ from mcp_gateway.decision import Refusal
 
 
 class Interceptor(Protocol):
-    """What the proxy consults. Implementations decide; the proxy obeys."""
+    """What the proxy consults. Implementations decide; the proxy obeys.
 
-    def on_tool_definition(self, *, server_name: str, definition: Any) -> Any | None:
+    Every hook is awaitable. A security decision here means calling the WrapSec
+    API, so a synchronous seam would force each implementation to block the event
+    loop while a scan is in flight -- and one stalled scan would stall every
+    other request the process is serving.
+    """
+
+    async def on_tool_definition(self, *, server_name: str, definition: Any) -> Any | None:
         """Return the definition to publish, or None to withhold it."""
         ...
 
-    def on_tool_call(
+    async def on_tool_call(
         self,
         *,
         server_name:   str,
@@ -39,7 +45,7 @@ class Interceptor(Protocol):
         """Return a Refusal to block the call, or None to allow it."""
         ...
 
-    def on_tool_result(self, *, server_name: str, result: Any, trace_id: str) -> Any:
+    async def on_tool_result(self, *, server_name: str, result: Any, trace_id: str) -> Any:
         """Return the result to deliver, or a Refusal to block it."""
         ...
 
@@ -57,11 +63,11 @@ class PassThrough:
     is what refuses it outside development.
     """
 
-    def on_tool_definition(self, *, server_name: str, definition: Any) -> Any | None:
+    async def on_tool_definition(self, *, server_name: str, definition: Any) -> Any | None:
         return definition
 
-    def on_tool_call(self, **kwargs: Any) -> Refusal | None:
+    async def on_tool_call(self, **kwargs: Any) -> Refusal | None:
         return None
 
-    def on_tool_result(self, *, server_name: str, result: Any, trace_id: str) -> Any:
+    async def on_tool_result(self, *, server_name: str, result: Any, trace_id: str) -> Any:
         return result

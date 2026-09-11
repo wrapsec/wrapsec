@@ -81,10 +81,60 @@ class ServerConfig:
 
 
 @dataclass(frozen=True)
+class WrapSecConfig:
+    """How to reach the detection API.
+
+    The credential is NOT here. `api_key_env` names an environment variable, so
+    a configuration file can be committed, shared, or mounted without carrying a
+    key. Reading the value is deferred until startup, where an unset variable is
+    a refusal rather than an anonymous scan.
+    """
+
+    base_url:    str
+    api_key_env: str = "WRAPSEC_API_KEY"
+    timeout_s:   int = 10
+
+    def __post_init__(self) -> None:
+        if not self.base_url:
+            raise ConfigError("wrapsec.base_url is required")
+        if not self.api_key_env:
+            raise ConfigError("wrapsec.api_key_env must name an environment variable")
+        if self.timeout_s <= 0:
+            raise ConfigError(f"wrapsec.timeout_s must be positive, got {self.timeout_s}")
+
+
+@dataclass(frozen=True)
+class ScanConfig:
+    """What is inspected, and the bound past which content is refused.
+
+    `max_chars` is a SECURITY LIMIT, not a truncation instruction: content over
+    it is blocked rather than partially scanned, because a verdict taken on the
+    first N characters does not cover what was sent and yet looks like one that
+    does.
+    """
+
+    mode:             str  = "fast"
+    tool_definitions: bool = True
+    max_chars:        int  = 8000
+
+    def __post_init__(self) -> None:
+        if self.mode != "fast":
+            raise ConfigError(
+                f"scan.mode {self.mode!r} is not available; this build runs the "
+                f"fast detection path, which is the one suited to a synchronous "
+                f"tool-call loop"
+            )
+        if self.max_chars <= 0:
+            raise ConfigError(f"scan.max_chars must be positive, got {self.max_chars}")
+
+
+@dataclass(frozen=True)
 class GatewayConfig:
     """The whole gateway configuration."""
 
-    servers: tuple[ServerConfig, ...]
+    servers:  tuple[ServerConfig, ...]
+    wrapsec:  WrapSecConfig | None = None
+    scan:     ScanConfig = field(default_factory=ScanConfig)
 
     def __post_init__(self) -> None:
         if not self.servers:
@@ -139,7 +189,7 @@ class GatewayConfig:
 # REFUSED rather than ignored: a configuration whose keys are silently dropped is
 # a configuration the operator believes is in force and is not. Later phases add
 # their own sections to `_KNOWN_TOP_LEVEL` as they land.
-_KNOWN_TOP_LEVEL = frozenset({"servers"})
+_KNOWN_TOP_LEVEL = frozenset({"servers", "wrapsec", "scan"})
 
 # V1 ships stdio only. A config naming another transport is refused rather than
 # quietly served over stdio: the operator asked for something this build does not
@@ -190,9 +240,72 @@ def load_config(path: str | Path) -> GatewayConfig:
             f"configuration {str(file)!r} must define a non-empty 'servers' list"
         )
 
-    return GatewayConfig(servers=tuple(
-        _server_from(entry, index, file) for index, entry in enumerate(servers_raw)
-    ))
+    return GatewayConfig(
+        servers = tuple(
+            _server_from(entry, index, file) for index, entry in enumerate(servers_raw)
+        ),
+        wrapsec = _wrapsec_from(parsed.get("wrapsec"), file),
+        scan    = _scan_from(parsed.get("scan"), file),
+    )
+
+
+def _wrapsec_from(raw: object, file: Path) -> WrapSecConfig | None:
+    """The detection API section. Absent means the gateway has nowhere to scan,
+    which startup refuses rather than treating as 'scanning off'."""
+    if raw is None:
+        return None
+    if not isinstance(raw, dict):
+        raise ConfigError(f"'wrapsec' in {str(file)!r} must be a mapping")
+
+    unknown = sorted(set(raw) - {"base_url", "api_key_env", "timeout_s"})
+    if unknown:
+        raise ConfigError(f"'wrapsec' has unsupported key(s): {', '.join(unknown)}")
+
+    base_url = raw.get("base_url")
+    if not isinstance(base_url, str) or not base_url:
+        raise ConfigError("wrapsec.base_url must be a non-empty string")
+
+    api_key_env = raw.get("api_key_env", "WRAPSEC_API_KEY")
+    if not isinstance(api_key_env, str) or not api_key_env:
+        raise ConfigError("wrapsec.api_key_env must be a non-empty string")
+    if api_key_env.lower().startswith(("wsk_", "sk-")):
+        # A key pasted where a variable NAME belongs. Refused rather than used,
+        # because the alternative is a credential living in a config file.
+        raise ConfigError(
+            "wrapsec.api_key_env names an ENVIRONMENT VARIABLE, not a key; it "
+            "looks like a credential was pasted here"
+        )
+
+    timeout = raw.get("timeout_s", 10)
+    if not isinstance(timeout, int) or isinstance(timeout, bool):
+        raise ConfigError("wrapsec.timeout_s must be an integer number of seconds")
+
+    return WrapSecConfig(base_url=base_url, api_key_env=api_key_env, timeout_s=timeout)
+
+
+def _scan_from(raw: object, file: Path) -> ScanConfig:
+    if raw is None:
+        return ScanConfig()
+    if not isinstance(raw, dict):
+        raise ConfigError(f"'scan' in {str(file)!r} must be a mapping")
+
+    unknown = sorted(set(raw) - {"mode", "tool_definitions", "max_chars"})
+    if unknown:
+        raise ConfigError(f"'scan' has unsupported key(s): {', '.join(unknown)}")
+
+    mode = raw.get("mode", "fast")
+    if not isinstance(mode, str):
+        raise ConfigError("scan.mode must be a string")
+
+    definitions = raw.get("tool_definitions", True)
+    if not isinstance(definitions, bool):
+        raise ConfigError("scan.tool_definitions must be true or false")
+
+    max_chars = raw.get("max_chars", 8000)
+    if not isinstance(max_chars, int) or isinstance(max_chars, bool):
+        raise ConfigError("scan.max_chars must be an integer")
+
+    return ScanConfig(mode=mode, tool_definitions=definitions, max_chars=max_chars)
 
 
 def _server_from(entry: object, index: int, file: Path) -> ServerConfig:
