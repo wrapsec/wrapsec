@@ -26,6 +26,10 @@ testcontainers[postgres]==4.13.1
 # Pinned exactly, matching requirements-mcp.txt, so the test tier and the
 # deployment resolve the same package. See that file for why this is not a floor.
 mcp==2.2.0
+# The gateway reads its configuration from YAML. Declared rather than inherited:
+# it currently reaches this environment only as a transitive dependency of the
+# core application stack, which the gateway does not install.
+PyYAML>=6.0,<7.0
 
 # ── Static analysis ───────────────────────────────────────────────────────────
 # Linting and formatting (make lint / make format).

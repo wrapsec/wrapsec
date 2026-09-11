@@ -19,3 +19,9 @@
 # and 2.2.0 in CI. Raising this is a deliberate compatibility change that must
 # pass the MCP suites, never an incidental bump.
 mcp==2.2.0
+
+# The gateway reads its configuration from a YAML file. Declared here rather
+# than inherited: it reaches a full development environment only as a transitive
+# dependency of the core application stack, which a host running just the
+# gateway does not install.
+PyYAML>=6.0,<7.0
