@@ -69,7 +69,17 @@ async def test_authenticate_api_key_calls_hmac_compare_digest(monkeypatch):
         calls.append((a, b))
         return False  # force miss so downstream fallback kicks in
 
-    monkeypatch.setattr(auth_mw.hmac, "compare_digest", _spy)
+    # Spied at `security.compare`, which is where the comparison moved when the
+    # credential check was changed to compare BYTES -- `compare_digest` rejects a
+    # non-ASCII str, and the presented value is a caller-chosen header, so a
+    # malformed credential was raising instead of failing authentication.
+    #
+    # The invariant is unchanged and so is this test's purpose: the admin key
+    # must never be compared with `==`. Only its location moved, so the spy
+    # follows it rather than the assertion being dropped.
+    import security.compare as compare_mod
+
+    monkeypatch.setattr(compare_mod.hmac, "compare_digest", _spy)
 
     # Fake settings with a known admin key
     fake_settings = MagicMock()
@@ -87,8 +97,13 @@ async def test_authenticate_api_key_calls_hmac_compare_digest(monkeypatch):
 
     assert calls, "hmac.compare_digest was never invoked - admin key path likely uses =="
     # Both operands must be the strings; order doesn't matter for compare_digest
+    # Operands are bytes now; that IS the fix, so the assertion decodes rather
+    # than expecting str.
+    def _text(v):
+        return v.decode("utf-8", "surrogateescape") if isinstance(v, bytes) else v
+
     assert any(
-        {a, b} == {"wsk_live_something", "TEST_ADMIN_KEY_12345"}
+        {_text(a), _text(b)} == {"wsk_live_something", "TEST_ADMIN_KEY_12345"}
         for a, b in calls
     ), f"compare_digest called with unexpected operands: {calls}"
 
@@ -102,8 +117,20 @@ def test_authenticate_api_key_source_uses_hmac_compare_digest():
     """
     src = inspect.getsource(auth_mw.AuthMiddleware._authenticate_api_key)
 
-    assert "hmac.compare_digest" in src, (
-        "admin key comparison must use hmac.compare_digest for timing safety"
+    # The route to the comparison is now a delegation, so both halves are
+    # asserted: this method must use the constant-time helper, and the helper
+    # must still be constant time. Checking only the first would pass against a
+    # helper that had been lowered to `==`.
+    import inspect as _inspect
+
+    from security.compare import constant_time_equals
+
+    assert "constant_time_equals" in src, (
+        "admin key comparison must go through the constant-time helper"
+    )
+    assert "hmac.compare_digest" in _inspect.getsource(constant_time_equals), (
+        "the helper no longer uses hmac.compare_digest, so the admin key "
+        "comparison is no longer constant time"
     )
     assert "== get_settings().admin_api_key" not in src, (
         "admin key comparison must not use ==; use hmac.compare_digest"

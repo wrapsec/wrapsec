@@ -2,7 +2,6 @@
 # Copyright (c) 2026 WrapSec. All rights reserved.
 # WrapSec v1.0 | AI Security Gateway - https://wrapsec.com
 
-import hmac
 import logging
 from contextlib import asynccontextmanager
 
@@ -32,6 +31,7 @@ from errors.handlers import (
     wrapsec_exception_handler,
 )
 from errors.response import error_response
+from security.compare import constant_time_equals
 
 setup_logging()
 
@@ -308,7 +308,9 @@ async def metrics(request: Request):
     token       = auth_header.removeprefix("Bearer ").strip()
     # Fail closed if no secret is configured (both unset): never expose metrics,
     # and never call compare_digest with an empty/None expected value.
-    if not expected or not token or not hmac.compare_digest(token, expected):
+    # Same reasoning as the api-key path: the token comes from a request header,
+    # so a non-ASCII value must be an authentication failure rather than a 500.
+    if not constant_time_equals(token, expected):
         logger.warning(
             "metrics auth failed ip=%s token_present=%s",
             request.client.host if request.client else "unknown",

@@ -3,7 +3,6 @@
 # WrapSec v1.0 | AI Security Gateway - https://wrapsec.com
 
 import hashlib
-import hmac
 import ipaddress
 import logging
 import os
@@ -23,6 +22,7 @@ from config.settings import get_settings
 from errors.catalog import ErrorCode
 from errors.response import error_response
 from observability.metrics import record_api_key_ip_denied
+from security.compare import constant_time_equals
 from security.ip_allowlist import is_allowed
 from services.time import utc_now
 
@@ -550,7 +550,12 @@ class AuthMiddleware(BaseHTTPMiddleware):
     async def _authenticate_api_key(
         self, api_key: str, request: Request, call_next
     ) -> Response:
-        if hmac.compare_digest(api_key, get_settings().admin_api_key or ""):
+        # Bytes, not str. `api_key` is a caller-supplied header, and
+        # `compare_digest` raises TypeError on a non-ASCII str -- which turned an
+        # unauthenticated request carrying `x-api-key: café` into a 500 with a
+        # traceback instead of an authentication failure. Still constant time;
+        # see security/compare.py.
+        if constant_time_equals(api_key, get_settings().admin_api_key):
             return await self._authenticate_admin_key(request, call_next)
 
         if api_key.startswith(("wsk_live_", "wsk_trial_")):
