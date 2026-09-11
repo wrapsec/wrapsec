@@ -49,6 +49,7 @@ TOOL_NOT_RESOLVED        = "TOOL_NOT_RESOLVED"
 TOOL_DENIED_BY_POLICY    = "TOOL_DENIED_BY_POLICY"
 UNSUPPORTED_SERVER_REQUEST = "UNSUPPORTED_MCP_SERVER_REQUEST"
 DOWNSTREAM_UNAVAILABLE   = "DOWNSTREAM_UNAVAILABLE"
+DOWNSTREAM_RESPONSE_UNUSABLE = "DOWNSTREAM_RESPONSE_UNUSABLE"
 SYSTEM_ERROR             = "SYSTEM_ERROR"
 
 _AGENT_MESSAGES = {
@@ -60,6 +61,8 @@ _AGENT_MESSAGES = {
         "The tool attempted an operation this gateway does not support.",
     DOWNSTREAM_UNAVAILABLE:
         "The tool could not be reached.",
+    DOWNSTREAM_RESPONSE_UNUSABLE:
+        "The tool returned a response this gateway could not use.",
     SYSTEM_ERROR:
         "The operation was refused because a security check could not run.",
 }

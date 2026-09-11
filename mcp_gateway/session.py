@@ -22,6 +22,19 @@ TWO REFUSALS ARE WIRED IN HERE, not bolted on later:
 
 Both are refusals of content the gateway cannot yet inspect. Opening either one
 is a security change that has to come with scanning, not a flag flip.
+
+WHICH PROTOCOL REVISION, AND WHY IT MATTERS HERE. Downstream connections use the
+client session's handshake, which negotiates 2025-11-25. An input-required
+result is only a valid answer to a tool call at 2026-07-28, so on these
+connections that channel is closed BY CONSTRUCTION rather than by the guard: a
+server attempting it produces a response the client will not deserialize.
+
+The `allow_input_required` guard is therefore defence in depth for this build,
+not the control doing the work. It is kept, and kept tested, because the
+negotiated revision is a property of the SDK rather than a decision expressed
+here, and a future version that negotiates higher would make the channel
+reachable with no other change. A test pins the property so that shift is
+visible rather than silent.
 """
 
 from __future__ import annotations
@@ -31,6 +44,8 @@ from contextlib import AsyncExitStack
 from dataclasses import dataclass
 from typing import Any
 
+from pydantic import ValidationError
+
 from mcp_gateway.config import ServerConfig
 
 logger = logging.getLogger(__name__)
@@ -38,6 +53,17 @@ logger = logging.getLogger(__name__)
 
 class DownstreamUnavailable(RuntimeError):
     """A configured downstream server could not be reached or initialized."""
+
+
+class UnusableDownstreamResponse(RuntimeError):
+    """The downstream server answered with something the client cannot read.
+
+    A malformed result, or one whose shape the negotiated protocol revision does
+    not allow. Distinguished from a server being unreachable because they are
+    different signals: one says the network failed, the other says the server is
+    sending things this gateway rejects, which is what a compromised or
+    misbehaving server looks like.
+    """
 
 
 class UnsupportedDownstreamRequest(RuntimeError):
@@ -138,6 +164,21 @@ class DownstreamPool:
         """
         try:
             return await server.session.call_tool(tool_name, arguments or {})
+        except ValidationError as exc:
+            # The server answered with a shape the client will not accept. On
+            # this build that includes an input-required result, which the
+            # negotiated revision does not permit -- see the note on revisions
+            # below. Converted into a refusal rather than allowed to escape,
+            # because a protocol fault reaching the agent is a fault it will
+            # commonly retry, and the refusal contract says a blocked operation
+            # comes back as a valid result telling it not to.
+            logger.warning(
+                "downstream server %s returned an unusable response for tool %s: %s",
+                server.name, tool_name, str(exc)[:200],
+            )
+            raise UnusableDownstreamResponse(
+                "the tool returned a response this gateway could not use"
+            ) from exc
         except RuntimeError as exc:
             if _is_input_required_refusal(exc):
                 logger.warning(

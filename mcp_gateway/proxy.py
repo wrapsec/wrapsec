@@ -33,6 +33,7 @@ from mcp_gateway.session import (
     DownstreamPool,
     DownstreamUnavailable,
     UnsupportedDownstreamRequest,
+    UnusableDownstreamResponse,
 )
 
 logger = logging.getLogger(__name__)
@@ -160,6 +161,16 @@ class Gateway:
             logger.warning("refused downstream request for %r: %s", name, exc)
             return decision.refusal_result(decision.Refusal(
                 reason   = decision.UNSUPPORTED_SERVER_REQUEST,
+                trace_id = trace_id,
+                detail   = str(exc),
+            ))
+        except UnusableDownstreamResponse as exc:
+            # The server answered with something the client could not read. The
+            # agent is told the call failed and not to retry, rather than being
+            # handed a protocol fault.
+            logger.warning("unusable response for %r: %s", name, exc)
+            return decision.refusal_result(decision.Refusal(
+                reason   = decision.DOWNSTREAM_RESPONSE_UNUSABLE,
                 trace_id = trace_id,
                 detail   = str(exc),
             ))
