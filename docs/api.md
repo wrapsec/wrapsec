@@ -1331,6 +1331,22 @@ entirely**, leaving SANITIZE as the strongest outcome, with nothing in the
 response or the logs to say so. Lower it if you want blocking to trigger more
 readily; there is no headroom above.
 
+**Output scanning is PII-only, and is not symmetric with input detection.** The
+output guard runs the PII detector and redactor, and nothing else. Every other
+layer that inspects a prompt -- the rule, machine-learning, transformer, and LLM
+detection tiers, and the toxicity guardrail -- runs on input only. A model
+response is therefore never scored for prompt injection, jailbreak content, or
+toxicity on its way back to you, and the only results it can produce are
+`PII_GUARDRAIL_SANITIZE`, `PII_GUARDRAIL_BLOCK`, `NO_THREAT_DETECTED`, and
+`SYSTEM_ERROR` when the guard could not run at all.
+
+This is a capability limit, not a configuration one: no setting widens it. Read
+`output_decision` as "the response was checked for personal data", not as "the
+response was judged by the same pipeline as the prompt". If your threat model
+includes what the model itself emits -- content policy, or output that a
+downstream agent or tool will act on -- that check belongs outside the proxy
+today.
+
 ---
 
 ## Proxy Interactions

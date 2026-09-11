@@ -152,3 +152,58 @@ def test_permissions_are_load_bearing_not_scaffolding():
         "no endpoint uses require_permission; the permissions field would then "
         "genuinely be unenforced and its comment should say so"
     )
+
+
+# --------------------------------------------------------------------------
+# 5. output scanning is PII-only (docs/api.md states this as a capability limit)
+# --------------------------------------------------------------------------
+
+def test_output_guard_runs_pii_engines_only():
+    """The output path must not acquire a detection layer without the doc saying so.
+
+    docs/api.md tells integrators that a model response is never scored for
+    prompt injection, jailbreak content, or toxicity, and that no setting
+    widens that. The statement is only true while the output guard consults the
+    PII engines alone.
+
+    If a layer is added here, that paragraph becomes a false assurance about a
+    security control -- the failure this whole file exists to prevent -- so the
+    doc has to move with the code.
+    """
+    source = (_ROOT / "engine/guardrails/output_guard.py").read_text(encoding="utf-8").lower()
+
+    # Compared case-insensitively: a new layer arrives as a class name
+    # (ToxicityScorer) as readily as a module path (guardrails.toxicity), and a
+    # guard that only caught one spelling would wave the other through.
+    for absent in ("ruledetector", "mldetector", "transformerdetector",
+                   "llmdetector", "toxicity"):
+        assert absent not in source, (
+            f"output_guard.py now references {absent}; output scanning is no longer "
+            f"PII-only and the capability-limit paragraph in docs/api.md is wrong"
+        )
+
+    # And the toxicity guardrail is reached from the input path only.
+    gateway = (_ROOT / "services/gateway/service.py").read_text(encoding="utf-8")
+    assert gateway.count("inspect_toxicity") == 1, (
+        "inspect_toxicity is called more than once; if it now runs on the output "
+        "path, docs/api.md must stop claiming toxicity is input-only"
+    )
+
+
+def test_documented_output_reasons_are_the_ones_the_guard_emits():
+    """The four reason codes named in docs/api.md are exactly what it can return.
+
+    Documenting a code the guard cannot emit, or omitting one it can, both
+    mislead a caller branching on `output_primary_reason`.
+    """
+    import re
+
+    source    = (_ROOT / "engine/guardrails/output_guard.py").read_text(encoding="utf-8")
+    emitted   = set(re.findall(r'primary_reason\s*=\s*"([A-Z_]+)"', source))
+    documented = {"PII_GUARDRAIL_SANITIZE", "PII_GUARDRAIL_BLOCK",
+                  "NO_THREAT_DETECTED", "SYSTEM_ERROR"}
+
+    assert emitted == documented, (
+        f"output guard emits {sorted(emitted)} but docs/api.md documents "
+        f"{sorted(documented)}"
+    )
