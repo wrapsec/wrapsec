@@ -33,17 +33,23 @@ async def _clear_setup_cache() -> None:
 
 
 async def _reset_default_tenant(test_db, tid: uuid.UUID) -> None:
-    """Return the default tenant to its pristine zero-user state (FK-safe) and
-    clear the Redis initialized flag."""
-    from db.models import MembershipModel
-    user_ids = (await test_db.execute(
-        select(MembershipModel.user_id).where(MembershipModel.tenant_id == tid)
-    )).scalars().all()
-    if user_ids:
-        await test_db.execute(delete(RefreshTokenModel).where(RefreshTokenModel.user_id.in_(user_ids)))
-        await test_db.execute(delete(AdminEventModel).where(AdminEventModel.tenant_id == tid))
-        await test_db.execute(delete(UserModel).where(UserModel.id.in_(user_ids)))
-        await test_db.commit()
+    """Return the DEPLOYMENT to its pristine zero-user state (FK-safe) and clear
+    the Redis initialized flag.
+
+    Global, not scoped to the default tenant. The setup gate asks whether this
+    deployment has any user at all, so a reset that removed only the default
+    tenant's members left the system initialized -- correctly -- and the
+    "uninitialized" assertions below then failed against state another test had
+    created in some other tenant.
+
+    Order matters: `admin_events` references `users` WITHOUT a cascade, so it
+    goes first. Memberships and refresh tokens cascade and do not.
+    """
+    del tid  # retained for call-site clarity; the reset is deployment-wide
+    await test_db.execute(delete(AdminEventModel))
+    await test_db.execute(delete(RefreshTokenModel))
+    await test_db.execute(delete(UserModel))
+    await test_db.commit()
     await _clear_setup_cache()
 
 

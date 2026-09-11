@@ -83,13 +83,16 @@ async def setup_status(db: AsyncSession = Depends(get_db)):
         return SetupStatusResponse(initialized=False)
 
     try:
-        from db.repositories.membership import MembershipRepository
-        count = await asyncio.wait_for(MembershipRepository(db).count_in_tenant(tenant.id), timeout=5.0)
+        # The same predicate the create route gates on. If the two disagreed,
+        # this would report a setup page the create route refuses to serve, or
+        # hide one it would still serve.
+        from db.repositories.user import UserRepository as _UserRepository
+        initialized = await asyncio.wait_for(
+            _UserRepository(db).any_user_exists(), timeout=5.0,
+        )
     except asyncio.TimeoutError:
         logger.warning("setup DB user count timed out - returning not initialized")
         return SetupStatusResponse(initialized=False)
-
-    initialized = count > 0
 
     # Warm the cache so future calls skip the DB
     if initialized:
@@ -101,7 +104,8 @@ async def setup_status(db: AsyncSession = Depends(get_db)):
 @router.post("", status_code=201, include_in_schema=False)
 async def complete_setup(body: SetupRequest, db: AsyncSession = Depends(get_db)):
     """
-    Creates the first admin user. Only succeeds when no users exist.
+    Creates the first admin user. Refused once any user exists in any tenant;
+    the gate below records why that is the predicate.
     Returns 404 once initialized - indistinguishable from a missing route.
     Public endpoint - accessible without any API key or JWT.
     """
@@ -121,8 +125,23 @@ async def complete_setup(body: SetupRequest, db: AsyncSession = Depends(get_db))
         await db.execute(text("SELECT pg_advisory_xact_lock(hashtext('wrapsec:setup:first_admin'))"))
 
     user_repo = UserRepository(db)
-    from db.repositories.membership import MembershipRepository
-    if await MembershipRepository(db).count_in_tenant(tenant.id) > 0:
+    # Gate on whether this deployment has ANY user, not on the membership count
+    # of one tenant. Three code paths make the narrower check insufficient:
+    #
+    #   * `seed_default_tenant` (api/main.py) creates the "default" tenant at
+    #     startup, so it exists with zero memberships from first boot;
+    #   * `POST /v1/admin/tenants/{tenant_id}/bootstrap-admin` attaches an admin
+    #     to an ARBITRARY tenant, so a deployment run entirely through
+    #     platform-operator tenants accumulates users while "default" stays
+    #     empty -- permanently, not transiently;
+    #   * this route is unauthenticated and grants ADMIN of "default".
+    #
+    # Together those leave an unauthenticated caller able to mint an admin of
+    # the default tenant at any point in that deployment's life. Gating on the
+    # existence of any user closes it, and strands nobody: `bootstrap-admin`
+    # takes an arbitrary tenant_id, so the default tenant's first admin can
+    # still be created through an authenticated path.
+    if await user_repo.any_user_exists():
         raise HTTPException(status_code=404)
 
     email = normalize_email(str(body.email))

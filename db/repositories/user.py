@@ -18,6 +18,25 @@ class UserRepository(BaseRepository):
     Email is globally unique (ux_users_email_lower).
     """
 
+    async def any_user_exists(self) -> bool:
+        """Has this deployment ever had a user, in ANY tenant?
+
+        The first-run gate needs a GLOBAL answer. Counting members of the
+        default tenant answers a narrower question, and the two diverge on a
+        deployment whose tenants are provisioned through the platform-operator
+        endpoints: the default tenant can stay empty indefinitely while real
+        users exist elsewhere, which leaves an unauthenticated route able to
+        mint an admin.
+
+        `users` is the right table because identity is global here -- a user row
+        exists independently of any membership.
+        """
+        return bool(
+            await self.session.scalar(
+                select(UserModel.id).limit(1)
+            )
+        )
+
     async def get_by_email(self, email: str) -> UserModel | None:
         """
         Case-insensitive email lookup using LOWER() to match ux_users_email_lower index.
