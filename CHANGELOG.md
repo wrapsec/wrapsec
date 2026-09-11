@@ -52,6 +52,13 @@ response declaration widened.
   The refusal is unavoidable while identity is global, so the probe is recorded
   rather than concealed.
 
+- **The dashboard takes patched dependency versions.** Next.js 16.2.12 carried two
+  unauthenticated remote code execution advisories, one reachable through the image
+  optimization API; 16.3.3 fixes both. The published deployment does not proxy the
+  dashboard, so neither was reachable through it. Patched versions of js-yaml,
+  nanoid, sharp and the vitest packages are taken at the same time, all within
+  ranges the project already declared.
+
 ### Added
 
 - **An administrator can clear a login lockout.** Brute-force protection is
@@ -74,6 +81,9 @@ response declaration widened.
   authentication-event engines captured the database URL before any caller could
   influence it. The guard in front of dropping every table read the environment
   from that same capture, so a stale value could leave it not firing.
+
+- **Scripts that declare an interpreter are executable.** Five were committed
+  without the executable bit, so the shebang and the file mode disagreed.
 
 ### Documentation
 
