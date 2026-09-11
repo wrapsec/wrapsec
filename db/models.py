@@ -8,6 +8,7 @@ from typing import Any
 
 from sqlalchemy import (
     JSON,
+    BigInteger,
     Boolean,
     CheckConstraint,
     DateTime,
@@ -15,6 +16,7 @@ from sqlalchemy import (
     ForeignKey,
     Index,
     Integer,
+    SmallInteger,
     String,
     Text,
     UniqueConstraint,
@@ -158,6 +160,15 @@ class AuditLogModel(Base):
     # Populated by the hash-chained audit writer; UPDATE blocked by trigger.
     record_hash: Mapped[str | None] = mapped_column(String(64),  nullable=True)
     prev_hash: Mapped[str | None] = mapped_column(String(64),  nullable=True)
+    # Position within this tenant's chain, assigned under the advisory lock in
+    # `AuditRepository`. The chain is ordered by THIS, never by `created_at`
+    # (stamped before the lock, so clock-dependent) and never by `id` (UUID4, so
+    # random). NULL for rows that predate the chain and carry no record_hash.
+    chain_seq: Mapped[int | None] = mapped_column(BigInteger, nullable=True)
+    # Which canonical field set this row was hashed under. 1 = the field set
+    # before chain_seq was hashed; 2 = including it. Per row, so old rows verify
+    # under their own format and their hashes are never recomputed.
+    chain_format: Mapped[int] = mapped_column(SmallInteger, nullable=False, default=1, server_default="1")
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True),    nullable=False, default=utc_now)
 
     __table_args__ = (

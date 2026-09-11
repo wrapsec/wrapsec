@@ -92,6 +92,47 @@ CANONICAL_FIELDS: tuple[str, ...] = (
     "user_id",
 )
 
+# Format 2 adds the chain position to the hashed content.
+#
+# WHY IT IS HASHED. `chain_seq` is what the chain is ordered by. Ordering that
+# is not covered by the hash is ordering an attacker may rewrite: renumber the
+# rows and every hash still verifies, so the sequence would document the order
+# without attesting to it.
+#
+# WHY A FORMAT RATHER THAN AN EDIT. Adding a field changes the hash input, and
+# rows already on disk were hashed without it. Re-hashing them would destroy the
+# only evidence they carry. Each row instead records the format it was written
+# under, and verification uses that row's own field set -- so a table holding
+# both verifies end to end and no historical hash is ever recomputed.
+CANONICAL_FIELDS_V2: tuple[str, ...] = (*CANONICAL_FIELDS, "chain_seq")
+
+# Written on every new row. Existing rows carry 1 by column default.
+CURRENT_CHAIN_FORMAT = 2
+
+_FIELDS_BY_FORMAT: dict[int, tuple[str, ...]] = {
+    1: CANONICAL_FIELDS,
+    2: CANONICAL_FIELDS_V2,
+}
+
+
+def fields_for_format(chain_format: int | None) -> tuple[str, ...]:
+    """The canonical field set a row of this format was hashed under.
+
+    A missing or NULL format means a row written before the column existed,
+    which is format 1 by definition -- the column's default says the same thing
+    for rows the migration touched.
+    """
+    if chain_format is None:
+        return CANONICAL_FIELDS
+    try:
+        return _FIELDS_BY_FORMAT[int(chain_format)]
+    except (KeyError, TypeError, ValueError):
+        raise ValueError(
+            f"unknown chain_format {chain_format!r}: this row was written by a "
+            "newer build than the one verifying it, and its hash cannot be "
+            "reproduced here"
+        ) from None
+
 
 def _json_safe(value: Any) -> Any:
     """
@@ -121,14 +162,16 @@ def _json_safe(value: Any) -> Any:
     )
 
 
-def canonical_row(data: dict[str, Any]) -> str:
+def canonical_row(data: dict[str, Any], chain_format: int | None = 1) -> str:
     """
-    Deterministic JSON serialisation of `data` restricted to CANONICAL_FIELDS.
+    Deterministic JSON serialisation of `data` restricted to the canonical
+    fields OF THAT ROW'S FORMAT.
 
-    Missing fields default to None. Fields outside CANONICAL_FIELDS are
-    ignored (see module docstring point 2).
+    Missing fields default to None. Fields outside the set are ignored (see
+    module docstring point 2). The default is format 1 so any caller written
+    before formats existed keeps its exact previous behaviour.
     """
-    normalized = {name: _json_safe(data.get(name)) for name in CANONICAL_FIELDS}
+    normalized = {name: _json_safe(data.get(name)) for name in fields_for_format(chain_format)}
     return json.dumps(
         normalized,
         sort_keys=True,
@@ -137,7 +180,11 @@ def canonical_row(data: dict[str, Any]) -> str:
     )
 
 
-def compute_record_hash(data: dict[str, Any], prev_hash: str | None) -> str:
+def compute_record_hash(
+    data: dict[str, Any],
+    prev_hash: str | None,
+    chain_format: int | None = 1,
+) -> str:
     """
     SHA-256 over canonical(data) concatenated with prev_hash. Returns the
     64-char lowercase hex digest.
@@ -146,5 +193,8 @@ def compute_record_hash(data: dict[str, Any], prev_hash: str | None) -> str:
     stored prev_hash column is NULL on that row by convention, but the
     hash input MUST NOT change based on whether an SQL NULL was involved.
     """
-    payload = canonical_row(data).encode("ascii") + (prev_hash or "").encode("ascii")
+    payload = (
+        canonical_row(data, chain_format).encode("ascii")
+        + (prev_hash or "").encode("ascii")
+    )
     return hashlib.sha256(payload).hexdigest()

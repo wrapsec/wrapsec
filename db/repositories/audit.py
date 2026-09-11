@@ -11,8 +11,54 @@ from sqlalchemy.dialects.postgresql import JSONB
 
 from db.models import AuditLogModel
 from db.repositories.base import BaseRepository
-from security.audit_chain import compute_record_hash
+from security.audit_chain import (
+    CANONICAL_FIELDS_V2,
+    CURRENT_CHAIN_FORMAT,
+    compute_record_hash,
+)
 from services.time import ensure_utc, utc_now
+
+
+def _materialise_defaults(data: dict) -> None:
+    """Fill column defaults the ORM would apply, BEFORE the row is hashed.
+
+    The hash has to cover what is STORED. A canonical field the writer omits is
+    None at hash time but carries its column default on disk -- so recomputing
+    the hash from the stored row yields a different digest and the row cannot be
+    verified. `attribution_verified` (False) and `principal_type` ('api_key') are
+    exactly that shape.
+
+    This was invisible while nothing read the chain back: the write path hashed
+    its own dict and never compared the result against the row. The verifier
+    found it on its first run, which is the point of having one.
+
+    BOTH kinds of default are applied. `input_source` carries a SERVER default
+    ('user_prompt') rather than a Python one, and handling only the Python kind
+    left exactly the same unverifiable row for a different reason -- which is
+    how this was found the second time.
+
+    A callable default (`created_at`, `threats`) is left alone: `created_at` is
+    already set by the caller above, and invoking a factory here would attach a
+    value the row might not receive.
+    """
+    for name in CANONICAL_FIELDS_V2:
+        if name in data and data[name] is not None:
+            continue
+        column = AuditLogModel.__table__.columns.get(name)
+        if column is None:
+            continue
+
+        if column.default is not None:
+            default = column.default.arg
+            if not callable(default):
+                data[name] = default
+                continue
+
+        if column.server_default is not None:
+            literal = getattr(column.server_default, "arg", None)
+            literal = getattr(literal, "text", literal)
+            if isinstance(literal, str):
+                data[name] = literal.strip("'")
 
 
 class AuditRepository(BaseRepository):
@@ -40,17 +86,39 @@ class AuditRepository(BaseRepository):
             # the table -- the chain starts fresh for each tenant on the
             # first v1.2.0 write. Retroactive hashing of legacy rows is
             # deliberately out of scope.
-            prev_hash = await self.session.scalar(
-                select(AuditLogModel.record_hash)
-                .where(
-                    AuditLogModel.tenant_id   == tenant_id,
-                    AuditLogModel.record_hash.is_not(None),
+            # The tip, by SEQUENCE. Ordering by `created_at` selected the wrong
+            # predecessor whenever two rows' timestamps were not in insertion
+            # order -- a clock step back, or two requests that both stamped the
+            # time above before either reached this lock. Both rows then chained
+            # to the same parent and the chain forked.
+            #
+            # One query returns both things the write needs: the hash to chain
+            # from and the position to continue from. Asking twice would be two
+            # round trips inside the lock for data that arrives together.
+            tip = (
+                await self.session.execute(
+                    select(AuditLogModel.record_hash, AuditLogModel.chain_seq)
+                    .where(
+                        AuditLogModel.tenant_id   == tenant_id,
+                        AuditLogModel.record_hash.is_not(None),
+                    )
+                    .order_by(AuditLogModel.chain_seq.desc())
+                    .limit(1)
                 )
-                .order_by(AuditLogModel.created_at.desc())
-                .limit(1)
+            ).first()
+
+            prev_hash = tip[0] if tip else None
+            # Genesis starts at 1. A tip whose chain_seq is NULL is a row from
+            # before this column existed and was not backfilled, which means it
+            # is unchained; treating it as position 0 continues from 1 without
+            # claiming a position it never had.
+            data["chain_seq"]    = ((tip[1] or 0) if tip else 0) + 1
+            data["chain_format"] = CURRENT_CHAIN_FORMAT
+            _materialise_defaults(data)
+            data["prev_hash"]    = prev_hash
+            data["record_hash"]  = compute_record_hash(
+                data, prev_hash, CURRENT_CHAIN_FORMAT,
             )
-            data["prev_hash"]   = prev_hash
-            data["record_hash"] = compute_record_hash(data, prev_hash)
         # Rows without tenant_id stay unchained (both hash cols NULL);
         # see security/audit_chain.py docstring for the rationale.
 
@@ -99,6 +167,12 @@ class AuditRepository(BaseRepository):
 
         try:
             prev_hash = None
+            # Bound before the branch, not inside it. Both this and `prev_hash`
+            # are read under the same `if tenant_id:` further down, so the
+            # coupling holds -- but it holds implicitly, which is exactly the
+            # shape a type checker cannot see and the reason it is spelled out
+            # here instead.
+            next_seq  = 1
             if tenant_id:
                 # Held until this batch commits, so the rows below cannot be
                 # interleaved with another request's.
@@ -107,23 +181,36 @@ class AuditRepository(BaseRepository):
                         text("SELECT pg_advisory_xact_lock(hashtext(:tid))"),
                         {"tid": tenant_id},
                     )
-                prev_hash = await self.session.scalar(
-                    select(AuditLogModel.record_hash)
-                    .where(
-                        AuditLogModel.tenant_id   == tenant_id,
-                        AuditLogModel.record_hash.is_not(None),
+                # Same tip query as `create`, for the same reason -- see there.
+                tip = (
+                    await self.session.execute(
+                        select(AuditLogModel.record_hash, AuditLogModel.chain_seq)
+                        .where(
+                            AuditLogModel.tenant_id   == tenant_id,
+                            AuditLogModel.record_hash.is_not(None),
+                        )
+                        .order_by(AuditLogModel.chain_seq.desc())
+                        .limit(1)
                     )
-                    .order_by(AuditLogModel.created_at.desc())
-                    .limit(1)
-                )
+                ).first()
+                prev_hash = tip[0] if tip else None
+                next_seq  = ((tip[1] or 0) if tip else 0) + 1
 
             records = []
             for data in rows:
                 data.setdefault("created_at", utc_now())
                 if tenant_id:
-                    data["prev_hash"]   = prev_hash
-                    data["record_hash"] = compute_record_hash(data, prev_hash)
-                    prev_hash           = data["record_hash"]
+                    # Positions advance in batch order, under the one lock the
+                    # batch already holds.
+                    data["chain_seq"]    = next_seq
+                    data["chain_format"] = CURRENT_CHAIN_FORMAT
+                    _materialise_defaults(data)
+                    data["prev_hash"]    = prev_hash
+                    data["record_hash"]  = compute_record_hash(
+                        data, prev_hash, CURRENT_CHAIN_FORMAT,
+                    )
+                    prev_hash            = data["record_hash"]
+                    next_seq            += 1
                 # Rows without tenant_id stay unchained, as in `create`.
                 record = AuditLogModel(**data)
                 self.session.add(record)

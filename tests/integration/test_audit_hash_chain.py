@@ -49,13 +49,22 @@ class TestChainSingleTenant:
         assert row.prev_hash   is None
         assert row.record_hash is not None
         assert len(row.record_hash) == 64
-        # Genesis hash matches the pure-function output (prev_hash="").
-        expected = compute_record_hash(
-            {**_row("t_genesis", tenant_id="tenant_a"), "prev_hash": None,
-             "record_hash": None},
-            prev_hash=None,
+
+        # Recomputed from the STORED ROW, not from a hand-built dict.
+        #
+        # It used to rebuild the input by hand and hash it at the default
+        # format. That only matched while the writer's hash input was identical
+        # to the caller's dict -- which stopped being true once column defaults
+        # were materialised before hashing, and once the row's position entered
+        # the hash under format 2.
+        #
+        # Recomputing from storage is the stronger assertion anyway: it is
+        # exactly what a verifier does, so it fails if the written row is not
+        # self-verifiable, which a hand-built comparison cannot detect.
+        as_stored = {c.name: getattr(row, c.name) for c in row.__table__.columns}
+        assert row.record_hash == compute_record_hash(
+            as_stored, row.prev_hash, row.chain_format,
         )
-        assert row.record_hash == expected
 
     @pytest.mark.asyncio
     async def test_second_row_links_to_first(self, test_db):
