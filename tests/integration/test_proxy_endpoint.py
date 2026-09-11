@@ -271,6 +271,63 @@ class TestProxyChatCompletions:
         assert data["wrapsec"]["execution_status"] == "TIMEOUT"
 
     # -----------------------------------------------------------------------
+    # Every transport failure -> 502, in the route's own shape, and audited
+    # -----------------------------------------------------------------------
+
+    @pytest.mark.parametrize("transport_error", [
+        pytest.param(httpx.ReadError("connection reset while reading"),  id="ReadError"),
+        pytest.param(httpx.WriteError("connection reset while writing"), id="WriteError"),
+        pytest.param(httpx.RemoteProtocolError("malformed response"),    id="RemoteProtocolError"),
+        pytest.param(httpx.ProxyError("proxy refused"),                  id="ProxyError"),
+        pytest.param(httpx.UnsupportedProtocol("no scheme"),             id="UnsupportedProtocol"),
+    ])
+    @pytest.mark.asyncio
+    async def test_any_transport_failure_is_a_502_in_the_openai_shape(self, app, transport_error):
+        """Only `ConnectError` and `HTTPStatusError` were caught here.
+
+        The rest of httpx's transport family -- raised when a connection drops
+        mid-body, among other things -- propagated to the global handler. That
+        answered 500 in the CATALOG envelope, on a route whose declared 500 is
+        an OpenAI-shaped body, so a client parsing `error.code` got a shape the
+        schema does not advertise for this route. Worse, the handler that writes
+        the interaction row never ran: a request that had REACHED the provider
+        left no audit trail at all.
+        """
+        config                = _make_config()
+        fake_get_db, _mock_db = _patch_config(config)
+
+        from api.v1.dependencies.db import get_db
+        app.dependency_overrides[get_db] = fake_get_db
+
+        with patch("httpx.AsyncClient") as mock_cls:
+            mock_client      = AsyncMock()
+            mock_client.post = AsyncMock(side_effect=transport_error)
+            mock_cls.return_value.__aenter__ = AsyncMock(return_value=mock_client)
+            mock_cls.return_value.__aexit__  = AsyncMock(return_value=False)
+
+            async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as client:
+                resp = await client.post(
+                    "/v1/chat/completions",
+                    headers={"x-api-key": settings.admin_api_key},
+                    json={"model": "openai/gpt-4o", "messages": _clean_messages()},
+                )
+
+        app.dependency_overrides = {}
+
+        assert resp.status_code == 502, (
+            f"{type(transport_error).__name__} produced {resp.status_code}, not the "
+            "502 this route's upstream-failure contract declares"
+        )
+        data = resp.json()
+        # the route's own shape, not the catalog envelope the global handler uses
+        assert "error" in data and "wrapsec" in data, (
+            f"not the OpenAI-shaped body this route declares: {sorted(data)}"
+        )
+        assert data["error"]["code"] == "provider_unreachable"
+        assert data["wrapsec"]["execution_status"] == "FAILED"
+        assert data["wrapsec"]["decision"] == "ALLOW"
+
+    # -----------------------------------------------------------------------
     # Provider unreachable -> 502
     # -----------------------------------------------------------------------
 

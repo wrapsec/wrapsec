@@ -1311,7 +1311,22 @@ async def proxy_chat_completions(
             headers=headers,
         )
 
-    except (httpx.ConnectError, httpx.HTTPStatusError) as exc:
+    # `TransportError`, not just `ConnectError`. The narrower form left every
+    # other transport failure uncaught -- `ReadError` and `RemoteProtocolError`
+    # from a connection dropped mid-body, plus `WriteError`, `CloseError`,
+    # `ProxyError` and `UnsupportedProtocol`. Those propagated to the global
+    # handler, which answered 500 in the CATALOG envelope on a route that
+    # declares its 500 as an OpenAI-shaped body, and skipped `_log_interaction`
+    # entirely -- so a request that had reached the provider left no interaction
+    # row and no audit trail.
+    #
+    # `TimeoutException` is a TransportError too, and keeps its own 504 handler
+    # above: the clause order is what preserves that, not an exclusion here.
+    #
+    # `_map_provider_failure` already returns 502 `provider_unreachable` for
+    # anything that is not an `HTTPStatusError`, so widening the catch needed no
+    # new mapping.
+    except (httpx.TransportError, httpx.HTTPStatusError) as exc:
         total_ms = int((time.monotonic() - wall_start) * 1000)
         _status, _code, _message, _retry_after = _map_provider_failure(exc)
         logger.error(
