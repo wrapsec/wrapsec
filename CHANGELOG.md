@@ -2,7 +2,7 @@
 
 All notable changes to WrapSec are documented here.
 
-## [Unreleased]
+## [1.9.2] - 2026-09-11
 
 Hardens the OpenAI-compatible proxy, and restructures the published API contract
 so the documented surface matches what the runtime actually returns. Two entries
