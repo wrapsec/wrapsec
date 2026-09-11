@@ -419,7 +419,13 @@ class GatewayService:
                 )
             elif llm_invoked:
                 # Output guard - check LLM response for PII
-                output_result = self._output_guard.inspect(raw_output)
+                # Bounded and off the loop, exactly as the input guard is at
+                # step 1. A timeout comes back as the guard's own fail-closed
+                # result (BLOCK / SYSTEM_ERROR / failed), so the branch below
+                # needs no special case for it.
+                output_result = await self._output_guard.inspect_bounded(
+                    raw_output, _settings.detector_timeout_seconds,
+                )
 
                 # The guard's BLOCK is honoured here. Only sanitized_text used
                 # to be read, and a BLOCK carries none -- so a response the

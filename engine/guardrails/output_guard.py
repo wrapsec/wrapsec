@@ -2,6 +2,7 @@
 # Copyright (c) 2026 WrapSec. All rights reserved.
 # WrapSec v1.0 | AI Security Gateway - https://wrapsec.com
 
+import asyncio
 import logging
 from dataclasses import dataclass, field
 from typing import cast
@@ -71,6 +72,49 @@ class OutputGuard:
     def __init__(self):
         self._detector = PIIDetector()
         self._redactor = PIIRedactor()
+
+    async def inspect_bounded(self, text: str, timeout_seconds: float) -> OutputGuardResult:
+        """`inspect` off the event loop and under a time bound.
+
+        The guard is regex over attacker-influenceable text. It is not
+        attacker-AUTHORED -- it is model output -- but a caller who can shape the
+        prompt can shape what the model emits, so a pathological string is
+        reachable from outside. Run synchronously on the loop, a catastrophic
+        backtrack does not slow one request down: it stalls every coroutine in
+        the process, including requests belonging to other tenants.
+
+        The input guard already treats the same engine this way
+        (`services/gateway/service.py`, step 1). This is the output side of that
+        same treatment, kept here rather than duplicated at the two call sites
+        so both fail closed identically.
+
+        A timeout returns the guard's OWN fail-closed shape -- BLOCK,
+        SYSTEM_ERROR, failed=True -- so callers that already distinguish "the
+        guard refused the content" from "the guard could not run" keep working
+        without knowing a timeout is possible.
+        """
+        try:
+            return await asyncio.wait_for(
+                asyncio.to_thread(self.inspect, text),
+                timeout=timeout_seconds,
+            )
+        except asyncio.TimeoutError:
+            logger.error(
+                "OutputGuard timed out after %ss -- blocking response",
+                timeout_seconds,
+            )
+            return OutputGuardResult(
+                text           = text,
+                sanitized_text = None,
+                was_sanitized  = False,
+                redacted_types = [],
+                decision       = "BLOCK",
+                primary_reason = "SYSTEM_ERROR",
+                pii_score      = 0.0,
+                threats        = [],
+                confidence     = 0.0,
+                failed         = True,
+            )
 
     def inspect(self, text: str) -> OutputGuardResult:
         if not text:

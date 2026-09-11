@@ -1414,7 +1414,12 @@ async def proxy_chat_completions(
         )
 
     _guard_start      = time.monotonic()
-    output_result     = _output_guard.inspect(provider_response.content)
+    # Bounded and off the loop -- see the note at the gateway's output guard.
+    # The timing below still measures the same thing: how long the scan took,
+    # now including the wait rather than excluding the possibility of one.
+    output_result     = await _output_guard.inspect_bounded(
+        provider_response.content, get_settings().detector_timeout_seconds,
+    )
     _output_scan_ms   = int((time.monotonic() - _guard_start) * 1000)
     output_decision   = output_result.decision
     output_reason     = output_result.primary_reason
