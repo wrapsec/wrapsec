@@ -46,12 +46,43 @@ PUBLIC_PATHS = {
     "/metrics",
     "/docs",
     "/redoc",
-    "/openapi.json",
     "/v1/auth/login",    # login is public - no auth required
     "/v1/auth/refresh",  # refresh uses httpOnly cookie - no Bearer required
     "/v1/setup",         # first-run setup - public, self-disables after first user created
     "/v1/setup/status",  # initialization check - public
 }
+
+# Public everywhere EXCEPT production.
+#
+# The schema document describes the surface of the deployment that serves it.
+# In production that is an unauthenticated description of the attack surface --
+# every path, method, parameter name, and error code -- handed to anyone who
+# asks, and it is the machine-readable form, so it enumerates rather than
+# merely mentions.
+#
+# `docs` and `redoc` are already absent in production: `api/main.py` passes
+# `None` for both, so those routes are never registered. This path was the
+# remaining way to read the same information, and it was the one that did not
+# need a browser.
+#
+# Authenticated in production rather than removed, because the contract is a
+# legitimate thing for an integrator holding a credential to fetch, and because
+# removing it would change the published surface rather than protect it. Below
+# production nothing changes: local development and the test suite read it
+# exactly as before.
+_NON_PRODUCTION_PUBLIC_PATHS = {"/openapi.json"}
+
+
+def _is_public_path(path: str) -> bool:
+    """Whether `path` may be served without any credential in this environment."""
+    if path in PUBLIC_PATHS:
+        return True
+    if path in _NON_PRODUCTION_PUBLIC_PATHS:
+        # Read per request. Capturing the environment at import would freeze it
+        # before configuration settles, and would make the boundary depend on
+        # when this module happened to be imported.
+        return get_settings().environment != "production"
+    return False
 
 # Paths where middleware must NOT log SESSION_EXPIRED
 # (refresh service owns its own logging for these paths)
@@ -517,7 +548,7 @@ class AuthMiddleware(BaseHTTPMiddleware):
     """
 
     async def dispatch(self, request: Request, call_next) -> Response:
-        if request.url.path in PUBLIC_PATHS:
+        if _is_public_path(request.url.path):
             request.state.is_admin = False
             return await call_next(request)
 
