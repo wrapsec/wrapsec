@@ -17,6 +17,7 @@ from typing import Any
 from mcp_gateway.decision import Refusal
 from mcp_gateway.interceptors.scan_result import ToolResultScanner
 from mcp_gateway.interceptors.scan_tools import ToolDefinitionScanner
+from mcp_gateway.interceptors.validate_call import ToolCallValidator
 
 
 class EnforcingInterceptor:
@@ -27,9 +28,11 @@ class EnforcingInterceptor:
         *,
         tool_definitions: ToolDefinitionScanner,
         tool_results:     ToolResultScanner,
+        tool_calls:       ToolCallValidator,
     ) -> None:
         self._tool_definitions = tool_definitions
         self._tool_results     = tool_results
+        self._tool_calls       = tool_calls
         self._refusals: list[Refusal] = []
 
     async def on_tool_definition(self, *, server_name: str, definition: Any) -> Any | None:
@@ -42,11 +45,25 @@ class EnforcingInterceptor:
             self._refusals.append(refusal)
         return published
 
-    async def on_tool_call(self, **kwargs: Any) -> Refusal | None:
-        # Call validation is not implemented in this build. Returning None allows
-        # the call, which is stated here rather than left to be inferred from an
-        # empty method: the gateway's tool-call boundary is not yet enforced.
-        return None
+    async def on_tool_call(
+        self,
+        *,
+        server_name:   str,
+        original_name: str,
+        exposed_name:  str,
+        arguments:     dict[str, Any],
+        trace_id:      str,
+    ) -> Refusal | None:
+        refusal = await self._tool_calls.inspect(
+            server_name   = server_name,
+            original_name = original_name,
+            exposed_name  = exposed_name,
+            arguments     = arguments,
+            trace_id      = trace_id,
+        )
+        if refusal is not None:
+            self._refusals.append(refusal)
+        return refusal
 
     async def on_tool_result(self, *, server_name: str, result: Any, trace_id: str) -> Any:
         delivered, refusal = await self._tool_results.inspect(

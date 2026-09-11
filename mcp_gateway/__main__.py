@@ -121,6 +121,7 @@ def _build_interceptor(config):
     from mcp_gateway.interceptors.enforcing import EnforcingInterceptor
     from mcp_gateway.interceptors.scan_result import ToolResultScanner
     from mcp_gateway.interceptors.scan_tools import ToolDefinitionScanner
+    from mcp_gateway.interceptors.validate_call import ToolCallValidator
     from mcp_gateway.scanner import Scanner
 
     if config.wrapsec is None:
@@ -147,6 +148,9 @@ def _build_interceptor(config):
             scanner, enabled=config.scan.tool_definitions,
         ),
         tool_results=ToolResultScanner(scanner, enabled=config.scan.results),
+        tool_calls=ToolCallValidator(
+            config, scanner, scan_arguments=config.scan.call_arguments,
+        ),
     )
 
 
