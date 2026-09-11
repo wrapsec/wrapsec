@@ -393,6 +393,14 @@ class GatewayService:
             output         = None
             llm_invoked    = False
             provider_error = None
+            # Bound before the branch that assigns it. `_call_llm_async` sets it
+            # only inside the proxy branch, and it is read only under
+            # `elif llm_invoked:` -- a coupling that holds but that nothing
+            # states, so a type checker reports the read as possibly unbound and
+            # a reader has to reconstruct the argument. Binding it here makes the
+            # relationship explicit and lets the None case be handled rather than
+            # assumed away.
+            raw_output: str | None = None
 
             if (
                 request.execution_mode == ExecutionMode.PROXY
@@ -418,36 +426,67 @@ class GatewayService:
                     provider_error, request.trace_id,
                 )
             elif llm_invoked:
-                # Output guard - check LLM response for PII
-                # Bounded and off the loop, exactly as the input guard is at
-                # step 1. A timeout comes back as the guard's own fail-closed
-                # result (BLOCK / SYSTEM_ERROR / failed), so the branch below
-                # needs no special case for it.
-                output_result = await self._output_guard.inspect_bounded(
-                    raw_output, _settings.detector_timeout_seconds,
-                )
-
-                # The guard's BLOCK is honoured here. Only sanitized_text used
-                # to be read, and a BLOCK carries none -- so a response the
-                # guard refused fell through to `raw_output` and was returned to
-                # the caller, which is the one thing an output guard exists to
-                # stop. That applied to a severe-PII block and to the guard's
-                # own fail-closed SYSTEM_ERROR alike.
-                if output_result.decision == "BLOCK":
+                # Nested rather than chained as `elif llm_invoked and
+                # raw_output is None`. The chained form left the type
+                # checker unable to narrow `raw_output` in the branch that
+                # uses it -- it knew only the negation of a compound
+                # condition. Nesting states the fact directly, which is
+                # what both the checker and a reader need.
+                if raw_output is None:
+                    # `_call_llm_async` returns exactly one of (content, error) --
+                    # three returns, all consistent -- so reaching here means that
+                    # contract was broken. It is handled rather than assumed away,
+                    # because of what the code would otherwise DO in this state:
+                    # `inspect` answers ALLOW for empty text, so the guard would pass,
+                    # `output` would resolve to None, and the caller would receive a
+                    # SUCCESSFUL response carrying no completion with llm_invoked
+                    # true. That is precisely the outage-as-an-answer failure the
+                    # provider_error branch above exists to prevent, arrived at from
+                    # the other side.
+                    #
+                    # So it fails closed, as a control that could not run: BLOCK,
+                    # maximum risk, reported as a detection failure rather than as a
+                    # verdict about content.
+                    logger.error(
+                        "LLM returned neither content nor error trace_id=%s",
+                        request.trace_id,
+                    )
                     output              = None
                     policy.decision     = DecisionType.BLOCK
                     scoring.final_score = RiskScore(1.0)
-                    # A guard that could not RUN is a detection failure, and is
-                    # reported as one. A guard that ran and refused the content
-                    # is a policy block, and keeps its own reason.
-                    if output_result.failed:
-                        detection_failed = True
-                    logger.warning(
-                        "Output blocked reason=%s trace_id=%s",
-                        output_result.primary_reason, request.trace_id,
-                    )
+                    detection_failed    = True
+
                 else:
-                    output = output_result.sanitized_text or raw_output
+                    # Output guard - check LLM response for PII
+                    # Bounded and off the loop, exactly as the input guard is at
+                    # step 1. A timeout comes back as the guard's own fail-closed
+                    # result (BLOCK / SYSTEM_ERROR / failed), so the branch below
+                    # needs no special case for it.
+                    output_result = await self._output_guard.inspect_bounded(
+                        raw_output, _settings.detector_timeout_seconds,
+                    )
+
+                    # The guard's BLOCK is honoured here. Only sanitized_text used
+                    # to be read, and a BLOCK carries none -- so a response the
+                    # guard refused fell through to `raw_output` and was returned to
+                    # the caller, which is the one thing an output guard exists to
+                    # stop. That applied to a severe-PII block and to the guard's
+                    # own fail-closed SYSTEM_ERROR alike.
+                    if output_result.decision == "BLOCK":
+                        output              = None
+                        policy.decision     = DecisionType.BLOCK
+                        scoring.final_score = RiskScore(1.0)
+                        # A guard that could not RUN is a detection failure, and is
+                        # reported as one. A guard that ran and refused the content
+                        # is a policy block, and keeps its own reason.
+                        if output_result.failed:
+                            detection_failed = True
+                        logger.warning(
+                            "Output blocked reason=%s trace_id=%s",
+                            output_result.primary_reason, request.trace_id,
+                        )
+                    else:
+                        output = output_result.sanitized_text or raw_output
 
             # ── Step 9: Build result ──────────────────────────
             latency_ms = (time.perf_counter() - start) * 1000
