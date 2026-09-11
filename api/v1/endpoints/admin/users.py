@@ -183,8 +183,33 @@ async def create_user(
 
     repo = UserRepository(db)
 
+    # This lookup is GLOBAL, and so is the answer it produces. `users.email` is
+    # unique across the deployment, so an address already registered in ANOTHER
+    # tenant cannot be registered here either -- and saying so tells a tenant
+    # administrator that the address has an account somewhere.
+    #
+    # It is not removable without changing the identity model. Emails are global
+    # because a person is one identity holding memberships, so any create
+    # attempt necessarily reveals whether an address is taken; a response that
+    # concealed it would have to either lie or create nothing while claiming
+    # success. Login itself is uniform and leaks nothing -- this is the narrower
+    # oracle available only to an authenticated administrator.
+    #
+    # So it is made DETECTABLE instead of deniable: the attempt is recorded, and
+    # an administrator sweeping addresses leaves a trail proportional to the
+    # sweep. The endpoint is also rate limited (see the dependency above).
     existing = await repo.get_by_email(email)
     if existing:
+        await _log_admin_event(
+            db             = db,
+            tenant_id      = uuid.UUID(str(principal.tenant_id)),
+            actor_user_id  = uuid.UUID(str(principal.id).replace("user:", "")),
+            action         = AdminEventAction.USER_CREATE_REJECTED_EXISTING_EMAIL,
+            dept_id        = None,
+            target_user_id = None,
+            ip_address     = ip,
+            user_agent     = ua,
+        )
         return JSONResponse(
             status_code=409,
             content={"error": {
