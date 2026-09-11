@@ -34,10 +34,13 @@ class Principal:
     tenant_id:    str             # NEVER None - enforced at construction (Layer 4)
     dept_id:      str | None      # None for ADMIN role only
     roles:        list[str]
-    permissions:  list[str]       # from ROLE_PERMISSIONS - v2+ use only, not enforced in v1
+    # From ROLE_PERMISSIONS, and ENFORCED: `require_permission` refuses the
+    # request when the permission is absent. Changing ROLE_PERMISSIONS opens or
+    # closes real routes -- it is not scaffolding.
+    permissions:  list[str]
     is_admin:     bool
     email:        str | None = None       # USER principals only
-    # Phase 3 extension points - always None in v1
+    # Extension points for agent-initiated principals; always None today.
     agent_id:     str | None = None
     triggered_by: str | None = None
 

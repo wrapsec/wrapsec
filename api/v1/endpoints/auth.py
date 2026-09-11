@@ -172,7 +172,11 @@ async def login(
     Errors:
         401 INVALID_CREDENTIALS - wrong email or wrong password (identical message)
         401 ACCOUNT_DISABLED    - is_active = False
-        429 ACCOUNT_LOCKED      - too many failed attempts
+        429 ACCOUNT_LOCKED      - too many failed attempts for this ADDRESS
+        429 RATE_LIMIT_EXCEEDED - too many login attempts from this IP, checked
+                                  before any database work. Fails OPEN if the
+                                  rate-limit store is unreachable, so it thins
+                                  credential stuffing rather than gating login.
     """
     import os
 

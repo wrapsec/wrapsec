@@ -385,7 +385,12 @@ class Settings(BaseSettings):
     # -- Data storage ----------------------------------------------------------
     data_storage_mode:        str = Field(default="masked")
     # full   -- store input_raw and output_raw as-is (development)
-    # masked -- run PII redactor before storing (production default)
+    # masked -- store NO raw text; keep only the already-redacted sanitized
+    #           copy produced by the input guard (production default). It does
+    #           not redact at storage time -- the raw column is discarded, which
+    #           is stricter than redacting it. Any UNRECOGNIZED value is treated
+    #           as masked, so a typo cannot opt into plaintext retention; only an
+    #           explicit "full" does that.
     # none   -- store None for input_raw and output_raw (strict compliance)
     data_retention_days_proxy: int = 7
 

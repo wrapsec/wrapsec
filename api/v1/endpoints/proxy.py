@@ -66,7 +66,6 @@ from domain.enums import DetectionMode
 from domain.value_objects.severity import compute_severity
 from domain.value_objects.trace_id import TraceId
 from engine.guardrails.output_guard import OutputGuard
-from engine.guardrails.pii.redactor import PIIRedactor
 from engine.proxy.router import (
     parse_model_string,
     resolve_provider,
@@ -96,7 +95,6 @@ logger = logging.getLogger("wrapsec.proxy")
 
 _gateway      = GatewayService()
 _output_guard = OutputGuard()
-_pii_redactor = PIIRedactor()
 
 # Execution status constants
 STATUS_SUCCESS        = "SUCCESS"
