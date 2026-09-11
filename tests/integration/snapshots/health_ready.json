@@ -4,9 +4,9 @@
       "database": "ok",
       "redis": "ok",
       "tfidf_detector": "healthy",
-      "transformer_detector": "healthy"
+      "transformer_detector": "<optional_tier>"
     },
-    "status": "ready"
+    "status": "<ready_or_degraded>"
   },
   "mode": "value",
   "status": 200

@@ -136,6 +136,42 @@ def _keys(value):
             for k, v in value.items()}
 
 
+# The transformer tier is OPTIONAL: it ships in a separate build, so
+# `/health/ready` reports it healthy where it is installed and degraded where it
+# is not, and the overall status follows. Both answers are correct for the
+# environment that produced them, so recording either one literally pins the
+# snapshot to whichever machine last wrote it. That is exactly how it failed:
+# recorded where the tier is installed, run in CI where it is not.
+#
+# Only these two fields are collapsed. Everything else in the body is still
+# compared by value, so a database or redis check that stops saying "ok", a probe
+# that disappears, or a new one that appears all still fail here -- and the HTTP
+# status is recorded separately, so a 503 is caught regardless.
+_OPTIONAL_TIER_PROBES = ("transformer_detector",)
+
+
+def _collapse_optional_tiers(body):
+    """Mask the probes whose answer depends on which build is installed."""
+    if not isinstance(body, dict) or not isinstance(body.get("checks"), dict):
+        return body
+
+    collapsed = dict(body)
+    checks    = dict(collapsed["checks"])
+    masked    = False
+    for probe in _OPTIONAL_TIER_PROBES:
+        if probe in checks:
+            checks[probe] = "<optional_tier>"
+            masked = True
+    collapsed["checks"] = checks
+
+    # The overall status is derived from the checks, so it inherits the same
+    # environment dependence. Collapsed only across the two values the optional
+    # tier can produce, so any other status is still recorded literally.
+    if masked and collapsed.get("status") in ("ready", "degraded"):
+        collapsed["status"] = "<ready_or_degraded>"
+    return collapsed
+
+
 def _record(name: str, status: int, body, shape_only: bool = False,
             keys_only: bool = False) -> None:
     """Compare against the stored snapshot, or write it under the update flag."""
@@ -147,6 +183,8 @@ def _record(name: str, status: int, body, shape_only: bool = False,
         normalized, mode = _shape(body), "shape"
     else:
         normalized, mode = _normalize(body), "value"
+    if name in ("health", "health_ready"):
+        normalized = _collapse_optional_tiers(normalized)
     observed = {"status": status, "body": normalized, "mode": mode}
 
     if _UPDATE or not path.exists():
