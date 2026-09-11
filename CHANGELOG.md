@@ -2,6 +2,89 @@
 
 All notable changes to WrapSec are documented here.
 
+## [1.9.3] - 2026-09-11
+
+Security fixes across authentication, policy resolution, the audit chain and the
+guardrails. Every entry was verified against the implementation rather than
+against its documentation. No configuration value or default changed; one
+response declaration widened.
+
+### Security
+
+- **A request whose policy cannot be resolved is now refused.** A failed tenant,
+  department or application layer previously fell through to the system defaults.
+  A failed read is indistinguishable from a tenant that had TIGHTENED its
+  thresholds, so serving defaults silently relaxed exactly the tenants who had
+  asked for more. The request is refused fail-closed with `DETECTION_ERROR`.
+- **The audit hash chain is ordered by an explicit per-tenant sequence, not by the
+  clock.** `created_at` was stamped before the advisory lock that serialises the
+  write, so two writes whose timestamps arrived out of insertion order selected
+  the same predecessor and forked the chain. Rows now carry `chain_seq`, which is
+  itself hashed, plus a `chain_format` so existing rows keep their stored hashes
+  and are verified under the format they were written with. Historical forks are
+  left intact and visible rather than rewritten.
+- **A command verifies an audit chain.** The chain had been written since v1.2 and
+  never read back. It distinguishes a break from a fork from a retention gap, and
+  states plainly that deletion of the most recent rows cannot be detected without
+  an anchor outside the database.
+- **The output guard runs under a time bound and off the event loop.** It is regex
+  over text a caller can shape through the prompt, so a pathological response
+  stalled every coroutine in the process, including other tenants' requests.
+- **Rate limiting charges the source address on every request.** The per-address
+  bucket was consulted only when no API key was presented, so a caller holding a
+  key was not counted against it.
+- **First-run setup closes once the deployment has any user.** It self-disabled on
+  a narrower condition that a multi-tenant deployment could leave unmet.
+- **A wildcard CORS origin is refused rather than trusted.**
+- **Credentials are compared as bytes.** A header containing non-ASCII turned a
+  constant-time comparison into an unhandled exception, so an anonymous caller
+  could raise 500s at will. A malformed credential is an authentication failure.
+  The comparison stays constant-time.
+- **A replayed refresh token revokes the whole token family.** Presenting an
+  already-rotated token is evidence the session is compromised, and it is now
+  recorded as `token_reuse_detected`.
+- **The schema document requires a credential in production.** `/openapi.json` sat
+  in the unconditional public allowlist while production already withheld the
+  rendered docs, so the machine-readable enumeration of the surface stayed open.
+  It is unchanged below production, and an authenticated caller still receives it.
+- **The key-encryption key is derived once per secret rather than once per call.**
+- **A user create refused because the address is already registered is audited.**
+  The refusal is unavoidable while identity is global, so the probe is recorded
+  rather than concealed.
+
+### Added
+
+- **An administrator can clear a login lockout.** Brute-force protection is
+  unchanged; this adds an authorized recovery path rather than weakening it, and
+  the action is recorded like any other change to who can get in.
+
+### Changed
+
+- **`POST /v1/chat/completions` declares both shapes for its 500.** A policy that
+  cannot be resolved is answered by the gateway in the catalog envelope, while an
+  output-guard or post-provider failure stays OpenAI-shaped. The status has one
+  producer on each side, as the 429 already did, and is now declared with `anyOf`.
+
+### Fixed
+
+- **Upstream transport failures answer in the shape the route declares.**
+- **A provider completion state the contract rules out is handled rather than
+  assumed away.**
+- **Settings-derived state is built on first use rather than at import.** Two
+  authentication-event engines captured the database URL before any caller could
+  influence it. The guard in front of dropping every table read the environment
+  from that same capture, so a stale value could leave it not firing.
+
+### Documentation
+
+- **Output scanning is stated as PII-only.** The output guard consults the PII
+  engines alone; the rule, machine-learning, transformer and LLM tiers and the
+  toxicity guardrail run on input only. A response is never scored for prompt
+  injection, jailbreak content or toxicity on its way back, and no setting widens
+  that.
+- **Four comments that described absent behaviour are corrected**, including a
+  field documented as unenforced while eight endpoints depended on it.
+
 ## [1.9.2] - 2026-09-11
 
 Hardens the OpenAI-compatible proxy, and restructures the published API contract
