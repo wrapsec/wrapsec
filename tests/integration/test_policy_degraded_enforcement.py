@@ -203,3 +203,36 @@ async def test_the_runtime_schema_and_the_committed_artifact_agree_on_the_new_50
             f"{path} advertises {ref!r} for its 500; the runtime returns the "
             "catalog envelope"
         )
+
+
+@pytest.mark.asyncio
+async def test_the_chat_route_refuses_when_the_tenant_layer_fails(
+    client, test_db, tenant_read_fails,
+):
+    """The proxy route refuses in the catalog envelope, not the OpenAI shape.
+
+    Policy is resolved at step 2, before the provider config is loaded and long
+    before anything OpenAI-compatible is produced, so the refusal is raised as a
+    WrapSecError and answered by the global handler. That handler shapes every
+    error the same way; it does not know this route speaks another protocol.
+
+    The scan and batch routes were covered here and this one was not, which is
+    how it came to declare its 500 as OpenAI-shaped only. A caller parsing
+    `error.type` on this status would find no such field.
+    """
+    headers = await _dept_scoped_key(test_db)
+
+    resp = await client.post(
+        "/v1/chat/completions",
+        json    = {"model": "openai/gpt-4o",
+                   "messages": [{"role": "user", "content": "hello"}]},
+        headers = headers,
+    )
+
+    _assert_refused(resp)
+    # The negative half: NOT the OpenAI error shape this route uses elsewhere,
+    # which is why the declaration has to carry both.
+    assert "type" not in resp.json()["error"], (
+        "the refusal came back in the OpenAI error shape; this test and the 500 "
+        "declaration disagree about which producer answered"
+    )

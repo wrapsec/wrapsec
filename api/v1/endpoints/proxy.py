@@ -780,7 +780,17 @@ _CHAT_RESPONSES: dict[int | str, dict[str, Any]] = {
         "model":       OpenAIErrorResponse | ErrorEnvelope,
         "description": "Rate limited. The gateway's own limiter answers with the catalog envelope; an upstream provider refusal is OpenAI-shaped and carries `Retry-After` when the provider supplied one.",
     },
-    500: {"model": OpenAIErrorResponse, "description": "Output guard failure, or an unexpected error after the provider replied."},
+    # The second status on this route with two producers, for the same reason as
+    # the 429 above. This route maps an output-guard fault or a post-provider
+    # failure into the OpenAI shape. A policy that could not be RESOLVED is
+    # different: it is raised before the OpenAI-compatible path is reachable and
+    # answered by the global handler, which emits the catalog envelope without
+    # knowing which protocol the route speaks. Declaring only the OpenAI shape
+    # was a false statement about the fail-closed refusal.
+    500: {
+        "model":       OpenAIErrorResponse | ErrorEnvelope,
+        "description": "Output guard failure, or an unexpected error after the provider replied, in the OpenAI shape. A policy that could not be resolved is refused fail-closed before the provider is called and carries the catalog envelope with `DETECTION_ERROR`.",
+    },
     502: {"model": OpenAIErrorResponse, "description": "The provider was unreachable or returned an unusable reply."},
     504: {"model": OpenAIErrorResponse, "description": "The provider timed out."},
 }

@@ -6325,11 +6325,19 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/OpenAIErrorResponse"
+                  "anyOf": [
+                    {
+                      "$ref": "#/components/schemas/OpenAIErrorResponse"
+                    },
+                    {
+                      "$ref": "#/components/schemas/ErrorEnvelope"
+                    }
+                  ],
+                  "title": "Response 500 Proxy Chat Completions V1 Chat Completions Post"
                 }
               }
             },
-            "description": "Output guard failure, or an unexpected error after the provider replied."
+            "description": "Output guard failure, or an unexpected error after the provider replied, in the OpenAI shape. A policy that could not be resolved is refused fail-closed before the provider is called and carries the catalog envelope with `DETECTION_ERROR`."
           },
           "502": {
             "content": {

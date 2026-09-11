@@ -343,8 +343,12 @@ def test_chat_completions_advertises_its_own_protocol_shape():
     and idempotency), 422 from the global validation handler, and 403 refuses a
     dashboard session. Every error the route itself builds stays OpenAI-shaped.
 
-    429 belongs to neither group -- it has one producer on each side -- and is
-    asserted separately.
+    429 and 500 belong to neither group -- each has one producer on each side --
+    and both are asserted separately. The 500 joined them once the degraded-policy
+    refusal was measured on this route: policy is resolved before the
+    OpenAI-compatible path is reachable, so that refusal is raised as a
+    WrapSecError and answered by the global handler in the catalog envelope,
+    while an output-guard or post-provider failure stays OpenAI-shaped.
 
     401 and 409 were reachable and canonical well before they were declared --
     neither is mentioned anywhere in this route's source, which is why they were
@@ -358,9 +362,10 @@ def test_chat_completions_advertises_its_own_protocol_shape():
 
     assert ref("200") == "ChatCompletionResponse"
 
-    # 429 is excluded here and asserted on its own below: it is the one status
-    # with two producers, so it is the one status that is NOT a single $ref.
-    for code in ("400", "413", "500", "502", "504"):
+    # 429 and 500 are excluded here and asserted on their own below: they are
+    # the two statuses with a producer on each side, so they are the two that
+    # are NOT a single $ref.
+    for code in ("400", "413", "502", "504"):
         assert ref(code) == "OpenAIErrorResponse", (
             f"{code} on the OpenAI-compatible route advertises {ref(code)!r}; its "
             "callers parse error.message / error.type / error.code"
@@ -371,6 +376,21 @@ def test_chat_completions_advertises_its_own_protocol_shape():
             f"{code} is answered by WrapSec rather than by the OpenAI-compatible "
             f"path, so it must advertise the catalog envelope, not {ref(code)!r}"
         )
+
+    # The 500's two producers, in the same form the 429 uses. Asserted here as
+    # well as in the integration suite because the suite measures the body and
+    # this measures the promise; the defect was the two disagreeing.
+    schema_500 = (
+        op["responses"]["500"]["content"]["application/json"]["schema"]
+    )
+    assert "oneOf" not in schema_500, "the 500 union became exclusive"
+    branches_500 = {b.get("$ref", "").split("/")[-1]
+                    for b in schema_500.get("anyOf", [])}
+    assert branches_500 == {"OpenAIErrorResponse", "ErrorEnvelope"}, (
+        f"the 500 advertises {sorted(branches_500) or schema_500!r}; both "
+        "producers must be present -- an unresolved policy (catalog envelope) "
+        "and an output-guard or post-provider failure (OpenAI-shaped)"
+    )
 
 
 def test_the_proxy_interaction_detail_404_advertises_the_catalog_envelope():
