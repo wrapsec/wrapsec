@@ -94,6 +94,32 @@ async def clear_failures(email: str) -> None:
     await redis.delete(_locked_key(email))
 
 
+async def unlock(email: str) -> bool:
+    """Clear a lockout on an operator's instruction. Returns True if one existed.
+
+    The lockout itself is deliberately unchanged: the counter's sliding window
+    and the lock's extension on every further failure ARE the brute-force
+    protection, and relaxing either to make accounts recoverable would trade a
+    real control for a convenience.
+
+    What was missing is a way back. `is_locked` is checked before credentials
+    are verified, so a locked account refuses the CORRECT password; and
+    `clear_failures` runs only after a successful login, which that check makes
+    unreachable. An attacker submitting one wrong password per window therefore
+    held an account shut indefinitely, and the only remedy was editing the store
+    by hand.
+
+    Clears BOTH keys. Removing the lock while leaving the counter at or above
+    the threshold would re-lock the account on the next single failure, which
+    would look like the unlock had not worked.
+    """
+    redis   = get_redis()
+    existed = await redis.exists(_locked_key(email)) > 0
+    await redis.delete(_failed_key(email))
+    await redis.delete(_locked_key(email))
+    return existed
+
+
 async def get_lockout_remaining(email: str) -> int:
     """
     Returns seconds remaining in lockout period.

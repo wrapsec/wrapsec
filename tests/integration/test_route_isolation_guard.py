@@ -71,6 +71,10 @@ TENANT_SCOPED = {
     # Users (memberships)
     "/v1/admin/users", "/v1/admin/users/{user_id}",
     "/v1/admin/users/{user_id}/reset-password",
+    # Clearing a lockout restores the ability to authenticate, so it is bounded
+    # by the same tenant membership check as the password reset beside it. The
+    # cross-tenant refusal is exercised in test_account_unlock.py.
+    "/v1/admin/users/{user_id}/unlock",
     # Webhooks
     "/v1/admin/webhooks", "/v1/admin/webhooks/{endpoint_id}",
     "/v1/admin/webhooks/{endpoint_id}/pause",

@@ -87,6 +87,9 @@ class AdminEventAction(str, Enum):
     USER_DEACTIVATED = "user_deactivated"
     USER_REACTIVATED = "user_reactivated"
     PASSWORD_RESET   = "password_reset"
+    # Clearing a lockout restores the ability to authenticate, so it is
+    # recorded like any other change to who can get in.
+    ACCOUNT_UNLOCKED = "account_unlocked"
     ROLE_CHANGED     = "role_changed"
     DEPT_CHANGED     = "dept_changed"
     # Changing where a credential may be used is a change to a security

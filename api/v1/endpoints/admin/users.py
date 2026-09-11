@@ -536,6 +536,68 @@ async def update_user(
     return JSONResponse(content=_format(updated, membership))
 
 
+@router.post("/{user_id}/unlock", include_in_schema=False)
+async def unlock_account(
+    user_id:   uuid.UUID,
+    request:   Request,
+    principal: Principal    = Depends(require_admin()),
+    db:        AsyncSession = Depends(get_db),
+    _rl:       None         = Depends(endpoint_rate_limit("admin_write_rate_limit")),
+) -> JSONResponse:
+    """
+    Clear a login lockout so the account can authenticate again.
+
+    Auth: JWT + ADMIN role, and the target must hold a membership in the
+    admin's own tenant -- the same authorization the password reset above
+    requires, and strictly less powerful: this changes no credential, it only
+    clears a counter.
+
+    The lockout is not weakened to provide this. The sliding counter and the
+    lock's extension on each further failure remain exactly as they were; what
+    is added is a way back, because there was none. A locked account refuses the
+    correct password, and the only path that cleared the lock ran after a
+    successful login -- so an attacker submitting one wrong password per window
+    could hold an account shut for as long as they cared to, and recovery meant
+    editing the store by hand.
+    """
+    ip, ua = _get_client_info(request)
+    actor_id  = uuid.UUID(str(principal.id).replace("user:", ""))
+    tenant_id = uuid.UUID(str(principal.tenant_id))
+
+    repo       = UserRepository(db)
+    user       = await repo.get_by_id(user_id)
+    membership = await MembershipRepository(db).get_by_user_and_tenant(user_id, tenant_id) if user else None
+
+    # Same 404 for "no such user" and "not in your tenant": an admin of one
+    # tenant must not learn whether a user id exists in another.
+    if not user or membership is None:
+        raise NotFoundError("user", str(user_id))
+
+    from services.auth.lockout import unlock as clear_lockout
+
+    was_locked = await clear_lockout(normalize_email(user.email))
+
+    await _log_admin_event(
+        db             = db,
+        tenant_id      = tenant_id,
+        actor_user_id  = actor_id,
+        action         = AdminEventAction.ACCOUNT_UNLOCKED,
+        dept_id        = membership.dept_id,
+        target_user_id = user_id,
+        ip_address     = ip,
+        user_agent     = ua,
+    )
+
+    # Reported either way, and audited either way. An admin who unlocks an
+    # account that was not locked has still exercised the authority, and the
+    # response says which happened rather than implying a lock existed.
+    return JSONResponse(content={
+        "message":    "Account unlocked." if was_locked else "Account was not locked.",
+        "user_id":    str(user_id),
+        "was_locked": was_locked,
+    })
+
+
 @router.post("/{user_id}/reset-password")
 async def reset_password(
     user_id:   uuid.UUID,
