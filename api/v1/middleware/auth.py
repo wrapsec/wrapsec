@@ -6,6 +6,7 @@ import hashlib
 import ipaddress
 import logging
 import os
+from functools import lru_cache
 from typing import TYPE_CHECKING, cast
 from uuid import UUID
 
@@ -31,9 +32,12 @@ if TYPE_CHECKING:
 
 logger = logging.getLogger("wrapsec.auth")
 
-_auth_event_engine = create_async_engine(get_settings().database_url, poolclass=NullPool)
-_auth_event_sf     = async_sessionmaker(bind=_auth_event_engine, class_=AsyncSession,
-                                        expire_on_commit=False)
+@lru_cache(maxsize=1)
+def _auth_event_sf():
+    """Built on FIRST USE rather than at import -- see the identical factory in
+    `services/auth/service.py` for why."""
+    engine = create_async_engine(get_settings().database_url, poolclass=NullPool)
+    return async_sessionmaker(bind=engine, class_=AsyncSession, expire_on_commit=False)
 
 PUBLIC_PATHS = {
     "/health",
@@ -312,7 +316,7 @@ async def _log_session_expired(
     from domain.enums import AuthEventAction as _Action
     from domain.enums import AuthFailureReason as _Reason
 
-    session = _auth_event_sf()
+    session = _auth_event_sf()()
     try:
         repo = AuthEventRepository(session)
         await repo.insert(

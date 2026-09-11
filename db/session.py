@@ -83,7 +83,12 @@ async def dispose_engine() -> None:
 
 
 async def drop_tables() -> None:
-    if _settings.environment == "production":
+    # Read the environment LIVE rather than from the import-time capture above.
+    # This is the last guard in front of an irreversible operation, and the
+    # captured value predates any configuration a caller could have applied --
+    # including a test that clears the settings cache. A guard that consults a
+    # stale value is not a guard.
+    if get_settings().environment == "production":
         raise RuntimeError("drop_tables() must never be called in production.")
     from db.models import Base
     async with engine.begin() as conn:

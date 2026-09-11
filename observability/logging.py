@@ -10,9 +10,6 @@ from datetime import datetime, timezone
 
 from config.settings import get_settings
 
-settings = get_settings()
-
-
 # Extra fields that must never appear in structured logs - accidental inclusion
 # of secrets via logger.info(..., extra={...}) would write them to log streams.
 _SENSITIVE_EXTRAS = frozenset({
@@ -148,6 +145,7 @@ def setup_logging() -> None:
     Configure structured JSON logging for the entire application.
     Call once at startup.
     """
+    settings  = get_settings()
     log_level = getattr(logging, settings.log_level.upper(), logging.INFO)
 
     # Root logger

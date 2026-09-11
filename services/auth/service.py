@@ -5,6 +5,7 @@
 import logging
 from dataclasses import dataclass
 from datetime import datetime, timedelta
+from functools import lru_cache
 from typing import TYPE_CHECKING
 from uuid import UUID
 
@@ -12,7 +13,6 @@ from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_asyn
 from sqlalchemy.pool import NullPool
 
 from cache import keyspace
-from config.settings import get_settings as _get_settings
 from services.time import ensure_utc, utc_now
 
 if TYPE_CHECKING:
@@ -23,10 +23,28 @@ logger = logging.getLogger("wrapsec.auth")
 # Dedicated NullPool engine for auth_event writes - kept at module level so the
 # engine object is not re-created on every login attempt. NullPool still opens
 # a fresh DB connection per session; dispose() is never needed at this scope.
-_auth_settings    = _get_settings()
-_auth_event_engine = create_async_engine(_auth_settings.database_url, poolclass=NullPool)
-_auth_event_sf     = async_sessionmaker(bind=_auth_event_engine, class_=AsyncSession,
-                                        expire_on_commit=False)
+@lru_cache(maxsize=1)
+def _auth_event_sf():
+    """The session factory for auth events, built on FIRST USE.
+
+    It used to be built at import, which captured `database_url` before any
+    caller could influence it. Import happens at collection time, so a test that
+    points the database elsewhere and clears the settings cache still wrote its
+    auth events to whatever URL was in force when the module was first imported
+    -- silently, because the write succeeds either way.
+
+    Deferring to first use costs nothing in production (the first auth event
+    comes long after startup configuration settles) and puts the capture after
+    the point where configuration is known.
+
+    Still cached after that: this is a connection pool, not a value to re-read
+    per call, and the settings invariant already accepts that a database URL
+    change needs a restart. `cache_clear()` is available to tests that need it.
+    """
+    from config.settings import get_settings
+
+    engine = create_async_engine(get_settings().database_url, poolclass=NullPool)
+    return async_sessionmaker(bind=engine, class_=AsyncSession, expire_on_commit=False)
 
 
 def _utcnow() -> datetime:
@@ -82,7 +100,7 @@ async def _log_auth_event(
     from domain.enums import AuthEventAction as _Action
     from domain.enums import AuthFailureReason as _Reason
 
-    session = _auth_event_sf()
+    session = _auth_event_sf()()
     try:
         repo = AuthEventRepository(session)
         await repo.insert(
