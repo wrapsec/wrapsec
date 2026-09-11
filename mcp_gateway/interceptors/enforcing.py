@@ -15,14 +15,21 @@ from __future__ import annotations
 from typing import Any
 
 from mcp_gateway.decision import Refusal
+from mcp_gateway.interceptors.scan_result import ToolResultScanner
 from mcp_gateway.interceptors.scan_tools import ToolDefinitionScanner
 
 
 class EnforcingInterceptor:
     """Applies the inspections this build implements."""
 
-    def __init__(self, *, tool_definitions: ToolDefinitionScanner) -> None:
+    def __init__(
+        self,
+        *,
+        tool_definitions: ToolDefinitionScanner,
+        tool_results:     ToolResultScanner,
+    ) -> None:
         self._tool_definitions = tool_definitions
+        self._tool_results     = tool_results
         self._refusals: list[Refusal] = []
 
     async def on_tool_definition(self, *, server_name: str, definition: Any) -> Any | None:
@@ -42,9 +49,15 @@ class EnforcingInterceptor:
         return None
 
     async def on_tool_result(self, *, server_name: str, result: Any, trace_id: str) -> Any:
-        # Result scanning is not implemented in this build; the result is passed
-        # through unexamined.
-        return result
+        delivered, refusal = await self._tool_results.inspect(
+            server_name = server_name,
+            result      = result,
+            trace_id    = trace_id,
+        )
+        if refusal is not None:
+            self._refusals.append(refusal)
+            return refusal
+        return delivered
 
     @property
     def refusals(self) -> tuple[Refusal, ...]:

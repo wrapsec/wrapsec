@@ -160,17 +160,89 @@ def to_tool_definition(tool: Any) -> ToolDefinition:
 
 
 def text_parts_of(result: Any) -> tuple[str, ...]:
-    """Every textual part of a tool result, in order.
+    """Every part of a result that a model will read as text, in order.
 
-    Non-text content (images, binary, embedded resources) is NOT rendered into
-    text. V1 does not scan it, and inventing a textual stand-in would mean
-    scanning something the agent never receives while forwarding something that
-    was never scanned. Such parts are simply not returned here; the caller
-    forwards them unchanged and the plan records that limit.
+    Text reaches the agent through more than one block type, and scanning only
+    the obvious one leaves the rest unexamined:
+
+      * a text block, the usual case;
+      * a resource LINK, whose name, title and description are prose the model
+        reads, and whose uri is a destination it may be induced to follow;
+      * an EMBEDDED resource, whose contents may be text.
+
+    A link's uri is included deliberately. It is not prose, but it is
+    attacker-chosen and it is the payload in an exfiltration or phishing lure, so
+    it belongs in what gets judged rather than passing as metadata.
+
+    STRUCTURED CONTENT IS INCLUDED. A result may carry `structured_content`
+    alongside its blocks, and a server is free to return the blocks EMPTY and put
+    everything there -- measured against this MCP version, the client accepts
+    that and the value is preserved end to end. Scanning only the blocks would
+    therefore leave a one-step bypass: put the payload in the structured field
+    and nothing is examined.
+
+    It is rendered with the same call the MCP package itself uses when mirroring
+    a tool's structured return into the model-facing text block, so what the
+    detector reads is the representation the protocol already produces rather
+    than a second one invented here.
+
+    NOT INCLUDED: binary payloads (image, audio, blob), which this build does not
+    scan. That is a limit of this build, not a statement that they are safe.
     """
     parts: list[str] = []
     for block in getattr(result, "content", None) or []:
-        text = getattr(block, "text", None)
-        if isinstance(text, str):
-            parts.append(text)
+        parts.extend(_block_text(block))
+
+    structured = getattr(result, "structured_content", None)
+    if structured is not None:
+        parts.append(structured_text(structured))
     return tuple(parts)
+
+
+def structured_text(structured: Any) -> str:
+    """`structured_content` rendered exactly as the MCP package renders it.
+
+    The same call the package uses to turn a tool's structured return into the
+    text block a model reads. Matching it means the detector is judging the
+    representation the protocol produces, not an approximation of it, and a
+    payload that appears in both places is judged identically in both.
+
+    `fallback=str` so a value the serializer does not know how to encode still
+    reaches the detector as text instead of raising and losing the content.
+    """
+    import pydantic_core
+
+    return pydantic_core.to_json(structured, fallback=str, indent=2).decode()
+
+
+def _block_text(block: Any) -> list[str]:
+    """The readable text of one content block."""
+    found: list[str] = []
+
+    text = getattr(block, "text", None)
+    if isinstance(text, str) and text:
+        found.append(text)
+
+    # A resource link: prose plus the destination it points at.
+    for attr in ("name", "title", "description", "uri"):
+        value = getattr(block, attr, None)
+        if isinstance(value, str) and value:
+            found.append(value)
+        elif value is not None and attr == "uri":
+            # A uri may arrive as a parsed type rather than a string; it is still
+            # the destination, so it is judged rather than skipped.
+            rendered = str(value)
+            if rendered:
+                found.append(rendered)
+
+    # An embedded resource wraps its own contents, which may be text.
+    resource = getattr(block, "resource", None)
+    if resource is not None:
+        inner = getattr(resource, "text", None)
+        if isinstance(inner, str) and inner:
+            found.append(inner)
+        uri = getattr(resource, "uri", None)
+        if uri is not None and str(uri):
+            found.append(str(uri))
+
+    return found

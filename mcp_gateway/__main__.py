@@ -119,6 +119,7 @@ def _build_interceptor(config):
 
     from mcp_gateway.config import ConfigError
     from mcp_gateway.interceptors.enforcing import EnforcingInterceptor
+    from mcp_gateway.interceptors.scan_result import ToolResultScanner
     from mcp_gateway.interceptors.scan_tools import ToolDefinitionScanner
     from mcp_gateway.scanner import Scanner
 
@@ -145,6 +146,7 @@ def _build_interceptor(config):
         tool_definitions=ToolDefinitionScanner(
             scanner, enabled=config.scan.tool_definitions,
         ),
+        tool_results=ToolResultScanner(scanner, enabled=config.scan.results),
     )
 
 

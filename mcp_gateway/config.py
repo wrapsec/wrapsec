@@ -115,6 +115,7 @@ class ScanConfig:
 
     mode:             str  = "fast"
     tool_definitions: bool = True
+    results:          bool = True
     max_chars:        int  = 8000
 
     def __post_init__(self) -> None:
@@ -289,7 +290,7 @@ def _scan_from(raw: object, file: Path) -> ScanConfig:
     if not isinstance(raw, dict):
         raise ConfigError(f"'scan' in {str(file)!r} must be a mapping")
 
-    unknown = sorted(set(raw) - {"mode", "tool_definitions", "max_chars"})
+    unknown = sorted(set(raw) - {"mode", "tool_definitions", "results", "max_chars"})
     if unknown:
         raise ConfigError(f"'scan' has unsupported key(s): {', '.join(unknown)}")
 
@@ -301,11 +302,16 @@ def _scan_from(raw: object, file: Path) -> ScanConfig:
     if not isinstance(definitions, bool):
         raise ConfigError("scan.tool_definitions must be true or false")
 
+    results = raw.get("results", True)
+    if not isinstance(results, bool):
+        raise ConfigError("scan.results must be true or false")
+
     max_chars = raw.get("max_chars", 8000)
     if not isinstance(max_chars, int) or isinstance(max_chars, bool):
         raise ConfigError("scan.max_chars must be an integer")
 
-    return ScanConfig(mode=mode, tool_definitions=definitions, max_chars=max_chars)
+    return ScanConfig(mode=mode, tool_definitions=definitions, results=results,
+                      max_chars=max_chars)
 
 
 def _server_from(entry: object, index: int, file: Path) -> ServerConfig:
