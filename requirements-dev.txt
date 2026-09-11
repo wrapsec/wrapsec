@@ -23,7 +23,9 @@ testcontainers[postgres]==4.13.1
 # installed from a stage that has copied requirements*.txt and nothing else, so a
 # path requirement pointing into the source tree fails the image build; the SDK
 # is installed editable after the source arrives, for every build stage.
-mcp>=2.0.0
+# Pinned exactly, matching requirements-mcp.txt, so the test tier and the
+# deployment resolve the same package. See that file for why this is not a floor.
+mcp==2.2.0
 
 # ── Static analysis ───────────────────────────────────────────────────────────
 # Linting and formatting (make lint / make format).

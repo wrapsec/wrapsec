@@ -11,4 +11,11 @@
 # Run (stdio transport -- the default for agent-spawned tool servers):
 #   WRAPSEC_API_KEY=wsk_live_... WRAPSEC_BASE_URL=http://localhost:8000 \
 #       python -m mcp_server
-mcp>=2.0.0
+# Pinned exactly, not floored. The gateway and the adapter build against the
+# low-level server API, and the SDK marks parts of that surface provisional --
+# the middleware seam carries a note that its signature may change in a 2.x
+# MINOR release. An unbounded floor lets an enforcement dependency move under a
+# green build, and it already had: the same declaration resolved 2.1.0 locally
+# and 2.2.0 in CI. Raising this is a deliberate compatibility change that must
+# pass the MCP suites, never an incidental bump.
+mcp==2.2.0
