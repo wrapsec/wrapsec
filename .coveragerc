@@ -17,6 +17,7 @@ source =
     errors
     observability
     clients
+    mcp_gateway
 omit =
     */__pycache__/*
     */tests/*
