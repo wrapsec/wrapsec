@@ -104,10 +104,24 @@ class RateLimitMiddleware(BaseHTTPMiddleware):
         from api.v1.middleware.auth import get_client_ip
         client_ip = get_client_ip(request)
 
-        if api_key:
-            rate_limit_id = f"key:{hashlib.sha256(api_key.encode()).hexdigest()[:16]}"
-        else:
-            rate_limit_id = f"ip:{client_ip}"
+        # TWO buckets, and the source bucket is charged on EVERY request.
+        #
+        # This used to be an either/or: present an `x-api-key` header and the
+        # per-key bucket was charged INSTEAD of the address bucket. Because this
+        # middleware runs before auth, the header did not have to be valid --
+        # so a caller varying it per request got a fresh bucket every time and
+        # the address was never charged at all. The per-address limit was not
+        # weakened by that, it was absent.
+        #
+        # The address bucket carries its own, much higher limit. Sizing it at
+        # the per-key value would throttle a legitimate tenant whose traffic
+        # leaves through one egress address, which is the very case the per-key
+        # bucket exists to serve.
+        source_id     = f"src:{client_ip}"
+        rate_limit_id = (
+            f"key:{hashlib.sha256(api_key.encode()).hexdigest()[:16]}"
+            if api_key else f"ip:{client_ip}"
+        )
 
         request.state.rate_limit_id = rate_limit_id
 
@@ -115,10 +129,27 @@ class RateLimitMiddleware(BaseHTTPMiddleware):
 
         from cache.rate_limit_store import is_rate_limited
         effective_limit = await _get_live_rate_limit()
-        is_limited, remaining, reset_at = await is_rate_limited(
-            rate_limit_id,
-            limit=effective_limit,
+
+        # Source first. `is_rate_limited` CONSUMES, so the order is observable:
+        # if the source bucket refuses, the per-key bucket is never charged; if
+        # the key bucket then refuses, the source slot has already been spent.
+        # The second is accepted -- the request was made and did cost work --
+        # but it does mean the two counters are not transactional with each
+        # other, which is why they are separate keyspaces rather than one.
+        # Per-call, never bound at module scope -- the settings object is
+        # memoised and a module-level binding survives cache_clear().
+        source_limited, _src_remaining, source_reset = await is_rate_limited(
+            source_id,
+            limit=get_settings().rate_limit_per_ip_per_minute,
         )
+
+        if source_limited:
+            is_limited, remaining, reset_at = True, 0, source_reset
+        else:
+            is_limited, remaining, reset_at = await is_rate_limited(
+                rate_limit_id,
+                limit=effective_limit,
+            )
 
         if is_limited:
             # Record rate limit hit metric - no key_type label since auth hasn't run yet

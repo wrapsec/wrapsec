@@ -117,6 +117,12 @@ class Settings(BaseSettings):
     # ── Rate Limiting ─────────────────────────────────────────
     rate_limit_enabled:             bool = True
     rate_limit_per_minute:          int  = 60
+    # Charged per SOURCE ADDRESS on every request, in addition to the per-key
+    # bucket. Deliberately far higher than the per-key limit: it exists to bound
+    # what one address can cost, NOT to throttle a legitimate tenant, and a
+    # tenant whose traffic leaves through a single egress address would be
+    # capped by the per-key value if the two matched.
+    rate_limit_per_ip_per_minute:   int  = 600
     rate_limit_burst:               int  = 10
     admin_write_rate_limit:         int  = 20   # POST/PATCH on admin user endpoints
     audit_export_rate_limit:        int  = 5    # GET /audit/export

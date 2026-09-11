@@ -651,11 +651,26 @@ class TestRateLimitAccounting:
             )
 
             buckets = {c["id"] for c in calls}
-            assert len(buckets) == 1, (
-                f"the fan-out charged a different bucket than the limiter enforces: {buckets}"
+
+            # The pre-auth per-SOURCE-ADDRESS bucket is a second, deliberate
+            # control charged on every request, so more than one identifier now
+            # appears. It is separated out rather than folded in: this test is
+            # about the fan-out charging the bucket the limiter ENFORCES on, and
+            # the address bucket is neither. Asserting it is present keeps the
+            # separation pinned -- if the source bucket ever stopped being
+            # charged, that would show up here as well as in its own tests.
+            source_buckets   = {b for b in buckets if b.startswith("src:")}
+            enforced_buckets = buckets - source_buckets
+
+            assert source_buckets, (
+                f"the per-address bucket was not charged at all: {buckets}"
             )
-            assert buckets == {self._canonical(raw)}, (
-                f"not the canonical bucket: {buckets}"
+            assert len(enforced_buckets) == 1, (
+                f"the fan-out charged a different bucket than the limiter enforces: "
+                f"{enforced_buckets}"
+            )
+            assert enforced_buckets == {self._canonical(raw)}, (
+                f"not the canonical bucket: {enforced_buckets}"
             )
 
             # and the extra units really were the extra ones
