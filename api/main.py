@@ -256,9 +256,16 @@ app.add_middleware(RateLimitMiddleware)
 app.add_middleware(TraceMiddleware)
 
 # ── CORS ──────────────────────────────────────────────────────
-# RFC 6454: allow_credentials=True with allow_origins=["*"] is invalid -
-# browsers reject this combination. Credentials are only sent when origins
-# are explicitly listed via CORS_ALLOWED_ORIGINS in .env.
+# Credentials are enabled only when origins are listed explicitly, and "*" is
+# refused by the settings validator so this cannot be reached with a wildcard.
+#
+# The refusal is the control. This block used to carry the claim that browsers
+# reject allow_credentials with allow_origins=["*"], i.e. that the combination
+# was inert. It is not: measured against the installed framework, the CORS
+# middleware ECHOES the caller's Origin and sets allow-credentials on it, so a
+# wildcard would hand credentialed access to every origin on the web. A false
+# reassurance in a comment is how a configuration like that survives review,
+# which is why the check lives in the validator and not here.
 _cors_origins     = _startup_settings.cors_allowed_origins
 _cors_credentials = bool(_cors_origins)
 app.add_middleware(

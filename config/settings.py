@@ -68,8 +68,39 @@ class Settings(BaseSettings):
     api_workers:     int = 1
     # Explicit CORS origins for credential-bearing requests (dashboard).
     # Empty list disables credentialed CORS entirely.
-    # Never use ["*"] with allow_credentials - browsers reject this.
+    #
+    # "*" is REFUSED at startup, and the reason is not the one this comment used
+    # to give. It said browsers reject wildcard-plus-credentials, implying the
+    # configuration was inert. Measured against the installed framework, it is
+    # not: the CORS middleware ECHOES the request's Origin back and sets
+    # `access-control-allow-credentials: true`, so every origin on the web gets
+    # credentialed access. A wildcard here is the worst case, not a no-op.
     cors_allowed_origins: list[str] = Field(default_factory=list)
+
+    @field_validator("cors_allowed_origins", mode="after")
+    @classmethod
+    def _refuse_wildcard_origin(cls, v: list[str]) -> list[str]:
+        """Fail startup rather than serve credentialed CORS to everyone.
+
+        Refused rather than silently downgraded to `allow_credentials=False`,
+        because the two configurations mean different things and an operator who
+        wrote "*" should find out which one they are getting.
+
+        Note the other reader of this setting behaves differently: the
+        refresh-cookie path gate (`api/v1/endpoints/auth.py`) tests MEMBERSHIP,
+        so "*" never matches a real Origin there and falls back safely. One
+        setting, two consumers, one of which reflects and one of which compares
+        -- which is exactly why the dangerous one must not be reachable.
+        """
+        if any(str(origin).strip() == "*" for origin in v):
+            raise ValueError(
+                'CORS_ALLOWED_ORIGINS must not contain "*". The CORS middleware '
+                "reflects the caller's Origin and sets allow-credentials, so a "
+                "wildcard grants credentialed access to every origin. List the "
+                "origins explicitly, or leave it empty to disable credentialed "
+                "CORS."
+            )
+        return v
 
     # ── Security ──────────────────────────────────────────────
     secret_key:      str = Field(..., min_length=32)
