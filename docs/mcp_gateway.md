@@ -314,6 +314,7 @@ reason:
 | `prompts/*` | no | No handler registered |
 | `completion/*` | no | No handler registered |
 | `logging/*` | no | No handler registered |
+| `sampling/*` (server to client) | refused | Answered with a refusal; see the ask channels below |
 
 Resources and prompts are not proxied. Each is another channel by which server
 text reaches a model, and forwarding a channel that nothing inspects is not a
@@ -439,18 +440,28 @@ been found to need redaction.
 
 Results are classified as tool output when scanned.
 
-### 6. Server-initiated ask channels
+### 6. Server-initiated and extension channels
 
-Two channels by which a downstream server can ask the agent's model to do
-something. Both are refused, because this version does not inspect either one,
-and forwarding would hand a downstream server a way to run inference on content
-the gateway never scanned.
+Three channels by which a downstream server can reach past the inspected path.
+All are refused, because this version inspects none of them, and forwarding
+would hand a downstream server a way to reach the agent with content the gateway
+never scanned.
 
 - **Legacy sampling.** The gateway supplies a callback that refuses, so the
   request is answered rather than served.
 - **The modern replacement**, in which the same ask arrives inside a tool
   result. The SDK guard that rejects it is left at its secure default, and the
   resulting error is converted into a refusal.
+- **A claimed extension result**, in which a server answers a tool call with a
+  payload belonging to a protocol extension. The gateway registers no
+  extensions, so it has no handler for that payload and cannot reduce it to text
+  to be judged. The SDK guard that rejects it is likewise left at its secure
+  default, and the error becomes a refusal.
+
+Both SDK guard defaults are verified at startup, not assumed. A future SDK that
+dropped either guard, or flipped either default to permissive, would return what
+it currently refuses, with no scanning behind it and no other code change to
+notice. The startup probe refuses such a package.
 
 On the current build the second channel is closed by construction as well: the
 gateway's downstream connections negotiate protocol revision `2025-11-25`, and
@@ -478,6 +489,13 @@ clean payload from a hostile one at that point, so it refuses.
 The consequence is worth stating plainly: **with the API down, the gateway
 publishes no tools and forwards no results.** Availability is traded for the
 guarantee that unjudged content never reaches the agent.
+
+The same rule covers the downstream side of a call. A server that answers with
+a protocol-level error, closes the stream mid-call, or dies outright produces no
+result to judge, so the call is refused rather than surfaced to the agent as a
+transport fault. **No failure inside the call path reaches the agent as a
+protocol error**, because a client handed one commonly retries, and a retry loop
+against a security control is indistinguishable from an attack on it.
 
 The record distinguishes the two cases. A block says the content was judged
 dangerous; a failure says the control did not run. Both refuse, but only one is
@@ -610,6 +628,7 @@ were chosen by an attacker.
 | Reaching a tool the operator did not permit | Deny list, then exhaustive allow list, exact match |
 | A server asking the agent's model to run inference | Both ask channels refused |
 | A detection outage silently disabling the control | Every failure is a block; startup refuses without enforcement |
+| A server crashing or erroring mid-call to provoke retries | Any downstream failure is answered as a refusal, never a protocol fault |
 | An oversized payload slipping past a partial scan | Content over the bound is blocked, not truncated |
 | A downstream server reading the gateway's credential | Operator sets `env` per server; see the warning above |
 

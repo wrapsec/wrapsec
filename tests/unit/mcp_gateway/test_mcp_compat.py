@@ -124,6 +124,58 @@ def test_a_flipped_input_required_default_is_detected(monkeypatch):
         verify_mcp_package()
 
 
+def test_a_removed_claimed_guard_is_detected(monkeypatch):
+    """The same protection for the claimed-result channel.
+
+    This one was pinned late. `allow_input_required` was checked from the start
+    and `allow_claimed` was not, so the probe verified one of the two channels
+    that must stay shut and reported the package sound. A guard that covers only
+    the channel you remembered is the failure it was meant to prevent.
+    """
+    from mcp.client.session import ClientSession
+
+    original = ClientSession.call_tool
+    params   = [
+        p for p in inspect.signature(original).parameters.values()
+        if p.name != "allow_claimed"
+    ]
+
+    async def _without_guard(self, *args, **kwargs):  # pragma: no cover - never called
+        raise AssertionError("not invoked")
+
+    _without_guard.__signature__ = inspect.Signature(params)
+    monkeypatch.setattr(ClientSession, "call_tool", _without_guard)
+
+    assert any("allow_claimed" in m for m in _missing_apis())
+    with pytest.raises(UnsupportedMCPPackage, match="allow_claimed"):
+        verify_mcp_package()
+
+
+def test_a_flipped_claimed_default_is_detected(monkeypatch):
+    """Still present, now defaulting to True: every claimed result would be
+    RETURNED rather than refused, carrying an extension payload the gateway has
+    no handler for and therefore never judged."""
+    from mcp.client.session import ClientSession
+
+    original = ClientSession.call_tool
+    params   = [
+        p.replace(default=True) if p.name == "allow_claimed" else p
+        for p in inspect.signature(original).parameters.values()
+    ]
+
+    async def _flipped(self, *args, **kwargs):  # pragma: no cover - never called
+        raise AssertionError("not invoked")
+
+    _flipped.__signature__ = inspect.Signature(params)
+    monkeypatch.setattr(ClientSession, "call_tool", _flipped)
+
+    missing = _missing_apis()
+    assert any("allow_claimed" in m and "no longer defaults to False" in m
+               for m in missing), missing
+    with pytest.raises(UnsupportedMCPPackage):
+        verify_mcp_package()
+
+
 # ---------------------------------------------------------------------------
 # the hand-copied tool-name rule must not drift from the SDK's
 # ---------------------------------------------------------------------------

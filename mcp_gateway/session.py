@@ -9,7 +9,7 @@ and call them. It makes no security decision. What it DOES do is refuse to open
 channels the gateway has not been built to inspect, because a channel that is
 open by default is a channel nobody decided to open.
 
-TWO REFUSALS ARE WIRED IN HERE, not bolted on later:
+THREE REFUSALS ARE WIRED IN HERE, not bolted on later:
 
 1. `sampling_callback` -- on legacy protocol revisions a downstream server can
    ask the client to run an inference. The gateway supplies a callback that
@@ -20,8 +20,13 @@ TWO REFUSALS ARE WIRED IN HERE, not bolted on later:
    inside a tool result as an `InputRequiredResult`. With the flag False the SDK
    raises instead of returning it, which this module turns into a refusal.
 
-Both are refusals of content the gateway cannot yet inspect. Opening either one
-is a security change that has to come with scanning, not a flag flip.
+3. `allow_claimed` stays at its default of False -- a server may answer a tool
+   call with an extension-claimed result, whose payload the gateway has no
+   handler for and therefore cannot reduce to text. The SDK raises rather than
+   returning it, and this module turns that into a refusal too.
+
+All three are refusals of content the gateway cannot inspect. Opening any of
+them is a security change that has to come with scanning, not a flag flip.
 
 WHICH PROTOCOL REVISION, AND WHY IT MATTERS HERE. Downstream connections use the
 client session's handshake, which negotiates 2025-11-25. An input-required
@@ -162,6 +167,11 @@ class DownstreamPool:
         the same refusal as a legacy sampling request: a downstream server must
         not reach the agent through a channel V1 does not scan.
         """
+        # Imported here rather than at module scope: this package stays importable
+        # without the MCP package installed, so the enforcement code can be tested
+        # without it.
+        from mcp.client.extension import UnexpectedClaimedResult
+
         try:
             return await server.session.call_tool(tool_name, arguments or {})
         except ValidationError as exc:
@@ -178,6 +188,28 @@ class DownstreamPool:
             )
             raise UnusableDownstreamResponse(
                 "the tool returned a response this gateway could not use"
+            ) from exc
+        except UnexpectedClaimedResult as exc:
+            # A third ask channel, and the one with no message to match on: the
+            # SDK raises a dedicated type, so it is caught as that type.
+            #
+            # It MUST precede the RuntimeError clause below. This is a subclass
+            # of RuntimeError, and the input-required matcher does not recognise
+            # its message, so reaching that clause would re-raise it -- out of
+            # the handler, past the refusal contract, and to the agent as a
+            # protocol fault it would be free to retry.
+            #
+            # A claimed result carries an extension payload this gateway has no
+            # handler for. It cannot be reduced to text, so it cannot be judged,
+            # so it is not forwarded.
+            logger.warning(
+                "downstream server %s returned a claimed extension result for "
+                "tool %s; refusing (this build inspects no extension payloads)",
+                server.name, tool_name,
+            )
+            raise UnsupportedDownstreamRequest(
+                "the tool returned an extension result this gateway does not "
+                "handle"
             ) from exc
         except RuntimeError as exc:
             if _is_input_required_refusal(exc):

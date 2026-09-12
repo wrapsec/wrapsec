@@ -153,14 +153,48 @@ class Gateway:
         return types.ListToolsResult(tools=published)
 
     async def on_call_tool(self, ctx: Any, params: Any) -> Any:
-        """Resolve, consult the interceptor, then forward or refuse."""
-        # One turn for this request. The result scan below INHERITS it rather
-        # than taking a new one: the arguments and the result are two decisions
-        # about one agent action, and a timeline that split them would leave an
+        """Serve one tool call, and answer with a result whatever happens.
+
+        THE OUTER GUARD IS THE REFUSAL CONTRACT. Everything below may raise, and
+        an exception that leaves this method reaches the agent as a PROTOCOL
+        fault rather than a tool outcome. `decision` spells out why that is not
+        acceptable: a client handed a transport error commonly retries, and a
+        retry loop against a security control is indistinguishable from an
+        attack on it. So an unanticipated failure is converted into a refusal
+        here rather than allowed to escape.
+
+        `Exception`, deliberately, and not `BaseException`: cancellation is
+        raised as `CancelledError`, which does not derive from `Exception`, so
+        shutdown still propagates instead of being answered with a refusal.
+        """
+        # One turn for this request. The result scan INHERITS it rather than
+        # taking a new one: the arguments and the result are two decisions about
+        # one agent action, and a timeline that split them would leave an
         # investigator to re-associate a blocked result with the call it came
         # from.
         turn     = self._correlation.begin_turn()
         trace_id = self._correlation.trace()
+
+        try:
+            return await self._serve_call_tool(params, trace_id=trace_id, turn=turn)
+        except Exception as exc:
+            # Nothing below is expected to reach here; that is the point. The
+            # reason is SYSTEM_ERROR rather than a downstream one because at
+            # this depth the gateway does not know which half failed, and
+            # naming the wrong half in the record would be worse than admitting
+            # the control did not complete.
+            logger.exception(
+                "unhandled failure serving a tool call (trace %s); refusing", trace_id,
+            )
+            return decision.refusal_result(decision.Refusal(
+                reason   = decision.SYSTEM_ERROR,
+                trace_id = trace_id,
+                detail   = f"unhandled failure serving a tool call: {exc!r}",
+                failed   = True,
+            ))
+
+    async def _serve_call_tool(self, params: Any, *, trace_id: str, turn: int) -> Any:
+        """Resolve, consult the interceptor, then forward or refuse."""
         name     = getattr(params, "name", None) or ""
         args     = getattr(params, "arguments", None) or {}
 
@@ -213,6 +247,27 @@ class Gateway:
                 reason   = decision.DOWNSTREAM_UNAVAILABLE,
                 trace_id = trace_id,
                 detail   = str(exc),
+            ))
+        except Exception as exc:
+            # Everything else a downstream server can do to this call: answer
+            # with a protocol-level error, close the stream mid-call, or die
+            # outright. None of those are typed by the pool, and none of them
+            # produced a result, so the call is refused rather than surfaced as
+            # a fault the agent would retry into a dead server.
+            #
+            # Reported as unavailable because that is what is known to be true
+            # at this point: the call was forwarded and no usable answer came
+            # back. The specific failure goes to `detail` and the log, where an
+            # operator can read it, rather than into the agent's context.
+            logger.warning(
+                "downstream call to %r failed with %s; refusing (trace %s): %s",
+                name, type(exc).__name__, trace_id, exc,
+            )
+            return decision.refusal_result(decision.Refusal(
+                reason   = decision.DOWNSTREAM_UNAVAILABLE,
+                trace_id = trace_id,
+                detail   = f"{type(exc).__name__}: {exc}",
+                failed   = True,
             ))
 
         inspected = await self._interceptor.on_tool_result(

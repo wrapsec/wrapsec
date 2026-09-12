@@ -122,15 +122,20 @@ def _missing_apis() -> list[str]:
         from mcp.client.session import ClientSession
 
         call_tool = inspect.signature(ClientSession.call_tool).parameters
-        # The guard that keeps the modern sampling/elicitation channel closed.
-        # Its ABSENCE would mean an InputRequiredResult is returned rather than
-        # refused, which is a silent widening of what reaches the agent.
-        if "allow_input_required" not in call_tool:
-            missing.append("ClientSession.call_tool(allow_input_required=...)")
-        elif call_tool["allow_input_required"].default is not False:
-            missing.append(
-                "ClientSession.call_tool(allow_input_required=) no longer defaults to False"
-            )
+        # Both guards that keep a server-initiated ask channel closed. Their
+        # ABSENCE, or a default flipped to True, would mean the SDK RETURNS what
+        # it currently refuses -- a silent widening of what reaches the agent,
+        # with no scanning behind it and no other code change to notice.
+        #
+        # Enumerated rather than checked one at a time: the claimed-result
+        # channel was missed once precisely because only the first was pinned.
+        for guard in ("allow_input_required", "allow_claimed"):
+            if guard not in call_tool:
+                missing.append(f"ClientSession.call_tool({guard}=...)")
+            elif call_tool[guard].default is not False:
+                missing.append(
+                    f"ClientSession.call_tool({guard}=) no longer defaults to False"
+                )
         if "sampling_callback" not in inspect.signature(ClientSession.__init__).parameters:
             missing.append("ClientSession(sampling_callback=...)")
     except Exception:
