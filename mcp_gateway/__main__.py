@@ -48,14 +48,18 @@ async def _run() -> int:
         logger.error("configuration refused: %s", exc)
         return EXIT_STARTUP_REFUSED
 
+    from mcp_gateway.correlation import Correlation
+
+    correlation = Correlation()
+
     try:
-        interceptor = _build_interceptor(config)
+        interceptor = _build_interceptor(config, correlation)
     except Exception as exc:
         logger.error("cannot build the security interceptor: %s", exc)
         return EXIT_STARTUP_REFUSED
 
     pool    = DownstreamPool()
-    gateway = Gateway(config, pool, interceptor)
+    gateway = Gateway(config, pool, interceptor, correlation=correlation)
 
     try:
         gateway.require_enforcement(
@@ -73,8 +77,9 @@ async def _run() -> int:
         return EXIT_STARTUP_REFUSED
 
     logger.info(
-        "serving %d tool(s) from %d downstream server(s); scan posture: %s",
+        "serving %d tool(s) from %d downstream server(s); scan posture: %s; %s",
         len(gateway.routes), len(config.servers), config.scan.describe(),
+        correlation.describe(),
     )
 
     try:
@@ -107,7 +112,7 @@ def _load_config():
     return load_config(path)
 
 
-def _build_interceptor(config):
+def _build_interceptor(config, correlation=None):
     """The interceptor this configuration asks for.
 
     Returns None when the configuration names no detection API, which leaves the
@@ -141,7 +146,13 @@ def _build_interceptor(config):
         base_url = config.wrapsec.base_url,
         timeout  = config.wrapsec.timeout_s,
     )
-    scanner = Scanner(client, mode=config.scan.mode, max_chars=config.scan.max_chars)
+    scanner = Scanner(
+        client,
+        mode       = config.scan.mode,
+        max_chars  = config.scan.max_chars,
+        session_id = correlation.session_id if correlation else None,
+        run_id     = correlation.run_id     if correlation else None,
+    )
 
     return EnforcingInterceptor(
         tool_definitions=ToolDefinitionScanner(

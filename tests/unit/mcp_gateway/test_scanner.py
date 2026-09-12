@@ -28,8 +28,13 @@ class _Result:
     trace_id:       str = "api-trace"
     sanitized_input: str | None = None
 
+    # Properties, matching the real result type. A fake with methods here
+    # is how a broken translation passed every unit test.
+    @property
     def is_blocked(self):      return self.decision == "BLOCK"
+    @property
     def is_sanitized(self):    return self.decision == "SANITIZE"
+    @property
     def is_system_error(self): return self.primary_reason == "SYSTEM_ERROR"
 
 
@@ -39,7 +44,7 @@ class _Client:
         self._raises = raises
         self.calls   = []
 
-    async def scan(self, text, *, mode, input_source):
+    async def scan(self, text, *, mode, input_source, **kwargs):
         self.calls.append({"text": text, "mode": mode, "source": input_source})
         if self._raises:
             raise self._raises
@@ -155,3 +160,57 @@ async def test_the_api_trace_id_is_preferred_when_it_returns_one():
 def test_a_verdict_that_is_not_blocked_is_allowed():
     assert Verdict(blocked=False, sanitized=None, reason="x", trace_id="t").allowed
     assert not Verdict(blocked=True, sanitized=None, reason="x", trace_id="t").allowed
+
+
+def test_the_verdict_flags_are_properties_on_the_real_result_type():
+    """Pins the shape the translation depends on.
+
+    These flags are PROPERTIES. The gateway once read them as methods, which
+    raised at the point a verdict was needed and turned every scan into a
+    refusal -- and every unit test passed, because each fake was wrong in the
+    same way the code was.
+
+    Asserted against the real type rather than a double, so a fake cannot drift
+    away from it again without this failing.
+    """
+    from wrapsec import ScanResult
+
+    for name in ("is_allowed", "is_blocked", "is_sanitized", "is_system_error"):
+        attribute = getattr(ScanResult, name)
+        assert isinstance(attribute, property), (
+            f"ScanResult.{name} is a {type(attribute).__name__}, not a property; "
+            f"the scanner reads it as an attribute and would misread every verdict"
+        )
+
+
+@pytest.mark.asyncio
+async def test_a_real_result_object_translates_correctly():
+    """End of the translation, against the genuine type rather than a stand-in."""
+    from wrapsec import ScanResult
+
+    def _result(decision: str, reason: str) -> ScanResult:
+        return ScanResult(
+            decision=decision, primary_reason=reason, confidence=0.9,
+            confidence_band="HIGH", trace_id="api-trace", threats=[],
+            latency_ms=1.0, risk_score=0.9, execution_mode="scan_only",
+            sanitization_applied=decision == "SANITIZE",
+            sanitized_input="clean" if decision == "SANITIZE" else None,
+            output=None, assessment=None, decision_version="1", debug=None,
+        )
+
+    class _Client:
+        def __init__(self, result): self._result = result
+        async def scan(self, text, *, mode, input_source, **kwargs): return self._result
+
+    blocked = await Scanner(_Client(_result("BLOCK", "PROMPT_INJECTION"))).scan(
+        "x", source="tool_output", trace_id="t")
+    assert blocked.blocked and not blocked.failed
+    assert blocked.reason == "PROMPT_INJECTION"
+
+    allowed = await Scanner(_Client(_result("ALLOW", "NO_THREAT_DETECTED"))).scan(
+        "x", source="tool_output", trace_id="t")
+    assert not allowed.blocked
+
+    sanitized = await Scanner(_Client(_result("SANITIZE", "PII_GUARDRAIL_SANITIZE"))).scan(
+        "x", source="tool_output", trace_id="t")
+    assert not sanitized.blocked and sanitized.sanitized == "clean"

@@ -29,7 +29,10 @@ class Interceptor(Protocol):
     other request the process is serving.
     """
 
-    async def on_tool_definition(self, *, server_name: str, definition: Any) -> Any | None:
+    async def on_tool_definition(
+        self, *, server_name: str, definition: Any, trace_id: str | None = None,
+        turn_index: int | None = None,
+    ) -> Any | None:
         """Return the definition to publish, or None to withhold it."""
         ...
 
@@ -41,11 +44,15 @@ class Interceptor(Protocol):
         exposed_name:  str,
         arguments:     dict[str, Any],
         trace_id:      str,
+        turn_index:    int | None = None,
     ) -> Refusal | None:
         """Return a Refusal to block the call, or None to allow it."""
         ...
 
-    async def on_tool_result(self, *, server_name: str, result: Any, trace_id: str) -> Any:
+    async def on_tool_result(
+        self, *, server_name: str, result: Any, trace_id: str,
+        turn_index: int | None = None,
+    ) -> Any:
         """Return the result to deliver, or a Refusal to block it."""
         ...
 
@@ -63,11 +70,14 @@ class PassThrough:
     is what refuses it outside development.
     """
 
-    async def on_tool_definition(self, *, server_name: str, definition: Any) -> Any | None:
+    async def on_tool_definition(
+        self, *, server_name: str, definition: Any, trace_id: str | None = None,
+        turn_index: int | None = None,
+    ) -> Any | None:
         return definition
 
     async def on_tool_call(self, **kwargs: Any) -> Refusal | None:
         return None
 
-    async def on_tool_result(self, *, server_name: str, result: Any, trace_id: str) -> Any:
-        return result
+    async def on_tool_result(self, **kwargs: Any) -> Any:
+        return kwargs.get("result")

@@ -32,7 +32,8 @@ class _Scanner:
     block_text: str | None = None
     seen: list[str] = field(default_factory=list)
 
-    async def scan(self, text: str, *, source: str, trace_id: str) -> Verdict:
+    async def scan(self, text: str, *, source: str, trace_id: str,
+                   turn_index: int | None = None) -> Verdict:
         self.seen.append(text)
         blocked = self.block_text is not None and self.block_text in text
         return Verdict(

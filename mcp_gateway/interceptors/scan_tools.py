@@ -64,6 +64,7 @@ class ToolDefinitionScanner:
 
     async def inspect(
         self, *, server_name: str, definition: Any, trace_id: str,
+        turn_index: int | None = None,
     ) -> tuple[Any | None, Refusal | None]:
         """Return the definition to publish, or (None, refusal) to withhold it."""
         if not self._enabled:
@@ -109,6 +110,7 @@ class ToolDefinitionScanner:
 
         verdict = await self._scanner.scan(
             text, source=SOURCE_TOOL_DEFINITION, trace_id=trace_id,
+            turn_index=turn_index,
         )
 
         if verdict.blocked:

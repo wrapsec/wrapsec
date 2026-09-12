@@ -30,7 +30,8 @@ class _Scanner:
     reason:    str = "ALLOWED"
     seen:      list[tuple[str, str]] = field(default_factory=list)
 
-    async def scan(self, text: str, *, source: str, trace_id: str) -> Verdict:
+    async def scan(self, text: str, *, source: str, trace_id: str,
+                   turn_index: int | None = None) -> Verdict:
         self.seen.append((text, source))
         return Verdict(blocked=self.blocked, sanitized=self.sanitized,
                        reason=self.reason, trace_id=trace_id)
@@ -360,7 +361,7 @@ async def test_oversized_structured_content_blocks_and_is_not_truncated():
 
     class _Client:
         def __init__(self): self.calls = []
-        async def scan(self, text, *, mode, input_source):
+        async def scan(self, text, *, mode, input_source, **kwargs):
             self.calls.append(text)
             raise AssertionError("oversized content was sent to the detector")
 

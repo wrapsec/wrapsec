@@ -35,11 +35,15 @@ class EnforcingInterceptor:
         self._tool_calls       = tool_calls
         self._refusals: list[Refusal] = []
 
-    async def on_tool_definition(self, *, server_name: str, definition: Any) -> Any | None:
+    async def on_tool_definition(
+        self, *, server_name: str, definition: Any, trace_id: str | None = None,
+        turn_index: int | None = None,
+    ) -> Any | None:
         published, refusal = await self._tool_definitions.inspect(
             server_name = server_name,
             definition  = definition,
-            trace_id    = _trace(),
+            trace_id    = trace_id or _trace(),
+            turn_index  = turn_index,
         )
         if refusal is not None:
             self._refusals.append(refusal)
@@ -53,6 +57,7 @@ class EnforcingInterceptor:
         exposed_name:  str,
         arguments:     dict[str, Any],
         trace_id:      str,
+        turn_index:    int | None = None,
     ) -> Refusal | None:
         refusal = await self._tool_calls.inspect(
             server_name   = server_name,
@@ -60,16 +65,21 @@ class EnforcingInterceptor:
             exposed_name  = exposed_name,
             arguments     = arguments,
             trace_id      = trace_id,
+            turn_index    = turn_index,
         )
         if refusal is not None:
             self._refusals.append(refusal)
         return refusal
 
-    async def on_tool_result(self, *, server_name: str, result: Any, trace_id: str) -> Any:
+    async def on_tool_result(
+        self, *, server_name: str, result: Any, trace_id: str,
+        turn_index: int | None = None,
+    ) -> Any:
         delivered, refusal = await self._tool_results.inspect(
             server_name = server_name,
             result      = result,
             trace_id    = trace_id,
+            turn_index  = turn_index,
         )
         if refusal is not None:
             self._refusals.append(refusal)

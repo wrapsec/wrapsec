@@ -27,6 +27,7 @@ from typing import Any
 
 from mcp_gateway import decision
 from mcp_gateway.config import GatewayConfig
+from mcp_gateway.correlation import Correlation
 from mcp_gateway.interceptors.base import Interceptor, PassThrough
 from mcp_gateway.routing import RoutingTable, exposed_name
 from mcp_gateway.session import (
@@ -52,13 +53,13 @@ class Gateway:
         pool:        DownstreamPool,
         interceptor: Interceptor | None = None,
         *,
-        trace_source: Any = None,
+        correlation: Correlation | None = None,
     ) -> None:
         self._config      = config
         self._pool        = pool
         self._routes: RoutingTable[Any] = RoutingTable()
         self._interceptor = interceptor or PassThrough()
-        self._trace       = trace_source or _TraceIds()
+        self._correlation = correlation or Correlation()
 
     # -- startup -----------------------------------------------------------
 
@@ -128,11 +129,18 @@ class Gateway:
         """Publish the downstream tools under their namespaced names."""
         from mcp import types
 
+        # One agent request is one turn. Every definition judged while serving it
+        # shares the index, so the timeline groups them as the single listing
+        # they were rather than scattering them.
+        turn = self._correlation.begin_turn()
+
         published = []
         for name, entry in self._routes.entries():
             definition = await self._interceptor.on_tool_definition(
                 server_name = entry.server_name,
                 definition  = entry.definition,
+                trace_id    = self._correlation.trace(),
+                turn_index  = turn,
             )
             if definition is None:
                 # The interceptor withheld it. Nothing is said to the agent about
@@ -146,7 +154,13 @@ class Gateway:
 
     async def on_call_tool(self, ctx: Any, params: Any) -> Any:
         """Resolve, consult the interceptor, then forward or refuse."""
-        trace_id = self._trace.next()
+        # One turn for this request. The result scan below INHERITS it rather
+        # than taking a new one: the arguments and the result are two decisions
+        # about one agent action, and a timeline that split them would leave an
+        # investigator to re-associate a blocked result with the call it came
+        # from.
+        turn     = self._correlation.begin_turn()
+        trace_id = self._correlation.trace()
         name     = getattr(params, "name", None) or ""
         args     = getattr(params, "arguments", None) or {}
 
@@ -167,6 +181,7 @@ class Gateway:
             exposed_name  = name,
             arguments     = args,
             trace_id      = trace_id,
+            turn_index    = turn,
         )
         if verdict is not None:
             return decision.refusal_result(verdict)
@@ -203,7 +218,8 @@ class Gateway:
         inspected = await self._interceptor.on_tool_result(
             server_name = entry.server_name,
             result      = result,
-            trace_id    = trace_id,
+            trace_id    = self._correlation.trace(),
+            turn_index  = turn,          # the call's turn, not a new one
         )
         if isinstance(inspected, decision.Refusal):
             return decision.refusal_result(inspected)
@@ -231,6 +247,10 @@ class Gateway:
     def routes(self) -> RoutingTable[Any]:
         return self._routes
 
+    @property
+    def correlation(self) -> Correlation:
+        return self._correlation
+
 
 def _republish(types: Any, definition: Any, published_name: str) -> Any:
     """The downstream definition, under the name the gateway publishes.
@@ -245,24 +265,6 @@ def _republish(types: Any, definition: Any, published_name: str) -> Any:
         description  = getattr(definition, "description", None),
         inputSchema  = getattr(definition, "input_schema", None) or {"type": "object"},
     )
-
-
-class _TraceIds:
-    """Per-connection correlation identifiers.
-
-    Gateway-assigned, not taken from the MCP protocol: the 2026-07-28 revision
-    has no session, so anything derived from protocol state would work on a
-    legacy connection and produce nothing on a modern one.
-    """
-
-    def __init__(self) -> None:
-        self._n = 0
-
-    def next(self) -> str:
-        import uuid
-
-        self._n += 1
-        return f"mcp_{uuid.uuid4().hex[:16]}"
 
 
 __all__ = ["EnforcementDisabled", "Gateway", "exposed_name"]

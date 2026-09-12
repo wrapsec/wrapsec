@@ -66,6 +66,7 @@ class ToolCallValidator:
         exposed_name:  str,
         arguments:     dict[str, Any],
         trace_id:      str,
+        turn_index:    int | None = None,
     ) -> Refusal | None:
         """Return a Refusal to block the call, or None to let it through."""
         denied = self._policy_refusal(
@@ -82,6 +83,7 @@ class ToolCallValidator:
 
         verdict = await self._scanner.scan(
             structured_text(arguments), source=SOURCE_TOOL_ARGUMENT, trace_id=trace_id,
+            turn_index=turn_index,
         )
         if verdict.blocked:
             logger.warning(

@@ -39,20 +39,20 @@ from mcp_gateway.session import DownstreamPool, DownstreamServer
 class _UnreachableClient:
     """A detection API that cannot be reached."""
 
-    async def scan(self, text, *, mode, input_source):
+    async def scan(self, text, *, mode, input_source, **kwargs):
         raise OSError("connection refused")
 
 
 class _FaultingClient:
     """A detection API that answers, but reports its own fault on the result."""
 
-    async def scan(self, text, *, mode, input_source):
+    async def scan(self, text, *, mode, input_source, **kwargs):
         class _R:
             trace_id = "api"
             primary_reason = "SYSTEM_ERROR"
-            def is_blocked(self):      return True
-            def is_sanitized(self):    return False
-            def is_system_error(self): return True
+            is_blocked      = True
+            is_sanitized    = False
+            is_system_error = True
         return _R()
 
 
@@ -60,7 +60,8 @@ class _FaultingClient:
 class _CleanScanner:
     seen: list[str] = field(default_factory=list)
 
-    async def scan(self, text: str, *, source: str, trace_id: str) -> Verdict:
+    async def scan(self, text: str, *, source: str, trace_id: str,
+                   turn_index: int | None = None) -> Verdict:
         self.seen.append(text)
         return Verdict(blocked=False, sanitized=None, reason="ALLOWED", trace_id=trace_id)
 
@@ -146,7 +147,7 @@ async def test_content_too_large_to_judge_blocks_and_is_not_truncated():
     """
     class _Counting:
         def __init__(self): self.calls = 0
-        async def scan(self, text, *, mode, input_source):
+        async def scan(self, text, *, mode, input_source, **kwargs):
             self.calls += 1
 
     oversized = types.Tool(

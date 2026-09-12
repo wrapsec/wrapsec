@@ -34,7 +34,8 @@ class _Scanner:
     reason:   str  = "ALLOWED"
     seen:     list[tuple[str, str]] = field(default_factory=list)
 
-    async def scan(self, text: str, *, source: str, trace_id: str) -> Verdict:
+    async def scan(self, text: str, *, source: str, trace_id: str,
+                   turn_index: int | None = None) -> Verdict:
         self.seen.append((text, source))
         return Verdict(blocked=self.blocked, sanitized=None, reason=self.reason,
                        trace_id=trace_id, failed=self.failed)

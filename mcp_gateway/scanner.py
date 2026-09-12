@@ -58,18 +58,34 @@ class Verdict:
 class ScannerProtocol(Protocol):
     """What an interceptor needs. Kept narrow so tests can supply their own."""
 
-    async def scan(self, text: str, *, source: str, trace_id: str) -> Verdict: ...
+    async def scan(
+        self, text: str, *, source: str, trace_id: str, turn_index: int | None = None,
+    ) -> Verdict: ...
 
 
 class Scanner:
     """Scans through the WrapSec API using the existing client."""
 
-    def __init__(self, client: Any, *, mode: str = "fast", max_chars: int = 8000) -> None:
-        self._client    = client
-        self._mode      = mode
-        self._max_chars = max_chars
+    def __init__(
+        self,
+        client: Any,
+        *,
+        mode:       str = "fast",
+        max_chars:  int = 8000,
+        session_id: str | None = None,
+        run_id:     str | None = None,
+    ) -> None:
+        self._client     = client
+        self._mode       = mode
+        self._max_chars  = max_chars
+        # Stable for the life of the process, so every decision it makes lands in
+        # one timeline. Correlation metadata only -- nothing is authorized on it.
+        self._session_id = session_id
+        self._run_id     = run_id
 
-    async def scan(self, text: str, *, source: str, trace_id: str) -> Verdict:
+    async def scan(
+        self, text: str, *, source: str, trace_id: str, turn_index: int | None = None,
+    ) -> Verdict:
         if not text:
             # Nothing to judge. Not a failure, and not a block: an empty
             # description is not evidence of anything.
@@ -87,7 +103,12 @@ class Scanner:
 
         try:
             result = await self._client.scan(
-                text, mode=self._mode, input_source=source,
+                text,
+                mode         = self._mode,
+                input_source = source,
+                session_id   = self._session_id,
+                run_id       = self._run_id,
+                turn_index   = turn_index,
             )
         except Exception as exc:
             # Unreachable, timed out, refused: the content is unjudged.
@@ -103,23 +124,28 @@ class Scanner:
 def _verdict_from(result: Any, trace_id: str) -> Verdict:
     """Translate a scan result into the gateway's own terms.
 
-    The API reports a detector fault on the result rather than raising, so that
-    flag has to be read. Without it a failed scan arrives looking like a clean
-    one, which is the failure mode this whole module exists to avoid.
+    The verdict flags are PROPERTIES on the result, not methods. Reading them as
+    methods raises `'bool' object is not callable` at the point a verdict is
+    needed, which turns every scan into a refusal -- fail-closed, so nothing
+    unsafe is forwarded, but the gateway blocks everything and looks broken.
+
+    A detector fault is reported ON the result rather than raised, so that flag
+    has to be read. Without it a failed scan arrives looking like a clean one,
+    which is the failure this module exists to prevent.
     """
     reported = getattr(result, "trace_id", None) or trace_id
 
-    if getattr(result, "is_system_error", None) and result.is_system_error():
+    if getattr(result, "is_system_error", False):
         return Verdict(blocked=True, sanitized=None, reason="SYSTEM_ERROR",
                        trace_id=reported, failed=True)
 
-    if getattr(result, "is_blocked", None) and result.is_blocked():
+    if getattr(result, "is_blocked", False):
         return Verdict(blocked=True, sanitized=None,
                        reason=getattr(result, "primary_reason", "BLOCKED") or "BLOCKED",
                        trace_id=reported)
 
     sanitized = None
-    if getattr(result, "is_sanitized", None) and result.is_sanitized():
+    if getattr(result, "is_sanitized", False):
         sanitized = getattr(result, "sanitized_input", None)
 
     return Verdict(blocked=False, sanitized=sanitized,

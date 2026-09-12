@@ -29,7 +29,8 @@ class _Scanner:
     sanitized:  str | None = None
     seen:       list[tuple[str, str]] = field(default_factory=list)
 
-    async def scan(self, text: str, *, source: str, trace_id: str) -> Verdict:
+    async def scan(self, text: str, *, source: str, trace_id: str,
+                   turn_index: int | None = None) -> Verdict:
         self.seen.append((text, source))
         blocked = self.block_text is not None and self.block_text in text
         return Verdict(blocked=blocked, sanitized=self.sanitized,
@@ -249,7 +250,7 @@ async def test_a_call_with_no_arguments_is_not_scanned():
 async def test_a_scan_failure_refuses_the_call():
     """Fail closed: unjudged arguments are not safe arguments."""
     class _Failing:
-        async def scan(self, text, *, source, trace_id):
+        async def scan(self, text, *, source, trace_id, turn_index=None):
             return Verdict(blocked=True, sanitized=None, reason="SYSTEM_ERROR",
                            trace_id=trace_id, failed=True)
 

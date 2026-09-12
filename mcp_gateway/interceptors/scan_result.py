@@ -43,6 +43,7 @@ class ToolResultScanner:
 
     async def inspect(
         self, *, server_name: str, result: Any, trace_id: str,
+        turn_index: int | None = None,
     ) -> tuple[Any | None, Refusal | None]:
         """Return the result to deliver, or (None, refusal) to withhold it."""
         if not self._enabled:
@@ -58,6 +59,7 @@ class ToolResultScanner:
 
         verdict = await self._scanner.scan(
             "\n".join(parts), source=SOURCE_TOOL_RESULT, trace_id=trace_id,
+            turn_index=turn_index,
         )
 
         if verdict.blocked:
