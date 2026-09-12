@@ -57,9 +57,38 @@ from alembic import op
 _TABLE = "audit_logs"
 _INDEX = "ix_audit_logs_tenant_chain_seq"
 
+# 0004 put a BEFORE UPDATE trigger on this table that raises on any update to a
+# row whose record_hash is set. The backfill below writes chain_seq to exactly
+# those rows, so the two cannot both hold: the migration completes on a database
+# with no chained rows and aborts on every database that has any.
+_IMMUTABILITY_TRIGGER = "audit_logs_no_update_on_chained"
+
 
 def _inspector():
     return sa.inspect(op.get_bind())
+
+
+def _immutability_trigger_armed(bind) -> bool:
+    """Whether this database has the 0004 trigger installed and active.
+
+    Checked rather than assumed. A database built from the models has the table
+    without the trigger, because a trigger is not something a model declares, and
+    disabling one that is not there is an error rather than a no-op.
+    """
+    if bind.dialect.name != "postgresql":
+        return False
+    return bool(
+        bind.execute(
+            sa.text(
+                "SELECT 1 FROM pg_trigger"
+                " WHERE tgrelid = CAST(:table AS regclass)"
+                "   AND tgname  = :name"
+                "   AND NOT tgisinternal"
+                "   AND tgenabled <> 'D'"
+            ),
+            {"table": _TABLE, "name": _IMMUTABILITY_TRIGGER},
+        ).scalar()
+    )
 
 
 def _existing_columns() -> set[str]:
@@ -101,6 +130,33 @@ def upgrade() -> None:
         )
 
     bind = op.get_bind()
+
+    # THE ROWS THAT NEED NUMBERING ARE THE ROWS THAT CANNOT BE UPDATED.
+    #
+    # Suspended for the backfill, then re-armed, both inside this migration's
+    # transaction: if anything below raises, the rollback takes the suspension
+    # with it and the table is never left writable. DISABLE TRIGGER needs table
+    # ownership rather than superuser, so it works where the application role
+    # owns its own schema.
+    #
+    # WHAT THE TRIGGER PROTECTS IS NOT WEAKENED. It exists so a chained row's
+    # hashed content cannot change. `chain_seq` is not hashed under format 1
+    # (`CANONICAL_FIELDS` in security/audit_chain.py; only `CANONICAL_FIELDS_V2`
+    # includes it), and the backfill writes nothing else, so every historical
+    # row keeps its stored hash byte-for-byte and stays verifiable under the
+    # field set it was hashed with. The alternative -- teaching the trigger to
+    # permit some updates -- would widen what is mutable for good, to buy a
+    # one-off.
+    #
+    # LEAVING THE ROWS NULL IS NOT AN OPTION. The writer's tip lookup selects
+    # `WHERE record_hash IS NOT NULL ORDER BY chain_seq DESC LIMIT 1`, and
+    # Postgres sorts nulls FIRST under DESC. A chained row left at NULL would be
+    # picked as the tip by every subsequent write, each restarting the sequence
+    # at 1 and chaining from the same arbitrary ancestor -- the fork this
+    # migration exists to prevent.
+    trigger_was_armed = _immutability_trigger_armed(bind)
+    if trigger_was_armed:
+        op.execute(f"ALTER TABLE {_TABLE} DISABLE TRIGGER {_IMMUTABILITY_TRIGGER}")
 
     # Backfill per tenant, in the order the rows already have. Chained rows only:
     # an unchained row (record_hash IS NULL) has no position to be given.
@@ -146,6 +202,21 @@ def upgrade() -> None:
                AND record_hash IS NOT NULL
             """
         )
+
+    # Re-armed the moment the backfill is done, before anything else runs. The
+    # transaction would restore it on a rollback anyway; doing it here means the
+    # table is not writable for one statement longer than the backfill needs.
+    if trigger_was_armed:
+        op.execute(f"ALTER TABLE {_TABLE} ENABLE TRIGGER {_IMMUTABILITY_TRIGGER}")
+
+        # Verified rather than assumed. A migration that left this table mutable
+        # would remove the control silently, and the next thing to notice would
+        # be an audit trail nobody could trust.
+        if not _immutability_trigger_armed(bind):
+            raise RuntimeError(
+                f"{_IMMUTABILITY_TRIGGER} was not re-armed after the chain_seq "
+                f"backfill; refusing to finish with {_TABLE} left mutable"
+            )
 
     # The writer's tip lookup is `WHERE tenant_id = :t AND record_hash IS NOT NULL
     # ORDER BY chain_seq DESC LIMIT 1`, under the advisory lock. This index makes
