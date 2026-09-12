@@ -116,8 +116,10 @@ export interface AuditLogsResponse {
 
 export interface AgentRunResponse {
   run_id: string
+  /** Scan records returned, bounded by the API's limit. NOT a turn count: one
+   *  turn can produce several scans, so group by turn_index for that. */
   count:  number
-  turns:  AuditLogItem[]
+  scans:  AuditLogItem[]
 }
 
 export interface ThreatCount {

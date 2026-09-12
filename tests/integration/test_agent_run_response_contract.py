@@ -115,13 +115,13 @@ async def test_a_populated_timeline_drops_an_undeclared_field(
 
     assert r.status_code == 200, r.text
     body = r.json()
-    assert body["count"] >= 1, "no turns came back, so nothing was filtered"
-    for turn in body["turns"]:
-        assert _LEAK not in turn, (
+    assert body["count"] >= 1, "no scans came back, so nothing was filtered"
+    for scan in body["scans"]:
+        assert _LEAK not in scan, (
             "an undeclared field reached the caller: the response model is not "
             "being applied, so the success path is returning a Response object"
         )
-    assert set(body) == {"run_id", "count", "turns"}, (
+    assert set(body) == {"run_id", "count", "scans"}, (
         f"the envelope carries unexpected keys: {sorted(set(body))}"
     )
 
@@ -136,8 +136,8 @@ async def test_an_empty_timeline_is_a_200_with_the_same_envelope(client, live_ke
 
     assert r.status_code == 200, r.text
     body = r.json()
-    assert set(body) == {"run_id", "count", "turns"}
-    assert body["count"] == 0 and body["turns"] == []
+    assert set(body) == {"run_id", "count", "scans"}
+    assert body["count"] == 0 and body["scans"] == []
 
 
 @pytest.mark.asyncio
@@ -171,9 +171,9 @@ async def test_a_proxy_turn_carries_the_proxy_fields(client, live_key, test_db):
     r = await client.get(f"/v1/agent-runs/{run_id}", headers=headers)
 
     assert r.status_code == 200, r.text
-    turns = r.json()["turns"]
-    assert len(turns) == 1, f"expected the seeded proxy turn, got {len(turns)}"
-    turn = turns[0]
+    scans = r.json()["scans"]
+    assert len(scans) == 1, f"expected the seeded proxy scan, got {len(scans)}"
+    turn = scans[0]
     assert turn["output_decision"] == "ALLOW"
     assert turn["provider"] == "openai"
     assert turn["model"] == "gpt-4o"
@@ -192,7 +192,7 @@ async def test_empty_fields_are_null_and_still_present(client, live_key):
 
     r = await client.get(f"/v1/agent-runs/{run_id}", headers=headers)
     assert r.status_code == 200, r.text
-    turn = r.json()["turns"][0]
+    turn = r.json()["scans"][0]
 
     # A scan-only turn from a key with no application: these are null, not absent.
     for field in ("output_decision", "provider", "model", "app_id", "app_name", "user_id"):
@@ -221,8 +221,8 @@ async def test_the_turn_carries_exactly_the_declared_fields(client, live_key):
     r = await client.get(f"/v1/agent-runs/{run_id}", headers=headers)
     assert r.status_code == 200, r.text
 
-    assert set(r.json()["turns"][0]) == set(AuditItem.model_fields), (
-        "the served turn and the declared model disagree about the field set"
+    assert set(r.json()["scans"][0]) == set(AuditItem.model_fields), (
+        "the served scan and the declared model disagree about the field set"
     )
 
 
@@ -317,5 +317,5 @@ async def test_a_timeline_only_carries_published_vocabulary_values(client, live_
 
     assert r.status_code == 200, r.text
     body = r.json()
-    assert body["turns"], "no turns came back, so nothing was checked"
+    assert body["scans"], "no scans came back, so nothing was checked"
     assert_published_vocabulary(body, "AgentRunResponse")

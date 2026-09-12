@@ -880,7 +880,7 @@ Return every scan belonging to one agent run (shared `run_id`), ordered as a tim
 {
   "run_id": "run_2d14a30194b1",
   "count":  4,
-  "turns": [
+  "scans": [
     {
       "trace_id":       "req_...",
       "turn_index":     0,
@@ -894,7 +894,9 @@ Return every scan belonging to one agent run (shared `run_id`), ordered as a tim
 }
 ```
 
-Each turn is a full audit item (same shape as `GET /v1/audit/logs` items), including `input_source`, `session_id`, and `turn_index`.
+**One entry per scan, not per turn.** A single agent turn can produce several scans: a tool call is judged on its arguments and again on its result, and one tool listing judges every definition it publishes. So `count` is the number of scan records returned (bounded by `limit`), and it is routinely larger than the number of turns - an agent gateway run of 16 scans may represent only 2 turns.
+
+Each entry is a full audit item (same shape as `GET /v1/audit/logs` items), including `input_source`, `session_id`, and `turn_index`. Group by `turn_index` to recover the turns; the distinct count of that field is the turn count.
 
 ---
 

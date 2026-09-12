@@ -2,7 +2,7 @@
   "body": {
     "count": "<int>",
     "run_id": "<str>",
-    "turns": [
+    "scans": [
       {
         "app_id": null,
         "app_name": null,

@@ -80,12 +80,15 @@ async def get_agent_run(
     )
 
     dept_names, app_names, proxy_map = await _enrich(db, items)
-    turns = [_format_item(i, dept_names, app_names, proxy_map) for i in items]
+    # One entry per scan. A turn can produce several -- a tool call is judged on
+    # its arguments and again on its result -- so this is not a list of turns,
+    # and each entry carries the turn_index that groups it.
+    scans = [_format_item(i, dept_names, app_names, proxy_map) for i in items]
 
     # A value, not a JSONResponse: a Response object bypasses the response model,
     # and the schema would then advertise a shape nothing enforces.
     return {
         "run_id": run_id,
-        "count":  len(turns),
-        "turns":  turns,
+        "count":  len(scans),
+        "scans":  scans,
     }

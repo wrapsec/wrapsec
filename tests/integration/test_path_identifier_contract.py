@@ -190,7 +190,7 @@ async def test_an_unknown_run_is_still_an_empty_timeline(client, admin_headers):
     other tenants. A malformed id must not be folded into that answer either."""
     r = await client.get(f"/v1/agent-runs/{_ABSENT}", headers=admin_headers)
     assert r.status_code == 200, r.text
-    assert r.json()["turns"] == []
+    assert r.json()["scans"] == []
 
 
 @pytest.mark.asyncio

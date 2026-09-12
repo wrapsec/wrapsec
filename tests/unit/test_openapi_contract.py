@@ -1213,7 +1213,7 @@ def test_the_health_runtime_still_accepts_an_unknown_probe_value():
 #
 # This family added NO metadata, and that is the finding rather than an omission.
 # `AgentRunResponse` has three properties: `run_id` (echoed straight back from the
-# caller), `count` (an integer), and `turns` -- a list of `AuditItem`, the audit
+# caller), `count` (an integer), and `scans` -- a list of `AuditItem`, the audit
 # family's own model. Its vocabularies are published there and reach this
 # operation by reference. Publishing them again would be a second source of truth
 # for the same values.
@@ -1221,18 +1221,18 @@ def test_the_health_runtime_still_accepts_an_unknown_probe_value():
 def test_the_agent_run_turns_reference_the_audit_item_rather_than_copying_it():
     """The whole reason this family needed no work of its own.
 
-    `turns.items` must stay a `$ref`. If the generator ever inlined `AuditItem`
+    `scans.items` must stay a `$ref`. If the generator ever inlined `AuditItem`
     here -- a plausible outcome of restructuring the model -- this operation would
     get a private copy of the schema, and the enums published on the audit family
     would silently stop covering it. Nothing else would notice: the property names
     and types would be identical.
     """
     schemas = _committed()["components"]["schemas"]
-    turns = schemas["AgentRunResponse"]["properties"]["turns"]
+    scans = schemas["AgentRunResponse"]["properties"]["scans"]
 
-    assert turns.get("type") == "array", turns
-    assert turns["items"] == {"$ref": "#/components/schemas/AuditItem"}, (
-        "AgentRunResponse.turns no longer references AuditItem, so the audit "
+    assert scans.get("type") == "array", scans
+    assert scans["items"] == {"$ref": "#/components/schemas/AuditItem"}, (
+        "AgentRunResponse.scans no longer references AuditItem, so the audit "
         "vocabularies no longer reach GET /v1/agent-runs/{run_id}"
     )
 
@@ -1251,7 +1251,7 @@ def test_the_audit_vocabularies_reach_the_agent_run_operation():
              ["content"]["application/json"]["schema"]["$ref"]
     assert ref.endswith("/AgentRunResponse")
 
-    item_ref = schemas["AgentRunResponse"]["properties"]["turns"]["items"]["$ref"]
+    item_ref = schemas["AgentRunResponse"]["properties"]["scans"]["items"]["$ref"]
     item = schemas[item_ref.rsplit("/", 1)[-1]]
 
     missing = [
@@ -1261,7 +1261,7 @@ def test_the_audit_vocabularies_reach_the_agent_run_operation():
                  or any(b.get("enum") for b in item["properties"][prop].get("anyOf", [])))
     ]
     assert not missing, (
-        f"these audit vocabularies are not reachable from the agent-run turns: {missing}"
+        f"these audit vocabularies are not reachable from the agent-run scans: {missing}"
     )
 
 
@@ -1278,7 +1278,7 @@ def test_the_agent_run_envelope_has_no_vocabulary_of_its_own():
 
     assert _published_enum(schemas, "AgentRunResponse", "run_id") is None
     assert props["count"]["type"] == "integer"
-    assert set(props) == {"run_id", "count", "turns"}, (
+    assert set(props) == {"run_id", "count", "scans"}, (
         f"AgentRunResponse gained a property that has not been classified: {sorted(props)}"
     )
 
@@ -1300,10 +1300,10 @@ def test_an_agent_run_still_round_trips_an_unknown_turn_value():
         severity="LOW", session_id=None, turn_index=None, run_id=None,
         input_source="user_prompt", record_hash=None, prev_hash=None,
     )
-    run = R.AgentRunResponse(run_id="anything the caller sent", count=1, turns=[turn])
+    run = R.AgentRunResponse(run_id="anything the caller sent", count=1, scans=[turn])
 
-    assert run.turns[0].decision == "ESCALATE"
-    assert run.model_dump()["turns"][0]["decision"] == "ESCALATE"
+    assert run.scans[0].decision == "ESCALATE"
+    assert run.model_dump()["scans"][0]["decision"] == "ESCALATE"
 
 
 # ── Phase C / §17: field descriptions, by family ─────────────────────────────

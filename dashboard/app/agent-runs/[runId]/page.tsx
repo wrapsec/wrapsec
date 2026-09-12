@@ -29,10 +29,15 @@ function AgentRunInner() {
     { refreshInterval: 30000 },
   )
 
-  const turns: AuditLogItem[] = data?.turns ?? []
-  const blocked   = turns.filter(t => t.decision === "BLOCK").length
-  const sanitized = turns.filter(t => t.decision === "SANITIZE").length
-  const sources   = Array.from(new Set(turns.map(t => t.input_source ?? "user_prompt")))
+  // One entry per SCAN, not per turn: a tool call is judged on its arguments
+  // and again on its result, so several scans can share one turn_index. The
+  // turn count is derived here rather than sent, because turn_index is already
+  // on every record and a second server-side counter could disagree with it.
+  const scans: AuditLogItem[] = data?.scans ?? []
+  const blocked   = scans.filter(s => s.decision === "BLOCK").length
+  const sanitized = scans.filter(s => s.decision === "SANITIZE").length
+  const sources   = Array.from(new Set(scans.map(s => s.input_source ?? "user_prompt")))
+  const turnCount = new Set(scans.map(s => s.turn_index)).size
 
   return (
     <Shell title={tt("title")}>
@@ -50,7 +55,13 @@ function AgentRunInner() {
               <div className="font-mono text-sm text-slate-800 break-all">{runId}</div>
             </div>
             <div className="flex items-center gap-4 text-sm">
-              <div><span className="font-semibold">{data?.count ?? 0}</span> <span className="text-slate-600">{tt("turns")}</span></div>
+              <div>
+                <span className="font-semibold">{data?.count ?? 0}</span>{" "}
+                <span className="text-slate-600">{tt("scans")}</span>
+                <span className="text-slate-400"> {tt("across")} </span>
+                <span className="font-semibold">{turnCount}</span>{" "}
+                <span className="text-slate-600">{tt("turns")}</span>
+              </div>
               {blocked > 0   && <div className="text-red-600"><span className="font-semibold">{blocked}</span> {tt("blocked")}</div>}
               {sanitized > 0 && <div className="text-amber-600"><span className="font-semibold">{sanitized}</span> {tt("sanitized")}</div>}
             </div>
@@ -72,14 +83,14 @@ function AgentRunInner() {
               title={tt("load_error")}
               message={(error as { message?: string })?.message ?? tt("load_error_body")}
             />
-          ) : turns.length === 0 ? (
+          ) : scans.length === 0 ? (
             <EmptyState
               title={tt("empty_title")}
               message={tt("empty_body")}
             />
           ) : (
             <ol className="relative border-l border-slate-200 ml-3">
-              {turns.map((t, i) => (
+              {scans.map((t, i) => (
                 <li key={`${t.trace_id}-${i}`} className="mb-6 ml-6">
                   <span className="absolute -left-3 flex items-center justify-center w-6 h-6 rounded-full bg-slate-100 border border-slate-300 text-[11px] font-semibold text-slate-600 tabular-nums">
                     {t.turn_index ?? i}

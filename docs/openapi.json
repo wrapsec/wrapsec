@@ -91,10 +91,10 @@
         "type": "object"
       },
       "AgentRunResponse": {
-        "description": "A run's scans as an ordered timeline (turn_index, then time).\n\nAn unknown or out-of-scope run_id is not an error: it returns this same\nenvelope with `count: 0` and an empty `turns`, which is what keeps one\ntenant's run ids from being probed against another's.",
+        "description": "A run's scans as an ordered timeline (turn_index, then time).\n\nONE ENTRY PER SCAN, NOT PER TURN. A single agent turn can produce several\nscans -- a tool call is judged on its arguments and again on its result, and\none tool listing judges every definition it publishes -- so `scans` is\nroutinely longer than the number of turns. Each entry carries the\n`turn_index` it belongs to, which is what groups them back together.\n\nAn unknown or out-of-scope run_id is not an error: it returns this same\nenvelope with `count: 0` and an empty `scans`, which is what keeps one\ntenant's run ids from being probed against another's.",
         "properties": {
           "count": {
-            "description": "Number of turns returned, bounded by `limit`.",
+            "description": "Number of scan records returned, bounded by `limit`. Not a count of turns: several scans can share one `turn_index`.",
             "title": "Count",
             "type": "integer"
           },
@@ -106,19 +106,19 @@
             "title": "Run Id",
             "type": "string"
           },
-          "turns": {
-            "description": "The run's scans in timeline order. Empty when the run is unknown or out of the caller's scope, which is not an error.",
+          "scans": {
+            "description": "The run's scan records in timeline order, one per scan rather than one per turn. Each carries the `turn_index` it belongs to. Empty when the run is unknown or out of the caller's scope, which is not an error.",
             "items": {
               "$ref": "#/components/schemas/AuditItem"
             },
-            "title": "Turns",
+            "title": "Scans",
             "type": "array"
           }
         },
         "required": [
           "run_id",
           "count",
-          "turns"
+          "scans"
         ],
         "title": "AgentRunResponse",
         "type": "object"
@@ -896,7 +896,7 @@
                 "type": "null"
               }
             ],
-            "description": "Caller-supplied identifier grouping one agent run; its turns read back via GET /v1/agent-runs/{run_id}.",
+            "description": "Caller-supplied identifier grouping one agent run; its scans read back via GET /v1/agent-runs/{run_id}.",
             "examples": [
               "run_4d81aa27"
             ],

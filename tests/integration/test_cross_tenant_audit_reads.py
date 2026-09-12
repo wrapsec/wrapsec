@@ -196,6 +196,6 @@ async def test_an_agent_run_is_not_readable_across_tenants(
         "tenant A read tenant B's agent-run timeline"
     )
     if resp.status_code == 200:
-        assert not resp.json().get("turns"), (
+        assert not resp.json().get("scans"), (
             "the run resolved to tenant B's turns for a caller in tenant A"
         )

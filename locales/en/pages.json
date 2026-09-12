@@ -387,7 +387,9 @@
     "load_error_body": "Unable to reach the API.",
     "empty_title": "No turns for this run",
     "empty_body": "Scans tagged with this run ID appear here as an ordered timeline.",
-    "risk": "risk {score}"
+    "risk": "risk {score}",
+    "scans": "scans",
+    "across": "across"
   },
   "detail": {
     "edit": "Edit",

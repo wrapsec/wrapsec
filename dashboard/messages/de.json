@@ -601,7 +601,9 @@
       "load_error_body": "API konnte nicht erreicht werden.",
       "empty_title": "Keine Schritte für diesen Lauf",
       "empty_body": "Scans, die mit dieser Lauf-ID gekennzeichnet sind, werden hier als chronologische Zeitleiste angezeigt.",
-      "risk": "Risiko {score}"
+      "risk": "Risiko {score}",
+      "scans": "Scans",
+      "across": "in"
     },
     "detail": {
       "edit": "Bearbeiten",

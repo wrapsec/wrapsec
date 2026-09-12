@@ -787,7 +787,7 @@ class OpenAIErrorResponse(BaseModel):
 # ── the audit item projection, shared by two routes ──────────────────────────
 #
 # `_format_item` in the audit endpoints builds this, and BOTH `GET /v1/audit/logs`
-# and `GET /v1/agent-runs/{run_id}` serve it -- as `items` and as `turns`
+# and `GET /v1/agent-runs/{run_id}` serve it -- as `items` and as `scans`
 # respectively. One model, so the two cannot drift; it was called `AgentRunTurn`
 # when only the timeline was modelled, which stopped being accurate the moment the
 # audit list route reused it.
@@ -838,7 +838,7 @@ class AuditItem(BaseModel):
     severity:        str = Field(description="Risk level of the recorded decision.", json_schema_extra=_allowed(SEVERITIES))
     session_id:      str | None = Field(examples=["sess_9f31c02b"], description="Caller-supplied correlation; never an authorization input.")
     turn_index:      int | None = Field(description="Zero-based position within the session, as the caller supplied it.")
-    run_id:          str | None = Field(examples=["run_4d81aa27"], description="Caller-supplied identifier grouping one agent run; its turns read back via GET /v1/agent-runs/{run_id}.")
+    run_id:          str | None = Field(examples=["run_4d81aa27"], description="Caller-supplied identifier grouping one agent run; its scans read back via GET /v1/agent-runs/{run_id}.")
     input_source:    str = Field(description="Declared provenance, for example `user_prompt` or `retrieved_document`.", json_schema_extra=_allowed(INPUT_SOURCES))
     record_hash:     str | None = Field(examples=["4b8d1f60c27ae9531d0fa4c8e7b25396081decaf35176e2b9c40af8d61e3752c"], description="Hash-chain value for this row.")
     prev_hash:       str | None = Field(examples=["e07c3a95124fb86d0e51937ac2648bd7f395021ce8ab4d76195f0c3e28ad641b"], description="Preceding row's hash. Null for the first row in a tenant's chain.")
@@ -847,14 +847,20 @@ class AuditItem(BaseModel):
 class AgentRunResponse(BaseModel):
     """A run's scans as an ordered timeline (turn_index, then time).
 
+    ONE ENTRY PER SCAN, NOT PER TURN. A single agent turn can produce several
+    scans -- a tool call is judged on its arguments and again on its result, and
+    one tool listing judges every definition it publishes -- so `scans` is
+    routinely longer than the number of turns. Each entry carries the
+    `turn_index` it belongs to, which is what groups them back together.
+
     An unknown or out-of-scope run_id is not an error: it returns this same
-    envelope with `count: 0` and an empty `turns`, which is what keeps one
+    envelope with `count: 0` and an empty `scans`, which is what keeps one
     tenant's run ids from being probed against another's.
     """
 
     run_id: str = Field(examples=["run_4d81aa27"], description="Echoed back exactly as requested.")
-    count:  int = Field(description="Number of turns returned, bounded by `limit`.")
-    turns:  list[AuditItem] = Field(description="The run's scans in timeline order. Empty when the run is unknown or out of the caller's scope, which is not an error.")
+    count:  int = Field(description="Number of scan records returned, bounded by `limit`. Not a count of turns: several scans can share one `turn_index`.")
+    scans:  list[AuditItem] = Field(description="The run's scan records in timeline order, one per scan rather than one per turn. Each carries the `turn_index` it belongs to. Empty when the run is unknown or out of the caller's scope, which is not an error.")
 
 
 # ── GET /v1/audit/logs ───────────────────────────────────────────────────────

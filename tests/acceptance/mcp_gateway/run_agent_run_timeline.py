@@ -102,7 +102,7 @@ def main() -> int:
     for _ in range(20):                       # audit writes settle asynchronously
         resp = httpx.get(f"{API}/v1/agent-runs/{run_id}",
                          headers={"x-api-key": KEY}, timeout=20)
-        if resp.status_code == 200 and resp.json().get("turns"):
+        if resp.status_code == 200 and resp.json().get("scans"):
             timeline = resp.json()
             break
         time.sleep(1)
@@ -111,9 +111,9 @@ def main() -> int:
     if timeline is None:
         return _report()
 
-    items = timeline["turns"]
+    items = timeline["scans"]
     print(json.dumps({"run_id": run_id, "session_id": session_id,
-                      "turns": len(items)}, indent=2))
+                      "scans": len(items)}, indent=2))
     for item in items:
         print("   ", {k: item.get(k) for k in
                       ("turn_index", "trace_id", "decision", "primary_reason",
