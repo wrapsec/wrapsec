@@ -124,6 +124,7 @@ class ToolDefinitionScanner:
                 reason   = verdict.reason,
                 trace_id = verdict.trace_id,
                 detail   = f"tool definition {name!r} from server {server_name!r}",
+                failed   = verdict.failed,
             )
 
         self._seen[key] = (fingerprint, True)

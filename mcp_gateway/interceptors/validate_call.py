@@ -92,6 +92,7 @@ class ToolCallValidator:
                 reason   = verdict.reason,
                 trace_id = verdict.trace_id,
                 detail   = f"arguments to {exposed_name!r} on server {server_name!r}",
+                failed   = verdict.failed,
             )
 
         # A SANITIZE verdict on arguments is treated as ALLOW. Rewriting what the

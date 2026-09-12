@@ -69,6 +69,7 @@ class ToolResultScanner:
                 reason   = verdict.reason,
                 trace_id = verdict.trace_id,
                 detail   = f"tool result from server {server_name!r}",
+                failed   = verdict.failed,
             )
 
         if verdict.sanitized is not None:

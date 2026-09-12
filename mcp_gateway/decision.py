@@ -41,6 +41,11 @@ class Refusal:
     reason:   str
     trace_id: str
     detail:   str | None = None
+    # True when the control could not reach a verdict, as opposed to reaching
+    # one and refusing. Both refuse; only one is evidence about the content, and
+    # the agent-facing text must not report a judgement as an outage or the
+    # reverse.
+    failed:   bool = False
 
 
 # The vocabulary. Kept small and explicit: a reason that does not appear here
@@ -70,9 +75,31 @@ _AGENT_MESSAGES = {
 _DO_NOT_RETRY = "Do not retry this operation."
 
 
+# What an agent is told when content was judged and refused. Deliberately not
+# keyed on which detector fired: a per-detector message would be a tuning oracle,
+# letting a prober learn which class of payload trips the control.
+_CONTENT_REFUSED = "The content was refused by a security policy."
+
+
 def refusal_text(refusal: Refusal) -> str:
-    """The text an agent receives. Fixed phrasing, no content, no internals."""
-    message = _AGENT_MESSAGES.get(refusal.reason, _AGENT_MESSAGES[SYSTEM_ERROR])
+    """The text an agent receives. Fixed phrasing, no content, no internals.
+
+    A reason the vocabulary does not name comes from the detection API, which
+    reports its own verdicts -- `PROMPT_INJECTION` and the like. Those must not
+    be rendered: the wording would carry detector detail, and a message keyed on
+    them would tell a prober which class of payload was caught.
+
+    They are not, however, reported as a failed check. Whether the control
+    reached a verdict is carried explicitly, because telling an agent that a
+    judgement was an outage is simply false, and an operator reading a transcript
+    needs the two apart.
+    """
+    if refusal.reason in _AGENT_MESSAGES:
+        message = _AGENT_MESSAGES[refusal.reason]
+    elif refusal.failed:
+        message = _AGENT_MESSAGES[SYSTEM_ERROR]
+    else:
+        message = _CONTENT_REFUSED
     return f"[WrapSec] {message} Trace: {refusal.trace_id}. {_DO_NOT_RETRY}"
 
 
