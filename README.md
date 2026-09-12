@@ -117,6 +117,7 @@ WrapSec is built for agentic use, not just single prompts:
 - **Agent-run timeline.** `GET /v1/agent-runs/{run_id}` returns a run's scans as an ordered timeline; the dashboard renders it, showing where risk entered a multi-turn run.
 - **Function-calling tool.** The Python SDK exposes `wrapsec_scan` as a function-calling tool - `openai_tool()` / `anthropic_tool()` / `scan_tool_schema()` - for any agent framework.
 - **MCP server (opt-in).** `python -m mcp_server` (see `requirements-mcp.txt`) exposes `wrapsec_scan` over the Model Context Protocol so any MCP-compatible agent can call it natively.
+- **MCP gateway (opt-in).** `python -m mcp_gateway` sits between an agent and the MCP servers it uses: it publishes their tools under namespaced names, scans every tool definition before it enters the agent's context, checks call arguments against policy and detection, and scans every tool result before the agent sees it. Fail-closed - unjudged content is never forwarded. stdio transport, one agent per process. See `docs/mcp_gateway.md`.
 
 
 ## Stack
@@ -410,6 +411,7 @@ WrapSec is open-core. The detection pipeline, guardrails, proxy, audit trail, da
 | Document | Location |
 |---|---|
 | API reference | `docs/api.md` |
+| MCP gateway | `docs/mcp_gateway.md` |
 | Developer guide | `docs/developer_guide.md` |
 | User guide (dashboard) | `docs/user_guide.md` |
 | CLI reference | `docs/cli_reference.md` |
