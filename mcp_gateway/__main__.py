@@ -73,8 +73,8 @@ async def _run() -> int:
         return EXIT_STARTUP_REFUSED
 
     logger.info(
-        "serving %d tool(s) from %d downstream server(s)",
-        len(gateway.routes), len(config.servers),
+        "serving %d tool(s) from %d downstream server(s); scan posture: %s",
+        len(gateway.routes), len(config.servers), config.scan.describe(),
     )
 
     try:

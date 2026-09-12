@@ -205,3 +205,100 @@ def _text(result) -> str:
 
 if __name__ == "__main__":  # pragma: no cover - convenience only
     sys.exit(pytest.main([__file__, "-v"]))
+
+
+# ---------------------------------------------------------------------------
+# scan posture, as the real process applies it
+# ---------------------------------------------------------------------------
+
+def _posture_config(tmp_path: Path, scan: str) -> Path:
+    """A config with a detection API and an explicit scan posture."""
+    path = tmp_path / "posture.yaml"
+    path.write_text(
+        "servers:\n"
+        "  - name: alpha\n"
+        "    command:\n"
+        f"      - {_PY}\n"
+        f"      - {_FAKE}\n"
+        "      - alpha\n"
+        "wrapsec:\n"
+        "  base_url: http://localhost:8000\n"
+        "  api_key_env: WRAPSEC_API_KEY\n"
+        f"{scan}",
+        encoding="utf-8",
+    )
+    return path
+
+
+def _run_gateway(config: Path, env_extra: dict[str, str]):
+    """Start the gateway as a real process and let it reach EOF on stdin."""
+    import subprocess
+
+    env = {
+        "PATH":               os.environ.get("PATH", ""),
+        "PYTHONPATH":         str(_ROOT),
+        "WRAPSEC_MCP_CONFIG": str(config),
+        "WRAPSEC_API_KEY":    "wsk_live_testing_only",
+    }
+    env.update(env_extra)
+    return subprocess.run(
+        [_PY, "-m", "mcp_gateway"],
+        env=env, capture_output=True, text=True, timeout=120,
+        stdin=subprocess.DEVNULL, check=False,
+    )
+
+
+def test_production_with_every_scan_switch_off_refuses_before_serving(tmp_path):
+    """Holding an enforcing interceptor is not the same as enforcing.
+
+    With every boundary switched off the gateway would inspect nothing while
+    presenting itself as enforcing, which is the disabled mode under another
+    name and the more dangerous form of it -- it looks like a working gateway.
+    """
+    config = _posture_config(tmp_path, (
+        "scan:\n"
+        "  tool_definitions: false\n"
+        "  results: false\n"
+        "  call_arguments: false\n"
+    ))
+
+    done = _run_gateway(config, {"WRAPSEC_ENV": "production"})
+
+    assert done.returncode != 0, "a gateway inspecting nothing served in production"
+    assert "inspect nothing" in done.stderr
+    assert "serving" not in done.stderr, "it reached the serving stage before refusing"
+
+
+def test_production_with_a_partial_posture_starts_and_records_it(tmp_path):
+    """A partial posture is the operator's call, and must be visible.
+
+    Someone who has vetted their tool definitions out of band may reasonably
+    scan only results. What must not happen is that choice being invisible.
+    """
+    config = _posture_config(tmp_path, (
+        "scan:\n"
+        "  tool_definitions: false\n"
+        "  results: true\n"
+        "  call_arguments: false\n"
+    ))
+
+    done = _run_gateway(config, {"WRAPSEC_ENV": "production"})
+
+    assert done.returncode == 0, f"the gateway refused a partial posture: {done.stderr[-400:]}"
+    assert "scan posture:" in done.stderr
+    assert "mode=fast" in done.stderr
+    assert "inspecting=tool-results" in done.stderr, (
+        f"the recorded posture does not name exactly what is inspected: {done.stderr[-300:]}"
+    )
+    assert "tool-definitions" not in done.stderr.split("inspecting=")[1].split()[0]
+
+
+def test_the_default_posture_is_recorded_too(tmp_path):
+    """A config that omits the scan section still states what is in force, so
+    the posture is read rather than inferred from an omission."""
+    config = _posture_config(tmp_path, "")
+
+    done = _run_gateway(config, {"WRAPSEC_ENV": "production"})
+
+    assert done.returncode == 0, done.stderr[-400:]
+    assert "inspecting=tool-definitions,tool-results,call-arguments" in done.stderr

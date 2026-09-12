@@ -129,6 +129,37 @@ class ScanConfig:
         if self.max_chars <= 0:
             raise ConfigError(f"scan.max_chars must be positive, got {self.max_chars}")
 
+    @property
+    def inspects_anything(self) -> bool:
+        """Whether any boundary is actually examined.
+
+        A configuration with every switch off is the security-disabled mode
+        under another name: the gateway would hold an enforcing interceptor,
+        report itself as enforcing, and inspect nothing.
+        """
+        return bool(self.tool_definitions or self.results or self.call_arguments)
+
+    def describe(self) -> str:
+        """The effective posture, for the startup record.
+
+        Derived from the resolved configuration rather than from the file, so it
+        reflects what is in force including defaults the file never mentioned. An
+        operator should be able to read what is enforced, not infer it from what
+        was omitted.
+        """
+        inspected = [
+            name for name, on in (
+                ("tool-definitions", self.tool_definitions),
+                ("tool-results",     self.results),
+                ("call-arguments",   self.call_arguments),
+            ) if on
+        ]
+        return (
+            f"mode={self.mode} "
+            f"inspecting={','.join(inspected) if inspected else 'NOTHING'} "
+            f"max_chars={self.max_chars}"
+        )
+
 
 @dataclass(frozen=True)
 class GatewayConfig:

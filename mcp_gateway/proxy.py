@@ -71,11 +71,30 @@ class Gateway:
         precisely why it must not be reachable in production by configuration
         alone.
         """
-        if isinstance(self._interceptor, PassThrough) and environment != "development":
+        if environment == "development":
+            return
+
+        if isinstance(self._interceptor, PassThrough):
             raise EnforcementDisabled(
                 "the gateway is configured without security interception, which is "
                 "development and test infrastructure only. Refusing to start in "
                 f"environment {environment!r}."
+            )
+
+        # Holding an enforcing interceptor is not the same as enforcing. With
+        # every scan switch off the gateway would inspect nothing while
+        # reporting itself as enforcing, which is the disabled mode under
+        # another name -- and the more dangerous form of it, because it looks
+        # like a working gateway.
+        #
+        # A PARTIAL posture is left to the operator: someone who has vetted
+        # their tool definitions out of band may reasonably scan only results.
+        # What is refused is inspecting nothing at all.
+        if not self._config.scan.inspects_anything:
+            raise EnforcementDisabled(
+                "every scan boundary is switched off, so the gateway would "
+                "inspect nothing while presenting itself as enforcing. Refusing "
+                f"to start in environment {environment!r}."
             )
 
     async def connect_all(self) -> None:
