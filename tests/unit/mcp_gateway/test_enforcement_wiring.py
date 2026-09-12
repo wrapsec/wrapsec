@@ -170,7 +170,7 @@ class _CallSession:
     async def list_tools(self):
         return types.ListToolsResult(tools=self._tools)
 
-    async def call_tool(self, name, arguments):
+    async def call_tool(self, name, arguments, read_timeout_seconds=None):
         return self._result
 
 
@@ -277,7 +277,7 @@ class _RecordingSession:
     async def list_tools(self):
         return types.ListToolsResult(tools=self._tools)
 
-    async def call_tool(self, name, arguments):
+    async def call_tool(self, name, arguments, read_timeout_seconds=None):
         self.calls.append((name, arguments))
         return types.CallToolResult(
             content=[types.TextContent(type="text", text="downstream ok")]

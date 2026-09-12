@@ -45,11 +45,18 @@ class InputSource(str, Enum):
     indirect prompt-injection surface. Source never relaxes detection: identical
     content scores identically whatever origin it claims. It can, opt-in, tighten
     the policy thresholds applied to untrusted origins (source-aware posture,
-    off by default)."""
+    off by default).
+
+    agent_tool_call is arguments a model composed for a tool invocation. It is
+    untrusted by default and deliberately NOT user_prompt: a human typed the
+    latter, whereas the former is text a model produced, and an injected
+    instruction becomes an ACTION at exactly this boundary -- the last gate
+    before a side effect that may not be reversible."""
     USER_PROMPT        = "user_prompt"
     TOOL_OUTPUT        = "tool_output"
     RETRIEVED_DOCUMENT = "retrieved_document"
     EXTERNAL_CONTENT   = "external_content"
+    AGENT_TOOL_CALL    = "agent_tool_call"
 
 
 class LLMProvider(str, Enum):

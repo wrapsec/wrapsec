@@ -24,37 +24,90 @@ from mcp_gateway.session import (
     DownstreamServer,
     UnsupportedDownstreamRequest,
     _is_input_required_refusal,
-    _refuse_sampling,
 )
 
 # ---------------------------------------------------------------------------
 # channel 1: legacy sampling/*
 # ---------------------------------------------------------------------------
 
-@pytest.mark.asyncio
-async def test_a_sampling_request_is_refused_not_served():
-    """The callback the gateway installs must refuse, whatever it is handed."""
-    with pytest.raises(UnsupportedDownstreamRequest, match="sampling"):
-        await _refuse_sampling(object(), object())
+def test_no_sampling_callback_is_installed():
+    """Installing one is what ADVERTISES the capability.
 
+    The SDK builds its capability ad by comparing the callback against its own
+    default, so any callback of ours -- including one written to refuse -- makes
+    the client announce to every downstream server that sampling is available.
+    A gateway that refuses sampling should not first invite it.
 
-def test_the_sampling_callback_is_installed_on_every_connection():
-    """A connection opened without the callback would let the SDK's own default
-    handling apply, which is not the gateway's decision to delegate.
-
-    Checked on the AST rather than on the source text: a docstring or comment
-    mentioning the keyword would satisfy a substring search while the call itself
-    passed nothing.
+    Checked on the AST rather than the source text: a docstring mentioning the
+    keyword would satisfy a substring search while the call passed one anyway.
     """
     kwargs = _keywords_of_call(DownstreamPool.connect, "ClientSession")
-    assert "sampling_callback" in kwargs, (
-        "ClientSession is constructed without sampling_callback; a downstream "
-        "server could reach the agent's model"
+    assert "sampling_callback" not in kwargs, (
+        f"ClientSession is constructed with sampling_callback="
+        f"{kwargs.get('sampling_callback')}; that makes the client advertise the "
+        f"sampling capability to every downstream server"
     )
-    assert kwargs["sampling_callback"] == "_refuse_sampling", (
-        f"sampling_callback is {kwargs['sampling_callback']}, not the refusing "
-        f"callback"
+
+
+@pytest.mark.asyncio
+async def test_the_gateway_wiring_advertises_no_sampling_capability():
+    """The invariant itself, on a real session built the way production builds it.
+
+    Not a proxy for the behaviour: this asks the SDK to produce the capability
+    ad it would put on the wire.
+    """
+    import anyio
+    from mcp.client.session import LATEST_HANDSHAKE_VERSION, ClientSession
+
+    _, read  = anyio.create_memory_object_stream(1)
+    write, _ = anyio.create_memory_object_stream(1)
+
+    session = ClientSession(read, write)
+    assert session._build_capabilities(LATEST_HANDSHAKE_VERSION).sampling is None, (
+        "the client advertises sampling; a downstream server will be told the "
+        "capability is available and may ask for it"
     )
+
+
+@pytest.mark.asyncio
+async def test_a_custom_callback_would_advertise_it():
+    """Pins WHY the callback was removed rather than kept and made to refuse.
+
+    If a future SDK stopped advertising on a custom callback this would fail,
+    and the removal could be revisited as a deliberate choice rather than
+    carried forward as folklore.
+    """
+    import anyio
+    from mcp.client.session import LATEST_HANDSHAKE_VERSION, ClientSession
+
+    async def _refusing(context, params):  # pragma: no cover - never invoked
+        raise AssertionError("not invoked")
+
+    _, read  = anyio.create_memory_object_stream(1)
+    write, _ = anyio.create_memory_object_stream(1)
+
+    session = ClientSession(read, write, sampling_callback=_refusing)
+    assert session._build_capabilities(LATEST_HANDSHAKE_VERSION).sampling is not None
+
+
+@pytest.mark.asyncio
+async def test_the_sdk_default_declines_rather_than_serving():
+    """Not passing a callback must mean DECLINED, never handled.
+
+    The security property does not rest on a callback of ours, so it rests on
+    this: the SDK's own default answers a sampling request with an error. A
+    future SDK whose default served the request would open the channel with no
+    change here, which is why the startup probe also pins the parameter default.
+    """
+    from mcp import types
+    from mcp.client.session import _default_sampling_callback
+
+    answer = await _default_sampling_callback(None, None)
+
+    assert isinstance(answer, types.ErrorData), (
+        f"the SDK default no longer declines sampling; it returned {answer!r}"
+    )
+    assert answer.code == types.INVALID_REQUEST
 
 
 # ---------------------------------------------------------------------------
@@ -101,7 +154,7 @@ async def test_an_input_required_result_becomes_a_refusal():
     from mcp.client.session import _input_required_unexpected
 
     class _Session:
-        async def call_tool(self, name, arguments):
+        async def call_tool(self, name, arguments, read_timeout_seconds=None):
             raise _input_required_unexpected("call_tool")
 
     pool   = DownstreamPool()
@@ -119,7 +172,7 @@ async def test_an_unrelated_runtime_error_is_not_disguised_as_a_refusal():
     """It must propagate as itself, so a real fault is not filed as a policy
     refusal."""
     class _Session:
-        async def call_tool(self, name, arguments):
+        async def call_tool(self, name, arguments, read_timeout_seconds=None):
             raise RuntimeError("downstream pipe broke")
 
     pool   = DownstreamPool()

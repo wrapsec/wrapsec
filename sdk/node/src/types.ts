@@ -215,8 +215,9 @@ export interface ScanOptions {
   runId?:          string
   /**
    * Trust-boundary provenance of the scanned text: "user_prompt" (default),
-   * "tool_output", "retrieved_document", or "external_content". Untrusted
-   * origins mark agent-pulled content (indirect prompt-injection surface).
+   * "tool_output", "retrieved_document", "external_content", or
+   * "agent_tool_call". Untrusted origins mark agent-pulled content (indirect
+   * prompt-injection surface) and arguments a model composed for a tool call.
    * Labels and audits only; never relaxes detection.
    */
   inputSource?:    string

@@ -48,7 +48,7 @@ class _Session:
     async def list_tools(self):
         return types.ListToolsResult(tools=self._tools)
 
-    async def call_tool(self, name, arguments):
+    async def call_tool(self, name, arguments, read_timeout_seconds=None):
         return types.CallToolResult(
             content=[types.TextContent(type="text", text="ok")])
 

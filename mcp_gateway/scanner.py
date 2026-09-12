@@ -29,12 +29,18 @@ from typing import Any, Protocol
 logger = logging.getLogger(__name__)
 
 # What the caller asked us to judge, in the vocabulary the detection API uses for
-# provenance. A tool definition and a tool result are both content the gateway
-# did not author, and they are classified as such so the posture layer can judge
-# them more strictly than something a user typed.
+# provenance. None of the three is content a person typed, so all three carry an
+# untrusted classification by default and the posture layer can judge them more
+# strictly than a user prompt.
 SOURCE_TOOL_DEFINITION = "external_content"
 SOURCE_TOOL_RESULT     = "tool_output"
-SOURCE_TOOL_ARGUMENT   = "user_prompt"
+# NOT user_prompt. Arguments are composed by a model, not typed by a person, and
+# they are the last gate before a side effect that may not be reversible: the
+# classic chain is a poisoned result instructing the agent to call a tool with
+# attacker-chosen arguments. Classifying them as trusted left this boundary at
+# base thresholds while the deployment's untrusted delta tightened the two
+# boundaries either side of it.
+SOURCE_TOOL_ARGUMENT   = "agent_tool_call"
 
 
 @dataclass(frozen=True)

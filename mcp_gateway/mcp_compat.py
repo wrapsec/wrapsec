@@ -136,8 +136,29 @@ def _missing_apis() -> list[str]:
                 missing.append(
                     f"ClientSession.call_tool({guard}=) no longer defaults to False"
                 )
-        if "sampling_callback" not in inspect.signature(ClientSession.__init__).parameters:
+        # SAMPLING IS HELD SHUT BY NOT OPTING IN. The SDK advertises the
+        # sampling capability to every downstream server whenever the callback
+        # differs from its own default, so the gateway passes none: the
+        # capability stays unadvertised and the SDK still declines the request.
+        #
+        # Two things have to remain true for that to hold, and both are pinned
+        # rather than assumed. The parameter must still default to None, so
+        # passing nothing yields the SDK's own handling; and the default handler
+        # it substitutes must still exist. A future SDK that defaulted to a
+        # callback which SERVES sampling would otherwise open the channel with
+        # no change here to notice.
+        init = inspect.signature(ClientSession.__init__).parameters
+        if "sampling_callback" not in init:
             missing.append("ClientSession(sampling_callback=...)")
+        elif init["sampling_callback"].default is not None:
+            missing.append(
+                "ClientSession(sampling_callback=) no longer defaults to None, so "
+                "not passing one may no longer mean the SDK's declining handler"
+            )
+        try:
+            from mcp.client.session import _default_sampling_callback  # noqa: F401
+        except Exception:
+            missing.append("mcp.client.session._default_sampling_callback")
     except Exception:
         missing.append("mcp.client.session.ClientSession")
 

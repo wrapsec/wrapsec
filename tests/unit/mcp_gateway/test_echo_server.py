@@ -44,7 +44,8 @@ class _FakeSession:
     async def list_tools(self) -> types.ListToolsResult:
         return types.ListToolsResult(tools=self.tools)
 
-    async def call_tool(self, name: str, arguments: dict) -> Any:
+    async def call_tool(self, name: str, arguments: dict,
+                        read_timeout_seconds: float | None = None) -> Any:
         self.calls.append((name, arguments))
         if self.raises is not None:
             raise self.raises

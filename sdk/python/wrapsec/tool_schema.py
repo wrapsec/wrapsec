@@ -24,7 +24,8 @@ from typing import Any
 
 # Mirrors the server-side InputSource enum (trust-boundary provenance). A unit
 # test asserts this stays in sync with domain.enums.InputSource.
-INPUT_SOURCES = ["user_prompt", "tool_output", "retrieved_document", "external_content"]
+INPUT_SOURCES = ["user_prompt", "tool_output", "retrieved_document",
+                 "external_content", "agent_tool_call"]
 
 SCAN_TOOL_NAME = "wrapsec_scan"
 

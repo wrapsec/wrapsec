@@ -237,3 +237,65 @@ def test_a_non_string_policy_entry_is_refused(tmp_path):
 def test_a_non_mapping_server_entry_is_refused(tmp_path):
     with pytest.raises(ConfigError, match="must be a mapping"):
         load_config(_write(tmp_path, "servers:\n  - just-a-string\n"))
+
+
+# ---------------------------------------------------------------------------
+# the downstream call bound
+# ---------------------------------------------------------------------------
+
+def test_a_server_without_a_call_timeout_gets_the_shipped_default(tmp_path):
+    """Not opt-in. A configuration that says nothing still bounds the call,
+    because an unbounded call is the condition this exists to prevent."""
+    from mcp_gateway.config import DEFAULT_CALL_TIMEOUT_S
+
+    config = load_config(_write(tmp_path, _VALID))
+    assert config.servers[0].call_timeout_s == DEFAULT_CALL_TIMEOUT_S
+
+
+def test_the_shipped_default_is_generous_rather_than_arbitrary(tmp_path):
+    """A short bound would refuse slow-but-working tools, which is an outage the
+    gateway would be inflicting on the agent it protects."""
+    from mcp_gateway.config import DEFAULT_CALL_TIMEOUT_S
+
+    assert DEFAULT_CALL_TIMEOUT_S >= 60, (
+        f"the default bound is {DEFAULT_CALL_TIMEOUT_S}s; a tool that fetches a "
+        f"page or reads a large file can legitimately take longer than that"
+    )
+
+
+def test_a_call_timeout_is_read_from_the_file(tmp_path):
+    text = _VALID.replace(
+        "    transport: stdio\n", "    transport: stdio\n    call_timeout_s: 30\n")
+    assert "call_timeout_s" in text
+    config = load_config(_write(tmp_path, text))
+    assert config.servers[0].call_timeout_s == 30.0
+
+
+@pytest.mark.parametrize("value", ["0", "-1", "-0.5"])
+def test_a_non_positive_call_timeout_is_refused(tmp_path, value):
+    """There is no spelling here for "wait forever"."""
+    text = _VALID.replace(
+        "    transport: stdio\n",
+        f"    transport: stdio\n    call_timeout_s: {value}\n")
+    with pytest.raises(ConfigError, match="call_timeout_s"):
+        load_config(_write(tmp_path, text))
+
+
+@pytest.mark.parametrize("value", ["true", "'30'", "[30]"])
+def test_a_non_numeric_call_timeout_is_refused(tmp_path, value):
+    """Refused rather than coerced. A string that happens to parse would make
+    the bound depend on YAML quoting."""
+    text = _VALID.replace(
+        "    transport: stdio\n",
+        f"    transport: stdio\n    call_timeout_s: {value}\n")
+    with pytest.raises(ConfigError, match="call_timeout_s"):
+        load_config(_write(tmp_path, text))
+
+
+def test_a_misspelled_call_timeout_is_refused_not_ignored(tmp_path):
+    """Silently ignoring it would leave the operator believing a bound is in
+    force that is not."""
+    text = _VALID.replace(
+        "    transport: stdio\n", "    transport: stdio\n    call_timeout: 30\n")
+    with pytest.raises(ConfigError, match="unsupported key"):
+        load_config(_write(tmp_path, text))

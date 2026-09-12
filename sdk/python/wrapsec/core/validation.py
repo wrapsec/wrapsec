@@ -70,6 +70,7 @@ def validate_turn_index(value: int | None) -> int | None:
 # Input provenance (trust boundary). Mirrors domain.enums.InputSource server-side.
 VALID_INPUT_SOURCES = (
     "user_prompt", "tool_output", "retrieved_document", "external_content",
+    "agent_tool_call",
 )
 
 

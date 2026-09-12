@@ -176,6 +176,71 @@ def test_a_flipped_claimed_default_is_detected(monkeypatch):
         verify_mcp_package()
 
 
+def test_a_sampling_default_that_stopped_meaning_the_sdk_handler_is_detected(monkeypatch):
+    """Sampling is held shut by NOT opting in, so the opt-out must keep working.
+
+    The gateway passes no sampling_callback: that is what keeps the capability
+    unadvertised, and the SDK substitutes its own declining handler. Both halves
+    depend on the parameter still defaulting to None. If a future SDK defaulted
+    it to a callback of its own -- one that might SERVE the request -- passing
+    nothing would silently stop meaning "decline", with no change here to notice.
+
+    So the probe checks the DEFAULT, not merely that the parameter exists.
+    """
+    from mcp.client.session import ClientSession
+
+    original = ClientSession.__init__
+
+    async def _some_handler(context, params):  # pragma: no cover - never invoked
+        raise AssertionError("not invoked")
+
+    params = [
+        p.replace(default=_some_handler) if p.name == "sampling_callback" else p
+        for p in inspect.signature(original).parameters.values()
+    ]
+
+    def _defaulted(self, *args, **kwargs):  # pragma: no cover - never invoked
+        raise AssertionError("not invoked")
+
+    _defaulted.__signature__ = inspect.Signature(params)
+    monkeypatch.setattr(ClientSession, "__init__", _defaulted)
+
+    missing = _missing_apis()
+    assert any("sampling_callback" in m for m in missing), missing
+    with pytest.raises(UnsupportedMCPPackage, match="sampling_callback"):
+        verify_mcp_package()
+
+
+def test_a_removed_sampling_parameter_is_detected(monkeypatch):
+    """If the parameter is gone entirely, the posture cannot be reasoned about."""
+    from mcp.client.session import ClientSession
+
+    original = ClientSession.__init__
+    params   = [
+        p for p in inspect.signature(original).parameters.values()
+        if p.name != "sampling_callback"
+    ]
+
+    def _without(self, *args, **kwargs):  # pragma: no cover - never invoked
+        raise AssertionError("not invoked")
+
+    _without.__signature__ = inspect.Signature(params)
+    monkeypatch.setattr(ClientSession, "__init__", _without)
+
+    assert any("sampling_callback" in m for m in _missing_apis())
+    with pytest.raises(UnsupportedMCPPackage, match="sampling_callback"):
+        verify_mcp_package()
+
+
+def test_the_sdk_declining_handler_is_still_present():
+    """The handler the SDK substitutes when none is passed.
+
+    Its absence would mean the gateway's opt-out no longer resolves to anything
+    known, and the startup probe refuses rather than guessing.
+    """
+    assert not any("_default_sampling_callback" in m for m in _missing_apis())
+
+
 # ---------------------------------------------------------------------------
 # the hand-copied tool-name rule must not drift from the SDK's
 # ---------------------------------------------------------------------------

@@ -675,7 +675,7 @@ Scan-only mode. Inspect input, get a security decision, then forward to your LLM
   "input":          "string - required, 1-8000 chars",
   "detection_mode": "fast | full  (default: fast)",
   "execution_mode": "scan_only  (default)",
-  "input_source":   "user_prompt (default) | tool_output | retrieved_document | external_content",
+  "input_source":   "user_prompt (default) | tool_output | retrieved_document | external_content | agent_tool_call",
   "session_id":     "string - optional, opaque, groups a multi-turn conversation",
   "turn_index":     "int - optional, 0-based turn within session_id",
   "run_id":         "string - optional, opaque, one agent execution",
@@ -695,7 +695,7 @@ Scan-only mode. Inspect input, get a security decision, then forward to your LLM
 - `fast` - rule + ML only (~5ms)
 - `full` - rule + ML + LLM semantic (~100-500ms additional)
 
-**input_source** is the trust-boundary provenance of `input`: where the text came from. Use `tool_output`, `retrieved_document`, or `external_content` for content an agent pulled in (the indirect prompt-injection surface); `user_prompt` (the default) for the end user's own message. It never relaxes detection - identical content scores identically whatever origin it claims. It can, opt-in, tighten the *policy* thresholds applied to untrusted origins (see [Source-aware policy posture](#source-aware-policy-posture)); off by default.
+**input_source** is the trust-boundary provenance of `input`: where the text came from. Use `tool_output`, `retrieved_document`, or `external_content` for content an agent pulled in (the indirect prompt-injection surface); `agent_tool_call` for arguments a model composed for a tool invocation; `user_prompt` (the default) for the end user's own message. It never relaxes detection - identical content scores identically whatever origin it claims. It can, opt-in, tighten the *policy* thresholds applied to untrusted origins (see [Source-aware policy posture](#source-aware-policy-posture)); off by default.
 
 **session_id / turn_index / run_id** are optional correlation identifiers, persisted on the audit record. `run_id` groups one agent execution; its turns are returned as a timeline by `GET /v1/agent-runs/{run_id}`.
 
@@ -827,7 +827,7 @@ amplify throughput past the per-minute limit. Item count is capped by
   "detection_mode": "fast | full  (default: fast)",
   "items": [
     { "input": "string - required, 1-8000 chars",
-      "input_source": "user_prompt (default) | tool_output | retrieved_document | external_content",
+      "input_source": "user_prompt (default) | tool_output | retrieved_document | external_content | agent_tool_call",
       "id": "string - optional, echoed back on the matching result" }
   ]
 }

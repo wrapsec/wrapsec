@@ -310,6 +310,7 @@ function validateTurnIndex(value: number | undefined): number | undefined {
 
 const VALID_INPUT_SOURCES = [
   "user_prompt", "tool_output", "retrieved_document", "external_content",
+  "agent_tool_call",
 ] as const
 
 function validateInputSource(value: string): string {

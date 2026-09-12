@@ -190,7 +190,8 @@ class Settings(BaseSettings):
         default_factory=lambda: ["user_prompt"]
     )
     untrusted_input_sources:    list[str] = Field(
-        default_factory=lambda: ["tool_output", "retrieved_document", "external_content"]
+        default_factory=lambda: ["tool_output", "retrieved_document",
+                                 "external_content", "agent_tool_call"]
     )
     # A source in neither list resolves to the "unknown" tier. By default
     # unknown gets BASE posture (no tightening) so a newly introduced source

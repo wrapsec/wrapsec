@@ -48,11 +48,12 @@ export const CONTENT_SOURCE_LABELS: Record<string, string> = {
   retrieved_document: "Retrieved Document",
   tool_output:        "Tool Output",
   external_content:   "External Content",
+  agent_tool_call:    "Agent Tool Call",
 }
 
 const TRUSTED_CONTENT_SOURCES   = new Set(["user_prompt"])
 const UNTRUSTED_CONTENT_SOURCES = new Set([
-  "tool_output", "retrieved_document", "external_content",
+  "tool_output", "retrieved_document", "external_content", "agent_tool_call",
 ])
 
 /** Human label for an input_source; title-cases unknown values as a fallback. */

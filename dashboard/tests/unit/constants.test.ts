@@ -9,6 +9,7 @@ describe("contentSourceLabel", () => {
     expect(contentSourceLabel("user_prompt")).toBe("User Prompt")
     expect(contentSourceLabel("retrieved_document")).toBe("Retrieved Document")
     expect(contentSourceLabel("tool_output")).toBe("Tool Output")
+    expect(contentSourceLabel("agent_tool_call")).toBe("Agent Tool Call")
   })
 
   it("defaults a null/undefined source to User Prompt", () => {
@@ -31,6 +32,13 @@ describe("contentSourceTier (trust classification)", () => {
     expect(contentSourceTier("tool_output")).toBe("untrusted")
     expect(contentSourceTier("retrieved_document")).toBe("untrusted")
     expect(contentSourceTier("external_content")).toBe("untrusted")
+  })
+
+  it("classifies agent-composed tool-call arguments as untrusted", () => {
+    // Mirrors the shipped backend default. A trusted classification here would
+    // render the gateway's argument scans as though they were user input.
+    expect(contentSourceTier("agent_tool_call")).toBe("untrusted")
+    expect(isUntrustedSource("agent_tool_call")).toBe(true)
   })
 
   it("classifies an unrecognized source as unknown (not silently trusted)", () => {

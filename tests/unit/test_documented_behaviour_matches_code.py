@@ -2,7 +2,7 @@
 # Copyright (c) 2026 WrapSec. All rights reserved.
 # WrapSec v1.0 | AI Security Gateway - https://wrapsec.com
 
-"""Fences for four places where the documentation described behaviour the code
+"""Fences for places where the documentation described behaviour the code
 did not have.
 
 A comment that is wrong about a security control is worse than no comment: it
@@ -206,4 +206,54 @@ def test_documented_output_reasons_are_the_ones_the_guard_emits():
     assert emitted == documented, (
         f"output guard emits {sorted(emitted)} but docs/api.md documents "
         f"{sorted(documented)}"
+    )
+
+
+# --------------------------------------------------------------------------
+# 8. the gateway's tool definitions are a startup snapshot, not a live read
+# --------------------------------------------------------------------------
+
+def test_the_gateway_does_not_re_read_downstream_definitions_when_listing():
+    """The documentation claims a snapshot; this asserts the wiring is one.
+
+    The gateway documents that downstream definitions are read once at connect
+    and that a later `tools/list` re-publishes the snapshot rather than
+    re-reading the server. That is a SECURITY claim -- it is why a downstream
+    server cannot swap a published definition after the fact -- so it is fenced
+    rather than trusted.
+
+    It also guards the other direction. The change-detection path compares
+    fingerprints, and the docs say plainly that it cannot fire with this wiring.
+    If someone adds a downstream re-read, that statement becomes false and this
+    test fails, which is the prompt to correct the documentation rather than
+    leave it describing the old shape.
+    """
+    import textwrap
+
+    from mcp_gateway.proxy import Gateway
+
+    tree = ast.parse(textwrap.dedent(inspect.getsource(Gateway.on_list_tools)))
+
+    reads = [
+        node for node in ast.walk(tree)
+        if isinstance(node, ast.Call)
+        and isinstance(node.func, ast.Attribute)
+        and node.func.attr == "list_tools"
+    ]
+    assert not reads, (
+        "on_list_tools now reads downstream tools. That makes the definition "
+        "snapshot documented in docs/mcp_gateway.md untrue, and it re-opens the "
+        "window where a downstream server can replace an already-published "
+        "definition. Update the documentation deliberately if this is intended."
+    )
+
+
+def test_downstream_definitions_are_read_exactly_once_at_connect():
+    """The snapshot is taken, and taken in the startup path."""
+    from mcp_gateway.proxy import Gateway
+
+    source = inspect.getsource(Gateway.connect_all)
+    assert "list_tools" in source, (
+        "connect_all no longer reads downstream tools; the snapshot the docs "
+        "describe is not being taken where they say it is"
     )

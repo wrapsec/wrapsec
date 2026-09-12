@@ -91,7 +91,8 @@ ERROR_SEVERITIES  = ["ERROR", "WARNING"]                     # errors.catalog, v
 DETECTION_MODES   = ["fast", "full"]                            # domain.enums.DetectionMode
 EXECUTION_MODES   = ["scan_only", "proxy"]                      # domain.enums.ExecutionMode
 INPUT_SOURCES     = ["user_prompt", "tool_output",              # domain.enums.InputSource
-                     "retrieved_document", "external_content"]
+                     "retrieved_document", "external_content",
+                     "agent_tool_call"]
 CONFIDENCE_BANDS  = ["HIGH", "MEDIUM", "LOW"]                   # engine.scoring.confidence
 PRIMARY_REASONS   = ["SYSTEM_ERROR", "PII_GUARDRAIL_BLOCK",     # engine.scoring.primary_reason
                      "PII_GUARDRAIL_SANITIZE", "TOXICITY_GUARDRAIL_BLOCK",

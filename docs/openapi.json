@@ -716,7 +716,8 @@
               "user_prompt",
               "tool_output",
               "retrieved_document",
-              "external_content"
+              "external_content",
+              "agent_tool_call"
             ],
             "title": "Input Source",
             "type": "string"
@@ -2186,12 +2187,13 @@
         "type": "object"
       },
       "InputSource": {
-        "description": "Trust-boundary provenance of the scanned input: where the text came from.\nuser_prompt is trusted-origin; the rest mark content an agent pulled in\n(tool results, retrieved documents, other external text) -- the primary\nindirect prompt-injection surface. Source never relaxes detection: identical\ncontent scores identically whatever origin it claims. It can, opt-in, tighten\nthe policy thresholds applied to untrusted origins (source-aware posture,\noff by default).",
+        "description": "Trust-boundary provenance of the scanned input: where the text came from.\nuser_prompt is trusted-origin; the rest mark content an agent pulled in\n(tool results, retrieved documents, other external text) -- the primary\nindirect prompt-injection surface. Source never relaxes detection: identical\ncontent scores identically whatever origin it claims. It can, opt-in, tighten\nthe policy thresholds applied to untrusted origins (source-aware posture,\noff by default).\n\nagent_tool_call is arguments a model composed for a tool invocation. It is\nuntrusted by default and deliberately NOT user_prompt: a human typed the\nlatter, whereas the former is text a model produced, and an injected\ninstruction becomes an ACTION at exactly this boundary -- the last gate\nbefore a side effect that may not be reversible.",
         "enum": [
           "user_prompt",
           "tool_output",
           "retrieved_document",
-          "external_content"
+          "external_content",
+          "agent_tool_call"
         ],
         "title": "InputSource",
         "type": "string"
@@ -4270,7 +4272,8 @@
                   "user_prompt",
                   "tool_output",
                   "retrieved_document",
-                  "external_content"
+                  "external_content",
+                  "agent_tool_call"
                 ],
                 "type": "string"
               },

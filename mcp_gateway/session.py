@@ -9,11 +9,17 @@ and call them. It makes no security decision. What it DOES do is refuse to open
 channels the gateway has not been built to inspect, because a channel that is
 open by default is a channel nobody decided to open.
 
-THREE REFUSALS ARE WIRED IN HERE, not bolted on later:
+THREE CHANNELS ARE HELD SHUT HERE, not bolted on later:
 
-1. `sampling_callback` -- on legacy protocol revisions a downstream server can
-   ask the client to run an inference. The gateway supplies a callback that
-   refuses, so the request is answered rather than served.
+1. `sampling_callback` is NOT supplied. On legacy protocol revisions a
+   downstream server can ask the client to run an inference, and the SDK
+   answers such a request by declining with an error. Installing a callback of
+   our own to decline would be worse than leaving it alone: the SDK ADVERTISES
+   the sampling capability to every downstream server whenever the callback
+   differs from its default, so a gateway that refuses sampling would first
+   have announced that it offers it. Not passing one keeps the capability
+   unadvertised and still declines -- the request is never served either way,
+   and this way it is not invited.
 
 2. `allow_input_required` stays at its default of False -- at protocol revision
    2026-07-28 the server-initiated channel is gone and the same asks arrive
@@ -74,8 +80,13 @@ class UnusableDownstreamResponse(RuntimeError):
 class UnsupportedDownstreamRequest(RuntimeError):
     """The downstream server asked for something V1 refuses to serve.
 
-    Covers both sampling channels. Raised rather than returned so no caller can
-    mistake it for a result.
+    Covers the ask channels that surface as a failed tool CALL: an
+    input-required result and a claimed extension result. A legacy `sampling/*`
+    request does not reach here -- it is a separate server-initiated request
+    that the SDK declines on its own, without the capability ever having been
+    advertised.
+
+    Raised rather than returned so no caller can mistake it for a result.
     """
 
 
@@ -89,18 +100,6 @@ class DownstreamServer:
     @property
     def name(self) -> str:
         return self.config.name
-
-
-async def _refuse_sampling(*args: Any, **kwargs: Any) -> Any:
-    """Answer a legacy `sampling/*` request with a refusal.
-
-    V1 does not inspect sampling, so it does not serve it. The alternative --
-    forwarding to the agent's model -- would hand a downstream server a way to
-    run inference with content the gateway never scanned.
-    """
-    raise UnsupportedDownstreamRequest(
-        "sampling is not available through this gateway"
-    )
 
 
 class DownstreamPool:
@@ -128,8 +127,10 @@ class DownstreamPool:
 
         try:
             read, write = await self._stack.enter_async_context(stdio_client(params))
+            # No sampling_callback. See the note at the top of this module:
+            # supplying one is what makes the SDK advertise the capability.
             session = await self._stack.enter_async_context(
-                ClientSession(read, write, sampling_callback=_refuse_sampling)
+                ClientSession(read, write)
             )
             await session.initialize()
         except Exception as exc:
@@ -162,18 +163,36 @@ class DownstreamPool:
     ) -> Any:
         """Invoke a tool with the name the downstream server published.
 
-        `allow_input_required` is left at its default. The SDK then raises when a
-        server returns an `InputRequiredResult`, and that is converted here into
-        the same refusal as a legacy sampling request: a downstream server must
-        not reach the agent through a channel V1 does not scan.
+        BOUNDED, and every way the call can fail is classified rather than left
+        to escape:
+
+          * the answer is a shape the client will not accept;
+          * the bound elapses without an answer;
+          * the answer claims a protocol extension this gateway has no handler
+            for;
+          * the answer asks the client for input.
+
+        `allow_input_required` and `allow_claimed` are both left at their
+        defaults, so the SDK raises on the last two rather than returning them,
+        and each is converted here into a refusal: a downstream server must not
+        reach the agent through a channel this build does not scan.
         """
         # Imported here rather than at module scope: this package stays importable
         # without the MCP package installed, so the enforcement code can be tested
         # without it.
         from mcp.client.extension import UnexpectedClaimedResult
+        from mcp.shared.exceptions import MCPError
+        from mcp.types import REQUEST_TIMEOUT
 
         try:
-            return await server.session.call_tool(tool_name, arguments or {})
+            return await server.session.call_tool(
+                tool_name, arguments or {},
+                # BOUNDED. Without this a server that accepts the call and never
+                # answers hangs the request for the life of the process. The SDK
+                # sends the peer a cancellation when the bound elapses, so the
+                # downstream is told to stop rather than left working.
+                read_timeout_seconds = server.config.call_timeout_s,
+            )
         except ValidationError as exc:
             # The server answered with a shape the client will not accept. On
             # this build that includes an input-required result, which the
@@ -188,6 +207,23 @@ class DownstreamPool:
             )
             raise UnusableDownstreamResponse(
                 "the tool returned a response this gateway could not use"
+            ) from exc
+        except MCPError as exc:
+            if exc.code != REQUEST_TIMEOUT:
+                # Some other protocol-level error. Not classified here; the call
+                # handler refuses it like any other failed call.
+                raise
+            # The bound elapsed. Reported as unavailable because that is what is
+            # known: the call was sent and no answer came back. The call is NOT
+            # retried -- a hung server would hang the retry too, and the refusal
+            # contract tells the agent not to retry either.
+            logger.warning(
+                "downstream server %s did not answer tool %s within %.1fs; refusing",
+                server.name, tool_name, server.config.call_timeout_s,
+            )
+            raise DownstreamUnavailable(
+                f"the tool did not respond within "
+                f"{server.config.call_timeout_s:g} seconds"
             ) from exc
         except UnexpectedClaimedResult as exc:
             # A third ask channel, and the one with no message to match on: the

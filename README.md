@@ -110,7 +110,7 @@ These figures are for the full stack; the base install runs Tier-1 (TF-IDF) only
 
 WrapSec is built for agentic use, not just single prompts:
 
-- **Content provenance.** Tag each scan with `input_source` (`user_prompt`, `tool_output`, `retrieved_document`, `external_content`) so untrusted content an agent pulled in - the indirect prompt-injection surface - is labeled and audited. Scored the same whatever origin it claims; it can, opt-in, tighten **policy** thresholds for untrusted sources (source-aware posture, off by default).
+- **Content provenance.** Tag each scan with `input_source` (`user_prompt`, `tool_output`, `retrieved_document`, `external_content`, `agent_tool_call`) so untrusted content an agent pulled in - the indirect prompt-injection surface - is labeled and audited. Scored the same whatever origin it claims; it can, opt-in, tighten **policy** thresholds for untrusted sources (source-aware posture, off by default).
 - **RAG batch scanning.** `POST /v1/ai/scan-batch` scans a page of retrieved chunks in one call, each with its own `input_source`, returning per-item decisions plus a summary. SDK helpers `scan_documents()` / `scan_tool_outputs()` / `scan_external()` and `filter_safe()` (drop the poisoned chunks in one call) wrap it.
 - **Security by Source.** The `/sources` dashboard and `GET /v1/audit/by-source` break the threat picture down by provenance - volume, decision mix, threats per source - plus a Top Attack Origins leaderboard showing which knowledge sources deliver attacks.
 - **Security assessment.** Every scan returns a structured `assessment` (decision, risk, reasons, threats, and per-layer detector contributions) an agent can reason about, not just BLOCK/ALLOW.

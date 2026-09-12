@@ -1,4 +1,4 @@
-"""Phase 9 acceptance: the whole chain, then read the timeline back.
+"""Acceptance: the whole chain, then read the timeline back.
 
 MCP client -> gateway process -> downstream server, with a real API and a real
 database behind the gateway, then GET /v1/agent-runs/{run_id}.
@@ -16,6 +16,9 @@ import time
 from pathlib import Path
 
 ROOT   = Path("/home/kebi/projects/wrapsec")
+# Running a script puts its OWN directory on sys.path, not the working
+# directory, so the repo is not importable without this.
+sys.path.insert(0, str(ROOT))
 PY_    = str(ROOT / ".venv" / "bin" / "python")
 SP     = Path(os.environ.get("SP", "/tmp"))   # scratch for logs only
 API    = os.environ["API_BASE"]          # e.g. http://127.0.0.1:18000
@@ -122,10 +125,21 @@ def main() -> int:
     check(all(i.get("session_id") == session_id for i in items),
           "an item carried a different session_id")
 
-    args   = [i for i in items if i.get("input_source") == "user_prompt"]
-    result = [i for i in items if i.get("input_source") == "tool_output"]
+    # Arguments are declared as agent_tool_call, not user_prompt: they are text
+    # a model composed, and the source is what puts them in the untrusted tier.
+    # Asserted against the value the gateway module declares rather than a
+    # literal, so the two cannot drift apart silently.
+    from mcp_gateway.scanner import SOURCE_TOOL_ARGUMENT, SOURCE_TOOL_RESULT
+
+    args   = [i for i in items if i.get("input_source") == SOURCE_TOOL_ARGUMENT]
+    result = [i for i in items if i.get("input_source") == SOURCE_TOOL_RESULT]
+    check(SOURCE_TOOL_ARGUMENT == "agent_tool_call",
+          f"arguments are declared as {SOURCE_TOOL_ARGUMENT!r}")
     check(len(args) == 1, f"expected one argument decision, got {len(args)}")
     check(len(result) == 1, f"expected one result decision, got {len(result)}")
+    check(not [i for i in items if i.get("input_source") == "user_prompt"],
+          "a decision was recorded as user_prompt; nothing the gateway scans is "
+          "content a person typed")
     if not (args and result):
         return _report()
 

@@ -195,6 +195,7 @@ Each entry describes one downstream server.
 | `cwd` | no | Working directory for the child process |
 | `env` | no | Environment mapping for the child process |
 | `tools` | no | `allow` and `deny` lists |
+| `call_timeout_s` | no | Seconds one tool call may take; default `120` |
 
 Underscore is excluded from server names deliberately. The exposed name is
 `<server>__<tool>`, and a prefix that could itself contain `__` would make that
@@ -219,6 +220,15 @@ gateway scans with.
 
 Duplicate server names are refused: names are the routing namespace and two
 servers under one name would produce colliding exposed names.
+
+`call_timeout_s` bounds a single downstream tool call, in seconds. It is not
+opt-in: a server entry that says nothing gets the default of **120 seconds**.
+The default is deliberately generous, because a tool can legitimately be slow --
+fetching a page, reading a large file, waiting on a build -- and a short bound
+would turn working tools into refusals. What it exists to stop is the unbounded
+case: stdio is one client per process, so a server that accepts a call and never
+answers hangs that agent with nothing else to serve. Zero, a negative value, and
+a non-numeric value are all refused; there is no spelling for "wait forever".
 
 ### Policy entries
 
@@ -314,7 +324,7 @@ reason:
 | `prompts/*` | no | No handler registered |
 | `completion/*` | no | No handler registered |
 | `logging/*` | no | No handler registered |
-| `sampling/*` (server to client) | refused | Answered with a refusal; see the ask channels below |
+| `sampling/*` (server to client) | not advertised | The capability is never announced, and a request is declined; see the ask channels below |
 
 Resources and prompts are not proxied. Each is another channel by which server
 text reaches a model, and forwarding a channel that nothing inspects is not a
@@ -356,22 +366,48 @@ it cannot use. Nothing is said to the agent about why a tool is absent.
 Definitions are classified as external content when scanned, so a deployment
 running source-aware posture judges them more strictly than text a user typed.
 
-### 2. Tool-definition change detection
+### 2. The definition snapshot
 
-Each judged definition is fingerprinted: a SHA-256 over its name, title,
-description and full input schema, serialised with sorted keys so a server that
-merely reorders its output does not read as a change. The schema is covered as
-well as the prose, because a parameter that changes type, or a new required
-field, changes what the tool does even when every description is identical.
+**Downstream tool definitions are read once, when the gateway connects, and the
+agent-visible tool set comes from that snapshot for the life of the process.**
+A later `tools/list` from the agent re-publishes the snapshot; it does not
+re-read the downstream server.
 
-- An **unchanged** definition keeps its earlier verdict without being rescanned.
-  One withheld earlier stays withheld. Identical content cannot have a different
-  verdict, and an agent that lists tools every turn would otherwise pay a scan
-  per tool per turn in its own latency path.
-- A **changed** definition is recorded as a change and then re-inspected. Change
-  alone does not block: the record says the tool changed underneath an agent that
-  had already been told what it does, and the block, if any, comes from what the
-  new text says.
+That is the stronger property, and it is why this build does not re-list. A
+downstream server cannot replace an already-published definition after the fact:
+there is no later read for a swapped description to arrive on, so the rug-pull
+case is closed by construction rather than detected after it happens.
+
+It has costs, and they are real:
+
+- `notifications/tools/list_changed` is **not acted on**. A downstream server
+  announcing that its tools changed is ignored.
+- a tool **added** downstream after startup is not exposed until the gateway is
+  restarted;
+- a definition **changed** downstream after startup is neither re-read nor
+  re-scanned, and the agent continues to see the definition that was judged at
+  connect time.
+
+Restarting the gateway is what picks up any downstream change.
+
+Each snapshotted definition is also fingerprinted: a SHA-256 over its name,
+title, description and full input schema, serialised with sorted keys so a
+server that merely reorders its output does not read as a change. The schema is
+covered as well as the prose, because a parameter that changes type, or a new
+required field, changes what the tool does even when every description is
+identical.
+
+The fingerprint serves two purposes today, and a third only if dynamic
+re-listing is ever added:
+
+- an **unchanged** definition keeps its earlier verdict without being rescanned,
+  so an agent that lists tools every turn does not pay a scan per tool per turn
+  in its own latency path;
+- a definition **withheld** earlier stays withheld, without being sent again;
+- the change-comparison path exists and is tested, but **with the current wiring
+  it does not fire**, because the definitions being compared come from the same
+  snapshot every time. It is integrity and future-proofing, not a runtime
+  detector. Do not read it as one.
 
 Fingerprints are per gateway process, which is per agent connection. They
 describe what **this** agent was told and are not shared with a connection that
@@ -398,8 +434,17 @@ dictionary **key**. Serialising sends structure to the detector as well, which i
 noise rather than signal, and that cost is accepted for coverage that has no gaps
 to reason about.
 
-Arguments are classified as user prompt when scanned, because they originate
-with the agent acting for the user rather than with a downstream server.
+Arguments are classified as **agent tool call** when scanned, and that source is
+untrusted by default. They are deliberately not classified as a user prompt: a
+person typed a user prompt, whereas arguments are text a model composed, and
+this is the last boundary before a side effect that may not be reversible. The
+chain the classification is for is a poisoned tool result instructing the agent
+to call a tool with attacker-chosen arguments -- the result scan may catch the
+instruction, but the arguments are where it becomes an action.
+
+The practical effect: a deployment that sets an untrusted threshold delta now
+tightens all three gateway boundaries, rather than the two either side of this
+one.
 
 A sanitize verdict on arguments is treated as allow. Rewriting what the agent
 asked for would send the downstream server a call the agent did not make, and
@@ -447,8 +492,12 @@ All are refused, because this version inspects none of them, and forwarding
 would hand a downstream server a way to reach the agent with content the gateway
 never scanned.
 
-- **Legacy sampling.** The gateway supplies a callback that refuses, so the
-  request is answered rather than served.
+- **Legacy sampling.** The gateway advertises no sampling capability at all, so
+  a downstream server is never told the channel is available; a request sent
+  anyway is declined with a protocol error. The gateway deliberately installs no
+  refusing handler of its own, because supplying one is what makes the client
+  announce that sampling is on offer -- refusing a request you first invited is
+  strictly worse than never inviting it.
 - **The modern replacement**, in which the same ask arrives inside a tool
   result. The SDK guard that rejects it is left at its secure default, and the
   resulting error is converted into a refusal.
@@ -458,7 +507,8 @@ never scanned.
   to be judged. The SDK guard that rejects it is likewise left at its secure
   default, and the error becomes a refusal.
 
-Both SDK guard defaults are verified at startup, not assumed. A future SDK that
+The sampling posture and both remaining SDK guard defaults are verified at
+startup, not assumed. A future SDK that
 dropped either guard, or flipped either default to permissive, would return what
 it currently refuses, with no scanning behind it and no other code change to
 notice. The startup probe refuses such a package.
@@ -491,9 +541,13 @@ publishes no tools and forwards no results.** Availability is traded for the
 guarantee that unjudged content never reaches the agent.
 
 The same rule covers the downstream side of a call. A server that answers with
-a protocol-level error, closes the stream mid-call, or dies outright produces no
-result to judge, so the call is refused rather than surfaced to the agent as a
-transport fault. **No failure inside the call path reaches the agent as a
+a protocol-level error, closes the stream mid-call, dies outright, or simply
+never answers produces no result to judge, so the call is refused rather than
+surfaced to the agent as a transport fault. A call that exceeds its
+`call_timeout_s` is refused the same way and is **not retried**: a retry into an
+unresponsive tool would hang again, multiplying the outage being contained. The
+downstream server is sent a cancellation so it stops working on the abandoned
+call, and the connection stays usable for the agent's next call. **No failure inside the call path reaches the agent as a
 protocol error**, because a client handed one commonly retries, and a retry loop
 against a security control is indistinguishable from an attack on it.
 
@@ -653,9 +707,19 @@ cannot compensate for.
   are forwarded as they arrived. They are not judged, and that is a limit of
   this version rather than a statement that they are safe. Binary content inside
   a result that is blocked for other reasons is refused along with it.
-- **Definition-change events are not yet in the server-side audit.** A change is
-  logged and held in the process, but it is not persisted to the audit trail,
-  so it does not survive the process and cannot be queried through the API.
+- **Tool definitions are a startup snapshot.** Downstream additions and changes
+  after connect are not picked up, and `tools/list_changed` is ignored; a
+  restart is what refreshes them. Runtime change detection is not wired into
+  the listing path. See "The definition snapshot" above for why that trade is
+  deliberate.
+- **Definition-change events are not in the server-side audit.** Where a change
+  is recorded at all it is held in the process and logged, never persisted, so
+  it does not survive the process and cannot be queried through the API.
+- **Refusals that issue no scan are not in the server-side audit either.** A
+  policy denial, an over-size block, an unresolved tool, and a refusal caused by
+  the detection API being unreachable are recorded in the gateway's own log
+  only. The run timeline shows the scans the gateway issued, so it will not show
+  these.
 - **One agent per process.** The stdio transport permits a single client, so
   concurrency means more gateway processes. There is no shared state between
   them, including the definition fingerprints.

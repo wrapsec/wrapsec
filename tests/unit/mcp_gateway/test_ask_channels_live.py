@@ -25,7 +25,7 @@ from mcp import types
 from mcp_gateway.config import GatewayConfig, ServerConfig
 from mcp_gateway.interceptors.base import PassThrough
 from mcp_gateway.proxy import Gateway
-from mcp_gateway.session import DownstreamPool, DownstreamServer, _refuse_sampling
+from mcp_gateway.session import DownstreamPool, DownstreamServer
 
 _ROOT    = Path(__file__).resolve().parents[3]
 _PY      = str(_ROOT / ".venv" / "bin" / "python")
@@ -48,7 +48,8 @@ async def _call_through_gateway(mode: str):
     params = StdioServerParameters(command=_PY, args=[_SERVERS, mode])
     async with (
         stdio_client(params) as (read, write),
-        ClientSession(read, write, sampling_callback=_refuse_sampling) as session,
+        # No sampling_callback, exactly as DownstreamPool.connect builds it.
+        ClientSession(read, write) as session,
     ):
         await session.initialize()
         config  = GatewayConfig(servers=(ServerConfig(name="x", command=("e",)),))

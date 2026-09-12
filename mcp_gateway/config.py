@@ -36,6 +36,18 @@ _SERVER_NAME = re.compile(r"^[A-Za-z0-9.-]{1,64}$")
 # The separator between the configured server name and the downstream tool name.
 NAMESPACE_SEPARATOR = "__"
 
+# How long one downstream tools/call may take before the gateway gives up on it.
+#
+# CONSERVATIVE ON PURPOSE. A tool can legitimately be slow -- fetching a page,
+# reading a large file, waiting on a build -- and a short bound would turn
+# working tools into refusals, which is a denial of service the gateway would be
+# inflicting on the agent it protects. What this exists to stop is the UNBOUNDED
+# case: a downstream server that accepts a call and never answers hangs that
+# agent's request forever, because stdio is one client per process and there is
+# nothing else to serve. Two minutes is long enough for the slow-but-working
+# case and finite for the hung one. Seconds.
+DEFAULT_CALL_TIMEOUT_S = 120.0
+
 # SEP-986 bounds the composed name. The MCP package does not ENFORCE this on
 # names it receives, but a name the gateway PUBLISHES should conform.
 MAX_TOOL_NAME_LENGTH = 128
@@ -62,11 +74,12 @@ class ToolPolicy:
 class ServerConfig:
     """One downstream MCP server, as the operator declared it."""
 
-    name:    str
-    command: tuple[str, ...]
-    env:     dict[str, str] = field(default_factory=dict)
-    cwd:     str | None     = None
-    tools:   ToolPolicy     = field(default_factory=ToolPolicy)
+    name:            str
+    command:         tuple[str, ...]
+    env:             dict[str, str] = field(default_factory=dict)
+    cwd:             str | None     = None
+    tools:           ToolPolicy     = field(default_factory=ToolPolicy)
+    call_timeout_s:  float          = DEFAULT_CALL_TIMEOUT_S
 
     def __post_init__(self) -> None:
         if not _SERVER_NAME.match(self.name):
@@ -78,6 +91,13 @@ class ServerConfig:
             )
         if not self.command:
             raise ConfigError(f"server {self.name!r} has no command to launch")
+        if self.call_timeout_s <= 0:
+            raise ConfigError(
+                f"server {self.name!r} has call_timeout_s={self.call_timeout_s}; it "
+                f"must be a positive number of seconds. Zero or negative would mean "
+                f"no call could ever complete, and there is no spelling here for "
+                f"'wait forever' -- an unbounded call is the condition this bounds."
+            )
 
 
 @dataclass(frozen=True)
@@ -357,7 +377,8 @@ def _server_from(entry: object, index: int, file: Path) -> ServerConfig:
     if not isinstance(entry, dict):
         raise ConfigError(f"{where} must be a mapping, got {type(entry).__name__}")
 
-    allowed = {"name", "transport", "command", "env", "cwd", "tools"}
+    allowed = {"name", "transport", "command", "env", "cwd", "tools",
+               "call_timeout_s"}
     unknown = sorted(set(entry) - allowed)
     if unknown:
         raise ConfigError(f"{where} has unsupported key(s): {', '.join(unknown)}")
@@ -391,12 +412,20 @@ def _server_from(entry: object, index: int, file: Path) -> ServerConfig:
     if cwd is not None and not isinstance(cwd, str):
         raise ConfigError(f"{where} 'cwd' must be a string")
 
+    timeout_raw = entry.get("call_timeout_s", DEFAULT_CALL_TIMEOUT_S)
+    if isinstance(timeout_raw, bool) or not isinstance(timeout_raw, (int, float)):
+        raise ConfigError(
+            f"{where} 'call_timeout_s' must be a number of seconds, got "
+            f"{type(timeout_raw).__name__}"
+        )
+
     return ServerConfig(
-        name    = name,
-        command = tuple(command),
-        env     = dict(env_raw),
-        cwd     = cwd,
-        tools   = _policy_from(entry.get("tools"), where),
+        name           = name,
+        command        = tuple(command),
+        env            = dict(env_raw),
+        cwd            = cwd,
+        tools          = _policy_from(entry.get("tools"), where),
+        call_timeout_s = float(timeout_raw),
     )
 
 

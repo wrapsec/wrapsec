@@ -1644,7 +1644,8 @@ _VOCAB_FIELDS = {
     "policy_source":     lambda: {"system_default", "department_override",
                                   "application_override"},
     "input_source":      lambda: {"user_prompt", "tool_output",
-                                  "retrieved_document", "external_content"},
+                                  "retrieved_document", "external_content",
+                                  "agent_tool_call"},
     "tier":              lambda: {"trusted", "untrusted", "unknown"},
 }
 
