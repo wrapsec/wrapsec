@@ -31,6 +31,7 @@ thread.
 import asyncio
 import json
 import uuid
+from datetime import datetime, timezone
 from pathlib import Path
 
 import pytest
@@ -580,3 +581,193 @@ async def test_the_conversion_is_idempotent_in_both_directions(migration_db):
     await _downgrade(migration_db, "0023_auth_event_key_id")
     await _downgrade(migration_db, "0023_auth_event_key_id")
     assert await _ip_allowlist_type(migration_db) == "json"
+
+
+# ── 0025: a data migration, tested with data present ─────────────────────────
+#
+# Every test above upgrades into an EMPTY database, which is the one condition
+# under which a backfill does nothing. 0025 shipped broken for exactly that
+# reason: its backfill writes chain_seq to every chained row, 0004 installed a
+# trigger that refuses any update to a chained row, and with no rows present the
+# two never met. On a real deployment the migration aborted and the API
+# crash-looped on startup.
+#
+# So these stop one revision short, put rows in, and then migrate.
+
+_PRE   = "0024_ip_allowlist_jsonb"
+_UNDER = "0025_audit_chain_sequence"
+
+_AUDIT_INSERT = """
+    INSERT INTO audit_logs (
+        id, tenant_id, trace_id, decision, risk_score, threats, input_hash,
+        detection_mode, execution_mode, llm_invoked, latency_ms,
+        attribution_verified, created_at, record_hash
+    ) VALUES (
+        :id, :tenant_id, :trace_id, 'ALLOW', 0.1, '[]'::jsonb, 'h',
+        'fast', 'scan_only', false, 1.0, false, :created_at, :record_hash
+    )
+"""
+
+def _at(second: int) -> datetime:
+    """An aware UTC instant. asyncpg binds timestamptz from a datetime, never a
+    string, and the column is timestamptz end to end."""
+    return datetime(2026, 1, 1, 10, 0, second, tzinfo=timezone.utc)
+
+
+# Two tenants so the per-tenant partitioning is actually exercised, rows out of
+# insertion order by timestamp so the ordering is not accidentally satisfied,
+# and one unchained row, which must be left alone.
+_ROWS = [
+    # (tenant, trace, created_at, record_hash, expected chain_seq)
+    ("tenant-a", "req_a2",   _at(2), "hash-a2", 2),
+    ("tenant-a", "req_a1",   _at(1), "hash-a1", 1),
+    ("tenant-a", "req_a3",   _at(3), "hash-a3", 3),
+    ("tenant-b", "req_b2",   _at(2), "hash-b2", 2),
+    ("tenant-b", "req_b1",   _at(1), "hash-b1", 1),
+    ("tenant-a", "req_none", _at(4), None,      None),
+]
+
+
+async def _seed_audit_rows(url: str) -> dict[str, uuid.UUID]:
+    """Write the rows at 0024, before chain_seq exists."""
+    ids: dict[str, uuid.UUID] = {}
+    engine = create_async_engine(url, poolclass=NullPool)
+    try:
+        async with engine.begin() as conn:
+            for tenant, trace, created, record_hash, _ in _ROWS:
+                ids[trace] = uuid.uuid4()
+                await conn.execute(text(_AUDIT_INSERT), {
+                    "id": ids[trace], "tenant_id": tenant, "trace_id": trace,
+                    "created_at": created, "record_hash": record_hash,
+                })
+    finally:
+        await engine.dispose()
+    return ids
+
+
+@pytest.mark.asyncio
+async def test_the_chain_seq_backfill_runs_on_a_populated_audit_table(migration_db):
+    """The regression. Before the fix this raised and the chain never advanced.
+
+    The failure was not subtle -- the migration aborted outright -- but it was
+    invisible, because nothing ever ran it against a row it had to touch.
+    """
+    await _upgrade(migration_db, _PRE)
+    await _seed_audit_rows(migration_db)
+
+    await _upgrade(migration_db, _UNDER)          # must not raise
+
+    rows = await _fetch(migration_db, """
+        SELECT tenant_id, trace_id, chain_seq
+          FROM audit_logs
+         ORDER BY tenant_id, chain_seq NULLS LAST
+    """)
+    got = {r.trace_id: r.chain_seq for r in rows}
+
+    for _tenant, trace, _created, _hash, expected in _ROWS:
+        assert got[trace] == expected, (
+            f"{trace} was numbered {got[trace]}, expected {expected}"
+        )
+
+
+@pytest.mark.asyncio
+async def test_the_backfill_numbers_each_tenant_densely_from_one(migration_db):
+    """Per tenant, in created_at order, with no gaps.
+
+    A gap would be indistinguishable from a row removed by retention, and the
+    verifier reads this sequence to decide whether a chain is intact.
+    """
+    await _upgrade(migration_db, _PRE)
+    await _seed_audit_rows(migration_db)
+    await _upgrade(migration_db, _UNDER)
+
+    for tenant, expected_count in (("tenant-a", 3), ("tenant-b", 2)):
+        rows = await _fetch(migration_db, """
+            SELECT chain_seq FROM audit_logs
+             WHERE tenant_id = :t AND record_hash IS NOT NULL
+             ORDER BY chain_seq
+        """, t=tenant)
+        assert [r.chain_seq for r in rows] == list(range(1, expected_count + 1)), (
+            f"{tenant} is not numbered 1..{expected_count} without gaps"
+        )
+
+
+@pytest.mark.asyncio
+async def test_the_backfill_leaves_every_stored_hash_byte_for_byte(migration_db):
+    """The whole table is tamper-evidence; a backfill that rewrote a hash would
+    destroy the only evidence those rows carry.
+
+    Safe because chain_seq is not hashed under format 1 -- only
+    CANONICAL_FIELDS_V2 includes it -- and this asserts that rather than assuming
+    it.
+    """
+    await _upgrade(migration_db, _PRE)
+    await _seed_audit_rows(migration_db)
+
+    before = {
+        r.trace_id: r.record_hash
+        for r in await _fetch(migration_db, "SELECT trace_id, record_hash FROM audit_logs")
+    }
+
+    await _upgrade(migration_db, _UNDER)
+
+    after = {
+        r.trace_id: (r.record_hash, r.chain_format)
+        for r in await _fetch(
+            migration_db, "SELECT trace_id, record_hash, chain_format FROM audit_logs")
+    }
+
+    for trace, stored in before.items():
+        assert after[trace][0] == stored, f"{trace} had its record_hash rewritten"
+        assert after[trace][1] == 1, (
+            f"{trace} was moved to format {after[trace][1]}; rows hashed without "
+            f"chain_seq must stay verifiable under the field set they were "
+            f"hashed with"
+        )
+
+
+@pytest.mark.asyncio
+async def test_an_unchained_row_is_not_given_a_position(migration_db):
+    """A row written before the chain existed belongs to no chain, and numbering
+    it would say otherwise."""
+    await _upgrade(migration_db, _PRE)
+    await _seed_audit_rows(migration_db)
+    await _upgrade(migration_db, _UNDER)
+
+    rows = await _fetch(migration_db, """
+        SELECT chain_seq FROM audit_logs WHERE record_hash IS NULL
+    """)
+    assert [r.chain_seq for r in rows] == [None]
+
+
+@pytest.mark.asyncio
+async def test_the_immutability_trigger_is_re_armed_after_the_backfill(migration_db):
+    """The migration suspends the trigger to do its work. If it ever failed to
+    put it back, the audit table would be silently writable from then on and the
+    next thing to notice would be a trail nobody could trust."""
+    from sqlalchemy.exc import DBAPIError
+
+    await _upgrade(migration_db, _PRE)
+    ids = await _seed_audit_rows(migration_db)
+    await _upgrade(migration_db, _UNDER)
+
+    # Cast in SQL: pg_trigger.tgenabled is the "char" type, which asyncpg hands
+    # back as bytes (b"O"), so comparing it to a str silently never matches.
+    enabled = await _fetch(migration_db, """
+        SELECT tgenabled::text AS enabled FROM pg_trigger
+         WHERE tgrelid = 'audit_logs'::regclass
+           AND tgname  = 'audit_logs_no_update_on_chained'
+    """)
+    assert [r.enabled for r in enabled] == ["O"], "the trigger was left disabled"
+
+    engine = create_async_engine(migration_db, poolclass=NullPool)
+    try:
+        with pytest.raises(DBAPIError) as caught:
+            async with engine.begin() as conn:
+                await conn.execute(
+                    text("UPDATE audit_logs SET decision = 'BLOCK' WHERE id = :id"),
+                    {"id": ids["req_a1"]},
+                )
+        assert "chain-locked" in str(caught.value)
+    finally:
+        await engine.dispose()
