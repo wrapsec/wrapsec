@@ -16,6 +16,12 @@ one API call per result rather than one per block, which matters in the agent's
 own latency path. Joining with newlines means an injection cannot be assembled
 across a boundary that did not exist in the original.
 
+WHAT IS FORWARDED IS WHAT WAS JUDGED. A result carries server-authored fields
+that no detector sees -- `_meta` on the result, `_meta` on each block, and each
+block's `annotations`. They are removed before the result is delivered, so a
+server cannot route a payload around the scan by putting it somewhere the scan
+does not look. See `mcp_compat.without_unscanned_metadata`.
+
 A BLOCKED RESULT IS REFUSED WHOLE. Blocks arrive together from one call the
 gateway has just judged malicious; forwarding the image while refusing the text
 hands the agent half an attacker-controlled payload. Non-text content in a
@@ -28,7 +34,7 @@ import logging
 from typing import Any
 
 from mcp_gateway.decision import Refusal
-from mcp_gateway.mcp_compat import text_parts_of
+from mcp_gateway.mcp_compat import text_parts_of, without_unscanned_metadata
 from mcp_gateway.scanner import SOURCE_TOOL_RESULT, ScannerProtocol
 
 logger = logging.getLogger(__name__)
@@ -47,15 +53,19 @@ class ToolResultScanner:
     ) -> tuple[Any | None, Refusal | None]:
         """Return the result to deliver, or (None, refusal) to withhold it."""
         if not self._enabled:
-            return result, None
+            # An operator may switch result scanning off. That is a decision
+            # about the CONTENT; it is not a decision to forward fields nothing
+            # inspects in any configuration, so the metadata boundary still
+            # applies.
+            return without_unscanned_metadata(result), None
 
         parts = text_parts_of(result)
         if not parts:
             # Nothing readable to judge. The result may still carry binary
-            # content, which this build does not scan; it is forwarded as it
-            # arrived rather than refused, and that limit is recorded rather than
-            # presented as a clean verdict.
-            return result, None
+            # content, which this build does not scan; it is forwarded rather
+            # than refused, and that limit is recorded rather than presented as
+            # a clean verdict. Its metadata still does not cross.
+            return without_unscanned_metadata(result), None
 
         verdict = await self._scanner.scan(
             "\n".join(parts), source=SOURCE_TOOL_RESULT, trace_id=trace_id,
@@ -81,7 +91,10 @@ class ToolResultScanner:
             )
             return _sanitized_result(result, verdict.sanitized), None
 
-        return result, None
+        # Allowed, and this is where the result reaches the agent. It is the
+        # inspected content that is forwarded, not the object as it arrived:
+        # everything the detector was not shown is removed first.
+        return without_unscanned_metadata(result), None
 
 
 def _sanitized_result(original: Any, sanitized: str) -> Any:

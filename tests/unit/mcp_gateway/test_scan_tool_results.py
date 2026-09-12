@@ -226,13 +226,24 @@ async def test_the_error_flag_survives_sanitization():
 # ---------------------------------------------------------------------------
 
 @pytest.mark.asyncio
-async def test_a_clean_result_is_returned_untouched():
+async def test_a_clean_result_keeps_its_content_and_is_republished():
+    """Allowed content crosses unchanged, in a NEW object.
+
+    This used to assert object identity. It cannot any more: an allowed result
+    is re-published rather than passed through, so that the server-authored
+    fields no detector sees are removed on the way out. What must hold is that
+    the inspected content is unchanged and the downstream object is untouched.
+    """
     original = _result(_text("ordinary output"))
     delivered, refusal = await ToolResultScanner(_Scanner()).inspect(
         server_name="f", result=original, trace_id="t",
     )
 
-    assert refusal is None and delivered is original
+    assert refusal is None
+    assert [b.text for b in delivered.content] == ["ordinary output"]
+    assert delivered.is_error == original.is_error
+    assert delivered is not original, "the result must be republished, not passed through"
+    assert original.content[0].text == "ordinary output", "the downstream object was mutated"
 
 
 @pytest.mark.asyncio
@@ -388,5 +399,7 @@ async def test_absent_structured_content_changes_nothing():
         server_name="f", result=original, trace_id="t",
     )
 
-    assert delivered is original and refusal is None
+    assert refusal is None
+    assert [b.text for b in delivered.content] == ["ordinary"]
+    assert delivered.structured_content is None
     assert scanner.seen[0][0] == "ordinary", "something extra was sent to the detector"

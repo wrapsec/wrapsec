@@ -476,6 +476,38 @@ Every readable part of a result is judged together as one block:
 Parts are joined with newlines, so a payload split across two blocks is caught
 and one result costs one scan rather than one per block.
 
+**What is forwarded is what was judged.** An allowed result is re-published
+rather than passed through as it arrived. A tool result carries server-authored
+fields that no detector is shown, and those are removed before it reaches the
+agent:
+
+| Field | Treatment |
+|---|---|
+| `_meta` on the result | dropped |
+| `_meta` on each content block | dropped |
+| `annotations` on each content block | dropped |
+| `icons` on a resource link | dropped |
+| `_meta` on an embedded resource's nested resource | dropped |
+| text, structured content, resource-link `uri` / `name` / `title` / `description`, embedded text and uri | scanned, and forwarded |
+| `type`, `mimeType`, `size`, image and audio bytes | functional, forwarded unchanged |
+| `isError` | forwarded unchanged |
+
+These fields are **not** claimed to be harmless. They are attacker-influenceable
+like everything else a downstream server sends, and the security property is
+simply that they do not cross the boundary: nothing uninspected reaches the
+agent. They are dropped rather than scanned because sending protocol bookkeeping
+to a prose detector and forwarding whatever it did not object to would widen what
+crosses in exchange for compatibility this build does not need.
+
+An embedded resource is handled one level down as well. The block carries its own
+metadata and the resource inside it carries a separate `_meta`; stripping only
+the outer one would leave the same bypass nested.
+
+**Do not rely on these fields surviving the gateway.** A client that needs a
+server's result annotations, icons or `_meta` will not receive them here. The
+downstream object itself is never modified -- a copy is forwarded -- so the
+audit record still describes what the server actually sent.
+
 A blocked result is refused **whole**. The blocks arrived together from one call
 the gateway has just judged malicious, and forwarding the image while refusing
 the text hands the agent half an attacker-controlled payload. A sanitized result
@@ -703,6 +735,10 @@ policy are the operator's job, not the gateway's.
 Stated plainly, because a limit an operator does not know about is a limit they
 cannot compensate for.
 
+- **Result metadata is dropped, not inspected.** Result and block `_meta`,
+  block annotations, resource-link icons and an embedded resource's nested
+  `_meta` do not cross the gateway. A client depending on any of them will not
+  see them.
 - **Binary payloads are not scanned.** Images, audio and blobs in a tool result
   are forwarded as they arrived. They are not judged, and that is a limit of
   this version rather than a statement that they are safe. Binary content inside

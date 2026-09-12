@@ -225,6 +225,71 @@ def text_parts_of(result: Any) -> tuple[str, ...]:
     return tuple(parts)
 
 
+def without_unscanned_metadata(result: Any) -> Any:
+    """The result with every field the gateway never inspects removed.
+
+    THE COUNTERPART TO `text_parts_of`. That function decides what is JUDGED;
+    this one decides what is FORWARDED, and the two must agree. A field the
+    detector never sees must not reach the agent, because the whole guarantee is
+    that content crossing this boundary has been inspected.
+
+    A tool result carries more than its content blocks. `_meta` on the result,
+    `_meta` on each block, and each block's `annotations` are all server-authored
+    and all attacker-influenceable, and none of them is scanned. A server that
+    put its payload there would have it delivered verbatim while the visible text
+    read as benign.
+
+    They are DROPPED rather than scanned. Scanning them would mean sending
+    protocol bookkeeping to a prose detector and forwarding whatever it did not
+    object to, which widens what crosses the boundary to buy compatibility this
+    build does not need. Dropping is the choice that cannot go wrong quietly.
+
+    The blocks themselves are preserved exactly, including types this build does
+    not read, so nothing about the result's shape changes beyond the removal.
+    Copies are made throughout: the object the downstream server handed over is
+    never altered, because it is still the subject of the audit record.
+    """
+    blocks = [
+        _stripped_block(block)
+        for block in (getattr(result, "content", None) or [])
+    ]
+    return result.model_copy(update={"content": blocks, "meta": None})
+
+
+# Fields a content block can carry that no detector is shown.
+#
+#   annotations  presentation hints, server-authored
+#   meta         free-form server-authored mapping
+#   icons        a list of server-chosen URLs. NOT prose, but a destination the
+#                client may render and a user may follow, which is the same
+#                reason a resource link's `uri` is judged rather than skipped --
+#                and unlike the uri, nothing judges these.
+#
+# Applied only where the model actually declares the field, so a block type that
+# does not have one is left untouched rather than given an attribute it never had.
+_UNSCANNED_BLOCK_FIELDS = ("annotations", "meta", "icons")
+
+
+def _stripped_block(block: Any) -> Any:
+    """One content block with everything unexamined removed.
+
+    An EMBEDDED RESOURCE nests one level deeper: the block carries its own
+    metadata and the resource inside it carries a separate `_meta` of its own.
+    Stripping only the outer one leaves a payload reachable in the inner, which
+    is the same bypass one level down.
+    """
+    declared = type(block).model_fields
+    update: dict[str, Any] = {
+        name: None for name in _UNSCANNED_BLOCK_FIELDS if name in declared
+    }
+
+    resource = getattr(block, "resource", None)
+    if resource is not None and "meta" in type(resource).model_fields:
+        update["resource"] = resource.model_copy(update={"meta": None})
+
+    return block.model_copy(update=update)
+
+
 def structured_text(structured: Any) -> str:
     """`structured_content` rendered exactly as the MCP package renders it.
 
