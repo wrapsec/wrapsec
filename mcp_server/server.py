@@ -24,9 +24,21 @@ from wrapsec import Client
 
 from mcp_server.tool import run_scan
 
-# Enum surface for the tool's input schema; FastMCP derives the JSON Schema from
-# these type hints. Mirrors the server-side InputSource / SDK tool manifest.
-_InputSource = Literal["user_prompt", "tool_output", "retrieved_document", "external_content"]
+# Enum surface for the tool's input schema; the protocol SDK derives the JSON
+# Schema from these type hints.
+#
+# SPELLED OUT RATHER THAN DERIVED from domain.enums at import time, because this
+# module is the opt-in adapter and must stay importable without the application
+# package. The cost of writing it out is that it can drift, so a test asserts it
+# against the enum -- it already drifted once, when agent_tool_call was added to
+# the vocabulary and every consumer but this one was updated.
+_InputSource = Literal[
+    "user_prompt",
+    "tool_output",
+    "retrieved_document",
+    "external_content",
+    "agent_tool_call",
+]
 
 
 def build_server() -> MCPServer:

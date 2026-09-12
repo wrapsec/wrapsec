@@ -232,9 +232,12 @@ async def test_client_discovers_the_tool_and_its_schema():
         (b["enum"] for b in source.get("anyOf", []) if "enum" in b), None
     )
     assert enum is not None, f"input_source is not an enum: {source}"
-    assert set(enum) == {
-        "user_prompt", "tool_output", "retrieved_document", "external_content",
-    }
+    # Compared against the domain vocabulary rather than a copied list. A literal
+    # here is a second place to forget: when agent_tool_call was added, this test
+    # would have kept passing against the stale set it pinned.
+    from domain.enums import InputSource
+
+    assert set(enum) == {e.value for e in InputSource}
 
 
 # ── invocation over the wire ─────────────────────────────────────────────────
@@ -317,3 +320,27 @@ async def test_gateway_rejection_surfaces_as_a_tool_error():
 
     assert result.is_error is True
     assert len(gateway.requests) == 1  # it did try
+
+
+def test_the_tools_input_sources_are_the_whole_domain_vocabulary():
+    """The tool's declared sources must not drift from the enum behind them.
+
+    `_InputSource` is written out rather than derived from domain.enums, so this
+    adapter stays importable without the application package. That choice means
+    it CAN drift, and it did: `agent_tool_call` was added to the vocabulary and
+    every consumer was updated except this one, leaving an agent unable to
+    declare a source the API accepts.
+
+    Asserted against the enum rather than a copied list, so adding a value in one
+    place and not the other fails here instead of silently shrinking what an
+    agent may say about its own content.
+    """
+    from typing import get_args
+
+    from domain.enums import InputSource
+    from mcp_server.server import _InputSource
+
+    assert set(get_args(_InputSource)) == {e.value for e in InputSource}, (
+        "the wrapsec_scan tool's input_source values and domain.enums.InputSource "
+        "disagree; an agent can only declare what this Literal lists"
+    )
