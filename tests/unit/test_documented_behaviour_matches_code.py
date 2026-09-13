@@ -461,3 +461,73 @@ def test_the_documented_delivery_states_are_exactly_the_shipped_ones():
         f"the documented delivery states {sorted(listed)} are not the shipped ones "
         f"{sorted(s.value for s in EmailStatus)}"
     )
+
+
+# --------------------------------------------------------------------------
+# 13. the documented environment variables exist, and say the right default
+# --------------------------------------------------------------------------
+#
+# Settings are read by pydantic from the UPPERCASED FIELD NAME, and an env var
+# that matches no field is silently ignored -- no warning, no error. Five
+# documented names were in that state, including the token-lifetime and lockout
+# knobs an operator reaches for when hardening a deployment: setting them did
+# nothing and looked like it had worked.
+#
+# The default check is the same fence from the other side. It caught two rows
+# whose value had been inferred rather than read.
+
+_ENV_TABLE_START = "## Key Environment Variables"
+_ENV_TABLE_END   = "### Tuning `BATCH_CONCURRENCY`"
+
+
+def _documented_env_rows() -> list[tuple[str, str]]:
+    text = (_ROOT / "docs/developer_guide.md").read_text(encoding="utf-8")
+    start, end = text.index(_ENV_TABLE_START), text.index(_ENV_TABLE_END)
+    rows = re.findall(r'^\|\s*`([A-Z][A-Z0-9_]+)`\s*\|\s*([^|]*)\|', text[start:end], re.MULTILINE)
+    assert rows, "the environment variable table moved; update this fence"
+    return rows
+
+
+def test_every_documented_environment_variable_exists():
+    from config.settings import Settings
+
+    unknown = sorted(n for n, _ in _documented_env_rows() if n.lower() not in Settings.model_fields)
+    assert not unknown, (
+        f"these variables are documented but match no settings field, so setting "
+        f"them has no effect and fails silently: {unknown}"
+    )
+
+
+def test_documented_defaults_match_the_shipped_defaults():
+    """Only cells that state a bare literal are compared -- a cell carrying prose
+    (a required value shown as `-`, or an explanation) is not a claim about a
+    default and is left alone."""
+    from config.settings import Settings
+
+    def normalise(value: str) -> str:
+        value = value.strip().strip('`" ')
+        if value.lower() in ("true", "false"):
+            return value.lower()
+        number = float(value)
+        return str(int(number)) if number == int(number) else str(number)
+
+    wrong = []
+    for name, cell in _documented_env_rows():
+        field = Settings.model_fields.get(name.lower())
+        if field is None or field.default is None:
+            continue
+        if not re.fullmatch(r'\s*`[^`]+`\s*', cell):
+            continue                       # prose, not a default claim
+        try:
+            documented = normalise(cell)
+        except ValueError:
+            continue                       # a non-numeric literal, e.g. `masked`
+        shipped = str(field.default)
+        try:
+            shipped = normalise(shipped)
+        except ValueError:
+            continue
+        if documented != shipped:
+            wrong.append(f"{name}: documented {documented}, ships {shipped}")
+
+    assert not wrong, "documented defaults disagree with the code: " + "; ".join(wrong)

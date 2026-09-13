@@ -1016,21 +1016,21 @@ These rules must be followed in all new code. Violation creates real production 
 | Variable | Default | Description |
 |---|---|---|
 | `SECRET_KEY` | - | HMAC secret for JWT signing. **Startup guard rejects the example placeholder** - server will not start until set to a real value. Generate: `python -c "import secrets; print(secrets.token_hex(32))"` |
-| `ACCESS_TOKEN_EXPIRE_MINUTES` | `30` | JWT access token lifetime |
-| `REFRESH_TOKEN_EXPIRE_DAYS` | `30` | Refresh token lifetime |
+| `JWT_ACCESS_TOKEN_EXPIRE_MINUTES` | `30` | JWT access token lifetime |
+| `JWT_REFRESH_TOKEN_EXPIRE_DAYS` | `30` | Refresh token lifetime |
 | `ADMIN_API_KEY` | - | Master admin API key. **Startup guard rejects the example placeholder** - server will not start until set to a real value. Generate: `python -c "import secrets; print('wsk_admin_' + secrets.token_hex(24))"`. **Not subject to a source-network restriction**: those live on an `api_keys` row and this credential has none, so confine it at the network layer instead |
 | `ADMIN_EMAIL` | *(unset)* | Optional - if set alongside `ADMIN_PASSWORD`, bootstrap creates first admin on startup. Leave unset to use the dashboard `/setup` page instead |
 | `ADMIN_PASSWORD` | *(unset)* | Optional - see `ADMIN_EMAIL`. Must meet password strength requirements if set |
 | `TRUSTED_PROXY_IPS` | `""` (code default); `.env.example` ships `172.31.240.2`, the nginx fixed address on the compose network | Comma-separated IPs/CIDRs trusted to set `X-Forwarded-For`. Name the proxy only - keep it as narrow as possible, and do not list a whole container subnet, since anything on that network could then spoof a client address. A zero-prefix entry is ignored with a warning. Governs audit and auth-event attribution, API-key source restrictions, and the per-IP rate-limit bucket |
 | `METRICS_TOKEN` | `""` | If set, `GET /metrics` requires `Authorization: Bearer <token>`. Falls back to `ADMIN_API_KEY` if unset |
 | `DATA_STORAGE_MODE` | `masked` | `full` / `masked` / `none` - controls proxy text persistence |
-| `DATA_RETENTION_DAYS` | `30` | Audit log retention in days (min 7, max 3650) |
+| `AUDIT_RETENTION_DAYS` | `30` | Audit log retention in days (min 7, max 3650) |
 | `DATA_RETENTION_DAYS_PROXY` | `7` | Proxy interaction text retention in days |
 | `RETENTION_WORKER_ENABLED` | `true` | Enable/disable background retention worker |
 | `RETENTION_WORKER_HOUR` | `2` | UTC hour for daily cleanup |
 | `RETENTION_WORKER_MINUTE` | `0` | UTC minute for daily cleanup |
-| `LOCKOUT_MAX_ATTEMPTS` | `5` | Failed login attempts before lockout |
-| `LOCKOUT_DURATION_SECONDS` | `900` | Lockout duration (15 min) |
+| `AUTH_MAX_FAILED_ATTEMPTS` | `5` | Failed login attempts before lockout |
+| `AUTH_LOCKOUT_DURATION_SECONDS` | `900` | Lockout duration (15 min) |
 | `RATE_LIMIT_PER_MINUTE` | `60` | Global rate limit for live API keys. Also configurable via dashboard (DB-backed) |
 | `ADMIN_WRITE_RATE_LIMIT` | `20` | Per-user limit on admin write ops (user create/update/reset-password). DB-backed |
 | `AUDIT_EXPORT_RATE_LIMIT` | `5` | Per-caller limit on audit CSV export. DB-backed |
@@ -1044,6 +1044,17 @@ These rules must be followed in all new code. Violation creates real production 
 | `BATCH_CONCURRENCY` | `8` | Concurrent detector runs for multi-input scans, bounded **process-wide** and shared by every request in flight. Scoped to the worker process, so a multi-worker deployment permits this many per worker. See the tuning note below before changing it |
 | `MAX_SCAN_ALL_MESSAGES` | `10` | Eligible messages the proxy will scan in one request when scan-all is requested. Over this the request is rejected rather than partly scanned. Each scanned message costs a detection run, an audit-chain append against a per-tenant lock, and a rate-limit unit |
 | `SCAN_ASSISTANT_MESSAGES` | `false` | Whether the proxy inspects `assistant` turns as well as `user` turns. Assistant turns are accepted and forwarded either way; when disabled they are not inspected. Global, not per tenant |
+| `MAX_INPUT_CHARS` | `8000` | Longest input a live key may submit to a scan. Enforced as an estimated token bound on the request schema, so an over-long input is refused rather than truncated |
+| `TRIAL_MAX_INPUT_CHARS` | `500` | The same bound for trial keys |
+| `LLM_DETECTION_MAX_TOKENS` | `200` | Response cap for the LLM detector's own call. Bounds cost and latency of the semantic tier; unrelated to the proxy's `max_tokens` |
+| `RATE_LIMIT_PER_IP_PER_MINUTE` | `600` | Per-source-address bucket, charged on EVERY request in addition to the per-key bucket. Deliberately far above the per-key limit: it bounds what one address can cost, rather than throttling a tenant whose traffic leaves through a single egress |
+| `WEBHOOK_DELIVERY_WORKER_ENABLED` | `true` | Run the outbound delivery worker in this process. Disable on a node that should serve traffic without draining the queue |
+| `WEBHOOK_DELIVERY_CONCURRENCY` | `8` | Deliveries attempted in parallel by one worker |
+| `WEBHOOK_DELIVERY_TIMEOUT_SECONDS` | `10` | Per-attempt timeout against a destination. A timeout counts as a failed attempt and is retried on the schedule |
+| `WEBHOOK_DELIVERY_MAX_RESPONSE_BYTES` | `2048` | How much of a receiver's response is read and stored. Bounds memory and audit size against a destination that answers with a large body |
+| `WEBHOOK_CIRCUIT_BREAKER_ENABLED` | `true` | Auto-disable a destination that fails continuously. With it off, a permanently broken endpoint is retried indefinitely |
+| `WEBHOOK_CIRCUIT_BREAKER_HOURS` | `120` | Continuous-failure window before a destination is disabled. Clear it with `POST /v1/admin/webhooks/{id}/reactivate` |
+| `WEBHOOK_CIRCUIT_BREAKER_SWEEP_MINUTES` | `15` | How often the breaker sweep runs |
 
 ### Tuning `BATCH_CONCURRENCY`
 
