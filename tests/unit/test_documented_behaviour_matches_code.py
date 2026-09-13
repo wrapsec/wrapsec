@@ -579,3 +579,73 @@ def test_the_body_limit_stays_under_the_regex_clamp():
         f"capacity one -- widen the clamp, scan in windows, or bound message "
         f"length in the application."
     )
+
+
+# --------------------------------------------------------------------------
+# 15. every variable in .env.example reaches something
+# --------------------------------------------------------------------------
+#
+# `.env.example` is the file the README tells an operator to copy, so a name in
+# it reads as a supported control. Pydantic binds on the uppercased FIELD NAME
+# and ignores anything else without a word, so a name that matches no field is
+# inert and looks exactly like one that works.
+#
+# `JWT_EXPIRY_MINS=60` sat in the Security block in that state, next to
+# SECRET_KEY, while the variable that does set the token lifetime was absent from
+# the file entirely. The fence over the developer guide's table did not cover
+# this file, which is why it drifted on unnoticed.
+#
+# Some entries here are legitimately not settings: they configure the compose
+# stack, nginx, the dashboard, or the collector sidecar. Each is listed
+# individually with where it is consumed, so an exemption is a deliberate entry
+# rather than a pattern that quietly swallows the next mistake.
+
+_ENV_EXAMPLE_NON_SETTINGS = {
+    # dashboard (Next.js reads it directly; compose passes it through)
+    "DASHBOARD_ORIGIN",
+    # collector sidecar, named by the OpenTelemetry protocol exporter spec
+    "OTEL_EXPORTER_OTLP_ENDPOINT",
+    "OTEL_EXPORTER_OTLP_HEADERS",
+    "OTEL_EXPORTER_OTLP_PROTOCOL",
+    "OTEL_EXPORTER_OTLP_INSECURE",
+    # compose services, not the application
+    "POSTGRES_PASSWORD",
+    "REDIS_PASSWORD",
+    "GRAFANA_PASSWORD",
+    # nginx template and setup.sh
+    "SSL_CERT_PATH",
+    "SSL_KEY_PATH",
+    "DOMAIN",
+}
+
+
+def test_every_variable_in_the_example_env_reaches_something():
+    from config.settings import Settings
+
+    text  = (_ROOT / ".env.example").read_text(encoding="utf-8")
+    named = set(re.findall(r'^\s*#?\s*([A-Z][A-Z0-9_]{2,})\s*=', text, re.MULTILINE))
+    assert named, "the example env file moved or changed shape; update this fence"
+
+    fields  = set(Settings.model_fields)
+    orphans = sorted(n for n in named
+                     if n.lower() not in fields and n not in _ENV_EXAMPLE_NON_SETTINGS)
+
+    assert not orphans, (
+        f"these variables appear in .env.example but bind to no settings field and "
+        f"are not listed as belonging to another component: {orphans}. An operator "
+        f"copying the file would set them and see no effect and no error. Either "
+        f"correct the name or record where it IS consumed."
+    )
+
+
+def test_the_example_env_exemptions_are_all_still_present():
+    """An exemption that no longer appears is a stale allowance, and the next
+    mistake could land on that name and pass."""
+    text  = (_ROOT / ".env.example").read_text(encoding="utf-8")
+    named = set(re.findall(r'^\s*#?\s*([A-Z][A-Z0-9_]{2,})\s*=', text, re.MULTILINE))
+
+    stale = sorted(_ENV_EXAMPLE_NON_SETTINGS - named)
+    assert not stale, (
+        f"these names are exempted from the settings check but no longer appear in "
+        f".env.example: {stale}. Drop them from the exemption list."
+    )
