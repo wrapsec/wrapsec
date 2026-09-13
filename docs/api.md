@@ -2707,6 +2707,119 @@ Hard-delete the endpoint.
 
 ---
 
+## Email Delivery Audit
+
+WrapSec sends a small set of informational account and security notifications
+to the account's STORED email address. They carry no links, no tokens and no
+credentials, and every one is triggered by an authenticated or internal action
+on a known account, so none of them is an enumeration surface.
+
+These endpoints expose DELIVERY METADATA for those messages -- never the
+subject, body or MIME of an email. All are tenant-scoped.
+
+**Notification types currently sent:**
+
+| Type | Trigger |
+|---|---|
+| `password.changed` | the user changed their own password |
+| `password.reset_by_admin` | an administrator reset the user's password |
+| `account.locked` | the account was locked after repeated failed logins |
+| `account.deactivated` | an administrator deactivated the account |
+| `account.reactivated` | an administrator reactivated the account |
+| `role.changed` | the user's role in the tenant was changed |
+
+`user.invited`, `api_key.created` and `api_key.revoked` exist in the vocabulary
+but are RESERVED: nothing sends them and no template exists. Do not build against
+them.
+
+**Delivery states:**
+
+| Status | Meaning |
+|---|---|
+| `queued` | committed to the outbox, awaiting a worker |
+| `sending` | a worker has claimed the row |
+| `provider_accepted` | the mail server accepted the message for relay |
+| `failed` | non-retryable, or the retry budget is exhausted |
+
+Acceptance is not delivery. Over plain SMTP the mail server's acceptance is the
+last thing WrapSec can observe, so there is deliberately no `delivered` or
+`bounced` state -- reporting one would be a claim the transport cannot support.
+The normal lifecycle is `queued -> sending -> provider_accepted`, or
+`queued -> sending -> failed`.
+
+### GET /v1/admin/email
+
+*NOT PUBLIC - dashboard administration. Served and supported; outside the published contract.*
+
+*Auth: ADMIN or AUDITOR.*
+
+Delivery rows for the caller's tenant, newest first.
+
+Filters: `status`, `notification_type`, `department_id`, `recipient` (substring),
+`created_from` / `created_to` (ISO-8601). `limit` 1-200 (default 50), `offset`
+from 0. Unlike the audit-log filters, `status` IS validated: a value outside the
+set above returns 400 rather than an empty page.
+
+Each row carries `id`, `tenant_id`, `department_id`, `user_id`,
+`notification_type`, `recipient`, `locale`, `status`, `attempt_count`,
+`provider_message_id`, `trace_id`, `last_error`, `created_at`,
+`last_attempt_at`, and `completed_at`. `completed_at` is set only on a terminal
+row -- acceptance time when accepted, transition time when failed, and `null`
+while still in flight.
+
+`trace_id` ties the message back to the request that caused it.
+
+### GET /v1/admin/email/summary
+
+*NOT PUBLIC - dashboard administration. Served and supported; outside the published contract.*
+
+*Auth: ADMIN or AUDITOR.*
+
+Per-status counts for the caller's tenant, honouring the same filters as the
+listing except `status`.
+
+```json
+{"counts": {"queued": 0, "sending": 0, "provider_accepted": 12, "failed": 1}}
+```
+
+### GET /v1/admin/email/{email_id}
+
+*NOT PUBLIC - dashboard administration. Served and supported; outside the published contract.*
+
+*Auth: ADMIN or AUDITOR.*
+
+One delivery row, in the shape above. A row belonging to another tenant returns
+404, indistinguishable from one that does not exist.
+
+### GET /v1/admin/email/settings
+
+*NOT PUBLIC - dashboard administration. Served and supported; outside the published contract.*
+
+*Auth: ADMIN only -- these are system-level settings, not audit data.*
+
+Returns `notifications_enabled`, `max_attempts`, `retention_days`, and a
+READ-ONLY `retry_schedule` block: `intervals_seconds`
+(`[5, 300, 1800, 7200, 18000, 36000, 36000]`), `min_attempts` (1) and
+`max_attempts_ceiling` (8). The backoff intervals are fixed policy and are
+served from the schedule the worker actually uses, so a client never renders a
+stale copy.
+
+### PUT /v1/admin/email/settings
+
+*NOT PUBLIC - dashboard administration. Served and supported; outside the published contract.*
+
+*Auth: ADMIN only.*
+
+Body: `notifications_enabled`, `max_attempts`, `retention_days` -- all three
+required. `max_attempts` is bounded by the real schedule (1 to 8, since one
+initial attempt plus seven backoff intervals is all the schedule defines) and
+`retention_days` must be at least 1. Out-of-range values return 400.
+
+The change is recorded in `admin_events` as `settings_changed` with the old and
+new values.
+
+---
+
 ## Health
 
 ***All four operations here are published.***

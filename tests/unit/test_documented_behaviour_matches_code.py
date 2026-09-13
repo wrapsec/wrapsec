@@ -393,3 +393,71 @@ def test_every_catalog_error_code_is_documented():
         f"these error codes can be returned but appear in no documentation: "
         f"{missing}. A caller cannot handle a code it has never been told about."
     )
+
+
+# --------------------------------------------------------------------------
+# 12. the documented notification catalogue matches what is actually sent
+# --------------------------------------------------------------------------
+#
+# Three of the nine notification types are reserved: nothing emits them and no
+# template exists. The documentation lists the six that are sent and names the
+# three as reserved, so a reader does not build against a type that will never
+# arrive.
+#
+# "Emitted" is established from the templates on disk rather than from a list,
+# because a type cannot be sent without one -- that is the property that would
+# quietly change if a reserved type were wired up, or a live one dropped.
+
+_RESERVED_TYPES = {"user.invited", "api_key.created", "api_key.revoked"}
+
+
+def _types_with_templates() -> set[str]:
+    templates = _ROOT / "services/email/templates/en"
+    assert templates.is_dir(), "the english template directory moved; update this fence"
+    return {p.stem for p in templates.glob("*.html")}
+
+
+def test_every_notification_type_is_either_sent_or_documented_as_reserved():
+    from domain.enums import NotificationType
+
+    declared = {t.value for t in NotificationType}
+    sent     = _types_with_templates()
+
+    assert sent <= declared, f"templates exist for undeclared types: {sorted(sent - declared)}"
+    assert declared - sent == _RESERVED_TYPES, (
+        f"the reserved set changed: types without a template are "
+        f"{sorted(declared - sent)}, the documentation names {sorted(_RESERVED_TYPES)}"
+    )
+
+
+def test_the_documented_types_are_the_ones_with_templates():
+    documented = (_ROOT / "docs/api.md").read_text(encoding="utf-8")
+    for value in sorted(_types_with_templates()):
+        assert f"`{value}`" in documented, (
+            f"`{value}` is sent to real recipients but appears in no documentation"
+        )
+    for value in sorted(_RESERVED_TYPES):
+        assert f"`{value}`" in documented, (
+            f"`{value}` is reserved and must be named as such, so nobody builds against it"
+        )
+
+
+def test_the_documented_delivery_states_are_exactly_the_shipped_ones():
+    """`delivered` and `bounced` must not appear as available states: SMTP
+    acceptance is the last observable event, so neither could be reached
+    honestly. Reads the status table itself rather than searching the page, so
+    prose that explains their absence does not satisfy the check."""
+    from domain.enums import EmailStatus
+
+    text = (_ROOT / "docs/api.md").read_text(encoding="utf-8")
+    table = re.search(
+        r"\*\*Delivery states:\*\*\n\n\| Status \| Meaning \|\n\|[-| ]+\|\n((?:\|.*\n)+)",
+        text,
+    )
+    assert table, "the delivery-state table moved; update this fence"
+
+    listed = set(re.findall(r"^\|\s*`([a-z_]+)`\s*\|", table.group(1), re.MULTILINE))
+    assert listed == {s.value for s in EmailStatus}, (
+        f"the documented delivery states {sorted(listed)} are not the shipped ones "
+        f"{sorted(s.value for s in EmailStatus)}"
+    )
