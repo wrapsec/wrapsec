@@ -194,8 +194,14 @@ action. That opens an ordered timeline of every scan made during that one agent
 execution, so a run that took several steps reads as a single story instead of a
 scatter of unrelated rows.
 
-The timeline shows the run's turn count, how many turns were blocked or sanitized, the
-content sources involved, and each turn in order with its decision and risk score.
+The timeline carries one entry per SCAN, not one per turn. A single tool call is
+judged twice - once on the arguments going out, once on the result coming back -
+and both entries share a turn number, so a run of two turns can show four or more
+rows. Header counts reflect that: the page shows a scan count and a turn count
+side by side, and the blocked and sanitized figures count scans.
+
+Each row shows its turn number, decision and risk score, and the header also
+lists the content sources involved in the run.
 
 Run IDs are supplied by whoever makes the request - the SDK, the CLI (`--run-id`), or a
 direct API call. Untagged requests have no run to show, so the action does not appear.
