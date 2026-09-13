@@ -145,7 +145,7 @@ and read `access_token` from the response.
 | `POST/PUT/DELETE /v1/admin/departments/*` | no | yes ADMIN only |
 | `POST/PUT/DELETE /v1/admin/applications/*` | no | yes ADMIN only |
 | `ALL /v1/admin/users/*` | no | yes ADMIN only |
-| `GET /v1/admin/webhooks`, `GET /v1/admin/webhooks/{id}` | no | yes ADMIN only |
+| `GET /v1/admin/webhooks`, `GET /v1/admin/webhooks/{id}`, `GET /v1/admin/webhooks/connector-types` | no | yes ADMIN only |
 | `POST/PUT/DELETE /v1/admin/webhooks/*`, `POST /v1/admin/webhooks/{id}/rotate-secret` | no | yes ADMIN only |
 
 **Notes:**
@@ -2362,6 +2362,52 @@ Returns the fully resolved effective policy for the department. Merges: system d
 
 ---
 
+### PATCH /v1/admin/departments/{dept_id}/policy/llm
+
+*NOT PUBLIC - dashboard administration. Served and supported; outside the published contract.*
+
+Set or clear the LLM-detection provider override for a department.
+Inherited by applications in the department unless they set their own.
+
+A partial update: only the fields present are written, the rest of the section is
+left as it is. Requires JWT + ADMIN.
+
+| Field | Notes |
+|---|---|
+| `provider` | `openai`, `ollama`, or `custom` |
+| `model` | provider model name |
+| `base_url` | validated against the same SSRF rules as every other stored url |
+| `timeout` | seconds, 5 to 120 |
+| `api_key` | encrypted with AES-256-GCM before storage and never returned; send an empty string to remove the stored key |
+| `clear` | `true` drops the whole `llm` section so the layer inherits from its parent |
+
+Reads render the stored key as `api_key_masked`; the ciphertext and the
+plaintext are never returned. The change is recorded in `admin_events` as
+`policy_override_changed`.
+
+This is the only supported way to set a provider credential on this layer. The
+generic `policy_override` on create/update refuses a plaintext credential rather
+than encrypting it silently, so a key sent that way is rejected, not stored.
+
+### PATCH /v1/admin/departments/{dept_id}/policy/proxy
+
+*NOT PUBLIC - dashboard administration. Served and supported; outside the published contract.*
+
+Set or clear the PROXY provider override for a department -- the upstream that
+`POST /v1/chat/completions` forwards to. Same partial-update and clearing
+semantics as `/policy/llm` above, and the same credential handling.
+
+| Field | Notes |
+|---|---|
+| `provider` | `openai`, `ollama`, or `custom` |
+| `base_url` | SSRF-validated |
+| `default_model` | model used when the request does not name one |
+| `timeout_seconds` | 1 to 300 -- note this range differs from the `llm` override's `timeout` |
+| `api_key` | encrypted before storage, never returned; empty string removes it |
+| `clear` | `true` drops the whole `proxy_provider` section |
+
+---
+
 ## Applications
 
 *Organisation structure, dashboard surface. **No operation in this section is published.***
@@ -2434,6 +2480,52 @@ Returns the fully resolved effective policy. Merges: system -> DB settings -> de
 }
 ```
 
+### PATCH /v1/admin/applications/{app_id}/policy/llm
+
+*NOT PUBLIC - dashboard administration. Served and supported; outside the published contract.*
+
+Set or clear the LLM-detection provider override for an application.
+Takes precedence over the department-level override.
+
+A partial update: only the fields present are written, the rest of the section is
+left as it is. Requires JWT + ADMIN.
+
+| Field | Notes |
+|---|---|
+| `provider` | `openai`, `ollama`, or `custom` |
+| `model` | provider model name |
+| `base_url` | validated against the same SSRF rules as every other stored url |
+| `timeout` | seconds, 5 to 120 |
+| `api_key` | encrypted with AES-256-GCM before storage and never returned; send an empty string to remove the stored key |
+| `clear` | `true` drops the whole `llm` section so the layer inherits from its parent |
+
+Reads render the stored key as `api_key_masked`; the ciphertext and the
+plaintext are never returned. The change is recorded in `admin_events` as
+`policy_override_changed`.
+
+This is the only supported way to set a provider credential on this layer. The
+generic `policy_override` on create/update refuses a plaintext credential rather
+than encrypting it silently, so a key sent that way is rejected, not stored.
+
+### PATCH /v1/admin/applications/{app_id}/policy/proxy
+
+*NOT PUBLIC - dashboard administration. Served and supported; outside the published contract.*
+
+Set or clear the PROXY provider override for an application -- the upstream that
+`POST /v1/chat/completions` forwards to. Same partial-update and clearing
+semantics as `/policy/llm` above, and the same credential handling.
+
+| Field | Notes |
+|---|---|
+| `provider` | `openai`, `ollama`, or `custom` |
+| `base_url` | SSRF-validated |
+| `default_model` | model used when the request does not name one |
+| `timeout_seconds` | 1 to 300 -- note this range differs from the `llm` override's `timeout` |
+| `api_key` | encrypted before storage, never returned; empty string removes it |
+| `clear` | `true` drops the whole `proxy_provider` section |
+
+---
+
 ### PUT /v1/admin/applications/{app_id}/policy
 
 *NOT PUBLIC - dashboard administration. Served and supported; outside the published contract.*
@@ -2496,6 +2588,21 @@ maps to a private/loopback/link-local/metadata address, and `https` is required.
 To send to an on-prem SIEM on a private address, allowlist its host or CIDR via
 `WEBHOOK_EGRESS_ALLOWLIST` (see `.env.example`).
 
+### GET /v1/admin/webhooks/connector-types
+
+*NOT PUBLIC - dashboard administration. Served and supported; outside the published contract.*
+
+Form metadata for each destination type, used to build the create form. Static
+only: no tenant data and no secrets.
+
+Returns `{"connector_types": [...]}`, one entry per destination with `type`
+(the `connector_type` slug, `null` for the generic webhook), `label`, a `secret`
+block (`label`, `generated`, `required`), a `url` block (`label`, `help`), and
+`config_fields` -- each with `key`, `label`, `help`, and `required`. A field's
+`required` is read from the same registry the create-time validator consults, so
+the form and the runtime check cannot disagree about which config keys are
+mandatory.
+
 ### POST /v1/admin/webhooks
 
 *NOT PUBLIC - dashboard administration. Served and supported; outside the published contract.*
@@ -2545,6 +2652,45 @@ Rotate the generic signing secret with a grace window (`grace_hours`, default
 24) during which the old secret still verifies. Returns a fresh plaintext
 secret once. Returns 400 for connector endpoints (rotation is HMAC-signing
 specific; delete and recreate to change a connector token).
+
+### POST /v1/admin/webhooks/{id}/pause
+
+*NOT PUBLIC - dashboard administration. Served and supported; outside the published contract.*
+
+Stop delivery to an endpoint without losing anything: the config, secret, and
+delivery history are kept. Resume with `/reactivate`. Idempotent on an
+already-paused endpoint. Returns the endpoint with its secret masked.
+
+### POST /v1/admin/webhooks/{id}/reactivate
+
+*NOT PUBLIC - dashboard administration. Served and supported; outside the published contract.*
+
+Clear the circuit breaker (`disabled` and `first_failure_at`) and resume
+delivery, once the receiver has been fixed.
+
+This is the recovery path for an endpoint the breaker retired after 120h of
+continuous failure, which reads `status: auto_disabled`. `PUT` cannot do it --
+lifecycle flags are not settable there. Also resumes a manually paused endpoint.
+Idempotent on an already-active one. Returns the endpoint with its secret masked.
+
+### POST /v1/admin/webhooks/{id}/test
+
+*NOT PUBLIC - dashboard administration. Served and supported; outside the published contract.*
+
+Send a synthetic event to the endpoint and return what the receiver said.
+
+Synchronous and side-effect-free: it does not enqueue, write a delivery-attempt
+row, or move the circuit-breaker timer, so testing a destination never changes
+its delivery health. The target is the endpoint's stored, already-SSRF-validated
+url -- the same one the delivery worker uses -- so testing introduces no new
+egress. The payload is a `wrapsec.request.blocked` body carrying placeholder
+values and `"test": true`, so a receiver or SIEM can filter it out.
+
+```json
+{"ok": true, "status_code": 200, "response_snippet": "...", "duration_ms": 143, "error": null}
+```
+
+The endpoint secret and the outbound auth headers are never returned.
 
 ### DELETE /v1/admin/webhooks/{id}
 
