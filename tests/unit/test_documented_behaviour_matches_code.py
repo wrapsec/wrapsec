@@ -366,3 +366,30 @@ def test_documented_primary_reasons_are_the_ones_the_scorer_returns():
     emitted = literals | detectors
     assert emitted, "compute_primary_reason was rewritten; this fence needs updating"
     assert _documented_filter_values("primary_reason") == emitted
+
+
+# --------------------------------------------------------------------------
+# 11. every error code the catalog can serve is written down
+# --------------------------------------------------------------------------
+#
+# The catalog is metadata only -- it holds the status and severity, never the
+# text -- so `docs/api.md` is where a caller learns what a code means and what
+# provokes it. Five codes had been added to the catalog without ever reaching
+# the page, including one a caller can hit by sending `stream: true` to the
+# scan endpoint.
+#
+# Presence, not wording: this asserts a code is documented somewhere, which is
+# the part that silently stops being true when a new code is introduced.
+
+def test_every_catalog_error_code_is_documented():
+    from errors.catalog import ERROR_CATALOG, ErrorCode
+
+    documented = (_ROOT / "docs/api.md").read_text(encoding="utf-8")
+    servable   = {c for c in ErrorCode if c in ERROR_CATALOG}
+    assert servable, "the catalog map was restructured; update this fence"
+
+    missing = sorted(c.value for c in servable if f"`{c.value}`" not in documented)
+    assert not missing, (
+        f"these error codes can be returned but appear in no documentation: "
+        f"{missing}. A caller cannot handle a code it has never been told about."
+    )

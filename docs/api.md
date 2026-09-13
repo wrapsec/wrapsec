@@ -233,6 +233,8 @@ Security and proxy errors additionally include a `wrapsec` key:
 
 | Code | HTTP | Meaning |
 |---|---|---|
+| `STREAM_NOT_SUPPORTED` | 400 | `POST /v1/ai/request` with `options.stream: true` and `execution_mode: scan_only`. Streaming only means something when a provider answer is being returned |
+| `MODEL_REQUIRED` | 400 | `POST /v1/ai/request` with `execution_mode: proxy` and no `model`. In `scan_only` the field is ignored and cleared rather than rejected |
 | `UNAUTHORIZED` | 401 | Missing or invalid credentials |
 | `INVALID_CREDENTIALS` | 401 | Wrong email or password (same message for both - no enumeration) |
 | `ACCOUNT_DISABLED` | 401 | User `is_active = false` - always returned to the client when login is rejected due to a deactivated account |
@@ -246,10 +248,13 @@ Security and proxy errors additionally include a `wrapsec` key:
 | `NOT_FOUND` | 404 | Resource does not exist. `params.resource` names which kind, as a stable token (see below) |
 | `CONFLICT` | 409 | Duplicate (e.g. email already registered) |
 | `IDEMPOTENCY_CONFLICT` | 409 | Same Idempotency-Key, different body |
+| `CANNOT_DEACTIVATE_SELF` | 409 | `PATCH /v1/admin/users/{user_id}` setting `is_active: false` on the calling admin's own account |
+| `LAST_ADMIN` | 409 | `PATCH /v1/admin/users/{user_id}` demoting or deactivating the tenant's only remaining active ADMIN |
 | `VALIDATION_ERROR` | 422 | Body failed validation |
 | `ACCOUNT_LOCKED` | 429 | Too many failed login attempts - includes `retry_after` seconds |
 | `RATE_LIMIT_EXCEEDED` | 429 | Rate limit exceeded - includes `retry_after` seconds |
 | `LLM_UNAVAILABLE` | 502 | `POST /v1/ai/request` with `execution_mode: proxy`: the scan completed, the provider did not return a usable answer. No `output` is returned; the scan itself is audited and readable at the `trace_id` in the error |
+| `DETECTION_ERROR` | 500 | A policy layer could not be loaded, so how strictly to judge this request cannot be established. Refused rather than served on system defaults, which would silently relax a tenant that had tightened |
 | `INTERNAL_ERROR` | 500 | Unexpected server error |
 | `input_blocked` | 400 | Proxy: input blocked by policy |
 | `output_blocked` | 400 | Proxy: output blocked by policy |
