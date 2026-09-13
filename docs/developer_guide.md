@@ -248,6 +248,13 @@ Redis keys: `auth:failed:{normalized_email}`, `auth:locked:{normalized_email}`.
 - Counter TTL set on first failure, not reset on subsequent failures
 - Lock TTL reset on each retry - attacker extends their own lockout
 - On success: both keys deleted immediately
+- **Fails open when the lockout store is unavailable.** Every check, record and
+  clear is wrapped so a store error is logged and ignored rather than raised, on
+  the same availability reasoning as the rate limit layers: a store outage must
+  not lock every user out of a working deployment. The consequence is that
+  lockout stops protecting accounts for the duration of the outage, silently
+  from the caller's point of view. See the fail-open policy under Rate Limiting
+  for what this means in combination with the login rate limit.
 
 ### Password hashing - Argon2id with legacy bcrypt compatibility
 
@@ -516,6 +523,10 @@ Layers 2 and 3 (trial and debug) read directly from `settings` - no DB/Redis cha
 ### Fail-open policy
 
 All seven layers fail open when Redis is unavailable. Rate limiting is silently disabled during Redis outages to preserve API availability. Monitor Redis health and alert on connection errors if strict enforcement during outages is required.
+
+**Account lockout fails open on the same store, so the controls degrade together.** The brute-force controls on the login path are Layer 6 (the per-address login limit) and the 5-attempt account lockout, and both keep their state in Redis. A Redis outage therefore removes both at once: an attacker may make unlimited login attempts against unlimited accounts, with no limit and no lockout, and nothing in the response distinguishes that state from normal operation. Password hashing is the only remaining cost per attempt.
+
+This is a deliberate availability trade, not an oversight - the alternative is that a cache outage denies login to every legitimate user. It does mean Redis availability is a security control on this path and not only an operational one, so alert on it accordingly.
 
 ### Dashboard configuration (Layers 1, 4, 5 only)
 
@@ -976,7 +987,7 @@ These rules must be followed in all new code. Violation creates real production 
 37. Datetimes at DB boundary: strip timezone with `_to_db()` - internal calculations stay aware
 38. JWT middleware uses `_get_db_session()` - never `AsyncSessionFactory()` directly
 39. Endpoints use `get_db` from dependencies - not `get_session` from `db/session.py`
-40. All six rate limit layers fail open - never raise on Redis unavailability, always `except Exception: pass`
+40. All seven rate limit layers fail open - never raise on Redis unavailability, always `except Exception: pass`
 41. Rate limit Redis keys follow the naming convention - never invent new prefixes (see Rate Limiting section)
 42. `endpoint_rate_limit` limit values come from settings - never hardcode a number at the call site
 43. Debug rate limit and trial rate limit are env-only - never add them to the DB-backed settings chain
