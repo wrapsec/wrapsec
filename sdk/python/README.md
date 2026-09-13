@@ -228,6 +228,11 @@ results = client.batch(texts, mode="fast", user="sdk", timeout=None, delay_ms=0)
 | `mode` | str | `"fast"` | Detection mode applied to all inputs. |
 | `timeout` | int \| None | client default | Per-request timeout. |
 
+`batch()` sends ONE REQUEST PER ITEM in a loop, which is why `delay_ms` exists.
+For more than a handful of inputs use `scan_batch()` below: it sends the whole
+page in a single request, costs one rate-limit unit instead of N, and needs no
+delay.
+
 ```python
 inputs  = ["input one", "input two", "input three"]
 results = client.batch(inputs, delay_ms=100)
@@ -236,6 +241,58 @@ for i, result in enumerate(results):
     if result.is_blocked:
         print(f"Input {i} blocked: {result.primary_reason} trace={result.trace_id}")
 ```
+
+---
+
+## scan_batch() and the RAG helpers
+
+`scan_batch()` scans many items in ONE request to `POST /v1/ai/scan-batch`,
+returning a per-item decision plus a summary.
+
+```python
+result = client.scan_batch(items, mode="fast", default_source="user_prompt")
+```
+
+| Parameter | Type | Default | Description |
+|---|---|---|---|
+| `items` | list | required | Strings, or dicts `{input\|text, input_source?, id?}`. |
+| `mode` | str | `"fast"` | `fast` or `full`; anything else raises `ValueError`. |
+| `default_source` | str | `"user_prompt"` | Provenance for items that do not carry their own. |
+| `timeout` | int \| None | client default | Request timeout. |
+
+Three wrappers set `default_source` for you, which is the whole of what they do:
+
+| Helper | Sends |
+|---|---|
+| `scan_documents(items)` | `retrieved_document` |
+| `scan_tool_outputs(items)` | `tool_output` |
+| `scan_external(items)` | `external_content` |
+
+Labelling matters: these are the origins the source-aware posture judges more
+strictly than a user's own message. Passing retrieved chunks with the default
+`user_prompt` would have them judged as if the user had typed them.
+
+```python
+chunks = [d.page_content for d in retriever.get_relevant_documents(query)]
+result = client.scan_documents(chunks)
+if result.blocked:
+    log.warning("dropped %d poisoned chunks", len(result.blocked))
+```
+
+### filter_safe()
+
+The one-call version for a RAG pipeline: scan, then return only the inputs that
+were not blocked, in their original order.
+
+```python
+safe = client.filter_safe(chunks)          # default_source="retrieved_document"
+prompt = "\n".join(safe)
+```
+
+**It drops `BLOCK` only.** An item that came back `SANITIZE` is kept, and what
+you get is the ORIGINAL input text, not the sanitized form. If you need the
+redacted version, call `scan_batch()` and read each item's result rather than
+using this helper.
 
 ---
 
@@ -270,6 +327,31 @@ async def chat(request: Request):
     safe_input = result.sanitized_input if result.is_sanitized else user_input
     return await call_llm(safe_input)
 ```
+
+---
+
+## chat()
+
+Sends a message through the proxy: WrapSec scans the input, forwards to the
+configured provider if allowed, scans the response, and returns an
+OpenAI-compatible body.
+
+```python
+reply = client.chat("summarise this ticket", model="openai/gpt-4o")
+```
+
+| Parameter | Type | Default | Description |
+|---|---|---|---|
+| `message` | str | required | Sent as a single `user` message. |
+| `model` | str \| None | server default | `provider/model`, e.g. `openai/gpt-4o`. A bare name is refused. |
+| `timeout` | int \| None | `90` | Longer than other calls: this one waits on a provider. |
+
+**Requires an API key.** The proxy refuses a dashboard session with
+`403 PROXY_REQUIRES_API_KEY`, whatever the role.
+
+**Synchronous client only.** `AsyncClient` has no `chat()`; awaiting one raises
+`AttributeError`. Call the proxy endpoint directly from async code, or run the
+sync client in a thread.
 
 ---
 
@@ -362,6 +444,13 @@ health = client.health_ready()
 ```
 
 Use `health_live()` in CI/CD pipelines to verify WrapSec availability before deploying services that depend on it.
+
+```python
+# The configuration in force - thresholds, detection layers, provider, limits.
+# Values need the settings:read permission; without it each section reports only
+# whether it was customised.
+config = client.health_config()
+```
 
 ---
 

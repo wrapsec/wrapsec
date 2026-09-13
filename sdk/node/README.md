@@ -210,6 +210,11 @@ const results = await client.batch(texts, options?)
 | `options.mode` | string | `"fast"` | Detection mode applied to all inputs. |
 | `options.timeout` | number | client default | Per-request timeout. |
 
+`batch()` sends ONE REQUEST PER ITEM in a loop, which is why `delayMs` exists.
+For more than a handful of inputs use `scanBatch()` below: it sends the whole
+page in a single request, costs one rate-limit unit instead of N, and needs no
+delay.
+
 ```typescript
 const inputs  = ['input one', 'input two', 'input three']
 const results = await client.batch(inputs, { delayMs: 100 })
@@ -220,6 +225,59 @@ results.forEach((result, i) => {
   }
 })
 ```
+
+---
+
+## scanBatch() and the RAG helpers
+
+`scanBatch()` scans many items in ONE request to `POST /v1/ai/scan-batch`,
+returning a per-item decision plus a summary.
+
+```typescript
+const result = await client.scanBatch(items, { mode: 'fast', defaultSource: 'user_prompt' })
+```
+
+| Parameter | Type | Default | Description |
+|---|---|---|---|
+| `items` | (string \| BatchItem)[] | required | Strings, or `{ input \| text, inputSource?, id? }`. |
+| `options.mode` | string | `"fast"` | `fast` or `full`. |
+| `options.defaultSource` | string | `"user_prompt"` | Provenance for items that do not carry their own. |
+| `options.timeout` | number | client default | Request timeout. |
+
+Three wrappers set `defaultSource` for you, which is the whole of what they do:
+
+| Helper | Sends |
+|---|---|
+| `scanDocuments(items)` | `retrieved_document` |
+| `scanToolOutputs(items)` | `tool_output` |
+| `scanExternal(items)` | `external_content` |
+
+Labelling matters: these are the origins the source-aware posture judges more
+strictly than a user's own message. Passing retrieved chunks with the default
+`user_prompt` would have them judged as if the user had typed them.
+
+```typescript
+const chunks = docs.map(d => d.pageContent)
+const result = await client.scanDocuments(chunks)
+if (result.blocked.length) {
+  console.warn(`dropped ${result.blocked.length} poisoned chunks`)
+}
+```
+
+### filterSafe()
+
+The one-call version for a RAG pipeline: scan, then return only the inputs that
+were not blocked, in their original order.
+
+```typescript
+const safe   = await client.filterSafe(chunks)   // defaultSource: 'retrieved_document'
+const prompt = safe.join('\n')
+```
+
+**It drops `BLOCK` only.** An item that came back `SANITIZE` is kept, and what
+you get is the ORIGINAL input text, not the sanitized form. If you need the
+redacted version, call `scanBatch()` and read each item's result rather than
+using this helper.
 
 ---
 
@@ -384,6 +442,13 @@ const health = await client.healthReady()
 ```
 
 Use `healthLive()` in CI/CD pipelines to verify WrapSec availability before deploying services that depend on it.
+
+```typescript
+// The configuration in force - thresholds, detection layers, provider, limits.
+// Values need the settings:read permission; without it each section reports only
+// whether it was customised.
+const config = await client.healthConfig()
+```
 
 ---
 
