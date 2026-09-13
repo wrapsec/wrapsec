@@ -23,7 +23,7 @@ import type { DashboardUser, Role } from "@/lib/types"
 // Role identifiers are stable machine codes (never localized); rendered verbatim.
 const ROLES = ["ADMIN", "DEVELOPER", "AUDITOR", "VIEWER"] as const
 
-// â”€â”€ Role badge â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+// ── Role badge ─────────────────────────────────────────────────────────────────
 
 function RoleBadge({ role }: { role: string }) {
   const styles: Record<string, string> = {
@@ -39,7 +39,7 @@ function RoleBadge({ role }: { role: string }) {
   )
 }
 
-// â”€â”€ Status badge â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+// ── Status badge ───────────────────────────────────────────────────────────────
 
 function StatusBadge({ active }: { active: boolean }) {
   const t = useTranslations("pages.users.status")
@@ -54,7 +54,7 @@ function StatusBadge({ active }: { active: boolean }) {
   )
 }
 
-// â”€â”€ Input helper â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+// ── Input helper ───────────────────────────────────────────────────────────────
 
 function Field({
   label, children,
@@ -70,7 +70,7 @@ function Field({
 const inputCls = "h-9 px-3 text-sm rounded-md border border-slate-200 bg-white text-slate-900 placeholder:text-slate-600 focus:outline-none focus:ring-2 focus:ring-purple-700 disabled:opacity-50"
 const selectCls = inputCls
 
-// â”€â”€ Create user modal â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+// ── Create user modal ──────────────────────────────────────────────────────────
 
 function CreateUserModal({
   depts,
@@ -194,7 +194,7 @@ function CreateUserModal({
   )
 }
 
-// â”€â”€ Edit user modal â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+// ── Edit user modal ────────────────────────────────────────────────────────────
 
 function EditUserModal({
   user,
@@ -399,7 +399,7 @@ function EditUserModal({
   )
 }
 
-// â”€â”€ Page â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+// ── Page ───────────────────────────────────────────────────────────────────────
 
 export default function UsersPage() {
   const t  = useTranslations("pages.users")

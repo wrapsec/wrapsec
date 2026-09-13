@@ -47,7 +47,7 @@ const TH: React.CSSProperties = {
   whiteSpace: "nowrap" as const,
 }
 
-// â”€â”€ Security KPIs â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+// ── Security KPIs ─────────────────────────────────────────────────────────
 
 function SecuritySummary({ stats, attribution }: { stats: AuditStatsResponse; attribution: AttributionResponse }) {
   const fmt        = useFormat()
@@ -80,7 +80,7 @@ function SecuritySummary({ stats, attribution }: { stats: AuditStatsResponse; at
   )
 }
 
-// â”€â”€ Trend Chart â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+// ── Trend Chart ───────────────────────────────────────────────────────────
 
 function TrendChart({ data, groupBy, onGroupByChange }: {
   data: { period: string; total: number; blocked: number; sanitized: number; allowed: number; block_rate: number }[]
@@ -239,7 +239,7 @@ function TrendChart({ data, groupBy, onGroupByChange }: {
   )
 }
 
-// â”€â”€ Threat Intelligence â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+// ── Threat Intelligence ───────────────────────────────────────────────────
 
 function ThreatIntelligence({ stats }: { stats: AuditStatsResponse }) {
   const fmt = useFormat()
@@ -298,7 +298,7 @@ function ThreatIntelligence({ stats }: { stats: AuditStatsResponse }) {
   )
 }
 
-// â”€â”€ Detection Layer Breakdown â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+// ── Detection Layer Breakdown ─────────────────────────────────────────────
 
 function DetectionBreakdown({ byReason }: { byReason: { primary_reason: string; count: number }[] }) {
   const fmt = useFormat()
@@ -346,7 +346,7 @@ function DetectionBreakdown({ byReason }: { byReason: { primary_reason: string; 
   )
 }
 
-// â”€â”€ Confidence Distribution â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+// ── Confidence Distribution ───────────────────────────────────────────────
 
 function ConfidenceDistribution({ data }: { data: { band: string; count: number }[] }) {
   const fmt = useFormat()
@@ -392,7 +392,7 @@ function ConfidenceDistribution({ data }: { data: { band: string; count: number 
   )
 }
 
-// â”€â”€ Primary Reason Breakdown â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+// ── Primary Reason Breakdown ──────────────────────────────────────────────
 
 function PrimaryReasonBreakdown({ byReason }: { byReason: { primary_reason: string; count: number }[] }) {
   const fmt = useFormat()
@@ -432,7 +432,7 @@ function PrimaryReasonBreakdown({ byReason }: { byReason: { primary_reason: stri
   )
 }
 
-// â”€â”€ Attribution Table â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+// ── Attribution Table ─────────────────────────────────────────────────────
 
 function AttributionTable({ title, rows, emptyText }: {
   title: string; emptyText: string
@@ -482,7 +482,7 @@ function AttributionTable({ title, rows, emptyText }: {
   )
 }
 
-// â”€â”€ Page â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+// ── Page ──────────────────────────────────────────────────────────────────
 
 export default function AnalyticsPage() {
   const fmt = useFormat()

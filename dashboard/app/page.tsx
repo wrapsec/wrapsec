@@ -22,7 +22,7 @@ import { AuditStatsResponse, Department, Application, ApiKeysResponse } from "@/
 import { useTimeRange } from "@/hooks/useTimeRange"
 import { timeAgo } from "@/lib/datetime"
 
-// â”€â”€ Shared styles â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+// ── Shared styles ─────────────────────────────────────────────────────────────
 
 const CARD: React.CSSProperties = {
   background: "#fff", border: "1px solid #e5e7eb", borderRadius: "8px",
@@ -34,7 +34,7 @@ const LABEL: React.CSSProperties = {
   margin: "0 0 6px 0",
 }
 
-// â”€â”€ Row 1: Request summary cards â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+// ── Row 1: Request summary cards ─────────────────────────────────────────────
 
 function RequestCards({ stats, from, to }: { stats: AuditStatsResponse; from: string; to: string }) {
   const fmt       = useFormat()
@@ -73,7 +73,7 @@ function RequestCards({ stats, from, to }: { stats: AuditStatsResponse; from: st
   )
 }
 
-// â”€â”€ Row 2: Donut â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+// ── Row 2: Donut ──────────────────────────────────────────────────────────────
 
 function DonutChart({ stats }: { stats: AuditStatsResponse }) {
   const fmt       = useFormat()
@@ -147,7 +147,7 @@ function DonutChart({ stats }: { stats: AuditStatsResponse }) {
   )
 }
 
-// â”€â”€ Row 2: Latency card â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+// ── Row 2: Latency card ───────────────────────────────────────────────────────
 
 function LatencyCard({ stats, byReason }: { stats: AuditStatsResponse; byReason: { primary_reason: string; count: number }[] }) {
   const fmt      = useFormat()
@@ -220,7 +220,7 @@ function LatencyCard({ stats, byReason }: { stats: AuditStatsResponse; byReason:
   )
 }
 
-// â”€â”€ Row 3: Infrastructure â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+// ── Row 3: Infrastructure ─────────────────────────────────────────────────────
 
 function InfrastructureCard({ depts, apps, keys }: { depts: { departments: Department[] } | undefined; apps: { applications: Application[] } | undefined; keys: ApiKeysResponse | undefined }) {
   const t            = useTranslations("pages.overview")
@@ -269,7 +269,7 @@ function InfrastructureCard({ depts, apps, keys }: { depts: { departments: Depar
   )
 }
 
-// â”€â”€ Row 3: Detection layers â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+// ── Row 3: Detection layers ───────────────────────────────────────────────────
 
 function DetectionLayersCard({ byReason }: { byReason: { primary_reason: string; count: number }[] }) {
   const fmt = useFormat()
@@ -319,7 +319,7 @@ function DetectionLayersCard({ byReason }: { byReason: { primary_reason: string;
   )
 }
 
-// â”€â”€ Row 3: API key activity â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+// ── Row 3: API key activity ───────────────────────────────────────────────────
 
 function ApiKeyActivityCard({ keys }: { keys: ApiKeysResponse | undefined }) {
   const t       = useTranslations("pages.overview")
@@ -394,7 +394,7 @@ function ApiKeyActivityCard({ keys }: { keys: ApiKeysResponse | undefined }) {
   )
 }
 
-// â”€â”€ Severity â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+// ── Severity ──────────────────────────────────────────────────────────────────
 
 function SeveritySummary({ counts }: { counts: { CRITICAL: number; HIGH: number; MEDIUM: number; LOW: number } }) {
   const fmt = useFormat()
@@ -433,7 +433,7 @@ function SeveritySummary({ counts }: { counts: { CRITICAL: number; HIGH: number;
   )
 }
 
-// â”€â”€ Page â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+// ── Page ──────────────────────────────────────────────────────────────────────
 
 export default function OverviewPage() {
   const t = useTranslations("pages.overview")
