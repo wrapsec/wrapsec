@@ -508,3 +508,38 @@ async def test_a_legitimate_override_is_still_accepted(client, admin_jwt_headers
     })
 
     assert r.status_code == 201, r.text
+
+
+@pytest.mark.asyncio
+async def test_a_product_written_proxy_override_round_trips(client, admin_jwt_headers, test_db):
+    """GET an override the product itself produced, then PUT it back unchanged.
+
+    The credential guard refuses unknown keys inside llm / proxy_provider, which
+    is what stops the next credential-shaped field slipping in. It also means a
+    key the product writes but the allow-list omits turns a caller's own data
+    into a 400 -- `default_model` did exactly that, and no test covered the
+    round trip, which is why it shipped.
+    """
+    tid = _admin_tenant_id(admin_jwt_headers)
+    did = await _make_dept(test_db, tid)
+    aid = await _create_app(client, admin_jwt_headers, did, slug="round-trip")
+
+    # Let the product write the section through its own dedicated endpoint.
+    r = await client.patch(f"{BASE}/{aid}/policy/proxy", headers=admin_jwt_headers, json={
+        "provider": "openai", "default_model": "openai/gpt-4o",
+        "base_url": "https://api.openai.com/v1", "timeout_seconds": 30,
+        "api_key": "sk-round-trip-secret",
+    })
+    assert r.status_code == 200, r.text
+
+    fetched = (await client.get(f"{BASE}/{aid}", headers=admin_jwt_headers)).json()
+    override = fetched["policy_override"]
+    assert override["proxy_provider"]["default_model"] == "openai/gpt-4o"
+    assert "sk-round-trip-secret" not in str(override)
+
+    # Send back exactly what the API just returned.
+    back = await client.put(f"{BASE}/{aid}/policy", headers=admin_jwt_headers,
+                            json={"policy_override": override})
+    assert back.status_code == 200, (
+        f"the API refused an override it had just produced: {back.text}"
+    )

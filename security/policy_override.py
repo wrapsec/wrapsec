@@ -47,11 +47,21 @@ ENCRYPTED_SECTIONS: tuple[str, ...] = ("llm", "proxy_provider")
 
 # What a section is permitted to carry. Anything else is refused, so the next
 # credential-shaped field does not repeat this defect by simply not being
-# named here. `api_key_enc` is the stored form the dedicated endpoints write;
-# `api_key_masked` is what a read returns, and is accepted so a caller can
-# round-trip a value it was just given without having to strip it first.
+# named here.
+#
+# THIS MUST COVER EVERY KEY THE PRODUCT ITSELF WRITES. The dedicated
+# `/policy/llm` and `/policy/proxy` endpoints build these sections, and a key
+# they write but this omits makes a GET-then-PUT round trip fail -- the caller
+# is refused for sending back exactly what the product gave it. `default_model`
+# was missed on the first pass and did that, so a test now derives this set from
+# those endpoints' own write sites rather than trusting the list below.
+#
+# `api_key_enc` is the stored form the dedicated endpoints write;
+# `api_key_masked` is what a read returns, and is accepted for the same
+# round-trip reason.
 _ALLOWED_SECTION_KEYS: frozenset[str] = frozenset({
-    "provider", "model", "base_url", "timeout", "timeout_seconds",
+    "provider", "model", "base_url", "default_model",
+    "timeout", "timeout_seconds",
     "api_key_enc", "api_key_masked",
 })
 
@@ -69,8 +79,9 @@ class PolicyOverrideError(ValueError):
 def reject_plaintext_credentials(override: dict | None) -> None:
     """Refuse an override that carries a secret in the clear.
 
-    Raises `PolicyOverrideError`, which callers surface as a 422 the same way
-    they already surface the URL validator's rejection.
+    Raises `PolicyOverrideError`, which callers convert to `ValidationError`
+    and therefore serve as 400 INVALID_REQUEST -- the same status the URL
+    validator's rejection already produces on these paths.
 
     Only the encrypted sections are inspected. The rest of the override is
     ordinary policy -- thresholds, feature flags -- and constraining it here
