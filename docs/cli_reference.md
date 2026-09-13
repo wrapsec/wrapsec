@@ -41,7 +41,7 @@ wrapsec scan "hello world"
 | `1` | CLI error, network failure, auth error, rate limit, SYSTEM_ERROR |
 | `2` | BLOCK - input rejected by security policy |
 
-Network and server errors (5xx, timeout, connection failure) are retried up to 3 times with exponential backoff before exit 1 is returned. A CLI exit 1 on infrastructure errors means retries have already been exhausted.
+Network and server errors (5xx, timeout, connection failure) are retried before exit 1 is returned. A request is attempted at most **3 times** - the first immediately, then after 1 second, then after 2 - so a failing call adds at most 3 seconds of waiting before it gives up. Auth, rate-limit and validation errors are never retried; they propagate at once. A CLI exit 1 on infrastructure errors means those attempts have already been spent.
 
 **SYSTEM_ERROR and exit codes:**
 When the API returns `primary_reason = SYSTEM_ERROR`, a detector or guardrail could not run and the API decision is `BLOCK` with `risk_score = 1.0` - the gateway refuses the request rather than allowing it. The CLI reports exit code `1` (failure) rather than `2` (BLOCK), so a refusal caused by a fault is distinguishable from one caused by content. Either way the input must not be forwarded to an LLM. See `wrapsec scan` output for how SYSTEM_ERROR is surfaced.

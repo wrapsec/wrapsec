@@ -649,3 +649,38 @@ def test_the_example_env_exemptions_are_all_still_present():
         f"these names are exempted from the settings check but no longer appear in "
         f".env.example: {stale}. Drop them from the exemption list."
     )
+
+
+# --------------------------------------------------------------------------
+# 16. the documented retry budget is the one the client actually spends
+# --------------------------------------------------------------------------
+#
+# The CLI reference told operators that a failing request is "retried up to 3
+# times with exponential backoff". Neither half held: the schedule is three
+# ATTEMPTS, so two retries, and its delays are 0, 1 and 2 seconds, which is not
+# exponential. Someone sizing a caller-side timeout against that sentence would
+# have budgeted for roughly twice the wait that actually occurs.
+
+def test_the_documented_retry_budget_matches_the_schedule():
+    import sys
+    sdk = _ROOT / "sdk/python"
+    if str(sdk) not in sys.path:
+        sys.path.insert(0, str(sdk))
+    from wrapsec.core.retry import BACKOFF_SCHEDULE, MAX_ATTEMPTS
+
+    doc = (_ROOT / "docs/cli_reference.md").read_text(encoding="utf-8")
+
+    assert MAX_ATTEMPTS == len(BACKOFF_SCHEDULE)
+    assert f"**{MAX_ATTEMPTS} times**" in doc, (
+        f"the reference does not state the real attempt count of {MAX_ATTEMPTS}"
+    )
+
+    total = int(sum(BACKOFF_SCHEDULE))
+    assert f"{total} seconds of waiting" in doc, (
+        f"the schedule {BACKOFF_SCHEDULE} adds {total}s of delay; the reference "
+        f"states something else, so a reader sizing a timeout would be misled"
+    )
+    assert "exponential" not in doc.lower(), (
+        f"the reference calls the backoff exponential, but the schedule is "
+        f"{BACKOFF_SCHEDULE}"
+    )
