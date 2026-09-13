@@ -1523,8 +1523,8 @@ List audit log records.
 |---|---|
 | `trace_id` | Partial match |
 | `decision` | `BLOCK` / `SANITIZE` / `ALLOW` |
-| `threat_category` | e.g. `PROMPT_INJECTION`, `PII` |
-| `primary_reason` | e.g. `RULE_DETECTOR`, `PII_GUARDRAIL_BLOCK` |
+| `threat_category` | `PROMPT_INJECTION` / `JAILBREAK` / `MALICIOUS_INTENT` / `DATA_EXFILTRATION` / `PII` / `TOXICITY` |
+| `primary_reason` | `RULE_DETECTOR` / `ML_DETECTOR` / `LLM_DETECTOR` / `PII_GUARDRAIL_BLOCK` / `PII_GUARDRAIL_SANITIZE` / `TOXICITY_GUARDRAIL_BLOCK` / `SYSTEM_ERROR` / `NO_THREAT_DETECTED` |
 | `confidence_band` | `HIGH` / `MEDIUM` / `LOW` |
 | `execution_mode` | `scan_only` / `proxy` |
 | `key_id` | Filter by API key |
@@ -1538,6 +1538,8 @@ List audit log records.
 | `sort_order` | `desc` (default) / `asc` |
 | `limit` | Default 50, max 500 |
 | `offset` | Default 0 |
+
+These vocabularies are closed, but the filters are not validated against them: an unrecognised value is matched literally and simply returns no rows, rather than an error. A misspelled `threat_category` therefore reads as "no such events" rather than as a bad query.
 
 **Response 200:**
 ```json

@@ -312,3 +312,57 @@ def test_documented_source_lists_match_the_shipped_defaults(row, attribute):
         f"{shipped}. A reader tuning trust posture from the table would classify "
         f"a source the gateway judges differently."
     )
+
+
+# --------------------------------------------------------------------------
+# 10. the documented audit filter vocabularies are the ones the code produces
+# --------------------------------------------------------------------------
+#
+# `GET /v1/audit/logs` is a published operation and its filter table is the only
+# statement of what `threat_category` and `primary_reason` accept. Both were
+# written as "e.g." examples, so two of the six threat categories a caller can
+# actually receive appeared in no document at all.
+#
+# The filters are not validated, so a value that drifts out of the table does not
+# fail loudly -- it returns no rows. That is precisely why the table has to be
+# derived from the code rather than maintained by hand.
+
+def _documented_filter_values(param: str) -> set[str]:
+    text = (_ROOT / "docs/api.md").read_text(encoding="utf-8")
+    row  = re.search(rf'^\|\s*`{param}`\s*\|([^|]*)\|', text, re.MULTILINE)
+    assert row, f"the audit filter table no longer has a `{param}` row"
+    return set(re.findall(r'`([A-Z][A-Z0-9_]+)`', row.group(1)))
+
+
+def test_documented_threat_categories_are_the_ones_a_caller_can_receive():
+    """BENIGN is deliberately absent: the scorer drops it, so it never reaches a
+    response and must not be offered as a filter value."""
+    from domain.enums import ThreatCategory
+
+    reachable = {c.value for c in ThreatCategory} - {ThreatCategory.BENIGN.value}
+    assert _documented_filter_values("threat_category") == reachable
+
+
+def test_documented_primary_reasons_are_the_ones_the_scorer_returns():
+    """Read out of `compute_primary_reason` itself: every literal it returns, plus
+    the detector keys it selects the winner from."""
+    import ast
+
+    source = (_ROOT / "engine/scoring/primary_reason.py").read_text(encoding="utf-8")
+    fn = next(
+        n for n in ast.walk(ast.parse(source))
+        if isinstance(n, ast.FunctionDef) and n.name == "compute_primary_reason"
+    )
+    literals = {
+        n.value.value for n in ast.walk(fn)
+        if isinstance(n, ast.Return)
+        and isinstance(n.value, ast.Constant)
+        and isinstance(n.value.value, str)
+    }
+    detectors = {
+        k.value for n in ast.walk(fn) if isinstance(n, ast.Dict)
+        for k in n.keys if isinstance(k, ast.Constant) and isinstance(k.value, str)
+    }
+    emitted = literals | detectors
+    assert emitted, "compute_primary_reason was rewritten; this fence needs updating"
+    assert _documented_filter_values("primary_reason") == emitted
