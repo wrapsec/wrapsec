@@ -17,6 +17,7 @@ from __future__ import annotations
 
 import ast
 import inspect
+import re
 from pathlib import Path
 
 import pytest
@@ -256,4 +257,58 @@ def test_downstream_definitions_are_read_exactly_once_at_connect():
     assert "list_tools" in source, (
         "connect_all no longer reads downstream tools; the snapshot the docs "
         "describe is not being taken where they say it is"
+    )
+
+
+# --------------------------------------------------------------------------
+# 9. the documented trust vocabulary is the one the settings actually ship
+# --------------------------------------------------------------------------
+#
+# `docs/api.md` spells the trusted / untrusted source lists out by hand in its
+# settings table. That copy drifted: `agent_tool_call` was added to the shipped
+# default and the row still listed three values, so the table said an agent's
+# tool arguments get base posture while the code tightened them.
+#
+# The same vocabulary is hand-spelled in the Node SDK and the dashboard, and
+# those copies are fenced against the enum by their own test. This is the
+# remaining copy. It is compared against `get_settings()` rather than against a
+# literal here: a test that restates the list is a third copy, and would pass
+# on exactly the drift it is meant to catch.
+
+_SOURCE_ROW = re.compile(
+    r'^\|\s*`(TRUSTED_INPUT_SOURCES|UNTRUSTED_INPUT_SOURCES)`\s*\|\s*`\[([^\]]*)\]`',
+    re.MULTILINE,
+)
+
+
+def _documented_source_lists() -> dict[str, list[str]]:
+    text = (_ROOT / "docs/api.md").read_text(encoding="utf-8")
+    found = {
+        name: [v.strip().strip('"\'') for v in body.split(",") if v.strip()]
+        for name, body in _SOURCE_ROW.findall(text)
+    }
+    assert set(found) == {"TRUSTED_INPUT_SOURCES", "UNTRUSTED_INPUT_SOURCES"}, (
+        "the settings table in docs/api.md no longer carries both source rows in "
+        "the expected shape; update this fence rather than deleting it"
+    )
+    return found
+
+
+@pytest.mark.parametrize(
+    "row,attribute",
+    [
+        ("TRUSTED_INPUT_SOURCES",   "trusted_input_sources"),
+        ("UNTRUSTED_INPUT_SOURCES", "untrusted_input_sources"),
+    ],
+)
+def test_documented_source_lists_match_the_shipped_defaults(row, attribute):
+    from config.settings import get_settings
+
+    documented = _documented_source_lists()[row]
+    shipped    = list(getattr(get_settings(), attribute))
+
+    assert documented == shipped, (
+        f"docs/api.md documents {row} as {documented} but the shipped default is "
+        f"{shipped}. A reader tuning trust posture from the table would classify "
+        f"a source the gateway judges differently."
     )

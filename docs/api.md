@@ -1032,7 +1032,7 @@ scan `assessment` gains a `posture` block:
 |---|---|---|
 | `UNTRUSTED_THRESHOLD_DELTA` | `0.0` | Amount to lower block/sanitize thresholds for untrusted sources. `0` disables the feature. |
 | `TRUSTED_INPUT_SOURCES` | `["user_prompt"]` | Sources classified as trusted. |
-| `UNTRUSTED_INPUT_SOURCES` | `["tool_output","retrieved_document","external_content"]` | Sources classified as untrusted. |
+| `UNTRUSTED_INPUT_SOURCES` | `["tool_output","retrieved_document","external_content","agent_tool_call"]` | Sources classified as untrusted. |
 | `TREAT_UNKNOWN_AS_UNTRUSTED` | `false` | Treat a source in neither list as untrusted (full Zero-Trust) instead of base posture. |
 
 **Calibration note.** On the current FAST-mode detector the aggregated risk
