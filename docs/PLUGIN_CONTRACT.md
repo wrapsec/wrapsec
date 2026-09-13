@@ -103,6 +103,12 @@ layer can clamp even an application override. The core never interprets
 app_id}`. A layer that raises is logged and skipped (fail-open) -- never rely on
 it to *deny*; use it to shape.
 
+**Return the policy, or your layer does nothing.** The core keeps your result
+only when it is a dict; anything else, `None` included, leaves the policy as it
+was. An `async def` that falls off its end returns `None`, so a forgotten
+`return` is a layer that runs, appears registered, and silently has no effect.
+Unlike the raise case, this one is not logged.
+
 **"Ceiling" describes intent, not enforcement.** The core threads whatever policy
 dict your layer returns into the next layer and on to the policy engine; it does
 NOT clamp your return value against the pre-layer policy. A layer that returns a
