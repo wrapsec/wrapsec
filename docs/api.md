@@ -441,10 +441,10 @@ from a client that kept a copy, so it invalidates the whole set and forces
 re-authentication. The response is an ordinary `401 UNAUTHORIZED`, identical to
 any other invalid token, and carries no indication that this happened.
 
-Access tokens are NOT invalidated by this. Only refresh tokens are revoked, so
-any access token already issued stays usable until it expires - up to 30 minutes.
-That is unlike `POST /v1/auth/change-password`, which also increments the user's
-token version and so ends access-token validity immediately.
+Access tokens are invalidated too, immediately. The user's token version is
+incremented and the cached principal dropped, so an access token minted before
+the replay stops being accepted on the next request rather than living out its
+remaining lifetime. Nothing usable survives the event.
 
 **This is reachable without an attacker.** Two refreshes racing with the same
 cookie take the same path: the first rotates the token, and the second is then

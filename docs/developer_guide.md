@@ -170,13 +170,14 @@ Not python-jose. These are not interchangeable - exception types differ.
 - Department change (on the membership)
 - Account deactivation
 - Admin password reset
+- Refresh-token reuse (a presented token found already revoked)
 
-Refresh-token reuse revokes every refresh token too, but by a DIFFERENT route:
-`AuthService.refresh` calls `RefreshTokenRepository.revoke_all_for_user()`
-directly when a presented token is found already revoked. It does not go through
-`logout_all_sessions()`, so `token_version` is NOT incremented and access tokens
-issued beforehand stay valid until they expire. Two refreshes racing with the
-same cookie reach this path, which is why any client must serialize refreshes.
+Reuse detection previously revoked refresh tokens directly, without the version
+increment, which stopped renewal while leaving an already-issued access token
+valid for the rest of its lifetime. It now goes through `logout_all_sessions()`
+like the rest. Two refreshes racing with the same cookie reach that path with no
+attacker involved, so a client must serialize refreshes or it will end its own
+sessions.
 
 `token_version` is deliberately per-USER, not per-membership: a role change in one tenant invalidates the user's sessions everywhere (the safe variant). Any future membership-removal path MUST also call `logout_all_sessions()`.
 

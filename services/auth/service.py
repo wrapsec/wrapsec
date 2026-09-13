@@ -378,14 +378,28 @@ class AuthService:
             # back to authentication, which the legitimate user can complete and
             # the thief cannot. Revoking more than necessary is the point: the
             # alternative leaves a live session in unknown hands.
+            #
+            # It ends ACCESS tokens as well, which is why this goes through
+            # logout_all_sessions rather than revoking refresh tokens directly.
+            # Revoking refresh tokens alone stops renewal and nothing else: an
+            # access token minted a moment earlier stays valid for the rest of
+            # its lifetime, so whoever won the race keeps a working credential
+            # for that window. A replay is one of the strongest compromise
+            # signals available, and the answer to it should not leave a usable
+            # credential behind.
+            #
+            # Bumping token_version alone would not be enough either. The JWT
+            # middleware reads the user through a TTL cache, so it would keep
+            # comparing against the stale version until that expired.
+            # logout_all_sessions increments, revokes and drops the cache entry
+            # together, which is what makes the refusal immediate.
             replayed = await rt_repo.find_revoked(token_hash)
             if replayed is not None:
-                revoked_count = await rt_repo.revoke_all_for_user(replayed.user_id)
-                await db.commit()
+                await self.logout_all_sessions(replayed.user_id, db)
                 logger.warning(
                     "auth_event TOKEN_REFRESH_FAILED reason=token_reuse_detected "
-                    "user_id=%s sessions_revoked=%d",
-                    replayed.user_id, revoked_count,
+                    "user_id=%s",
+                    replayed.user_id,
                 )
                 await _log_auth_event(
                     action         = "token_refresh_failed",

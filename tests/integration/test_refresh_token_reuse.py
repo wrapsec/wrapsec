@@ -151,3 +151,45 @@ async def test_the_replay_is_recorded_as_its_own_reason(client, auth_setup, test
         "the replay was not recorded; either it was not detected, or the "
         "failure reason is not a member of the enum the writer coerces through"
     )
+
+
+@pytest.mark.asyncio
+async def test_a_replay_also_ends_access_tokens_already_issued(client, auth_setup):
+    """Revoking refresh tokens alone stops renewal and nothing else.
+
+    An access token minted moments before the replay would otherwise stay valid
+    for the rest of its lifetime, so whoever won the race keeps a working
+    credential against every authenticated endpoint until it expires. A replay
+    is a compromise signal; the answer to it must not leave a usable credential
+    behind.
+
+    The access token is taken from the login that also issued the refresh token,
+    so it is exactly the credential a thief would be holding.
+    """
+    email = auth_setup["viewer_user"].email
+
+    login = await client.post(_LOGIN, json={"email": email, "password": "TestPass1!"})
+    assert login.status_code == 200, login.text
+    original = login.cookies.get("refresh_token")
+    access   = login.json()["access_token"]
+    headers  = {"Authorization": f"Bearer {access}"}
+
+    # The access token works before anything goes wrong -- otherwise the
+    # assertion below would pass for the wrong reason.
+    before = await client.get("/v1/auth/me", headers=headers)
+    assert before.status_code == 200, (
+        f"the access token was already unusable, so this test proves nothing: {before.text}"
+    )
+
+    rotated = await _refresh(client, original)
+    assert rotated.status_code == 200, rotated.text
+
+    replay = await _refresh(client, original)
+    assert replay.status_code == 401
+
+    after = await client.get("/v1/auth/me", headers=headers)
+    assert after.status_code == 401, (
+        "an access token issued before the replay is still accepted; revoking "
+        "refresh tokens stopped renewal but left a live credential in whichever "
+        "hands won the race"
+    )

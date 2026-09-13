@@ -103,12 +103,13 @@ class RefreshTokenRepository(BaseRepository):
         Returns count of rows updated.
         Caller owns the transaction - no commit here.
 
-        TWO CALLERS, and they are not equivalent.
-        `AuthService.logout_all_sessions()` pairs this with a token_version
-        increment, so access tokens die with the refresh tokens.
-        `AuthService.refresh()` calls it alone on reuse detection, where
-        token_version is deliberately untouched: an access token already issued
-        stays valid until it expires.
+        Call it through `AuthService.logout_all_sessions()`, not directly.
+        Revoking refresh tokens stops renewal and nothing else: an access token
+        already issued stays valid for the rest of its lifetime. The service
+        method pairs this with a token_version increment and a cache drop, which
+        is what actually ends a session. Reuse detection used to call this
+        directly and left a usable access token behind for up to its full
+        lifetime.
         """
         result = await self.session.execute(
             update(RefreshTokenModel)
