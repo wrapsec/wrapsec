@@ -319,12 +319,12 @@ This allows deployment in regulated environments where storing raw user input is
 
 Every scan, proxy call, and administrative action is recorded to a tenant-scoped audit log. Rows are tamper-evident: each carries a SHA-256 hash computed over its payload and chained to the previous row's hash, and a database trigger rejects `UPDATE` on chained rows. Modifying a row, or removing one from the middle of the chain, breaks the link and is detectable.
 
-Two limits are worth stating plainly rather than leaving to be discovered:
+Two things are worth stating plainly rather than leaving to be discovered:
 
 - **`DELETE` is not blocked, and truncation of the newest rows is not currently detectable.** Deletion is permitted because per-tenant retention needs it. Removing rows from the *end* of a chain leaves everything that remains internally consistent, so there is nothing to notice.
-- **No verifier ships yet.** The hashes needed to check a chain are in the table, and the scheme is documented, but walking it is currently your own to do. There is no `wrapsec audit verify`.
+- **The verifier is an on-demand operator tool, not a scheduled check.** `scripts/verify_audit_chain.py` walks a tenant's chain and reports, row by row, whether each one still hashes to its stored `record_hash` and links to its predecessor (`--tenant` for a single tenant, `--json` for machine-readable output). Nothing runs it for you: there is no scheduled job and no `wrapsec audit verify` subcommand, so a chain is only as checked as your operations make it.
 
-Both are tracked as an audit-integrity workstream. Until it lands, treat the chain as evidence that a stored row has not been *edited*, not as proof that the log is *complete*.
+Treat the chain as evidence that a stored row has not been *edited*, not as proof that the log is *complete*.
 
 
 ## Webhooks and SIEM
