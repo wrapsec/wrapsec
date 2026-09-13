@@ -38,6 +38,12 @@ run_plugin_migrations(
 )
 ```
 
+**The name must match `[a-z0-9_]+`.** It becomes a table identifier, so anything
+else is refused with a `ValueError` rather than quietly producing an odd table
+name. A Python distribution is conventionally hyphenated, so the obvious value to
+reach for is the one that fails: pass `wrapsec_billing`, not `wrapsec-billing`.
+Uppercase and dots are refused for the same reason.
+
 Call it from the plugin's `register(app)` (or a management CLI), never from core
 startup. `command.upgrade` is synchronous and the env below calls `asyncio.run`,
 so call it from a worker thread when inside an event loop

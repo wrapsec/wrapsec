@@ -684,3 +684,22 @@ def test_the_documented_retry_budget_matches_the_schedule():
         f"the reference calls the backoff exponential, but the schedule is "
         f"{BACKOFF_SCHEDULE}"
     )
+
+
+# --------------------------------------------------------------------------
+# 17. the documented plugin-name constraint is the one enforced
+# --------------------------------------------------------------------------
+#
+# The name becomes an Alembic version table identifier, so it is validated. A
+# Python distribution is conventionally hyphenated, which makes the natural value
+# to pass the one that raises, and the convention document did not say so.
+
+def test_the_documented_plugin_name_pattern_is_the_enforced_one():
+    from db.plugin_migrations import _SAFE_NAME
+
+    doc = (_ROOT / "docs/plugin_migrations.md").read_text(encoding="utf-8")
+    body = _SAFE_NAME.pattern.strip("^$")
+    assert f"`{body}`" in doc, (
+        f"the convention document does not state the enforced pattern {body!r}, so "
+        f"an author would meet it as a ValueError instead"
+    )
