@@ -706,6 +706,10 @@ Scan-only mode. Inspect input, get a security decision, then forward to your LLM
     "user_id": "string - optional, self-reported, stored in audit",
     "source":  "string - optional, audit label"
   },
+  "context": {
+    "user_role":   "string - optional, ACCEPTED BUT UNUSED, see below",
+    "sensitivity": "string - optional, ACCEPTED BUT UNUSED, see below"
+  },
   "options": {
     "debug": false
   }
@@ -719,6 +723,17 @@ Scan-only mode. Inspect input, get a security decision, then forward to your LLM
 - `full` - rule + ML + LLM semantic (~100-500ms additional)
 
 **input_source** is the trust-boundary provenance of `input`: where the text came from. Use `tool_output`, `retrieved_document`, or `external_content` for content an agent pulled in (the indirect prompt-injection surface); `agent_tool_call` for arguments a model composed for a tool invocation; `user_prompt` (the default) for the end user's own message. It never relaxes detection - identical content scores identically whatever origin it claims. It can, opt-in, tighten the *policy* thresholds applied to untrusted origins (see [Source-aware policy posture](#source-aware-policy-posture)); off by default.
+
+**context** is accepted and carried no further. `context.user_role` and
+`context.sensitivity` are validated as strings, attached to the in-process request
+object, and then read by nothing: no detector consults them, no policy layer
+consults them, and neither is written to the audit record. They are a reserved
+shape, not a control.
+
+This is worth stating because `sensitivity` reads like one. Sending
+`"sensitivity": "high"` does NOT tighten how the content is judged, and sending a
+privileged `user_role` does not change anything either. The field that DOES shift
+policy by origin is `input_source`, described above.
 
 **session_id / turn_index / run_id** are optional correlation identifiers, persisted on the audit record. `run_id` groups one agent execution; its turns are returned as a timeline by `GET /v1/agent-runs/{run_id}`.
 
@@ -1928,6 +1943,35 @@ Sets audit log retention period. Min 7 days, max 3650 days (10 years).
 {"retention_days": 90}
 ```
 
+### GET /v1/settings/admin_limits
+
+*NOT PUBLIC - deployment configuration. Served and supported; outside the published contract.*
+
+Returns the per-caller limits on administrative writes and audit export.
+
+**Response 200:**
+```json
+{"admin_write_rate_limit": 20, "audit_export_rate_limit": 5}
+```
+
+### PUT /v1/settings/admin_limits
+
+*NOT PUBLIC - deployment configuration. Served and supported; outside the published contract.*
+
+Sets either or both. A field omitted or null is left unchanged.
+
+```json
+{"admin_write_rate_limit": 20, "audit_export_rate_limit": 5}
+```
+
+`admin_write_rate_limit` is 5-200 per minute. The floor exists so an
+administrator cannot lock themselves out of the endpoints that would let them
+raise it again. `audit_export_rate_limit` is 1-60 per minute; export is
+deliberately expensive to issue. Out-of-range values are refused.
+
+These are stored per tenant and take effect within seconds, ahead of the `.env`
+defaults of the same name.
+
 ### GET /v1/settings/rate_limit
 
 *PUBLIC - in the published OpenAPI contract.*
@@ -2474,11 +2518,23 @@ Creates an application under a department.
   "slug":        "code-assistant",
   "name":        "Code Assistant",
   "description": null,
+  "owner_name":  null,
+  "owner_email": null,
   "environment": "production",
+  "metadata":            null,
   "policy_override":     null,
   "rate_limit_override": null
 }
 ```
+
+`owner_name` (max 100 chars) and `owner_email` record who is accountable for the
+application. They are descriptive only: neither is used for authorization, and
+setting `owner_email` does not enrol that address in any notification.
+`metadata` is a free-form object stored alongside the application and returned on
+read; nothing interprets it.
+
+`rate_limit_override` is 1-10000 requests per minute, or null to inherit the
+global limit.
 
 **Response 201:** Application object.
 
