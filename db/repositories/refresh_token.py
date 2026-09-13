@@ -101,8 +101,14 @@ class RefreshTokenRepository(BaseRepository):
         """
         Revokes all active (revoked_at IS NULL) tokens for a user.
         Returns count of rows updated.
-        Called exclusively by AuthService.logout_all_sessions().
         Caller owns the transaction - no commit here.
+
+        TWO CALLERS, and they are not equivalent.
+        `AuthService.logout_all_sessions()` pairs this with a token_version
+        increment, so access tokens die with the refresh tokens.
+        `AuthService.refresh()` calls it alone on reuse detection, where
+        token_version is deliberately untouched: an access token already issued
+        stays valid until it expires.
         """
         result = await self.session.execute(
             update(RefreshTokenModel)

@@ -432,7 +432,25 @@ Issues a new access token using the refresh token cookie. Rotates the refresh to
 }
 ```
 
-Sets a new rotated `refresh_token` cookie. Parallel refresh requests with the same token: first wins, second gets 401.
+Sets a new rotated `refresh_token` cookie.
+
+**Presenting an already-rotated token revokes EVERY refresh token for that
+user.** Rotation marks the presented token revoked, and a later request carrying
+that same token is treated as a replay: the server cannot tell a stolen token
+from a client that kept a copy, so it invalidates the whole set and forces
+re-authentication. The response is an ordinary `401 UNAUTHORIZED`, identical to
+any other invalid token, and carries no indication that this happened.
+
+Access tokens are NOT invalidated by this. Only refresh tokens are revoked, so
+any access token already issued stays usable until it expires - up to 30 minutes.
+That is unlike `POST /v1/auth/change-password`, which also increments the user's
+token version and so ends access-token validity immediately.
+
+**This is reachable without an attacker.** Two refreshes racing with the same
+cookie take the same path: the first rotates the token, and the second is then
+presenting a revoked one. A client MUST serialize refreshes - share a single
+in-flight request rather than letting concurrent calls each refresh - or a
+routine race will sign the user out of every session.
 
 **Errors:**
 
@@ -1773,6 +1791,16 @@ the route, after which the schema will say `text/csv`.
 **Query params:** `dept_id`, `app_id`, `decision`, `primary_reason`, `confidence_band`, `from`, `to`, `limit` (default 1000, max 10000)
 
 **CSV columns:** `trace_id`, `timestamp`, `decision`, `risk_score`, `confidence`, `confidence_band`, `primary_reason`, `threats`, `tenant_id`, `dept_id`, `app_id`, `key_id`, `source`, `user_id_prefix`, `ip_address_hash`, `policy_source`, `detection_mode`, `latency_ms`
+
+**Formula neutralization changes cell values, so parse accordingly.** A text
+cell whose first character is `=`, `+`, `-`, `@`, a tab or a carriage return is
+written with a leading apostrophe, so a spreadsheet renders it as text instead of
+evaluating it as a formula. `source` is the field most likely to trigger this,
+since it arrives verbatim from scan metadata and a caller chooses it. Only string
+cells are affected -- numeric columns such as `risk_score` and `latency_ms` are
+written unchanged, so a negative number is never rewritten. A consumer reading
+the CSV programmatically should strip a single leading apostrophe from text
+columns.
 
 **Privacy note:** `ip_address` is SHA-256 hashed (first 16 hex chars) and exported as `ip_address_hash`. `user_id` is truncated to the first 8 characters and exported as `user_id_prefix`. Both fields retain enough entropy for correlation within an export without exposing raw PII. Full values remain available in the database for authorized access.
 

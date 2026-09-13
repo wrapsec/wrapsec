@@ -171,6 +171,13 @@ Not python-jose. These are not interchangeable - exception types differ.
 - Account deactivation
 - Admin password reset
 
+Refresh-token reuse revokes every refresh token too, but by a DIFFERENT route:
+`AuthService.refresh` calls `RefreshTokenRepository.revoke_all_for_user()`
+directly when a presented token is found already revoked. It does not go through
+`logout_all_sessions()`, so `token_version` is NOT incremented and access tokens
+issued beforehand stay valid until they expire. Two refreshes racing with the
+same cookie reach this path, which is why any client must serialize refreshes.
+
 `token_version` is deliberately per-USER, not per-membership: a role change in one tenant invalidates the user's sessions everywhere (the safe variant). Any future membership-removal path MUST also call `logout_all_sessions()`.
 
 NOT called on reactivation - there are no active sessions to invalidate.
