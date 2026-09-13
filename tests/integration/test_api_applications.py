@@ -382,3 +382,129 @@ async def test_app_proxy_override_invalid_timeout_422(client, admin_jwt_headers,
     aid = await _create_app(client, admin_jwt_headers, did, slug="prx-bad")
     r = await client.patch(f"{BASE}/{aid}/policy/proxy", json={"timeout_seconds": 999}, headers=admin_jwt_headers)
     assert r.status_code == 422
+
+
+# ── F-01: a credential must not be storable in the clear ─────────────────────
+#
+# Two write paths reach the same stored structure. The dedicated
+# /policy/llm and /policy/proxy endpoints take a SecretStr and encrypt it. The
+# generic policy_override took an unconstrained dict and stored it verbatim, so
+# a plaintext api_key was persisted in the clear, returned unmasked by every
+# read that renders the override, and merged into the effective policy by a
+# resolver that only ever decrypts api_key_enc.
+#
+# PUT /{app_id}/policy was worse still: it had no validation at all, so it also
+# accepted a base_url the SSRF guard would have rejected on the sibling paths.
+
+_PLAINTEXT_KEY = "sk-live-PLAINTEXT-MUST-NOT-PERSIST-0123"
+_METADATA_URL  = "http://169.254.169.254/latest/meta-data/"
+
+
+@pytest.mark.asyncio
+async def test_create_application_refuses_a_plaintext_credential(client, admin_jwt_headers, test_db):
+    tid = _admin_tenant_id(admin_jwt_headers)
+    did = await _make_dept(test_db, tid)
+
+    r = await client.post(BASE, headers=admin_jwt_headers, json={
+        "dept_id": did, "slug": "plain-create", "name": "Plain Create",
+        "policy_override": {"llm": {"provider": "openai", "api_key": _PLAINTEXT_KEY}},
+    })
+
+    assert r.status_code == 400, r.text
+    assert _PLAINTEXT_KEY not in r.text, "the rejection echoed the secret back"
+
+
+@pytest.mark.asyncio
+async def test_update_application_refuses_a_plaintext_credential(client, admin_jwt_headers, test_db):
+    tid = _admin_tenant_id(admin_jwt_headers)
+    did = await _make_dept(test_db, tid)
+    aid = await _create_app(client, admin_jwt_headers, did, slug="plain-update")
+
+    r = await client.put(f"{BASE}/{aid}", headers=admin_jwt_headers, json={
+        "policy_override": {"proxy_provider": {"api_key": _PLAINTEXT_KEY}},
+    })
+
+    assert r.status_code == 400, r.text
+    assert _PLAINTEXT_KEY not in r.text
+
+
+@pytest.mark.asyncio
+async def test_set_application_policy_refuses_a_plaintext_credential(client, admin_jwt_headers, test_db):
+    """PUT /{app_id}/policy is the path that had no guard whatsoever."""
+    tid = _admin_tenant_id(admin_jwt_headers)
+    did = await _make_dept(test_db, tid)
+    aid = await _create_app(client, admin_jwt_headers, did, slug="plain-policy")
+
+    r = await client.put(f"{BASE}/{aid}/policy", headers=admin_jwt_headers, json={
+        "policy_override": {"llm": {"provider": "openai", "api_key": _PLAINTEXT_KEY}},
+    })
+
+    assert r.status_code == 400, r.text
+    assert _PLAINTEXT_KEY not in r.text
+
+
+@pytest.mark.asyncio
+async def test_set_application_policy_ssrf_validates_the_base_url(client, admin_jwt_headers, test_db):
+    """The same path also bypassed the SSRF guard its siblings carried."""
+    tid = _admin_tenant_id(admin_jwt_headers)
+    did = await _make_dept(test_db, tid)
+    aid = await _create_app(client, admin_jwt_headers, did, slug="ssrf-policy")
+
+    r = await client.put(f"{BASE}/{aid}/policy", headers=admin_jwt_headers, json={
+        "policy_override": {"llm": {"provider": "openai", "base_url": _METADATA_URL}},
+    })
+
+    assert r.status_code == 400, r.text
+
+
+@pytest.mark.asyncio
+async def test_an_unknown_key_in_a_credential_section_is_refused(client, admin_jwt_headers, test_db):
+    """So the next credential-shaped field does not repeat this by not being
+    named in the rejection list."""
+    tid = _admin_tenant_id(admin_jwt_headers)
+    did = await _make_dept(test_db, tid)
+
+    r = await client.post(BASE, headers=admin_jwt_headers, json={
+        "dept_id": did, "slug": "unknown-key", "name": "Unknown Key",
+        "policy_override": {"llm": {"provider": "openai", "secret_token": "x"}},
+    })
+
+    assert r.status_code == 400, r.text
+
+
+@pytest.mark.asyncio
+async def test_a_stored_plaintext_credential_is_not_returned(client, admin_jwt_headers, test_db):
+    """The read-side backstop, seeded directly past the write guard.
+
+    The write path now refuses these, but a redaction that only runs when the
+    writer remembered to validate is not a redaction: this covers anything an
+    earlier build stored, or a path added later.
+    """
+    tid = _admin_tenant_id(admin_jwt_headers)
+    did = await _make_dept(test_db, tid)
+    aid = await _seed_app(test_db, tid, did, policy_override={
+        "llm": {"provider": "openai", "api_key": _PLAINTEXT_KEY},
+    })
+
+    r = await client.get(f"{BASE}/{aid}", headers=admin_jwt_headers)
+
+    assert r.status_code == 200
+    assert _PLAINTEXT_KEY not in r.text, "a stored plaintext credential reached the caller"
+    assert "api_key" not in r.json()["policy_override"]["llm"]
+
+
+@pytest.mark.asyncio
+async def test_a_legitimate_override_is_still_accepted(client, admin_jwt_headers, test_db):
+    """The guard must not refuse ordinary policy."""
+    tid = _admin_tenant_id(admin_jwt_headers)
+    did = await _make_dept(test_db, tid)
+
+    r = await client.post(BASE, headers=admin_jwt_headers, json={
+        "dept_id": did, "slug": "legit-override", "name": "Legit",
+        "policy_override": {
+            "llm": {"provider": "openai", "base_url": "https://api.openai.com/v1"},
+            "detection": {"rule_enabled": False},
+        },
+    })
+
+    assert r.status_code == 201, r.text

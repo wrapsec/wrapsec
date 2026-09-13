@@ -325,3 +325,76 @@ async def test_delete_department_soft_deletes(client, admin_jwt_headers, test_db
 async def test_delete_department_nonexistent_404(client, admin_jwt_headers):
     r = await client.delete(f"{BASE}/{uuid.uuid4()}", headers=admin_jwt_headers)
     assert r.status_code == 404
+
+
+# ── F-01: a credential must not be storable in the clear ─────────────────────
+#
+# Same defect as on applications, and it had to be fixed in both places: the
+# mask was duplicated byte-for-byte across the two endpoint modules, so a fix
+# to one would have left the other exposed. Both now delegate to
+# security.policy_override.
+
+_PLAINTEXT_KEY = "sk-live-PLAINTEXT-MUST-NOT-PERSIST-0123"
+
+
+@pytest.mark.asyncio
+async def test_create_department_refuses_a_plaintext_credential(client, admin_jwt_headers):
+    r = await client.post(BASE, headers=admin_jwt_headers, json={
+        "slug": "plain-dept-create", "name": "Plain Create",
+        "policy_override": {"llm": {"provider": "openai", "api_key": _PLAINTEXT_KEY}},
+    })
+
+    assert r.status_code == 400, r.text
+    assert _PLAINTEXT_KEY not in r.text, "the rejection echoed the secret back"
+
+
+@pytest.mark.asyncio
+async def test_update_department_refuses_a_plaintext_credential(client, admin_jwt_headers):
+    did = await _create_dept(client, admin_jwt_headers, slug="plain-dept-update")
+
+    r = await client.put(f"{BASE}/{did}", headers=admin_jwt_headers, json={
+        "policy_override": {"proxy_provider": {"api_key": _PLAINTEXT_KEY}},
+    })
+
+    assert r.status_code == 400, r.text
+    assert _PLAINTEXT_KEY not in r.text
+
+
+@pytest.mark.asyncio
+async def test_department_unknown_key_in_a_credential_section_is_refused(client, admin_jwt_headers):
+    r = await client.post(BASE, headers=admin_jwt_headers, json={
+        "slug": "dept-unknown-key", "name": "Unknown Key",
+        "policy_override": {"llm": {"provider": "openai", "secret_token": "x"}},
+    })
+
+    assert r.status_code == 400, r.text
+
+
+@pytest.mark.asyncio
+async def test_a_stored_plaintext_credential_is_not_returned_by_a_department(
+    client, admin_jwt_headers, test_db,
+):
+    """The read-side backstop, seeded directly past the write guard."""
+    tid = _admin_tenant_id(admin_jwt_headers)
+    did = await _seed_dept(test_db, tid, policy_override={
+        "llm": {"provider": "openai", "api_key": _PLAINTEXT_KEY},
+    })
+
+    r = await client.get(f"{BASE}/{did}", headers=admin_jwt_headers)
+
+    assert r.status_code == 200
+    assert _PLAINTEXT_KEY not in r.text, "a stored plaintext credential reached the caller"
+    assert "api_key" not in r.json()["policy_override"]["llm"]
+
+
+@pytest.mark.asyncio
+async def test_a_legitimate_department_override_is_still_accepted(client, admin_jwt_headers):
+    r = await client.post(BASE, headers=admin_jwt_headers, json={
+        "slug": "dept-legit-override", "name": "Legit",
+        "policy_override": {
+            "llm": {"provider": "openai", "base_url": "https://api.openai.com/v1"},
+            "detection": {"rule_enabled": False},
+        },
+    })
+
+    assert r.status_code == 201, r.text

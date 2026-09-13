@@ -24,7 +24,12 @@ from db.repositories.department import DepartmentRepository
 from domain.entities.principal import Principal
 from domain.enums import AdminEventAction
 from errors.exceptions import ConflictError, NotFoundError, ValidationError
-from security.encryption import decrypt, encrypt, mask
+from security.encryption import encrypt
+from security.policy_override import (
+    PolicyOverrideError,
+    mask_policy_override,
+    reject_plaintext_credentials,
+)
 from security.url_validator import validate_llm_base_url, validate_policy_override_urls
 from services.slug import is_reserved_slug, slugify
 from services.time import to_iso_z
@@ -33,7 +38,21 @@ logger = logging.getLogger("wrapsec.departments")
 
 router = APIRouter()
 
-_ENCRYPTED_SECTIONS = ("llm", "proxy_provider")
+
+def _guard_policy_override(override: dict | None) -> None:
+    """Both write-side guards for a generic policy_override, in one call.
+
+    The URL check is the SSRF retrofit; the credential check refuses a secret
+    stored in the clear. Applied together so no write path can carry one
+    without the other.
+    """
+    try:
+        validate_policy_override_urls(override)
+        reject_plaintext_credentials(override)
+    except PolicyOverrideError as exc:
+        raise ValidationError(str(exc)) from exc
+    except ValueError as exc:
+        raise ValidationError(str(exc)) from exc
 
 
 def _require_dept_scope(request: Request, dept_id: str) -> None:
@@ -53,24 +72,14 @@ def _require_dept_scope(request: Request, dept_id: str) -> None:
 
 
 def _mask_policy_override(override: dict | None) -> dict | None:
-    """Strip api_key_enc from sensitive sections, replace with api_key_masked."""
-    if not override:
-        return override
-    result = {}
-    _s     = get_settings()
-    for k, v in override.items():
-        if k in _ENCRYPTED_SECTIONS and isinstance(v, dict):
-            section = dict(v)
-            enc     = section.pop("api_key_enc", None)
-            if enc:
-                try:
-                    section["api_key_masked"] = mask(decrypt(enc, _s.secret_key))
-                except ValueError:
-                    section["api_key_masked"] = "****"
-            result[k] = section
-        else:
-            result[k] = v
-    return result
+    """Render an override for a reader. See security.policy_override.
+
+    Was duplicated byte-for-byte here and in applications.py, which is how one
+    copy could be corrected and the other left. It now delegates, and also drops
+    any plaintext credential rather than passing it through -- the old version
+    popped `api_key_enc` only, so a plaintext `api_key` was returned verbatim.
+    """
+    return mask_policy_override(override, get_settings().secret_key)
 
 
 def _format(dept, application_count: int = 0) -> dict:
@@ -193,12 +202,9 @@ async def create_department(
     if is_reserved_slug(body.slug):
         raise ValidationError(f"slug '{body.slug}' is reserved")
 
-    # C2: SSRF-validate any base_url in the generic policy_override, matching the
-    # dedicated /policy/llm and /policy/proxy PATCH endpoints.
-    try:
-        validate_policy_override_urls(body.policy_override)
-    except ValueError as e:
-        raise ValidationError(str(e)) from None
+    # SSRF-validate any base_url, and refuse a credential stored in the clear,
+    # matching what the dedicated /policy/llm and /policy/proxy endpoints require.
+    _guard_policy_override(body.policy_override)
 
     repo = DepartmentRepository(db)
     if await repo.get_by_slug(tenant_id, body.slug):
@@ -406,10 +412,7 @@ async def update_department(
     # are included - filtering "if v is not None" would silently drop them
     data = body.model_dump(exclude_unset=True)
     if "policy_override" in data:
-        try:
-            validate_policy_override_urls(data["policy_override"])
-        except ValueError as e:
-            raise ValidationError(str(e)) from None
+        _guard_policy_override(data["policy_override"])
     record = await repo.update(uuid.UUID(dept_id), data)
     if not record:
         raise NotFoundError("department", dept_id)
