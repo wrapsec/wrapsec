@@ -703,3 +703,60 @@ def test_the_documented_plugin_name_pattern_is_the_enforced_one():
         f"the convention document does not state the enforced pattern {body!r}, so "
         f"an author would meet it as a ValueError instead"
     )
+
+
+# --------------------------------------------------------------------------
+# 18. the published detection gates are the ones the harness enforces
+# --------------------------------------------------------------------------
+#
+# `results.md` 2.1 publishes four bounds and `tests/eval/test_redteam.py` defines
+# them. Nothing held the two together, so a threshold could be loosened in the
+# harness while the record kept advertising the stricter one -- and a detection
+# gate is exactly the number someone quotes without re-deriving it.
+#
+# The bounds are deliberately set one regressing case outside the measured
+# baseline, so a change of a few points is not cosmetic: it is the difference
+# between tripping on the second new failure and tripping on the fifth.
+
+_GATE_DOC = _ROOT / "docs/internal/results.md"
+
+
+def _documented_gates() -> dict[str, float]:
+    """The percentages from the gate table in 2.1, as fractions."""
+    if not _GATE_DOC.exists():
+        pytest.skip("results.md is not present in this checkout")
+    text = _GATE_DOC.read_text(encoding="utf-8")
+    rows = re.findall(r'^\|\s*([^|]+?)\s*\|\s*([<>]=)\s*(\d+)%\s*\|', text, re.MULTILINE)
+    assert rows, "the gate table in results.md 2.1 moved; update this fence"
+    return {name.strip(): int(pct) / 100 for name, _, pct in rows}
+
+
+def test_the_published_detection_gates_match_the_harness():
+    import ast
+
+    source = (_ROOT / "tests/eval/test_redteam.py").read_text(encoding="utf-8")
+    consts = {
+        t.targets[0].id: t.value.value
+        for t in ast.parse(source).body
+        if isinstance(t, ast.Assign)
+        and isinstance(t.targets[0], ast.Name)
+        and isinstance(t.value, ast.Constant)
+        and isinstance(t.value.value, (int, float))
+    }
+    for name in ("CATCH_FLOOR", "FPR_CEILING", "BENIGN_HARD_CEILING", "OOD_FLOOR"):
+        assert name in consts, f"{name} is no longer a module-level constant"
+
+    documented = _documented_gates()
+    pairs = {
+        "catch-rate (TPR)":          consts["CATCH_FLOOR"],
+        "false-positive rate":       consts["FPR_CEILING"],
+        "benign-hard over-defense":  consts["BENIGN_HARD_CEILING"],
+        "OOD catch":                 consts["OOD_FLOOR"],
+    }
+    for label, enforced in pairs.items():
+        assert label in documented, f"the gate table no longer has a row for {label!r}"
+        assert abs(documented[label] - enforced) < 1e-9, (
+            f"{label}: the record publishes {documented[label]:.0%} but the harness "
+            f"enforces {enforced:.0%}. A gate that is quoted from the record and "
+            f"enforced from the module must not be two different numbers."
+        )
