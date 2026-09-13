@@ -17,6 +17,9 @@ the arguments are the point at which the instruction becomes an action.
 
 from __future__ import annotations
 
+import re
+from pathlib import Path
+
 import pytest
 
 from domain.enums import InputSource
@@ -160,3 +163,55 @@ def test_the_published_vocabulary_carries_the_source():
 
     assert SOURCE_TOOL_ARGUMENT in INPUT_SOURCES
     assert set(INPUT_SOURCES) == {e.value for e in InputSource}
+
+
+# ---------------------------------------------------------------------------
+# the documented mapping is the one the gateway actually sends
+# ---------------------------------------------------------------------------
+#
+# `docs/mcp_gateway.md` prints the three labels in a table so an operator reading
+# the audit trail, or narrowing UNTRUSTED_INPUT_SOURCES, knows what gateway
+# traffic is tagged as. The argument label was changed once already -- it used to
+# be `user_prompt`, the one tier the posture layer trusts -- and a table written
+# by hand would not have followed.
+
+_DOC = Path(__file__).resolve().parents[3] / "docs/mcp_gateway.md"
+
+
+def _documented_sources() -> set[str]:
+    rows = re.findall(r'^\|[^|]*\|\s*`([a-z_]+)`\s*\|', _DOC.read_text(encoding="utf-8"),
+                      re.MULTILINE)
+    assert rows, "the provenance table in docs/mcp_gateway.md moved; update this fence"
+    return set(rows)
+
+
+def test_the_documented_provenance_table_matches_the_scanner():
+    documented = _documented_sources()
+    shipped    = {SOURCE_TOOL_DEFINITION, SOURCE_TOOL_ARGUMENT, SOURCE_TOOL_RESULT}
+    assert shipped <= documented, (
+        f"the gateway sends {sorted(shipped - documented)} but the documented table "
+        f"does not list it, so an operator would not know that traffic carries it"
+    )
+
+
+def test_no_gateway_scan_is_labelled_as_a_user_prompt():
+    """The documentation states this as a reason, so it is worth holding: nothing
+    reaching the gateway is typed by a person."""
+    for source in (SOURCE_TOOL_DEFINITION, SOURCE_TOOL_ARGUMENT, SOURCE_TOOL_RESULT):
+        assert source != InputSource.USER_PROMPT.value, (
+            f"{source} would place agent-controlled text in the trusted tier"
+        )
+
+
+def test_every_gateway_source_is_untrusted_by_default():
+    """The documentation tells operators that gateway traffic is judged against
+    the tightened thresholds when posture is enabled. That holds only while all
+    three labels are in the shipped untrusted set."""
+    from config.settings import get_settings
+
+    untrusted = set(get_settings().untrusted_input_sources)
+    for source in (SOURCE_TOOL_DEFINITION, SOURCE_TOOL_ARGUMENT, SOURCE_TOOL_RESULT):
+        assert source in untrusted, (
+            f"{source} is no longer untrusted by default, so the documented claim "
+            f"that gateway scans are judged strictly is now false"
+        )

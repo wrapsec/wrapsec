@@ -689,6 +689,30 @@ These fields are correlation metadata only. Nothing is authorized on them, and
 every value is minted inside the gateway process rather than accepted from
 outside.
 
+### The provenance label on each scan
+
+Every scan also carries an `input_source`, which is what the API's source-aware
+posture keys on and what `GET /v1/audit/by-source` groups by. The gateway chooses
+it by what the text IS, not by which server it came from:
+
+| What is being judged | `input_source` |
+|---|---|
+| A tool definition published by a downstream server | `external_content` |
+| The arguments a model composed for a tool call | `agent_tool_call` |
+| The result a tool returned | `tool_output` |
+
+None of the three is `user_prompt`. Nothing reaching the gateway is typed by a
+person: a definition is written by whoever runs the downstream server, arguments
+are composed by the model, and a result is returned by the tool. Labelling any of
+it as a user's own message would place agent-controlled text in the one tier the
+posture layer treats as trusted.
+
+This matters for configuration. If a deployment enables source-aware posture, all
+three of these labels are in the untrusted set by default, so gateway traffic is
+judged against the tightened thresholds rather than the base ones. An operator who
+narrows `UNTRUSTED_INPUT_SOURCES` without accounting for them will quietly relax
+the gateway's own scans.
+
 ---
 
 ## Security model
