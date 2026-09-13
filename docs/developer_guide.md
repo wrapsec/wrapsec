@@ -1202,6 +1202,14 @@ npm run dev
 
 ## Compose network topology
 
+**`client_max_body_size 64k` is load-bearing for detection, not just for load.**
+The rule detector and the PII guardrail read at most the first 65536 characters
+of a message (`engine/detection/limits.py`), and nothing in the application caps
+message length, so that nginx setting is what keeps a message from arriving
+longer than the detectors will read. Raise it and the regex tiers silently cover
+only the opening of a long message. A unit test holds the two values in the right
+order.
+
 Both shipped stacks run on one user-defined network with an explicit subnet,
 because nginx needs a fixed address for `TRUSTED_PROXY_IPS` to name it.
 

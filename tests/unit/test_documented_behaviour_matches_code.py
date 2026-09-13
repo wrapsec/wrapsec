@@ -531,3 +531,51 @@ def test_documented_defaults_match_the_shipped_defaults():
             wrong.append(f"{name}: documented {documented}, ships {shipped}")
 
     assert not wrong, "documented defaults disagree with the code: " + "; ".join(wrong)
+
+
+# --------------------------------------------------------------------------
+# 14. the proxy body limit stays under what the regex tiers will read
+# --------------------------------------------------------------------------
+#
+# Nothing in the application bounds the length of one proxy message. The rule
+# detector and the PII guardrail read a bounded prefix and drop the rest, which
+# is a deliberate ReDoS defence -- so what keeps a message from arriving longer
+# than they will read is the reverse proxy's body limit, and nothing else.
+#
+# While the body limit is the smaller of the two, a message that would be
+# truncated cannot reach the handler at all. Raise it above the clamp and the
+# regex tiers begin covering only the opening of a long message, silently. This
+# holds the ordering across the two files.
+
+_SIZE_SUFFIX = {"k": 1024, "m": 1024 * 1024, "g": 1024 * 1024 * 1024}
+
+
+def _nginx_body_limits() -> dict[str, int]:
+    found: dict[str, int] = {}
+    for conf in sorted((_ROOT / "infrastructure/nginx").rglob("*")):
+        if not conf.is_file():
+            continue
+        for raw in re.findall(
+            r'client_max_body_size\s+(\d+)([kKmMgG]?)\s*;', conf.read_text(encoding="utf-8")
+        ):
+            value = int(raw[0]) * _SIZE_SUFFIX.get(raw[1].lower(), 1)
+            found[str(conf.relative_to(_ROOT))] = value
+    assert found, "no client_max_body_size found; the nginx configuration moved"
+    return found
+
+
+def test_the_body_limit_stays_under_the_regex_clamp():
+    from engine.detection.limits import MAX_REGEX_INPUT_LENGTH
+
+    oversized = {
+        conf: size for conf, size in _nginx_body_limits().items()
+        if size > MAX_REGEX_INPUT_LENGTH
+    }
+    assert not oversized, (
+        f"these configurations accept a request body larger than the "
+        f"{MAX_REGEX_INPUT_LENGTH} characters the rule and PII detectors will read, "
+        f"so a long message would be scanned only in part and nothing would say so: "
+        f"{oversized}. Raising the limit is a detection decision, not only a "
+        f"capacity one -- widen the clamp, scan in windows, or bound message "
+        f"length in the application."
+    )

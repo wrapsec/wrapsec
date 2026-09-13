@@ -1244,6 +1244,20 @@ Each scanned message costs a detection run and an audit-chain append, so **N sca
 messages consume N rate-limit units**, not one. A request scanning ten messages draws ten
 units from the bucket for the presented key.
 
+**Message length is bounded by the reverse proxy, not by this API.** Nothing in
+the application caps the length of a single message. Rule-based detection and the
+PII guardrail read at most the first 65536 characters of any one message -- a
+deliberate bound, because Python's regex engine has no timeout and an adversarial
+payload against a backtracking pattern would otherwise pin a worker. The shipped
+nginx configuration sets `client_max_body_size 64k`, which is smaller than that
+bound, so a message long enough to be truncated cannot reach the API through it:
+an oversized request is refused with `413` before the handler runs.
+
+If you front this API with something else, or raise that limit to allow longer
+prompts, **that setting becomes a detection-coverage control rather than only a
+resource limit**. Past 65536 characters in one message, the regex tiers see the
+opening of the message and nothing reports the shortfall.
+
 The maximum is deliberately low. The audit chain takes a per-tenant lock, so concurrent
 requests from one tenant serialise on it, and the cost of a large fan-out lands on the
 caller's own latency. Raise it only against a measurement of your own traffic.
