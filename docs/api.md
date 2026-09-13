@@ -465,7 +465,19 @@ routine race will sign the user out of every session.
 
 *NOT PUBLIC - human session flow. Served and supported; outside the published contract.*
 
-Revokes the refresh token. Access token expires naturally (max 30 min residual). Clears cookie.
+Revokes the refresh token and clears the cookie.
+
+**The access token is revoked too, not left to expire.** Logout reads the token
+from the `Authorization` header and blacklists its `jti`; the auth middleware
+rejects a blacklisted `jti` before anything else, so the token stops working on
+the next request rather than lingering for its remaining lifetime.
+
+Two conditions bound that. Logout must be called WITH the bearer token -- it is
+read from the header, so a logout sent without one blacklists nothing and that
+token does expire naturally. And the blacklist check fails open if its store is
+unavailable, so during an outage a logged-out token is accepted again until it
+expires. Session termination is durable in the refresh token; the access-token
+half is best-effort.
 
 **Auth:** JWT Bearer required.
 
