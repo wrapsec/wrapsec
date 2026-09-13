@@ -721,14 +721,27 @@ def test_the_documented_plugin_name_pattern_is_the_enforced_one():
 _GATE_DOC = _ROOT / "docs/internal/results.md"
 
 
+_HARNESS_DOC = _ROOT / "docs/internal/eval_harness.md"
+
+
 def _documented_gates() -> dict[str, float]:
-    """The percentages from the gate table in 2.1, as fractions."""
+    """The percentages from the gate table in results.md 2.1, as fractions."""
     if not _GATE_DOC.exists():
         pytest.skip("results.md is not present in this checkout")
     text = _GATE_DOC.read_text(encoding="utf-8")
     rows = re.findall(r'^\|\s*([^|]+?)\s*\|\s*([<>]=)\s*(\d+)%\s*\|', text, re.MULTILINE)
     assert rows, "the gate table in results.md 2.1 moved; update this fence"
     return {name.strip(): int(pct) / 100 for name, _, pct in rows}
+
+
+def _harness_doc_gates() -> dict[str, float]:
+    """The same four bounds as stated a THIRD time, in the harness document."""
+    if not _HARNESS_DOC.exists():
+        pytest.skip("eval_harness.md is not present in this checkout")
+    text = _HARNESS_DOC.read_text(encoding="utf-8")
+    rows = re.findall(r'^\|\s*([a-z_ ]+?)\s*\|\s*`[<>]=\s*([\d.]+)`', text, re.MULTILINE)
+    assert rows, "the gate table in eval_harness.md moved; update this fence"
+    return {name.strip(): float(value) for name, value in rows}
 
 
 def test_the_published_detection_gates_match_the_harness():
@@ -759,4 +772,18 @@ def test_the_published_detection_gates_match_the_harness():
             f"{label}: the record publishes {documented[label]:.0%} but the harness "
             f"enforces {enforced:.0%}. A gate that is quoted from the record and "
             f"enforced from the module must not be two different numbers."
+        )
+
+    # the third copy: the harness document states the same bounds again
+    harness_doc = _harness_doc_gates()
+    for doc_label, const in (("catch_rate", "CATCH_FLOOR"), ("fpr", "FPR_CEILING"),
+                             ("benign_hard_fpr", "BENIGN_HARD_CEILING"),
+                             ("ood catch_rate", "OOD_FLOOR")):
+        assert doc_label in harness_doc, (
+            f"eval_harness.md no longer states a bound for {doc_label!r}"
+        )
+        assert abs(harness_doc[doc_label] - consts[const]) < 1e-9, (
+            f"{doc_label}: eval_harness.md states {harness_doc[doc_label]} but the "
+            f"harness enforces {consts[const]}. These bounds exist in three places "
+            f"and all three must agree."
         )
