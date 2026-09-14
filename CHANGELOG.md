@@ -2,6 +2,141 @@
 
 All notable changes to WrapSec are documented here.
 
+## [1.10.0] - 2026-09-14
+
+An enforcement point for the agent tool surface, and a breaking rename on one
+published operation. The rest is a documentation pass that compared every public
+document against the code rather than against its own prose, and the fixes that
+pass turned up.
+
+### Added
+
+- **A gateway enforces policy on the Model Context Protocol.** An agent
+  connecting to a tool server reads that server's tool definitions before it
+  invokes anything, so text placed in a description is read with the authority of
+  the tool list without any prompt being involved. The gateway sits between the
+  two and inspects three points: each definition at connect time, each call's
+  arguments before they leave for a downstream server, and each result before the
+  agent acts on it. What reaches the detector is the prose a model actually reads
+  -- name, title, description, and the descriptions inside an input schema at any
+  depth. Schema structure is not prose and is not sent. A refused definition is
+  never published to the agent.
+- **The gateway refuses to start when it would inspect nothing.** Holding an
+  enforcing interceptor is not the same as enforcing: with every scan switch off
+  it passed its own check, called no detector, and published definitions
+  unexamined. That is the security-disabled mode under another name, and the more
+  dangerous form of it, because from the outside it looks like a working gateway.
+  A partial posture is left to the operator; inspecting nothing at all is
+  refused. The effective posture is recorded at startup from the resolved
+  configuration, so a file that omits the section still states what is in force.
+- **Tool-call arguments carry their own provenance.** `agent_tool_call` joins the
+  input-source vocabulary and is untrusted by default. Arguments had been
+  declared as a user prompt, which resolves to the trusted tier, so a deployment
+  that tightened thresholds for untrusted origins tightened definitions and
+  results and left arguments at base -- the one boundary between them, and the
+  last one before a side effect that may not be reversible. The chain that
+  matters is a poisoned result instructing the agent to call a tool with
+  attacker-chosen arguments, where the arguments are the point at which an
+  instruction becomes an action. The vocabulary is defined in five places and all
+  five move together.
+
+### Security
+
+- **A provider credential can no longer be stored in the clear.** Two write paths
+  reach the same stored override. The dedicated endpoints take a secret and
+  encrypt it; the generic override on department and application create and
+  update took an unconstrained object and stored it verbatim, so a plaintext key
+  was persisted as given, returned by every read that renders the override, and
+  merged into the effective policy by a resolver that only ever decrypts the
+  encrypted field. Both halves of the invariant were broken: provider keys
+  encrypted at rest, and never returned in full. The mask was the part that
+  looked safe -- it strips the encrypted field and only that, so a plaintext key
+  passed through untouched while the call site read as though the section had
+  been sanitised.
+- **A replayed refresh token now ends access tokens too.** Reuse detection
+  revoked every refresh token the user held and stopped there, which ends renewal
+  and nothing else: an access token minted moments before the replay stayed valid
+  for the rest of its lifetime, so whoever won the race kept a working credential
+  against every authenticated endpoint for up to thirty minutes. Replay is one of
+  the strongest compromise signals available and the response left something
+  usable behind. It now takes the same path as the five other session-ending
+  flows. Revoking refresh tokens alone was not enough, and incrementing the token
+  version alone would not have been either, because the middleware reads the user
+  through a cache with its own lifetime.
+
+### Changed
+
+- **`GET /v1/agent-runs/{run_id}` renames `turns` to `scans`. This is a breaking
+  change to a published operation, made deliberately.** The field held one entry
+  per scan and `count` was described as a number of turns. That was accurate
+  while one request produced one scan. The gateway ended it: a tool call is
+  judged on its arguments and again on its result, and one tool listing judges
+  every definition it publishes, so a run of 16 records can be 2 turns. No turn
+  count is added -- every record already carries the turn index it belongs to,
+  and a second counter maintained server-side could disagree with the records it
+  claims to summarise.
+
+### Fixed
+
+- **The audit chain sequence backfill runs on a populated table.** A trigger
+  raises on any update to a chained row, and the migration that adds the sequence
+  backfills it with an update over exactly those rows. The two could not both
+  hold: the migration completed on a database with no chained rows and aborted on
+  every database that had any, leaving the API crash-looping on startup after an
+  upgrade. The trigger is now suspended for the backfill and re-armed inside the
+  same transaction, so a failure anywhere rolls the suspension back with it and
+  the table is never left writable. Re-arming is verified rather than assumed.
+- **A policy override fetched from the product can be sent back unchanged.** The
+  allow-list that refuses unknown keys inside the provider sections omitted a
+  key the product itself writes, so echoing the API's own output was rejected.
+  The expectation is now derived rather than maintained: the allow-list is
+  required to cover every key the dedicated endpoints assign, and a list falling
+  behind those write sites fails a test that names the key.
+- **An allowed tool result is republished rather than passed through.** It was
+  returned as the object the downstream server sent, so every field no detector
+  sees travelled with it: a server could leave the visible text benign and put
+  its payload in metadata on the result, on a content block, or in a block's
+  annotations, and the gateway delivered it verbatim.
+- **A failure inside a tool call answers with a refusal, not a protocol fault.**
+  A client handed a transport error commonly retries, and a retry loop against a
+  security control is indistinguishable from an attack on it. Two paths could
+  leave the call handler as a fault, including a claimed extension result.
+- **An unusable downstream response is answered with a refusal**, and a judged
+  refusal is no longer reported as a failed check.
+- **The scan tool declares every input source the API accepts.**
+- **A variable in the example environment file bound to nothing.** It named a
+  token lifetime the application never read, so setting it changed no behaviour.
+- **Section dividers in three dashboard files are repaired.** They carried a
+  single character as three, the permanent result of something reading its bytes
+  one per character and saving that back. Comments only, on 23 lines, so nothing
+  rendered or shipped wrong.
+
+### Documentation
+
+
+- **Eight served endpoints and nine request fields are now documented.** The
+  endpoints -- webhook pause, reactivate, test and connector types, plus four
+  policy override routes -- are served and supported but sit outside the
+  published contract, and were absent from the page that is their only
+  authority. Reactivate is the one that mattered: the reference described an
+  endpoint being retired by the circuit breaker and left no way back except
+  delete and recreate. One of the nine fields is not an ordinary omission -- the
+  scan endpoint accepts a `context` object carrying `user_role` and
+  `sensitivity`, both advertised in the generated schema that integrations are
+  built from and both read by nothing. It is documented as accepted and unused.
+- **Two audit filter vocabularies are closed, five error codes a caller could
+  already receive are written down, and the email delivery audit surface has an
+  entry.** Each is held by a test that derives the document from the code.
+- **Five documented environment variables did nothing and eleven were missing.**
+  The four switches that turn a control off are now written down, as is the
+  request body limit that bounds how much text regex detection sees.
+- **Statements that described absent behaviour are corrected.** Logout revokes
+  the access token rather than waiting for it to expire; the account lockout
+  fails open on a cache outage; the audit chain verifier ships; the untrusted
+  source list was missing a value; the layer count was wrong; a run timeline
+  lists scans, not turns; the command-line retry budget was wrong in both halves;
+  a policy layer that forgets to return silently does nothing.
+
 ## [1.9.3] - 2026-09-11
 
 Security fixes across authentication, policy resolution, the audit chain and the
